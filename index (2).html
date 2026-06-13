@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>璽墨 專案管理系統</title>
+<style>
+:root {
+  --bg:#edeae4; --surface:#fff; --sf2:#f7f5f2; --border:#e2ddd8;
+  --text:#1a1916; --t2:#6b6860; --t3:#9e9b96; --accent:#1a1916;
+  --c1:#2d6a4f; --c2:#1a4a7a; --c3:#7a1a2e; --c4:#4a7a1a; --c5:#5a3a8a;
+  --lw:210px; --rw:245px; --th:46px; --r:10px; --rs:6px;
+  --shadow:0 2px 14px rgba(0,0,0,0.09);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;font-size:13px}
+
+/* topbar */
+#topbar{position:fixed;top:0;left:0;right:0;height:var(--th);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;z-index:100}
+.logo{font-size:16px;font-weight:700;letter-spacing:2px}
+
+/* body */
+#body{position:fixed;top:var(--th);left:0;right:0;bottom:0;display:flex;gap:8px;padding:8px}
+
+/* toggle buttons - fixed on screen edges */
+.tog{position:fixed;top:50%;transform:translateY(-50%);width:20px;height:52px;background:var(--surface);border:1px solid var(--border);cursor:pointer;color:var(--t2);display:flex;align-items:center;justify-content:center;font-size:10px;z-index:200;box-shadow:var(--shadow);transition:left .25s,right .25s}
+.tog:hover{background:var(--sf2);color:var(--text)}
+#tl{left:calc(8px + var(--lw));border-left:none;border-radius:0 6px 6px 0}
+#tr{right:calc(8px + var(--rw));border-right:none;border-radius:6px 0 0 6px}
+
+/* panels */
+#lp{order:1;width:var(--lw);flex-shrink:0;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;transition:width .25s,opacity .25s,margin .25s}
+#lp.col{width:0;opacity:0;margin-right:-8px;pointer-events:none}
+#cp{order:2;flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+#rp{order:3;width:var(--rw);flex-shrink:0;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;transition:width .25s,opacity .25s,margin .25s}
+#rp.col{width:0;opacity:0;margin-left:-8px;pointer-events:none}
+
+/* A区 */
+.ah{height:var(--th);padding:0 10px;display:flex;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0;gap:5px}
+.sl{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px}
+.sa{display:flex;gap:3px;margin-left:auto}
+.badd{padding:3px 7px;border-radius:var(--rs);border:1px solid var(--border);background:var(--sf2);font-size:10px;cursor:pointer;color:var(--t2);transition:all .15s;white-space:nowrap}
+.badd:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pl{overflow-y:auto;padding:5px;flex-shrink:0;max-height:46%}
+.pi{margin-bottom:3px;border-radius:var(--rs);overflow:hidden}
+.pr{display:flex;align-items:center;gap:6px;padding:7px 9px;cursor:pointer;color:#fff;font-size:12px;font-weight:500;user-select:none;border-radius:var(--rs)}
+.pr .dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.5);flex-shrink:0}
+.pr .arr{margin-left:auto;font-size:9px;opacity:.8;transition:transform .2s}
+.pr.open .arr{transform:rotate(90deg)}
+.sl2{display:none;margin:2px 0 3px 4px}
+.sl2.open{display:block}
+.si{padding:5px 9px 5px 12px;font-size:11px;color:var(--t2);font-weight:500;cursor:pointer;border-radius:var(--rs);display:flex;align-items:center;justify-content:space-between}
+.si:hover{background:var(--sf2)}
+.sd{font-size:10px;background:var(--border);color:var(--t2);padding:1px 5px;border-radius:3px;font-weight:600}
+
+/* B区 */
+.bs{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0;border-top:1px solid var(--border)}
+.bh{padding:7px 10px 4px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.ft{display:flex;gap:3px;overflow-x:auto;padding:0 7px 5px;flex-shrink:0}
+.ftag{padding:2px 7px;border-radius:20px;font-size:10px;cursor:pointer;border:1px solid var(--border);white-space:nowrap;color:var(--t2);background:var(--sf2);transition:all .15s}
+.tl2{flex:1;overflow-y:auto;padding:5px 7px}
+.tgl{padding:6px 3px 4px;font-size:11px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:5px;border-bottom:1px solid var(--border);margin-bottom:5px}
+.tgd{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.tc{background:var(--sf2);border-radius:8px;padding:1px 5px;font-size:9px;color:var(--t3);font-weight:600}
+.ti{padding:7px 9px;border-radius:var(--rs);cursor:pointer;margin-bottom:4px;background:var(--surface);border:1px solid var(--border);transition:border-color .1s}
+.ti:hover{border-color:var(--t3)}
+.tit{display:flex;align-items:flex-start;justify-content:space-between;gap:5px}
+.tn{font-size:12px;font-weight:600}
+.tm{font-size:10px;color:var(--t3);margin-top:1px}
+.tr2{text-align:right;flex-shrink:0}
+.td2{font-size:11px;font-weight:600}
+.tds{font-size:10px;color:#e05a00;font-weight:700}
+.tpb{height:2px;background:var(--border);border-radius:1px;margin-top:5px;overflow:hidden}
+.tpf{height:100%;border-radius:1px}
+
+/* C tabs */
+#tabs{background:var(--surface);border-radius:var(--r) var(--r) 0 0;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:2px;height:var(--th);flex-shrink:0;box-shadow:var(--shadow)}
+.ntab{padding:5px 11px;border-radius:var(--rs);border:none;background:none;font-size:13px;cursor:pointer;color:var(--t2);transition:all .15s;white-space:nowrap}
+.ntab:hover{background:var(--sf2)}
+.ntab.active{background:var(--accent);color:#fff}
+
+/* D content */
+#content{flex:1;overflow-y:auto;background:var(--bg);border-radius:0 0 var(--r) var(--r);padding:10px}
+.page{display:none}
+.page.active{display:block}
+
+/* E区 */
+.eh{height:var(--th);padding:0 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+.eh h3{font-size:12px;font-weight:700}
+.dn{display:flex;align-items:center;gap:4px}
+.dn button{border:none;background:none;cursor:pointer;color:var(--t2);padding:2px 4px;border-radius:4px;font-size:12px}
+.dn button:hover{background:var(--sf2)}
+.jl{flex:1;overflow-y:auto;padding:4px}
+.ji{padding:9px;border-radius:var(--rs);margin-bottom:3px}
+.ji:hover{background:var(--sf2)}
+.jt{display:flex;align-items:center;gap:5px;margin-bottom:4px}
+.jn{font-size:12px;font-weight:600}
+.jpt{font-size:10px;padding:1px 6px;border-radius:10px;color:#fff;font-weight:500}
+.jtask{font-size:11px;color:var(--t2);margin-bottom:3px}
+.jnote{font-size:10px;color:var(--t3);background:var(--sf2);padding:4px 7px;border-radius:4px;border-left:2px solid var(--border)}
+
+/* D cards */
+.dc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
+.dch{padding:10px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+.pdot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.dch h3{font-size:13px;font-weight:600;flex:1}
+.pb{font-size:11px;padding:2px 7px;border-radius:20px;font-weight:600}
+.bsm{padding:3px 9px;border-radius:var(--rs);border:1px solid var(--border);background:var(--sf2);font-size:11px;cursor:pointer;color:var(--t2);white-space:nowrap}
+.bsm:hover{border-color:var(--accent);color:var(--accent)}
+
+/* Gantt */
+.gc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
+.gtb{padding:8px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+.gtb h3{font-size:13px;font-weight:600;flex:1}
+.gb{display:flex;overflow:hidden;border-bottom:1px solid var(--border)}
+.gf{width:190px;flex-shrink:0;border-right:2px solid var(--border);background:var(--surface)}
+.gfh{height:52px;background:var(--sf2);border-bottom:1px solid var(--border);display:flex;align-items:flex-end;padding:0 10px 6px}
+.gfh span{font-size:10px;font-weight:600;color:var(--t3)}
+.grl{height:44px;padding:6px 10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;justify-content:center}
+.grl:last-child{border-bottom:none}
+.grn{font-size:12px;font-weight:500}
+.grm{font-size:10px;color:var(--t3);margin-top:1px}
+.gsw{flex:1;overflow-x:auto;overflow-y:hidden;min-width:0}
+.gtc{display:inline-block}
+.gmr{display:flex;height:26px;border-bottom:1px solid var(--border);background:var(--sf2)}
+.gmc{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--t2);border-right:1px solid var(--border);flex-shrink:0}
+.gdr{display:flex;height:26px;border-bottom:1px solid var(--border);background:var(--sf2);position:relative}
+.gdc{display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--t3);border-right:1px solid rgba(226,221,216,0.4);flex-shrink:0}
+.gdc.tdc{background:rgba(220,50,50,0.07);color:#c0392b;font-weight:700}
+.gtr{height:44px;border-bottom:1px solid var(--border);position:relative}
+.gtr:last-child{border-bottom:none}
+.gbar{position:absolute;height:20px;top:50%;transform:translateY(-50%);border-radius:4px;display:flex;align-items:center;padding:0 6px;font-size:10px;color:rgba(255,255,255,.95);white-space:nowrap;overflow:hidden;font-weight:500;cursor:pointer}
+.gbar:hover{opacity:.82}
+.tline{position:absolute;top:0;bottom:0;width:2px;background:#e03030;z-index:5;pointer-events:none}
+.tlineh{position:absolute;top:0;width:2px;height:52px;background:#e03030;z-index:5;pointer-events:none}
+.gsb{padding:5px 14px 8px;display:flex;align-items:center;gap:7px;border-top:1px solid var(--border)}
+.gsb button{width:22px;height:22px;border:1px solid var(--border);border-radius:var(--rs);background:var(--sf2);cursor:pointer;font-size:11px;color:var(--t2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.gsb input[type=range]{flex:1;height:4px;cursor:pointer;accent-color:var(--t3)}
+
+/* gantt controls */
+.gctl{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px;padding:7px 12px;display:flex;align-items:center;gap:7px}
+.gnb{width:26px;height:26px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--t2)}
+.gnb:hover{background:var(--sf2)}
+.tbtn{padding:4px 10px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);cursor:pointer;font-size:11px;color:var(--t2);font-weight:500}
+.tbtn:hover{background:var(--sf2)}
+.drl{font-size:12px;font-weight:600;flex:1;text-align:center}
+.vs{display:flex;border:1px solid var(--border);border-radius:var(--rs);overflow:hidden}
+.vb{padding:4px 10px;border:none;background:var(--surface);cursor:pointer;font-size:11px;color:var(--t2);border-right:1px solid var(--border)}
+.vb:last-child{border-right:none}
+.vb.active{background:var(--accent);color:#fff}
+.vb:hover:not(.active){background:var(--sf2)}
+
+/* budget */
+.bo{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.bi .lb{font-size:10px;color:var(--t3);margin-bottom:2px}
+.bi .vl{font-size:12px;font-weight:600}
+.bbw{padding:0 14px 10px}
+.bbt{height:5px;background:var(--sf2);border-radius:3px;margin-top:5px;overflow:hidden}
+.bbf{height:100%;border-radius:3px}
+.wir{padding:7px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);cursor:pointer}
+.wir:hover{background:var(--sf2)}
+.wir:last-child{border-bottom:none}
+.wn{font-size:12px;flex:1}
+.wns{display:flex;gap:12px}
+.wl{font-size:10px;color:var(--t3)}
+.wv{font-size:11px;font-weight:600}
+
+/* table */
+.dt{width:100%;border-collapse:collapse}
+.dt th{padding:7px 10px;font-size:10px;font-weight:600;color:var(--t3);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+.dt td{padding:7px 10px;font-size:11px;border-bottom:1px solid var(--border)}
+.dt tr:last-child td{border-bottom:none}
+.dt tr:hover td{background:var(--sf2)}
+.gr td{background:var(--sf2);font-weight:600;font-size:11px;color:var(--t2);padding:5px 10px}
+.st{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500}
+.std{background:#e6f4ee;color:#1a7a45}
+.stp{background:#fff3e0;color:#b06000}
+.ds{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500;background:#fff3e0;color:#b06000}
+
+/* payment form */
+.pfw{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px}
+.fg{margin-bottom:11px}
+.fg label{display:block;font-size:11px;font-weight:600;color:var(--t2);margin-bottom:3px}
+.fg input,.fg select,.fg textarea{width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;background:var(--sf2);color:var(--text);outline:none;font-family:inherit}
+.fg input:focus,.fg select:focus{border-color:var(--accent);background:#fff}
+.ntags{display:flex;gap:5px;flex-wrap:wrap}
+.ntag{padding:3px 10px;border-radius:20px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--sf2);color:var(--t2)}
+.ntag.on{background:#f5c518;border-color:#e0b000;color:#5a4200}
+.ntag.on2{background:#1a4a7a;border-color:#1a4a7a;color:#fff}
+.bsub{width:100%;padding:9px;border-radius:var(--rs);border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;margin-top:6px}
+
+/* avatar */
+.av{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0}
+.avl{background:#1a4a7a}.avy{background:#2d6a4f}
+
+/* popup */
+.po{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;display:none;align-items:center;justify-content:center}
+.po.open{display:flex}
+.pp{background:var(--surface);border-radius:var(--r);width:520px;max-width:90vw;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.ppw{width:660px}
+.pph{padding:13px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:1}
+.pph h3{font-size:14px;font-weight:700}
+.ppc{border:none;background:none;cursor:pointer;font-size:16px;color:var(--t3);padding:3px;border-radius:4px}
+.ppc:hover{background:var(--sf2)}
+.ppb{padding:16px}
+.ppb2{padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
+.ppf{padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:7px}
+.bcan{padding:6px 13px;border-radius:var(--rs);border:1px solid var(--border);background:var(--sf2);font-size:12px;cursor:pointer;color:var(--t2)}
+.bpri{padding:6px 16px;border-radius:var(--rs);border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer}
+.fbox{background:var(--sf2);border-radius:var(--rs);padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.fi .fl{font-size:10px;color:var(--t3);margin-bottom:1px}
+.fi .fv{font-size:12px;font-weight:600}
+.slist{margin:4px 0 6px}
+.srow{display:grid;grid-template-columns:1fr 80px 1fr 70px 50px;gap:6px;align-items:center;margin-bottom:5px;padding:6px;background:var(--sf2);border-radius:var(--rs)}
+.srow input,.srow select{padding:5px 6px;border:1px solid var(--border);border-radius:3px;font-size:11px;background:#fff;font-family:inherit}
+.dc2{display:flex;align-items:center;gap:3px}
+.dc2 button{width:17px;height:17px;border:1px solid var(--border);border-radius:3px;background:#fff;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center}
+.dc2 span{font-size:11px;font-weight:600;min-width:16px;text-align:center}
+.bads{width:100%;padding:6px;border:1px dashed var(--border);border-radius:var(--rs);background:none;color:var(--t3);cursor:pointer;font-size:11px}
+.bads:hover{border-color:var(--accent);color:var(--accent)}
+
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+
+<div id="topbar"><div class="logo">璽墨</div></div>
+
+<!-- 收合按鈕 -->
+<button class="tog" id="tl" onclick="toggleL()">◀</button>
+<button class="tog" id="tr" onclick="toggleR()">▶</button>
+
+<div id="body">
+
+<!-- ══ 左側 AB ══ -->
+<div id="lp">
+  <div class="ah">
+    <span class="sl">Projects</span>
+    <div class="sa">
+      <button class="badd" onclick="op('pp-proj')">＋標案</button>
+      <button class="badd" onclick="op('pp-work')">＋工作項目</button>
+    </div>
+  </div>
+  <div class="pl">
+    <div class="pi"><div class="pr" style="background:var(--c1)" onclick="tgp(this)"><div class="dot"></div><span>115高雄山茶</span><span class="arr">▶</span></div><div class="sl2"><div class="si"><span>山茶評鑒</span><span class="sd">5Ds</span></div><div class="si"><span>成果展</span><span class="sd">5Ds</span></div><div class="si"><span>南投茶園</span><span class="sd">3Ds</span></div><div class="si"><span>農場主拜訪</span><span class="sd">4Ds</span></div></div></div>
+    <div class="pi"><div class="pr" style="background:var(--c2)" onclick="tgp(this)"><div class="dot"></div><span>116台中農場</span><span class="arr">▶</span></div><div class="sl2"><div class="si"><span>台中評鑒</span><span class="sd">4Ds</span></div><div class="si"><span>成果發表</span><span class="sd">3Ds</span></div><div class="si"><span>茶農訪視</span><span class="sd">5Ds</span></div></div></div>
+    <div class="pi"><div class="pr" style="background:var(--c3)" onclick="tgp(this)"><div class="dot"></div><span>116台南農場</span><span class="arr">▶</span></div><div class="sl2"></div></div>
+    <div class="pi"><div class="pr" style="background:var(--c4)" onclick="tgp(this)"><div class="dot"></div><span>115桃園茶廠</span><span class="arr">▶</span></div><div class="sl2"></div></div>
+    <div class="pi"><div class="pr" style="background:var(--c5)" onclick="tgp(this)"><div class="dot"></div><span>117台東茶廠</span><span class="arr">▶</span></div><div class="sl2"></div></div>
+  </div>
+  <div class="bs">
+    <div class="bh"><span class="sl">任務清單</span><button class="badd" onclick="op('pp-task')">＋ 新增</button></div>
+    <div class="ft">
+      <span class="ftag" style="background:var(--accent);color:#fff" onclick="sf(this)">全部</span>
+      <span class="ftag" onclick="sf(this,'var(--c1)')">高雄山茶</span>
+      <span class="ftag" onclick="sf(this,'var(--c2)')">台中農場</span>
+      <span class="ftag" onclick="sf(this,'var(--c3)')">台南農場</span>
+    </div>
+    <div class="tl2">
+      <div class="tgl"><div class="tgd" style="background:var(--c1)"></div>高雄山茶<span class="tc">3</span></div>
+      <div class="ti" onclick="op('pp-td')"><div class="tit"><div><div class="tn">拜訪OO茶主</div><div class="tm">山茶評鑒 · Lynn</div></div><div class="tr2"><div class="td2">6/12</div><div class="tds">3DS</div></div></div><div class="tpb"><div class="tpf" style="width:50%;background:var(--c1)"></div></div></div>
+      <div class="ti"><div class="tit"><div><div class="tn">茶葉樣品確認</div><div class="tm">成果展 · Lynn</div></div><div class="tr2"><div class="td2">6/15</div><div class="tds">6DS</div></div></div><div class="tpb"><div class="tpf" style="width:30%;background:var(--c1)"></div></div></div>
+      <div class="ti"><div class="tit"><div><div class="tn">農場主行程確認</div><div class="tm">農場主拜訪 · Lynn</div></div><div class="tr2"><div class="td2">6/20</div><div class="tds">11DS</div></div></div><div class="tpb"><div class="tpf" style="width:20%;background:var(--c1)"></div></div></div>
+      <div class="tgl"><div class="tgd" style="background:var(--c2)"></div>台中農場<span class="tc">2</span></div>
+      <div class="ti"><div class="tit"><div><div class="tn">拜訪OO茶主</div><div class="tm">台中評鑒 · Yann</div></div><div class="tr2"><div class="td2">6/12</div><div class="tds">3DS</div></div></div><div class="tpb"><div class="tpf" style="width:50%;background:var(--c2)"></div></div></div>
+      <div class="ti"><div class="tit"><div><div class="tn">購買禮物</div><div class="tm">台中買禮物 · Yann</div></div><div class="tr2"><div class="td2">6/18</div><div class="tds">9DS</div></div></div><div class="tpb"><div class="tpf" style="width:70%;background:var(--c2)"></div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 中間 CD ══ -->
+<div id="cp">
+  <div id="tabs">
+    <button class="ntab active" onclick="sw(this,'pg-s')">時程管理</button>
+    <button class="ntab" onclick="sw(this,'pg-b')">費用管理</button>
+    <button class="ntab" onclick="sw(this,'pg-e')">支出明細</button>
+    <button class="ntab" onclick="sw(this,'pg-p')">付款金費單</button>
+    <button class="ntab" onclick="sw(this,'pg-d')">設計任務單</button>
+  </div>
+  <div id="content">
+
+    <!-- 時程管理 -->
+    <div id="pg-s" class="page active">
+      <div class="gctl">
+        <button class="tbtn" onclick="goToday()">今天</button>
+        <button class="gnb" onclick="shiftV(-1)">◀</button>
+        <button class="gnb" onclick="shiftV(1)">▶</button>
+        <span class="drl" id="drl">5/1 — 7/31</span>
+        <div class="vs">
+          <button class="vb" onclick="setV('week',this)">週</button>
+          <button class="vb active" onclick="setV('month',this)">月</button>
+          <button class="vb" onclick="setV('quarter',this)">季</button>
+        </div>
+      </div>
+      <div class="gc">
+        <div class="gtb"><div class="pdot" style="background:var(--c1)"></div><h3>115高雄山茶</h3><span class="pb" style="background:#e6f4ee;color:var(--c1)">43%</span><button class="bsm" style="margin-left:auto" onclick="op('pp-task')">＋ 任務</button></div>
+        <div class="gb" id="gb-c1"></div>
+        <div class="gsb"><button onclick="scG('c1',-200)">◀</button><input type="range" min="0" max="100" value="30" id="rng-c1" oninput="scR('c1',this.value)"><button onclick="scG('c1',200)">▶</button></div>
+      </div>
+      <div class="gc">
+        <div class="gtb"><div class="pdot" style="background:var(--c2)"></div><h3>116台中農場</h3><span class="pb" style="background:#e6f0fa;color:var(--c2)">53%</span><button class="bsm" style="margin-left:auto" onclick="op('pp-task')">＋ 任務</button></div>
+        <div class="gb" id="gb-c2"></div>
+        <div class="gsb"><button onclick="scG('c2',-200)">◀</button><input type="range" min="0" max="100" value="30" id="rng-c2" oninput="scR('c2',this.value)"><button onclick="scG('c2',200)">▶</button></div>
+      </div>
+    </div>
+
+    <!-- 費用管理 -->
+    <div id="pg-b" class="page">
+      <div class="dc"><div class="dch"><div class="pdot" style="background:var(--c1)"></div><h3>115高雄山茶</h3></div><div class="bo"><div class="bi"><div class="lb">合約金額</div><div class="vl">NT$5,470,000</div></div><div class="bi"><div class="lb">合約未稅</div><div class="vl">NT$5,209,524</div></div><div class="bi"><div class="lb">可用成本</div><div class="vl">NT$2,604,762</div></div><div class="bi"><div class="lb">已支出合計</div><div class="vl" style="color:#c0392b">NT$260,000</div></div><div class="bi"><div class="lb">剩餘預算</div><div class="vl" style="color:var(--c1)">NT$2,344,762</div></div></div><div class="bbw"><div style="font-size:10px;color:var(--t3)">預算使用率 10%</div><div class="bbt"><div class="bbf" style="width:10%;background:var(--c1)"></div></div></div><div class="wir"><div class="wn">山茶評鑒</div><div class="wns"><div><div class="wl">可用</div><div class="wv">NT$120,000</div></div><div><div class="wl">已支出</div><div class="wv" style="color:#c0392b">NT$70,000</div></div><div><div class="wl">剩餘</div><div class="wv" style="color:var(--c1)">NT$50,000</div></div></div></div><div class="wir"><div class="wn">成果展</div><div class="wns"><div><div class="wl">可用</div><div class="wv">NT$80,000</div></div><div><div class="wl">已支出</div><div class="wv" style="color:#c0392b">NT$30,000</div></div><div><div class="wl">剩餘</div><div class="wv" style="color:var(--c1)">NT$50,000</div></div></div></div></div>
+      <div class="dc"><div class="dch"><div class="pdot" style="background:var(--c2)"></div><h3>116台中農場</h3></div><div class="bo"><div class="bi"><div class="lb">合約金額</div><div class="vl">NT$2,680,000</div></div><div class="bi"><div class="lb">合約未稅</div><div class="vl">NT$2,552,381</div></div><div class="bi"><div class="lb">可用成本</div><div class="vl">NT$1,276,190</div></div><div class="bi"><div class="lb">已支出合計</div><div class="vl" style="color:#c0392b">NT$20,000</div></div><div class="bi"><div class="lb">剩餘預算</div><div class="vl" style="color:var(--c2)">NT$1,256,190</div></div></div><div class="bbw"><div style="font-size:10px;color:var(--t3)">預算使用率 2%</div><div class="bbt"><div class="bbf" style="width:2%;background:var(--c2)"></div></div></div></div>
+    </div>
+
+    <!-- 支出明細 -->
+    <div id="pg-e" class="page">
+      <div class="dc"><div class="dch"><div class="pdot" style="background:var(--c1)"></div><h3>115高雄山茶</h3><button class="bsm" style="margin-left:auto" onclick="op('pp-exp')">＋ 新增支出明細</button></div><div style="overflow-x:auto"><table class="dt"><thead><tr><th>支出細項</th><th>負責人</th><th>所屬工作項目</th><th>預估花費</th><th>日期</th><th>實際金額</th><th>未稅金額</th><th>狀態</th><th>備註</th></tr></thead><tbody><tr class="gr"><td colspan="9">Lynn · 2筆</td></tr><tr><td>茶葉5斤</td><td><span class="av avl">L</span> Lynn</td><td>拜訪南投茶園</td><td>NT$75,000</td><td>2026/07/18</td><td style="font-weight:600">NT$70,000</td><td>NT$66,667</td><td><span class="st std">已核銷</span></td><td>—</td></tr><tr><td>購買禮盒</td><td><span class="av avl">L</span> Lynn</td><td>台北農場主拜訪</td><td>NT$35,000</td><td>2026/06/20</td><td style="font-weight:600">NT$30,000</td><td>NT$28,571</td><td><span class="st stp">待核銷</span></td><td>—</td></tr><tr class="gr"><td colspan="9">Yann · 2筆</td></tr><tr><td>場地設備</td><td><span class="av avy">Y</span> Yann</td><td>山茶評鑒</td><td>NT$35,000</td><td>2026/06/20</td><td style="font-weight:600">NT$30,000</td><td>NT$28,571</td><td><span class="st std">已核銷</span></td><td>—</td></tr><tr><td>購買獎杯</td><td><span class="av avy">Y</span> Yann</td><td>成果展頒獎</td><td>NT$25,000</td><td>2026/07/17</td><td style="font-weight:600">NT$20,000</td><td>NT$19,048</td><td><span class="st stp">待核銷</span></td><td>—</td></tr></tbody></table></div></div>
+    </div>
+
+    <!-- 付款金費單 -->
+    <div id="pg-p" class="page">
+      <div class="dc"><div class="dch"><h3>付款申請單</h3><span style="font-size:11px;color:var(--t3);margin-left:8px">填寫後確認資料列印</span></div>
+        <div class="pfw">
+          <div>
+            <div class="fg"><label>申請部門</label><input type="text" id="p-dept" value="璽墨"></div>
+            <div class="fg"><label>申請日期</label><input type="date" id="p-date" value="2026-06-12"></div>
+            <div class="fg"><label>支付對象</label><input type="text" id="p-payee" placeholder="OOO"></div>
+            <div class="fg"><label>廠商名稱</label><input type="text" id="p-vendor" placeholder="OOOO"></div>
+            <div class="fg"><label>支付性質</label><div class="ntags">
+              <span class="ntag on" onclick="this.classList.toggle('on')">貨款</span>
+              <span class="ntag on2" onclick="this.classList.toggle('on2')">工程款</span>
+              <span class="ntag" onclick="this.classList.toggle('on')">服務費</span>
+              <span class="ntag" onclick="this.classList.toggle('on')">其他</span>
+            </div></div>
+          </div>
+          <div>
+            <div class="fg"><label>支付方式</label><select id="p-method"><option>現金</option><option>匯款</option><option>支票</option></select></div>
+            <div class="fg"><label>事由</label><input type="text" id="p-reason" placeholder="填寫付款事由"></div>
+            <div class="fg"><label>備註</label><input type="text" id="p-remark" placeholder="備註說明"></div>
+            <div class="fg"><label>付款總金額</label><input type="text" id="p-total" placeholder="NT$0"></div>
+            <button class="bsub" onclick="prevPay()">確認資料預覽</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 設計任務單 -->
+    <div id="pg-d" class="page">
+      <div class="dc"><div class="dch"><div class="pdot" style="background:var(--c1)"></div><h3>山茶評鑒</h3><button class="bsm" style="margin-left:auto" onclick="op('pp-des')">＋ 新增設計任務單</button></div><div style="overflow-x:auto"><table class="dt"><thead><tr><th>設計項目名稱</th><th>所屬工作項目</th><th>負責PM</th><th>項目</th><th>設計需求</th><th>設計師</th><th>狀態</th><th>預算</th><th>初稿</th><th>完稿</th><th>成品</th></tr></thead><tbody><tr class="gr"><td colspan="11">Lynn · 1筆</td></tr><tr><td style="font-weight:500">制度修改</td><td>山茶評鑒</td><td><span class="av avy">Y</span> Yann</td><td>A</td><td>Logo修改</td><td><span class="av avl">L</span> Lynn</td><td><span class="ds">進行中</span></td><td>—</td><td>6/12</td><td>6/25</td><td>8/14</td></tr></tbody></table></div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ 右側 E ══ -->
+<div id="rp">
+  <div class="eh"><h3>墨日誌小天地</h3><div class="dn"><button>‹</button><span style="font-size:12px;font-weight:600">6/11</span><button>›</button></div></div>
+  <div class="jl">
+    <div class="ji"><div class="jt"><span class="av avl">L</span><span class="jn">Lynn</span><span class="jpt" style="background:var(--c1)">高雄山茶</span></div><div class="jtask">拜訪OO茶主 · 6/12 · 進度50%</div><div class="jnote">今日與茶主確認樣品規格，下次帶合約</div></div>
+    <div class="ji"><div class="jt"><span class="av avy">Y</span><span class="jn">Yann</span><span class="jpt" style="background:var(--c2)">台中農場</span></div><div class="jtask">購買禮物 · 6/18 · 進度70%</div><div class="jnote">禮盒已選定，等待報價確認</div></div>
+    <div class="ji"><div class="jt"><span class="av avl">L</span><span class="jn">Lynn</span><span class="jpt" style="background:var(--c1)">高雄山茶</span></div><div class="jtask">茶葉樣品確認 · 6/15 · 進度30%</div><div class="jnote">樣品已收到，待品質確認</div></div>
+  </div>
+</div>
+
+</div><!-- /body -->
+
+<!-- ══ POPUPS ══ -->
+<div class="po" id="pp-proj"><div class="pp"><div class="pph"><h3>建立新標案</h3><button class="ppc" onclick="cl('pp-proj')">✕</button></div><div class="ppb2"><div><div class="fg"><label>標案名稱</label><input type="text" placeholder="115花蓮山茶"></div><div class="fg"><label>主PM</label><select><option>Lynn</option><option>Yann</option></select></div><div class="fg"><label>合約開始日</label><input type="date"></div><div class="fg"><label>合約結束日</label><input type="date"></div><div class="fg"><label>合約金額</label><input type="text" placeholder="NT$0" id="ca" oninput="calcP()"></div></div><div><div class="fbox"><div class="fi"><div class="fl">合約未稅金額</div><div class="fv" id="fu">—</div></div><div class="fi"><div class="fl">可用成本</div><div class="fv" id="fc">—</div></div><div class="fi"><div class="fl">已支出合計</div><div class="fv">NT$0</div></div><div class="fi"><div class="fl">剩餘預算</div><div class="fv" id="fr">—</div></div></div><div style="font-size:10px;color:var(--t3);line-height:1.8">合約未稅 = 合約金額 ÷ 1.05<br>可用成本 = 合約未稅 ÷ 2<br>剩餘預算 = 可用成本 − 已支出</div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-proj')">取消</button><button class="bpri">新增</button></div></div></div>
+
+<div class="po" id="pp-work"><div class="pp ppw"><div class="pph"><h3>建立標案的工作項目</h3><button class="ppc" onclick="cl('pp-work')">✕</button></div><div class="ppb"><div class="fg"><label>標案</label><select><option>115高雄山茶</option><option>116台中農場</option></select></div><div class="fg"><label>開始日期</label><input type="date"></div><div style="display:grid;grid-template-columns:1fr 90px 1fr 70px 50px;gap:6px;padding:4px 0;font-size:10px;color:var(--t3)"><span>工作項目名稱</span><span>天數</span><span>負責夥伴</span><span>可用成本</span><span>權重</span></div><div class="slist" id="sl"><div class="srow"><input type="text" placeholder="成果發表"><div class="dc2"><button onclick="adj(this,-1)">−</button><span>6</span><button onclick="adj(this,1)">＋</button></div><select><option>林OO</option><option>張OO</option></select><input type="text" placeholder="NT$30,000"><input type="text" placeholder="40%"></div></div><button class="bads" onclick="addS()">＋ 新增工作項目</button></div><div class="ppf"><button class="bcan" onclick="cl('pp-work')">取消</button><button class="bpri">新增</button></div></div></div>
+
+<div class="po" id="pp-task"><div class="pp"><div class="pph"><h3>建立新任務</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fg"><label>任務名稱</label><input type="text" placeholder="拜訪OO茶主"></div><div class="fg"><label>負責人</label><select><option>Lynn</option><option>Yann</option></select></div><div class="fg"><label>所屬工作項目</label><select><option>三茶評鑒</option><option>成果展</option><option>南投茶園</option></select></div><div class="fg"><label>預計完成日</label><input type="date"></div><div class="fg"><label>進度狀態</label><select><option>未開始</option><option>進行中10%</option><option>進行中20%</option><option>進行中30%</option><option>進行中40%</option><option>進行中50%</option><option>進行中60%</option><option>進行中70%</option><option>進行中80%</option><option>進行中90%</option><option>已完成</option></select></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri">新增</button></div></div></div>
+
+<div class="po" id="pp-td"><div class="pp"><div class="pph" style="background:var(--c1)"><h3 style="color:#fff">拜訪OO茶主</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-td')">✕</button></div><div class="ppb"><div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;background:var(--sf2);padding:2px 8px;border-radius:20px">三茶評鑒</span><span class="av avl">L</span><span style="font-size:12px;color:var(--t2)">Lynn · 6/12</span><span style="font-size:11px;color:#e05a00;font-weight:600">3DS</span></div><div class="fg"><label>進度狀態</label><select><option>進行中50%</option></select></div><div class="fg"><label>備註</label><textarea rows="3" placeholder="填寫今日進度備註..."></textarea></div><button class="bads" style="margin-bottom:8px" onclick="cl('pp-td');op('pp-task')">＋ 新增其他任務</button><button class="bsub" onclick="cl('pp-td');alert('已轉換為今日日報！')">轉換成今日日報</button></div></div></div>
+
+<div class="po" id="pp-exp"><div class="pp"><div class="pph"><h3>新增支出明細</h3><button class="ppc" onclick="cl('pp-exp')">✕</button></div><div class="ppb"><div class="fg"><label>支出細項</label><input type="text" placeholder="茶葉5斤"></div><div class="fg"><label>所屬工作項目</label><select><option>拜訪南投茶園</option><option>山茶評鑒</option></select></div><div class="fg"><label>負責人</label><select><option>Lynn</option><option>Yann</option></select></div><div class="fg"><label>預估花費</label><input type="text" placeholder="NT$0"></div><div class="fg"><label>日期</label><input type="date"></div><div class="fg"><label>實際金額</label><input type="text" placeholder="NT$0" id="aa" oninput="calcE()"></div><div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ua" readonly style="background:#f0f0f0;color:var(--t3)"></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-exp')">取消</button><button class="bpri">新增</button></div></div></div>
+
+<div class="po" id="pp-des"><div class="pp ppw"><div class="pph"><h3>建立新設計任務</h3><button class="ppc" onclick="cl('pp-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" placeholder="Logo"></div><div class="fg"><label>所屬工作項目</label><select><option>三茶評鑒</option><option>成果展</option></select></div><div class="fg"><label>負責PM</label><select><option>Lynn</option><option>Yann</option></select></div><div class="fg"><label>項目</label><input type="text" placeholder="A"></div><div class="fg"><label>設計需求</label><input type="text" placeholder="AA"></div><div class="fg"><label>設計師</label><select><option>張OO</option><option>林OO</option></select></div><div class="fg"><label>狀態</label><select><option>進行中</option><option>待開始</option><option>已完成</option></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date"></div><div class="fg"><label>完稿交付日</label><input type="date"></div><div class="fg"><label>成品交付日</label><input type="date"></div><div class="fg"><label>備註</label><textarea rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-des')">取消</button><button class="bpri">新增</button></div></div></div>
+
+<!-- 付款預覽 -->
+<div class="po" id="pp-prev" style="align-items:flex-start;padding-top:30px"><div class="pp" style="width:820px;max-height:82vh"><div class="pph"><h3>付款申請單預覽</h3><button class="ppc" onclick="cl('pp-prev')">✕</button></div><div class="ppb" id="prev-body" style="padding:20px"></div><div class="ppf"><button class="bcan" onclick="cl('pp-prev')">返回修改</button><button class="bpri" onclick="doPrint()">🖨 確認列印</button></div></div></div>
+
+<script>
+// ── 基本互動 ──
+var lc=false, rc=false;
+function toggleL(){
+  lc=!lc;
+  document.getElementById('lp').classList.toggle('col',lc);
+  var btn=document.getElementById('tl');
+  btn.textContent=lc?'▶':'◀';
+  btn.style.left=lc?'0':'calc(8px + var(--lw))';
+}
+function toggleR(){
+  rc=!rc;
+  document.getElementById('rp').classList.toggle('col',rc);
+  var btn=document.getElementById('tr');
+  btn.textContent=rc?'◀':'▶';
+  btn.style.right=rc?'0':'calc(8px + var(--rw))';
+}
+function tgp(row){row.classList.toggle('open');row.nextElementSibling.classList.toggle('open');}
+function sw(btn,id){
+  document.querySelectorAll('.ntab').forEach(function(t){t.classList.remove('active');});
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  btn.classList.add('active');
+  document.getElementById(id).classList.add('active');
+}
+function sf(el,color){
+  document.querySelectorAll('.ftag').forEach(function(t){t.style.background='';t.style.color='';});
+  el.style.background=color||'var(--accent)';
+  el.style.color='#fff';
+}
+function op(id){document.getElementById(id).classList.add('open');}
+function cl(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.po').forEach(function(o){
+  o.addEventListener('click',function(e){if(e.target===o)o.classList.remove('open');});
+});
+function calcP(){
+  var v=parseInt(document.getElementById('ca').value.replace(/\D/g,''))||0;
+  var u=Math.round(v/1.05),c=Math.round(u/2);
+  var f=function(n){return n?'NT$'+n.toLocaleString():'—';};
+  document.getElementById('fu').textContent=f(u);
+  document.getElementById('fc').textContent=f(c);
+  document.getElementById('fr').textContent=f(c);
+}
+function calcE(){
+  var v=parseInt(document.getElementById('aa').value.replace(/\D/g,''))||0;
+  document.getElementById('ua').value=v?'NT$'+Math.round(v/1.05).toLocaleString():'';
+}
+function adj(btn,d){var s=btn.parentElement.querySelector('span');s.textContent=Math.max(1,parseInt(s.textContent)+d);}
+function addS(){
+  var r=document.createElement('div');r.className='srow';
+  r.innerHTML='<input type="text" placeholder="工作項目名稱"><div class="dc2"><button onclick="adj(this,-1)">−</button><span>5</span><button onclick="adj(this,1)">＋</button></div><select><option>林OO</option><option>張OO</option></select><input type="text" placeholder="NT$0"><input type="text" placeholder="0%">';
+  document.getElementById('sl').appendChild(r);
+}
+
+// ── 付款列印 ──
+function prevPay(){
+  var dept=document.getElementById('p-dept').value;
+  var date=document.getElementById('p-date').value;
+  var payee=document.getElementById('p-payee').value;
+  var vendor=document.getElementById('p-vendor').value;
+  var method=document.getElementById('p-method').value;
+  var reason=document.getElementById('p-reason').value;
+  var remark=document.getElementById('p-remark').value;
+  var total=document.getElementById('p-total').value;
+  var nats=[];
+  document.querySelectorAll('.ntag.on,.ntag.on2').forEach(function(t){nats.push(t.textContent);});
+  var nature=nats.join('、');
+  var nums=total.replace(/[^0-9]/g,'').padStart(8,'0');
+  var labs=['仟','佰','拾','萬','仟','佰','拾','元'];
+  var amtH='';
+  for(var i=0;i<8;i++){amtH+='<span style="border-bottom:1px solid #333;min-width:18px;display:inline-block;text-align:center;margin:0 1px">'+(nums[i]==='0'?'':nums[i])+'</span>'+labs[i]+' ';}
+  amtH+='整';
+  document.getElementById('prev-body').innerHTML=
+    '<div style="font-family:-apple-system,PingFang TC,sans-serif;font-size:13px;color:#1a1916">'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:4px">璽墨</div>'
+    +'<h2 style="text-align:center;font-size:20px;font-weight:700;margin-bottom:12px">付款申請單</h2>'
+    +'<div style="margin-bottom:10px">申請日期：'+date+'</div>'
+    +'<table style="width:100%;border-collapse:collapse;margin-bottom:12px">'
+    +'<tr><td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600;width:15%">申請部門</td><td style="border:1px solid #ccc;padding:8px;background:#e8f4e8;width:20%">'+dept+'</td>'
+    +'<td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600;width:15%">支付對象</td><td style="border:1px solid #ccc;padding:8px;background:#e8f4e8;width:20%">'+payee+'</td>'
+    +'<td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600;width:15%">廠商名稱</td><td style="border:1px solid #ccc;padding:8px;background:#e8f4e8">'+vendor+'</td></tr>'
+    +'<tr><td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600">支付性質</td><td colspan="3" style="border:1px solid #ccc;padding:8px">'+nature+'</td>'
+    +'<td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600">支付方式</td><td style="border:1px solid #ccc;padding:8px">'+method+'</td></tr>'
+    +'<tr><td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600">事由</td><td colspan="3" style="border:1px solid #ccc;padding:8px;background:#e8f4e8">'+reason+'</td>'
+    +'<td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600">備註</td><td style="border:1px solid #ccc;padding:8px;background:#e8f4e8">'+remark+'</td></tr>'
+    +'<tr><td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600">付款總金額</td>'
+    +'<td colspan="3" style="border:1px solid #ccc;padding:8px;font-size:12px">'+amtH+'</td>'
+    +'<td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600">合計</td><td style="border:1px solid #ccc;padding:8px;font-weight:700">'+total+'</td></tr>'
+    +'</table>'
+    +'<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'
+    +'<tr><td style="border:1px solid #ccc;padding:12px 16px;text-align:center;width:33%">董事長室：<br><br></td>'
+    +'<td style="border:1px solid #ccc;padding:12px 16px;text-align:center;width:33%">主管：<br><br></td>'
+    +'<td style="border:1px solid #ccc;padding:12px 16px;text-align:center;width:33%">申請人：<br><br></td></tr>'
+    +'</table>'
+    +'<div style="font-size:11px;color:#666;display:flex;justify-content:space-between">'
+    +'<span>版本：01-2020-12</span>'
+    +'<span>財務部/主管：________ &nbsp; 出納：________ &nbsp; 會計：________</span>'
+    +'</div></div>';
+  op('pp-prev');
+}
+function doPrint(){
+  var content=document.getElementById('prev-body').innerHTML;
+  var w=window.open('','_blank','width=860,height=700');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>付款申請單</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,"PingFang TC",sans-serif;padding:28px}@media print{body{padding:14px}}</style></head><body>'+content+'<script>window.onload=function(){window.print();}<\/script></body></html>');
+  w.document.close();
+}
+
+// ── 甘特圖 ──
+var PDATA={
+  c1:{color:'#2d6a4f',rows:[
+    {n:'山茶評鑒',m:'6/10–6/13 · 3Ds',w:'30/15',bars:[{s:'2026-06-10',e:'2026-06-13',l:'拜訪OO茶主',o:1},{s:'2026-06-25',e:'2026-07-02',l:'拜訪OO茶主',o:.45}]},
+    {n:'成果展',m:'6/14–6/20 · 5Ds',w:'40/25',bars:[{s:'2026-06-14',e:'2026-06-20',l:'拜訪OO茶主',o:1}]},
+    {n:'南投茶園',m:'6/12–6/18 · 5Ds',w:'20/15',bars:[{s:'2026-06-12',e:'2026-06-18',l:'拜訪OO茶主',o:1},{s:'2026-06-28',e:'2026-07-05',l:'拜訪OO茶主',o:.45}]},
+    {n:'農場主拜訪',m:'6/20–6/26 · 5Ds',w:'10/5',bars:[{s:'2026-07-08',e:'2026-07-15',l:'拜訪OO茶主',o:.45}]}
+  ]},
+  c2:{color:'#1a4a7a',rows:[
+    {n:'台中評鑒',m:'6/10–6/13',w:'30/20',bars:[{s:'2026-06-10',e:'2026-06-13',l:'拜訪OO茶主',o:1},{s:'2026-06-25',e:'2026-07-02',l:'拜訪OO茶主',o:.45}]},
+    {n:'成果發表',m:'6/14–6/18',w:'40/30',bars:[{s:'2026-06-14',e:'2026-06-18',l:'拜訪OO茶主',o:1}]},
+    {n:'茶農訪視',m:'6/19–6/23',w:'30/15',bars:[{s:'2026-06-19',e:'2026-06-23',l:'拜訪OO茶主',o:1},{s:'2026-07-08',e:'2026-07-15',l:'拜訪OO茶主',o:.45}]}
+  ]}
+};
+var vMode='month', vOff=0, CW=28;
+var TODAY=new Date(2026,5,12);
+
+function dif(a,b){return Math.round((b-a)/86400000);}
+
+function getRange(){
+  if(vMode==='week'){
+    var s=new Date(2026,4,1);s.setDate(s.getDate()+vOff*7);
+    var e=new Date(s);e.setDate(e.getDate()+27);return{s:s,e:e};
+  }else if(vMode==='month'){
+    return{s:new Date(2026,4+vOff,1),e:new Date(2026,7+vOff,0)};
+  }else{
+    return{s:new Date(2026,3+vOff*3,1),e:new Date(2026,6+vOff*3+3,0)};
+  }
+}
+
+function buildG(key){
+  var proj=PDATA[key];
+  var r=getRange(),vs=r.s,ve=r.e;
+  var total=dif(vs,ve)+1,tw=total*CW;
+  var toff=dif(vs,TODAY),tx=toff*CW;
+
+  // months
+  var mHTML='',mc=new Date(vs.getFullYear(),vs.getMonth(),1);
+  while(mc<=ve){
+    var ms=new Date(Math.max(mc,vs)),me2=new Date(Math.min(new Date(mc.getFullYear(),mc.getMonth()+1,0),ve));
+    var days=dif(ms,me2)+1;
+    mHTML+='<div class="gmc" style="width:'+(days*CW)+'px">'+(mc.getMonth()+1)+'月</div>';
+    mc.setMonth(mc.getMonth()+1);
+  }
+
+  // dates
+  var dHTML='';
+  for(var i=0;i<total;i++){
+    var d=new Date(vs);d.setDate(d.getDate()+i);
+    var isTd=dif(TODAY,d)===0;
+    var lbl=(d.getDate()===1||d.getDate()%5===0)?((d.getMonth()+1)+'/'+d.getDate()):'';
+    dHTML+='<div class="gdc'+(isTd?' tdc':'')+'" style="width:'+CW+'px">'+lbl+'</div>';
+  }
+
+  var tlHTML=toff>=0&&toff<=total?'<div class="tline" style="left:'+tx+'px"></div>':'';
+  var tlHdr=toff>=0&&toff<=total?'<div class="tlineh" style="left:'+tx+'px"></div>':'';
+
+  // fixed left
+  var fixH='<div class="gfh"><span>工作項目</span></div>';
+  proj.rows.forEach(function(row){
+    fixH+='<div class="grl"><div class="grn">'+row.n+'</div><div class="grm">'+row.m+'</div></div>';
+  });
+
+  // timeline
+  var tmH='<div class="gmr" style="width:'+tw+'px;position:relative">'+mHTML+tlHdr+'</div>';
+  tmH+='<div class="gdr" style="width:'+tw+'px;position:relative">'+dHTML+'</div>';
+  proj.rows.forEach(function(row){
+    var bH=tlHTML;
+    row.bars.forEach(function(bar){
+      var bs=new Date(bar.s),be=new Date(bar.e);
+      var bx=dif(vs,bs)*CW,bw=(dif(bs,be)+1)*CW-2;
+      if(bx+bw<0||bx>tw)return;
+      var ax=Math.max(0,bx),aw=Math.min(bw,tw-ax);
+      bH+='<div class="gbar" style="left:'+ax+'px;width:'+aw+'px;background:'+proj.color+';opacity:'+bar.o+'">'+bar.l+'</div>';
+    });
+    tmH+='<div class="gtr" style="width:'+tw+'px">'+bH+'</div>';
+  });
+
+  var gb=document.getElementById('gb-'+key);
+  gb.innerHTML='<div class="gf">'+fixH+'</div><div class="gsw" id="gsw-'+key+'"><div class="gtc" style="width:'+tw+'px">'+tmH+'</div></div>';
+
+  var sw2=document.getElementById('gsw-'+key);
+  var rng=document.getElementById('rng-'+key);
+  sw2.onscroll=function(){
+    var max=sw2.scrollWidth-sw2.clientWidth;
+    if(max>0)rng.value=(sw2.scrollLeft/max)*100;
+  };
+  if(toff>5)sw2.scrollLeft=Math.max(0,tx-200);
+}
+
+function updLabel(){
+  var r=getRange();
+  document.getElementById('drl').textContent=(r.s.getMonth()+1)+'/'+r.s.getDate()+' — '+(r.e.getMonth()+1)+'/'+r.e.getDate();
+}
+function renderAll(){buildG('c1');buildG('c2');updLabel();}
+function setV(m,btn){
+  vMode=m;vOff=0;
+  document.querySelectorAll('.vb').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  renderAll();
+}
+function shiftV(d){vOff+=d;renderAll();}
+function goToday(){
+  vOff=0;renderAll();
+  ['c1','c2'].forEach(function(k){
+    var r=getRange(),tx2=dif(r.s,TODAY)*CW;
+    var el=document.getElementById('gsw-'+k);
+    if(el)el.scrollLeft=Math.max(0,tx2-200);
+  });
+}
+function scG(k,d){var el=document.getElementById('gsw-'+k);if(el)el.scrollLeft+=d;}
+function scR(k,v){var el=document.getElementById('gsw-'+k);if(el){var max=el.scrollWidth-el.clientWidth;el.scrollLeft=(v/100)*max;}}
+
+// 初始化
+renderAll();
+</script>
+</body>
+</html>
