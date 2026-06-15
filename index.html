@@ -588,11 +588,17 @@ function onProcFileSelect(input) {
     if (!text || text.length < 20) throw new Error('檔案內容太少，請確認是否為服務建議書');
     var parsed = parseServiceProposalText(text);
     applyProcurementParse(parsed);
-    var status = '已辨識：' + (parsed.name || '（請確認標案名稱）');
-    if (parsed.workItems.length) status += ' · ' + parsed.workItems.length + ' 個工作項目';
-    if (parsed.amount) status += ' · 合約 NT$' + parsed.amount.toLocaleString();
-    else if (!parsed.workItems.length) status += ' · 未抓到經費表，請手動填寫';
-    setProcStatus(status);
+    var status;
+    if (parsed.name && parsed.workItems.length && parsed.amount) {
+      status = '已辨識：' + parsed.name + ' · ' + parsed.workItems.length + ' 個工作項目 · 合約 NT$' + parsed.amount.toLocaleString();
+    } else if (parsed.name) {
+      status = '部分辨識：' + parsed.name;
+      if (parsed.workItems.length) status += ' · ' + parsed.workItems.length + ' 個工作項目（請確認金額）';
+      else status += ' · 未抓到經費表，請手動填寫';
+    } else {
+      status = '未完整辨識，請手動填寫或換檔再試';
+    }
+    setProcStatus(status, !parsed.workItems.length && !parsed.amount);
     document.getElementById('proc-preview').style.display = '';
     document.getElementById('np-save-btn').disabled = false;
   }).catch(function(err) {
@@ -675,15 +681,16 @@ function findBudgetTableRows(tables) {
     var header = (rows[0] || []).join(' ');
     var score = 0;
     if (/序號|項次/.test(header)) score += 2;
-    if (/服務細項|服務項目|工作項目|項目名稱|執行項目|工作內容|細項/.test(header)) score += 3;
-    if (/複價|金額|預算|小計|合計/.test(header)) score += 2;
+    if (/服務細項|服務項目|工作項目|項目名稱|執行項目|工作內容|細項|項目/.test(header)) score += 3;
+    if (/複價|金額|預算|小計|費用|單價/.test(header)) score += 2;
     var moneyRows = 0;
     rows.slice(1).forEach(function(r) {
+      if (/總金額|總計|合計/.test(r.join(''))) return;
       if (r.some(function(c) { return parseMoney(c) >= 1000; })) moneyRows++;
     });
     score += Math.min(moneyRows, 6);
-    if (/總金額|總計/.test(rows[rows.length - 1] ? rows[rows.length - 1].join('') : '')) score += 1;
-    if (score > bestScore && moneyRows >= 2) {
+    if (/總金額|總計|合計/.test(rows[rows.length - 1] ? rows[rows.length - 1].join('') : '')) score += 1;
+    if (score > bestScore && moneyRows >= 1) {
       bestScore = score;
       best = rows;
     }
@@ -698,8 +705,8 @@ function parseBudgetTableRows(rows) {
   var nameCol = -1;
   var amtCol = -1;
   header.forEach(function(h, i) {
-    if (nameCol < 0 && /服務細項|服務項目|工作項目|項目名稱|執行項目|工作內容|細項內容|細項/.test(h)) nameCol = i;
-    if (/複價|金額|預算|小計/.test(h)) amtCol = i;
+    if (nameCol < 0 && /服務細項|服務項目|工作項目|項目名稱|執行項目|工作內容|細項內容|細項|項目/.test(h)) nameCol = i;
+    if (/複價|金額|預算|小計|費用/.test(h)) amtCol = i;
   });
   if (nameCol < 0) nameCol = header.length > 1 ? 1 : 0;
   if (amtCol < 0) amtCol = header.length - 1;
@@ -778,7 +785,8 @@ function extractDocxBudgetData(file, onProgress) {
     return docP.async('text').then(function(docXml) {
       var tableRows = findBudgetTableRows(parseDocxXmlTables(docXml));
       var tableText = tableRows ? tableToText(tableRows) : '';
-      if (tableRows && parseBudgetTableRows(tableRows).length) {
+      var tableItems = tableRows ? parseBudgetTableRows(tableRows) : [];
+      if (tableItems.length) {
         return { tableText: tableText, ocrText: '' };
       }
       return findDocxBudgetImageBlobs(zip).then(function(blobs) {
@@ -898,7 +906,6 @@ function extractProcurementText(file, onProgress) {
       if (!window.mammoth) throw new Error('Word 元件載入中，請稍後再試');
       return mammoth.extractRawText({ arrayBuffer: buf }).then(function(r) {
         var text = r.value || '';
-        if (hasParsedBudgetTable(text)) return text;
         return extractDocxBudgetData(file, onProgress).then(function(data) {
           var extra = '';
           if (data.tableText) extra += '\n===BUDGET_TABLE===\n' + data.tableText;
@@ -1061,7 +1068,31 @@ function parseBudgetWorkItems(budgetText) {
       items.push({ name: nm2, days: 30, cost: parseMoney(m[3]), weight: 0 });
     }
   }
-  if (!items.length) items = parseBudgetWorkItemsFromOcr(section);
+  if (!items.length) items = parseLooseBudgetLines(section);
+  if (!items.length && /===BUDGET_(OCR|TABLE)===/.test(section)) items = parseBudgetWorkItemsFromOcr(section);
+  return items;
+}
+
+function parseLooseBudgetLines(section) {
+  var items = [];
+  var lines = section.split('\n').map(function(l) { return l.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
+  for (var i = 0; i < lines.length - 1; i++) {
+    var line = lines[i];
+    if (/^[\d,]+$/.test(line) || /^[1-9]$/.test(line) || /序號|項次|總計|合計|單位/.test(line)) continue;
+    if (line.length < 4 || line.length > 80) continue;
+    if (!/[\u4e00-\u9fff]/.test(line)) continue;
+    var nums = [];
+    for (var j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+      var found = lines[j].match(/(?:NT\$?\s*)?([\d,]+)/);
+      if (found) nums.push(parseMoney(found[1]));
+      if (/^[\u4e00-\u9fff]{4,}/.test(lines[j])) break;
+    }
+    var cost = 0;
+    nums.forEach(function(n) { if (n >= 1000) cost = Math.max(cost, n); });
+    if (cost >= 1000 && !/服務細項|工作項目|項目名稱|說明|金額/.test(line)) {
+      items.push({ name: line, days: 30, cost: cost, weight: 0 });
+    }
+  }
   return items;
 }
 
@@ -1081,14 +1112,14 @@ function parseServiceProposalText(raw) {
   var totalFromTable = 0;
   result.workItems.forEach(function(it) { totalFromTable += it.cost; });
 
-  var totalM = (budgetText || text).match(/總金額\s*(?:[（(][^）)]*[）)])?\s*([\d,]+)/);
+  var totalM = (budgetText || text).match(/(?:總金額|總\s*計|合\s*計|本案預算|契約金額|採購金額)\s*(?:[（(][^）)]*[）)])?\s*(?:新臺幣|新台幣|NT\$?)?\s*([\d,]+)/);
   if (totalM) result.amount = parseMoney(totalM[1]);
   else {
-    var nums = (budgetText || '').match(/[\d,]+/g) || [];
+    var nums = (budgetText || text).match(/[\d,]+/g) || [];
     var max = 0;
     nums.forEach(function(s) {
       var v = parseMoney(s);
-      if (v >= 1000000 && v > max) max = v;
+      if (v >= 50000 && v > max) max = v;
     });
     if (max) result.amount = max;
     else if (totalFromTable) result.amount = totalFromTable;
