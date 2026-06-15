@@ -120,19 +120,15 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .rt-due{font-size:9px;color:var(--warn);font-weight:600;margin-top:2px}
 
 /* journal page */
-.jpage{display:flex;gap:10px;min-height:calc(100vh - var(--th) - 36px)}
-.jpage-side{width:200px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px;height:fit-content;position:sticky;top:0}
-.jpage-side h4{font-size:12px;font-weight:700;margin-bottom:8px}
-.jpage-soon{font-size:10px;color:var(--t3);line-height:1.55;padding:8px;background:var(--sf2);border-radius:var(--rs);border:1px dashed var(--border)}
-.jpage-res{margin-top:8px;display:flex;flex-direction:column;gap:6px}
-.jpage-res a{font-size:10px;color:var(--c2);text-decoration:none;padding:6px 8px;background:var(--sf2);border-radius:var(--rs)}
-.jpage-res a:hover{background:#e8f0fa}
-.jpage-main{flex:1;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);display:flex;flex-direction:column;overflow:hidden}
+.jpage-single{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);display:flex;flex-direction:column;overflow:hidden;min-height:calc(100vh - var(--th) - 36px)}
 .jpage-toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .jpage-toolbar h3{font-size:14px;font-weight:700;flex:1}
 .jpage-feed{flex:1;overflow-y:auto;padding:10px 14px}
-.jpage-feed .ji{margin-bottom:12px}
-.jpage-feed .jc{padding:12px}
+.jgroup-block{margin-bottom:14px}
+.jgroup-hdr{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text);padding:8px 4px 10px;border-bottom:2px solid var(--border);margin-bottom:8px}
+.jgroup-body{padding:0 2px}
+.jperson-row{margin-bottom:10px}
+.jperson-hdr{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;margin-bottom:6px;padding:4px 2px}
 .dn{display:flex;align-items:center;gap:4px}
 .dn button{border:none;background:none;cursor:pointer;color:var(--t2);padding:2px 4px;border-radius:4px;font-size:12px}
 .dn button:hover{background:var(--sf2)}
@@ -153,7 +149,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .jc-lbl.tomorrow{background:#f3f0e8;color:#6b5a1a}
 .jc-val{flex:1;color:var(--t2);word-break:break-word}
 .jc-reason{margin-top:6px;padding:7px 9px;background:#fff8f8;border-radius:6px;border-left:3px solid #e8a0a0;font-size:10px;color:var(--danger);line-height:1.5}
-.jday-hdr{font-size:10px;font-weight:700;color:var(--t3);padding:10px 4px 5px;letter-spacing:.3px}
+.jday-hdr{font-size:13px;font-weight:700;color:var(--text);padding:10px 4px 8px;border-bottom:2px solid var(--border);margin-bottom:10px}
 .jvbtns{display:flex;gap:3px}
 .jvbtn{padding:3px 8px;border-radius:12px;border:1px solid var(--border);background:var(--sf2);font-size:10px;cursor:pointer;color:var(--t2);white-space:nowrap}
 .jvbtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -480,27 +476,18 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
     <!-- 墨日誌 -->
     <div id="pg-journal" class="page">
-      <div class="jpage">
-        <aside class="jpage-side">
-          <h4>精選資源</h4>
-          <p class="jpage-soon">Lark 圈子整合開發中，完成後會顯示在這裡。</p>
-          <div class="jpage-res">
-            <a href="https://ajpfe1xdus5o.jp.larksuite.com/base/LngibdyrAaEinbsoxBrjj9AdpAg?table=tblVs9L5WAJcE2a3" target="_blank" rel="noopener">開啟 Lark 日報表</a>
+      <div class="jpage-single">
+        <div class="jpage-toolbar">
+          <h3>墨日誌小天地</h3>
+          <div class="jvbtns" id="journal-page-tabs">
+            <button class="jvbtn active" onclick="setJournalView('date',this)">依日期</button>
+            <button class="jvbtn" onclick="setJournalView('person',this)">依人員</button>
+            <button class="jvbtn" onclick="setJournalView('block',this)">卡關</button>
           </div>
-        </aside>
-        <div class="jpage-main">
-          <div class="jpage-toolbar">
-            <h3>墨日誌小天地</h3>
-            <div class="jvbtns" id="journal-page-tabs">
-              <button class="jvbtn active" onclick="setJournalView('date',this)">依日期</button>
-              <button class="jvbtn" onclick="setJournalView('person',this)">依人員</button>
-              <button class="jvbtn" onclick="setJournalView('block',this)">卡關</button>
-            </div>
-            <button class="bjlog" onclick="openDailyLog()">＋ 填寫今日日誌</button>
-          </div>
-          <div class="jpage-feed" id="journal-page-list">
-            <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
-          </div>
+          <button class="bjlog" onclick="openDailyLog()">＋ 填寫今日日誌</button>
+        </div>
+        <div class="jpage-feed" id="journal-page-list">
+          <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
         </div>
       </div>
     </div>
@@ -638,6 +625,7 @@ function sw(btn,id){
   btn.classList.add('active');
   document.getElementById(id).classList.add('active');
   if(id==='pg-journal') renderJournalPage();
+  if(id==='pg-d') renderDesigns();
 }
 function sf(el,color){
   document.querySelectorAll('.ftag').forEach(function(t){t.style.background='';t.style.color='';});
@@ -3027,6 +3015,92 @@ function journalField(rec, keys) {
   return '';
 }
 
+function collectJournalContent(rec) {
+  var f = rec.fields || {};
+  var note = journalField(rec, ['備註', '日誌內容', '內容']) || '';
+  var blockReason = journalField(rec, ['卡關原因']) || '';
+  var doing = journalTaskNames(rec, ['進行中任務']);
+  var done = journalTaskNames(rec, ['已完成今日任務']);
+  var blocked = journalTaskNames(rec, ['卡關任務']);
+  var tomorrow = journalTaskNames(rec, ['明日預計任務']);
+  if (!doing && !done && !blocked && !tomorrow && note) {
+    var parsed = parseJournalNoteSections(note);
+    doing = parsed.doing; done = parsed.done; blocked = parsed.block; tomorrow = parsed.tomorrow;
+  }
+  return {
+    proj: journalLinkText(rec, ['所屬專案', '標案名稱', '所屬標案']) || (f['所屬標案'] && f['所屬標案'].text_arr ? f['所屬標案'].text_arr[0] : '') || '',
+    doing: doing, done: done, blocked: blocked, tomorrow: tomorrow,
+    blockReason: blockReason, note: note,
+    hasBlock: journalHasBlock(rec) || !!blocked || !!blockReason,
+    ts: journalTs(rec)
+  };
+}
+
+function mergeJournalContents(contents) {
+  var merged = { doing: [], done: [], blocked: [], tomorrow: [], blockReasons: [], notes: [], projs: [], hasBlock: false };
+  contents.forEach(function(c) {
+    if (c.proj && merged.projs.indexOf(c.proj) < 0) merged.projs.push(c.proj);
+    function pushUnique(arr, val) {
+      if (!val) return;
+      val.split('、').forEach(function(part) {
+        part = part.trim();
+        if (part && arr.indexOf(part) < 0) arr.push(part);
+      });
+    }
+    pushUnique(merged.doing, c.doing);
+    pushUnique(merged.done, c.done);
+    pushUnique(merged.blocked, c.blocked);
+    pushUnique(merged.tomorrow, c.tomorrow);
+    if (c.blockReason && merged.blockReasons.indexOf(c.blockReason) < 0) merged.blockReasons.push(c.blockReason);
+    if (c.note && merged.notes.indexOf(c.note) < 0) merged.notes.push(c.note);
+    if (c.hasBlock) merged.hasBlock = true;
+  });
+  return merged;
+}
+
+function renderJournalRows(merged) {
+  var html = '<div class="jc-rows">';
+  function row(cls, label, arr) {
+    if (!arr.length) return '';
+    return '<div class="jc-row"><span class="jc-lbl ' + cls + '">' + label + '</span><span class="jc-val">' + escHtml(arr.join('、')) + '</span></div>';
+  }
+  html += row('doing', '進行中', merged.doing);
+  html += row('done', '完成', merged.done);
+  html += row('block', '卡關', merged.blocked);
+  html += row('tomorrow', '明日', merged.tomorrow);
+  html += '</div>';
+  merged.blockReasons.forEach(function(r) {
+    html += '<div class="jc-reason">' + escHtml(r) + '</div>';
+  });
+  var hasStructured = merged.doing.length || merged.done.length || merged.blocked.length || merged.tomorrow.length;
+  merged.notes.forEach(function(n) {
+    if (!hasStructured) html += '<div class="jc-reason" style="border-left-color:var(--border);background:var(--sf2);color:var(--t2)">' + formatJournalHtml(n) + '</div>';
+  });
+  return html;
+}
+
+function renderJournalPersonCard(author, merged, opts) {
+  opts = opts || {};
+  var color = merged.projs[0] ? projColorByName(merged.projs[0]) : '';
+  var projLabel = merged.projs.join('、');
+  var html = '<div class="ji"><div class="jc' + (merged.hasBlock ? ' has-block' : '') + '">';
+  if (!opts.hideAuthor) {
+    html += '<div class="jc-hdr"><span class="av ' + avatarClass(author) + '">' + personInitial(author) + '</span>'
+      + '<span class="jn">' + escHtml(author) + '</span>';
+    if (projLabel) html += '<span class="jpt" style="background:' + color + '">' + escHtml(projLabel) + '</span>';
+    if (merged.hasBlock) html += '<span class="jblk">卡關</span>';
+    html += '</div>';
+  } else if (projLabel || merged.hasBlock) {
+    html += '<div class="jc-hdr" style="border-bottom:none;padding-bottom:4px;margin-bottom:4px">';
+    if (projLabel) html += '<span class="jpt" style="background:' + color + '">' + escHtml(projLabel) + '</span>';
+    if (merged.hasBlock) html += '<span class="jblk">卡關</span>';
+    html += '</div>';
+  }
+  html += renderJournalRows(merged);
+  html += '</div></div>';
+  return html;
+}
+
 function renderJournalHtml(mode, area, compact) {
   if (!area) return;
   var items = getJournalItemsInRange(30);
@@ -3046,10 +3120,13 @@ function renderJournalHtml(mode, area, compact) {
     var names = Object.keys(byPerson).sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
     var html = '';
     names.forEach(function(name) {
-      html += '<div class="jgroup-hdr">' + escHtml(name) + ' · ' + byPerson[name].length + ' 筆</div>';
-      byPerson[name].forEach(function(rec) {
-        html += renderJournalCard(rec, compact, true);
-      });
+      var recs = byPerson[name].sort(function(a, b) { return (journalTs(b) || 0) - (journalTs(a) || 0); });
+      var contents = recs.map(collectJournalContent);
+      var merged = mergeJournalContents(contents);
+      html += '<div class="jgroup-block">';
+      html += '<div class="jgroup-hdr"><span class="av ' + avatarClass(name) + '">' + personInitial(name) + '</span>' + escHtml(name) + '<span class="tc" style="font-size:10px;color:var(--t3);font-weight:600">' + recs.length + ' 筆回報</span></div>';
+      html += '<div class="jgroup-body">' + renderJournalPersonCard(name, merged, { hideAuthor: true }) + '</div>';
+      html += '</div>';
     });
     area.innerHTML = html;
     return;
@@ -3068,13 +3145,25 @@ function renderJournalHtml(mode, area, compact) {
   var html2 = '';
   dayKeys.forEach(function(dayTs) {
     var d = new Date(dayTs);
+    var dayRecs = byDay[dayTs];
+    var byPersonDay = {};
+    dayRecs.forEach(function(rec) {
+      var author = journalPersonName(rec) || '未指定';
+      if (!byPersonDay[author]) byPersonDay[author] = [];
+      byPersonDay[author].push(rec);
+    });
+    html2 += '<div class="jgroup-block">';
     html2 += '<div class="jday-hdr">' + (d.getMonth()+1) + '/' + d.getDate() + '（' + weekdayLabel(d) + '）</div>';
-    byDay[dayTs].sort(function(a, b) {
-      return (journalHasBlock(b) ? 1 : 0) - (journalHasBlock(a) ? 1 : 0);
+    html2 += '<div class="jgroup-body">';
+    Object.keys(byPersonDay).sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); }).forEach(function(name) {
+      var recs = byPersonDay[name];
+      var merged = mergeJournalContents(recs.map(collectJournalContent));
+      html2 += '<div class="jperson-row">';
+      html2 += '<div class="jperson-hdr"><span class="av ' + avatarClass(name) + '">' + personInitial(name) + '</span>' + escHtml(name) + '</div>';
+      html2 += renderJournalPersonCard(name, merged, { hideAuthor: true });
+      html2 += '</div>';
     });
-    byDay[dayTs].forEach(function(rec) {
-      html2 += renderJournalCard(rec, compact, mode !== 'date');
-    });
+    html2 += '</div></div>';
   });
   area.innerHTML = html2;
 }
@@ -3143,46 +3232,60 @@ function renderDesigns() {
   workitemsData.forEach(function(wi) {
     wiMap[wi.record_id] = {
       name: wi.fields['工作項目名稱'] || '',
-      project: wi.fields['所屬標案'] && wi.fields['所屬標案'].text_arr ? wi.fields['所屬標案'].text_arr[0] : ''
+      project: getProjectNameFromWi(wi)
     };
   });
   var byProject = {};
   designsData.forEach(function(rec) {
     var f = rec.fields;
-    var wiArr = f['所屬工作項目'];
-    var wiId = wiArr && wiArr.record_ids ? wiArr.record_ids[0] : null;
+    var wiIds = getLinkIds(f['所屬工作項目']);
+    var wiId = wiIds[0] || null;
     var wi = wiId ? wiMap[wiId] : null;
-    var proj = wi ? wi.project : '其他';
+    var proj = wi ? (wi.project || '其他') : '其他';
     if (!byProject[proj]) byProject[proj] = [];
     byProject[proj].push({
       name: f['設計項目名稱'] || '',
-      wiName: wi ? wi.name : '',
+      wiName: wi ? wi.name : getLinkText(f['所屬工作項目']) || '',
       pm: personName(f['負責PM']),
       item: f['項目'] || '',
       req: f['設計需求'] || '',
       designer: personName(f['設計師']),
       status: f['狀態'] || '',
       budget: f['預算金費'] || f['預算'] || '—',
+      spent: f['實際花費'] || '—',
       draft: f['初稿交付日'] ? fmtDate(f['初稿交付日']) : '—',
       final: f['完稿交付日'] ? fmtDate(f['完稿交付日']) : '—',
       deliver: f['成品交付日'] ? fmtDate(f['成品交付日']) : '—'
     });
   });
+
+  function renderProjectBlock(pname, color) {
+    var list = byProject[pname];
+    if (!list || !list.length) return '';
+    var rows = '';
+    list.forEach(function(d) {
+      rows += '<tr><td style="font-weight:500">' + escHtml(d.name) + '</td><td>' + escHtml(d.wiName) + '</td><td>' + escHtml(d.pm) + '</td><td>' + escHtml(d.item) + '</td><td>' + escHtml(d.req) + '</td><td>' + escHtml(d.designer) + '</td>'
+        + '<td><span class="ds">' + escHtml(d.status) + '</span></td><td>' + (typeof d.budget === 'number' ? ntf(d.budget) : escHtml(String(d.budget))) + '</td>'
+        + '<td>' + (typeof d.spent === 'number' ? ntf(d.spent) : escHtml(String(d.spent))) + '</td>'
+        + '<td>' + d.draft + '</td><td>' + d.final + '</td><td>' + d.deliver + '</td></tr>';
+    });
+    return '<div class="dc"><div class="dch"><div class="pdot" style="background:' + color + '"></div><h3>' + escHtml(pname) + '</h3>'
+      + '<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-des\')">＋ 新增設計任務單</button></div>'
+      + '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>設計項目名稱</th><th>所屬工作項目</th><th>負責PM</th><th>項目</th><th>設計需求</th><th>設計師</th><th>狀態</th><th>預算</th><th>實際花費</th><th>初稿</th><th>完稿</th><th>成品</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+  }
+
   var html = '';
   projectsData.forEach(function(rec, i) {
     var pname = rec.fields['標案名稱'] || '';
-    if (!byProject[pname] || !byProject[pname].length) return;
-    var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
-    var rows = '';
-    byProject[pname].forEach(function(d) {
-      rows += '<tr><td style="font-weight:500">' + d.name + '</td><td>' + d.wiName + '</td><td>' + d.pm + '</td><td>' + d.item + '</td><td>' + d.req + '</td><td>' + d.designer + '</td>'
-        + '<td><span class="ds">' + d.status + '</span></td><td>' + (typeof d.budget === 'number' ? ntf(d.budget) : d.budget) + '</td>'
-        + '<td>' + d.draft + '</td><td>' + d.final + '</td><td>' + d.deliver + '</td></tr>';
-    });
-    html += '<div class="dc"><div class="dch"><div class="pdot" style="background:' + color + '"></div><h3>' + pname + '</h3>'
-      + '<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-des\')">＋ 新增設計任務單</button></div>'
-      + '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>設計項目名稱</th><th>所屬工作項目</th><th>負責PM</th><th>項目</th><th>設計需求</th><th>設計師</th><th>狀態</th><th>預算</th><th>初稿</th><th>完稿</th><th>成品</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+    html += renderProjectBlock(pname, PROJECT_COLORS[i % PROJECT_COLORS.length]);
     delete byProject[pname];
+  });
+  if (byProject['其他'] && byProject['其他'].length) {
+    html += renderProjectBlock('其他', '#888');
+    delete byProject['其他'];
+  }
+  Object.keys(byProject).forEach(function(pname) {
+    if (byProject[pname] && byProject[pname].length) html += renderProjectBlock(pname, '#888');
   });
   area.innerHTML = html || '<div style="padding:20px;color:var(--t3)">尚無設計任務單</div>';
 }
@@ -3516,7 +3619,8 @@ function saveDesign() {
   apiPost('designs', fields).then(function() {
     cl('pp-des');
     document.getElementById('ds-name').value = '';
-    loadData();
+    loadExtraData();
+    renderDesigns();
     alert('設計任務單已新增！');
   }).catch(function(err) {
     alert('新增失敗：' + err.message);
