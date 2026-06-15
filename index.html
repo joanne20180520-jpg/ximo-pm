@@ -14,27 +14,27 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;font-size:13px}
- 
+
 /* topbar */
 #topbar{position:fixed;top:0;left:0;right:0;height:var(--th);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;z-index:100}
 .logo{font-size:16px;font-weight:700;letter-spacing:2px}
- 
+
 /* body */
 #body{position:fixed;top:var(--th);left:0;right:0;bottom:0;display:flex;gap:8px;padding:8px}
- 
+
 /* toggle buttons - fixed on screen edges */
 .tog{position:fixed;top:50%;transform:translateY(-50%);width:20px;height:52px;background:var(--surface);border:1px solid var(--border);cursor:pointer;color:var(--t2);display:flex;align-items:center;justify-content:center;font-size:10px;z-index:200;box-shadow:var(--shadow);transition:left .25s,right .25s}
 .tog:hover{background:var(--sf2);color:var(--text)}
 #tl{left:calc(8px + var(--lw));border-left:none;border-radius:0 6px 6px 0}
 #tr{right:calc(8px + var(--rw));border-right:none;border-radius:6px 0 0 6px}
- 
+
 /* panels */
 #lp{order:1;width:var(--lw);flex-shrink:0;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;transition:width .25s,opacity .25s,margin .25s}
 #lp.col{width:0;opacity:0;margin-right:-8px;pointer-events:none}
 #cp{order:2;flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
 #rp{order:3;width:var(--rw);flex-shrink:0;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;transition:width .25s,opacity .25s,margin .25s}
 #rp.col{width:0;opacity:0;margin-left:-8px;pointer-events:none}
- 
+
 /* A区 */
 .ah{height:var(--th);padding:0 10px;display:flex;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0;gap:5px}
 .sl{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px}
@@ -52,7 +52,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .si{padding:5px 9px 5px 12px;font-size:11px;color:var(--t2);font-weight:500;cursor:pointer;border-radius:var(--rs);display:flex;align-items:center;justify-content:space-between}
 .si:hover{background:var(--sf2)}
 .sd{font-size:10px;background:var(--border);color:var(--t2);padding:1px 5px;border-radius:3px;font-weight:600}
- 
+
 /* B区 */
 .bs{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0;border-top:1px solid var(--border)}
 .bh{padding:7px 10px 4px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
@@ -72,18 +72,18 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .tds{font-size:10px;color:#e05a00;font-weight:700}
 .tpb{height:2px;background:var(--border);border-radius:1px;margin-top:5px;overflow:hidden}
 .tpf{height:100%;border-radius:1px}
- 
+
 /* C tabs */
 #tabs{background:var(--surface);border-radius:var(--r) var(--r) 0 0;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:2px;height:var(--th);flex-shrink:0;box-shadow:var(--shadow)}
 .ntab{padding:5px 11px;border-radius:var(--rs);border:none;background:none;font-size:13px;cursor:pointer;color:var(--t2);transition:all .15s;white-space:nowrap}
 .ntab:hover{background:var(--sf2)}
 .ntab.active{background:var(--accent);color:#fff}
- 
+
 /* D content */
 #content{flex:1;overflow-y:auto;background:var(--bg);border-radius:0 0 var(--r) var(--r);padding:10px}
 .page{display:none}
 .page.active{display:block}
- 
+
 /* E区 */
 .eh{height:var(--th);padding:0 12px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
 .eh h3{font-size:12px;font-weight:700}
@@ -98,7 +98,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .jpt{font-size:10px;padding:1px 6px;border-radius:10px;color:#fff;font-weight:500}
 .jtask{font-size:11px;color:var(--t2);margin-bottom:3px}
 .jnote{font-size:10px;color:var(--t3);background:var(--sf2);padding:4px 7px;border-radius:4px;border-left:2px solid var(--border)}
- 
+
 /* D cards */
 .dc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
 .dch{padding:10px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
@@ -107,7 +107,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .pb{font-size:11px;padding:2px 7px;border-radius:20px;font-weight:600}
 .bsm{padding:3px 9px;border-radius:var(--rs);border:1px solid var(--border);background:var(--sf2);font-size:11px;cursor:pointer;color:var(--t2);white-space:nowrap}
 .bsm:hover{border-color:var(--accent);color:var(--accent)}
- 
+
 /* Gantt */
 .gc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
 .gtb{padding:8px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
@@ -136,7 +136,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .gsb{padding:5px 14px 8px;display:flex;align-items:center;gap:7px;border-top:1px solid var(--border)}
 .gsb button{width:22px;height:22px;border:1px solid var(--border);border-radius:var(--rs);background:var(--sf2);cursor:pointer;font-size:11px;color:var(--t2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .gsb input[type=range]{flex:1;height:4px;cursor:pointer;accent-color:var(--t3)}
- 
+
 /* gantt controls */
 .gctl{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px;padding:7px 12px;display:flex;align-items:center;gap:7px}
 .gnb{width:26px;height:26px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--t2)}
@@ -149,7 +149,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .vb:last-child{border-right:none}
 .vb.active{background:var(--accent);color:#fff}
 .vb:hover:not(.active){background:var(--sf2)}
- 
+
 /* budget */
 .bo{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:12px 14px;border-bottom:1px solid var(--border)}
 .bi .lb{font-size:10px;color:var(--t3);margin-bottom:2px}
@@ -164,7 +164,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .wns{display:flex;gap:12px}
 .wl{font-size:10px;color:var(--t3)}
 .wv{font-size:11px;font-weight:600}
- 
+
 /* table */
 .dt{width:100%;border-collapse:collapse}
 .dt th{padding:7px 10px;font-size:10px;font-weight:600;color:var(--t3);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
@@ -176,7 +176,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .std{background:#e6f4ee;color:#1a7a45}
 .stp{background:#fff3e0;color:#b06000}
 .ds{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500;background:#fff3e0;color:#b06000}
- 
+
 /* payment form */
 .pfw{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px}
 .fg{margin-bottom:11px}
@@ -188,11 +188,11 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .ntag.on{background:#f5c518;border-color:#e0b000;color:#5a4200}
 .ntag.on2{background:#1a4a7a;border-color:#1a4a7a;color:#fff}
 .bsub{width:100%;padding:9px;border-radius:var(--rs);border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;margin-top:6px}
- 
+
 /* avatar */
 .av{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0}
 .avl{background:#1a4a7a}.avy{background:#2d6a4f}
- 
+
 /* popup */
 .po{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;display:none;align-items:center;justify-content:center}
 .po.open{display:flex}
@@ -218,22 +218,22 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .dc2 span{font-size:11px;font-weight:600;min-width:16px;text-align:center}
 .bads{width:100%;padding:6px;border:1px dashed var(--border);border-radius:var(--rs);background:none;color:var(--t3);cursor:pointer;font-size:11px}
 .bads:hover{border-color:var(--accent);color:var(--accent)}
- 
+
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 </style>
 </head>
 <body>
- 
+
 <div id="topbar"><div class="logo">璽墨</div></div>
- 
+
 <!-- 收合按鈕 -->
 <button class="tog" id="tl" onclick="toggleL()">◀</button>
 <button class="tog" id="tr" onclick="toggleR()">▶</button>
- 
+
 <div id="body">
- 
+
 <!-- ══ 左側 AB ══ -->
 <div id="lp">
   <div class="ah">
@@ -259,7 +259,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
     </div>
   </div>
 </div>
- 
+
 <!-- ══ 中間 CD ══ -->
 <div id="cp">
   <div id="tabs">
@@ -270,7 +270,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
     <button class="ntab" onclick="sw(this,'pg-d')">設計任務單</button>
   </div>
   <div id="content">
- 
+
     <!-- 時程管理 -->
     <div id="pg-s" class="page active">
       <div class="gctl">
@@ -288,17 +288,17 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
         <div style="padding:20px;color:var(--t3);font-size:12px;text-align:center">載入中...</div>
       </div>
     </div>
- 
+
     <!-- 費用管理 -->
     <div id="pg-b" class="page">
       <div id="budget-area"><div style="padding:20px;color:var(--t3);font-size:12px;text-align:center">載入中...</div></div>
     </div>
- 
+
     <!-- 支出明細 -->
     <div id="pg-e" class="page">
       <div id="expense-area"><div style="padding:20px;color:var(--t3);font-size:12px;text-align:center">載入中...</div></div>
     </div>
- 
+
     <!-- 付款金費單 -->
     <div id="pg-p" class="page">
       <div class="dc"><div class="dch"><h3>付款申請單</h3><span style="font-size:11px;color:var(--t3);margin-left:8px">填寫後確認資料列印</span></div>
@@ -327,15 +327,15 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
         </div>
       </div>
     </div>
- 
+
     <!-- 設計任務單 -->
     <div id="pg-d" class="page">
       <div class="dc"><div class="dch"><div class="pdot" style="background:var(--c1)"></div><h3>山茶評鑒</h3><button class="bsm" style="margin-left:auto" onclick="op('pp-des')">＋ 新增設計任務單</button></div><div style="overflow-x:auto"><table class="dt"><thead><tr><th>設計項目名稱</th><th>所屬工作項目</th><th>負責PM</th><th>項目</th><th>設計需求</th><th>設計師</th><th>狀態</th><th>預算</th><th>初稿</th><th>完稿</th><th>成品</th></tr></thead><tbody><tr class="gr"><td colspan="11">Lynn · 1筆</td></tr><tr><td style="font-weight:500">制度修改</td><td>山茶評鑒</td><td><span class="av avy">Y</span> Yann</td><td>A</td><td>Logo修改</td><td><span class="av avl">L</span> Lynn</td><td><span class="ds">進行中</span></td><td>—</td><td>6/12</td><td>6/25</td><td>8/14</td></tr></tbody></table></div></div>
     </div>
- 
+
   </div>
 </div>
- 
+
 <!-- ══ 右側 E ══ -->
 <div id="rp">
   <div class="eh"><h3>墨日誌小天地</h3><div class="dn"><button>‹</button><span style="font-size:12px;font-weight:600">6/11</span><button>›</button></div></div>
@@ -345,25 +345,25 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
     <div class="ji"><div class="jt"><span class="av avl">L</span><span class="jn">Lynn</span><span class="jpt" style="background:var(--c1)">高雄山茶</span></div><div class="jtask">茶葉樣品確認 · 6/15 · 進度30%</div><div class="jnote">樣品已收到，待品質確認</div></div>
   </div>
 </div>
- 
+
 </div><!-- /body -->
- 
+
 <!-- ══ POPUPS ══ -->
 <div class="po" id="pp-proj"><div class="pp"><div class="pph"><h3>建立新標案</h3><button class="ppc" onclick="cl('pp-proj')">✕</button></div><div class="ppb2"><div><div class="fg"><label>標案名稱</label><input type="text" placeholder="115花蓮山茶"></div><div class="fg"><label>主PM</label><select><option>Lynn</option><option>Yann</option></select></div><div class="fg"><label>合約開始日</label><input type="date"></div><div class="fg"><label>合約結束日</label><input type="date"></div><div class="fg"><label>合約金額</label><input type="text" placeholder="NT$0" id="ca" oninput="calcP()"></div></div><div><div class="fbox"><div class="fi"><div class="fl">合約未稅金額</div><div class="fv" id="fu">—</div></div><div class="fi"><div class="fl">可用成本</div><div class="fv" id="fc">—</div></div><div class="fi"><div class="fl">已支出合計</div><div class="fv">NT$0</div></div><div class="fi"><div class="fl">剩餘預算</div><div class="fv" id="fr">—</div></div></div><div style="font-size:10px;color:var(--t3);line-height:1.8">合約未稅 = 合約金額 ÷ 1.05<br>可用成本 = 合約未稅 ÷ 2<br>剩餘預算 = 可用成本 − 已支出</div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-proj')">取消</button><button class="bpri">新增</button></div></div></div>
- 
+
 <div class="po" id="pp-work"><div class="pp ppw"><div class="pph"><h3>建立標案的工作項目</h3><button class="ppc" onclick="cl('pp-work')">✕</button></div><div class="ppb"><div class="fg"><label>標案</label><select><option>115高雄山茶</option><option>116台中農場</option></select></div><div class="fg"><label>開始日期</label><input type="date"></div><div style="display:grid;grid-template-columns:1fr 90px 1fr 70px 50px;gap:6px;padding:4px 0;font-size:10px;color:var(--t3)"><span>工作項目名稱</span><span>天數</span><span>負責夥伴</span><span>可用成本</span><span>權重</span></div><div class="slist" id="sl"><div class="srow"><input type="text" placeholder="成果發表"><div class="dc2"><button onclick="adj(this,-1)">−</button><span>6</span><button onclick="adj(this,1)">＋</button></div><select><option>林OO</option><option>張OO</option></select><input type="text" placeholder="NT$30,000"><input type="text" placeholder="40%"></div></div><button class="bads" onclick="addS()">＋ 新增工作項目</button></div><div class="ppf"><button class="bcan" onclick="cl('pp-work')">取消</button><button class="bpri">新增</button></div></div></div>
- 
+
 <div class="po" id="pp-task"><div class="pp"><div class="pph"><h3>建立新任務</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fg"><label>任務名稱</label><input type="text" placeholder="拜訪OO茶主"></div><div class="fg"><label>負責人</label><select><option>Lynn</option><option>Yann</option></select></div><div class="fg"><label>所屬工作項目</label><select><option>三茶評鑒</option><option>成果展</option><option>南投茶園</option></select></div><div class="fg"><label>預計完成日</label><input type="date"></div><div class="fg"><label>進度狀態</label><select><option>未開始</option><option>進行中10%</option><option>進行中20%</option><option>進行中30%</option><option>進行中40%</option><option>進行中50%</option><option>進行中60%</option><option>進行中70%</option><option>進行中80%</option><option>進行中90%</option><option>已完成</option></select></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri">新增</button></div></div></div>
- 
+
 <div class="po" id="pp-td"><div class="pp"><div class="pph" style="background:var(--c1)"><h3 style="color:#fff">拜訪OO茶主</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-td')">✕</button></div><div class="ppb"><div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;background:var(--sf2);padding:2px 8px;border-radius:20px">三茶評鑒</span><span class="av avl">L</span><span style="font-size:12px;color:var(--t2)">Lynn · 6/12</span><span style="font-size:11px;color:#e05a00;font-weight:600">3DS</span></div><div class="fg"><label>進度狀態</label><select><option>進行中50%</option></select></div><div class="fg"><label>備註</label><textarea rows="3" placeholder="填寫今日進度備註..."></textarea></div><button class="bads" style="margin-bottom:8px" onclick="cl('pp-td');op('pp-task')">＋ 新增其他任務</button><button class="bsub" onclick="cl('pp-td');alert('已轉換為今日日報！')">轉換成今日日報</button></div></div></div>
- 
+
 <div class="po" id="pp-exp"><div class="pp"><div class="pph"><h3>新增支出明細</h3><button class="ppc" onclick="cl('pp-exp')">✕</button></div><div class="ppb"><div class="fg"><label>支出細項</label><input type="text" placeholder="茶葉5斤"></div><div class="fg"><label>所屬工作項目</label><select><option>拜訪南投茶園</option><option>山茶評鑒</option></select></div><div class="fg"><label>負責人</label><select><option>Lynn</option><option>Yann</option></select></div><div class="fg"><label>預估花費</label><input type="text" placeholder="NT$0"></div><div class="fg"><label>日期</label><input type="date"></div><div class="fg"><label>實際金額</label><input type="text" placeholder="NT$0" id="aa" oninput="calcE()"></div><div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ua" readonly style="background:#f0f0f0;color:var(--t3)"></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-exp')">取消</button><button class="bpri">新增</button></div></div></div>
- 
+
 <div class="po" id="pp-des"><div class="pp ppw"><div class="pph"><h3>建立新設計任務</h3><button class="ppc" onclick="cl('pp-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" placeholder="Logo"></div><div class="fg"><label>所屬工作項目</label><select><option>三茶評鑒</option><option>成果展</option></select></div><div class="fg"><label>負責PM</label><select><option>Lynn</option><option>Yann</option></select></div><div class="fg"><label>項目</label><input type="text" placeholder="A"></div><div class="fg"><label>設計需求</label><input type="text" placeholder="AA"></div><div class="fg"><label>設計師</label><select><option>張OO</option><option>林OO</option></select></div><div class="fg"><label>狀態</label><select><option>進行中</option><option>待開始</option><option>已完成</option></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date"></div><div class="fg"><label>完稿交付日</label><input type="date"></div><div class="fg"><label>成品交付日</label><input type="date"></div><div class="fg"><label>備註</label><textarea rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-des')">取消</button><button class="bpri">新增</button></div></div></div>
- 
+
 <!-- 付款預覽 -->
 <div class="po" id="pp-prev" style="align-items:flex-start;padding-top:30px"><div class="pp" style="width:820px;max-height:82vh"><div class="pph"><h3>付款申請單預覽</h3><button class="ppc" onclick="cl('pp-prev')">✕</button></div><div class="ppb" id="prev-body" style="padding:20px"></div><div class="ppf"><button class="bcan" onclick="cl('pp-prev')">返回修改</button><button class="bpri" onclick="doPrint()">🖨 確認列印</button></div></div></div>
- 
+
 <script>
 // ── 基本互動 ──
 var lc=false, rc=false;
@@ -416,7 +416,7 @@ function addS(){
   r.innerHTML='<input type="text" placeholder="工作項目名稱"><div class="dc2"><button onclick="adj(this,-1)">−</button><span>5</span><button onclick="adj(this,1)">＋</button></div><select><option>林OO</option><option>張OO</option></select><input type="text" placeholder="NT$0"><input type="text" placeholder="0%">';
   document.getElementById('sl').appendChild(r);
 }
- 
+
 // ── 付款列印 ──
 function prevPay(){
   var dept=document.getElementById('p-dept').value;
@@ -469,7 +469,7 @@ function doPrint(){
   w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>付款申請單</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,"PingFang TC",sans-serif;padding:28px}@media print{body{padding:14px}}</style></head><body>'+content+'<script>window.onload=function(){window.print();}<\/script></body></html>');
   w.document.close();
 }
- 
+
 // ── 甘特圖 ──
 var PDATA={
   c1:{color:'#2d6a4f',rows:[
@@ -486,9 +486,9 @@ var PDATA={
 };
 var vMode='month', vOff=0, CW=28;
 var TODAY=new Date(2026,5,12);
- 
+
 function dif(a,b){return Math.round((b-a)/86400000);}
- 
+
 function getRange(){
   if(vMode==='week'){
     var s=new Date(2026,4,1);s.setDate(s.getDate()+vOff*7);
@@ -499,13 +499,13 @@ function getRange(){
     return{s:new Date(2026,3+vOff*3,1),e:new Date(2026,6+vOff*3+3,0)};
   }
 }
- 
+
 function buildG(key){
   var proj=PDATA[key];
   var r=getRange(),vs=r.s,ve=r.e;
   var total=dif(vs,ve)+1,tw=total*CW;
   var toff=dif(vs,TODAY),tx=toff*CW;
- 
+
   // months
   var mHTML='',mc=new Date(vs.getFullYear(),vs.getMonth(),1);
   while(mc<=ve){
@@ -514,7 +514,7 @@ function buildG(key){
     mHTML+='<div class="gmc" style="width:'+(days*CW)+'px">'+(mc.getMonth()+1)+'月</div>';
     mc.setMonth(mc.getMonth()+1);
   }
- 
+
   // dates
   var dHTML='';
   for(var i=0;i<total;i++){
@@ -523,16 +523,16 @@ function buildG(key){
     var lbl=(d.getDate()===1||d.getDate()%5===0)?((d.getMonth()+1)+'/'+d.getDate()):'';
     dHTML+='<div class="gdc'+(isTd?' tdc':'')+'" style="width:'+CW+'px">'+lbl+'</div>';
   }
- 
+
   var tlHTML=toff>=0&&toff<=total?'<div class="tline" style="left:'+tx+'px"></div>':'';
   var tlHdr=toff>=0&&toff<=total?'<div class="tlineh" style="left:'+tx+'px"></div>':'';
- 
+
   // fixed left
   var fixH='<div class="gfh"><span>工作項目</span></div>';
   proj.rows.forEach(function(row){
     fixH+='<div class="grl"><div class="grn">'+row.n+'</div><div class="grm">'+row.m+'</div></div>';
   });
- 
+
   // timeline
   var tmH='<div class="gmr" style="width:'+tw+'px;position:relative">'+mHTML+tlHdr+'</div>';
   tmH+='<div class="gdr" style="width:'+tw+'px;position:relative">'+dHTML+'</div>';
@@ -547,10 +547,10 @@ function buildG(key){
     });
     tmH+='<div class="gtr" style="width:'+tw+'px">'+bH+'</div>';
   });
- 
+
   var gb=document.getElementById('gb-'+key);
   gb.innerHTML='<div class="gf">'+fixH+'</div><div class="gsw" id="gsw-'+key+'"><div class="gtc" style="width:'+tw+'px">'+tmH+'</div></div>';
- 
+
   var sw2=document.getElementById('gsw-'+key);
   var rng=document.getElementById('rng-'+key);
   sw2.onscroll=function(){
@@ -559,7 +559,7 @@ function buildG(key){
   };
   if(toff>5)sw2.scrollLeft=Math.max(0,tx-200);
 }
- 
+
 function updLabel(){
   var r=getRange();
   document.getElementById('drl').textContent=(r.s.getMonth()+1)+'/'+r.s.getDate()+' — '+(r.e.getMonth()+1)+'/'+r.e.getDate();
@@ -588,7 +588,7 @@ function goToday(){
 }
 function scG(k,d){var el=document.getElementById('gsw-'+k);if(el)el.scrollLeft+=d;}
 function scR(k,v){var el=document.getElementById('gsw-'+k);if(el){var max=el.scrollWidth-el.clientWidth;el.scrollLeft=(v/100)*max;}}
- 
+
 // ── 取得含某字的欄位值 ──
 function getField(fields, keyword) {
   var keys = Object.keys(fields);
@@ -600,25 +600,25 @@ function getField(fields, keyword) {
 var PROJECT_COLORS = [
   '#2d6a4f','#1a4a7a','#7a1a2e','#4a7a1a','#5a3a8a','#7a5a1a','#1a6a7a'
 ];
- 
+
 // ── 從 API 讀取資料 ──
 var API = '/api/lark';
 var projectsData = [];
 var workitemsData = [];
 var tasksData = [];
- 
+
 function fmt(ts) {
   if (!ts) return '';
   var d = new Date(ts);
   return (d.getMonth()+1) + '/' + d.getDate();
 }
- 
+
 var expensesData = [];
- 
+
 function loadData() {
   document.getElementById('pl-projects').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
   document.getElementById('task-list-body').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
- 
+
   Promise.all([
     fetch(API + '?table=projects').then(function(r){return r.json();}),
     fetch(API + '?table=workitems').then(function(r){return r.json();}),
@@ -639,7 +639,7 @@ function loadData() {
     document.getElementById('pl-projects').innerHTML = '<div style="padding:12px;color:#c0392b;font-size:11px">載入失敗，請重試</div>';
   });
 }
- 
+
 function ntf(n) { return 'NT$' + Math.round(n).toLocaleString(); }
 function fmtDate(ts) {
   if (!ts) return '—';
@@ -647,7 +647,7 @@ function fmtDate(ts) {
   return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
 }
 function togNtag(el) { el.classList.toggle('on'); }
- 
+
 // ── 費用管理 ──
 function renderBudget() {
   var area = document.getElementById('budget-area');
@@ -658,12 +658,12 @@ function renderBudget() {
     var name = f['標案名稱'] || '未命名';
     var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
     var contract = parseFloat(f['合約金額']) || 0;
-    var untax = getField(f,'合約未稅') || 0;
-    var avail = getField(f,'可用成本') || 0;
-    var spent = getField(f,'已支出') || 0;
-    var remain = getField(f,'剩餘預算') || f['剩餘預算(X)'] || (avail - spent);
+    var untax = f['合約未稅金額'] || 0;
+    var avail = f['可用成本'] || 0;
+    var spent = f['已支出合計'] || 0;
+    var remain = f['剩餘預算'] || f['剩餘預算(X)'] || (avail - spent);
     var pct = avail > 0 ? Math.min(100, Math.round(spent/avail*100)) : 0;
-    var wiIds = getField(f,'工作項目') && getField(f,'工作項目').record_ids ? getField(f,'工作項目').record_ids : [];
+    var wiIds = f['工作項目'] && f['工作項目'].record_ids ? f['工作項目'].record_ids : [];
     var wiRows = '';
     wiIds.forEach(function(wiId) {
       var wi = workitemsData.find(function(w){ return w.record_id === wiId; });
@@ -671,8 +671,8 @@ function renderBudget() {
       var wf = wi.fields;
       var wName = wf['工作項目名稱'] || '';
       var wAvail = parseFloat(wf['可用成本']) || 0;
-      var wSpent = getField(wf,'實際花費') || 0;
-      var wRemain = getField(wf,'剩餘預算') || (wAvail - wSpent);
+      var wSpent = wf['實際花費'] || 0;
+      var wRemain = wf['剩餘預算'] || (wAvail - wSpent);
       wiRows += '<div class="wir"><div class="wn">'+wName+'</div><div class="wns">'
         +'<div><div class="wl">可用</div><div class="wv">'+ntf(wAvail)+'</div></div>'
         +'<div><div class="wl">已支出</div><div class="wv" style="color:#c0392b">'+ntf(wSpent)+'</div></div>'
@@ -692,7 +692,7 @@ function renderBudget() {
   });
   area.innerHTML = html;
 }
- 
+
 // ── 支出明細 ──
 function renderExpenses() {
   var area = document.getElementById('expense-area');
@@ -752,7 +752,7 @@ function renderExpenses() {
   });
   area.innerHTML = html || '<div style="padding:20px;color:var(--t3)">尚無支出明細</div>';
 }
- 
+
 // ── 渲染 A 區標案列表 ──
 function renderProjects() {
   var html = '';
@@ -760,7 +760,7 @@ function renderProjects() {
     var f = rec.fields;
     var name = f['標案名稱'] || '未命名';
     var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
-    var workitems = getField(f,'工作項目') ? (getField(f,'工作項目').text_arr || []) : [];
+    var workitems = f['工作項目'] ? (f['工作項目'].text_arr || []) : [];
     var subHTML = '';
     workitems.forEach(function(wi) {
       subHTML += '<div class="si"><span>' + wi + '</span></div>';
@@ -772,7 +772,7 @@ function renderProjects() {
   });
   document.getElementById('pl-projects').innerHTML = html;
 }
- 
+
 // ── 渲染 B 區任務清單 ──
 function renderTasks() {
   // 建立 workitem record_id → {name, project, projectIdx} 對應
@@ -786,7 +786,7 @@ function renderTasks() {
     }
     wiMap[wi.record_id] = { name: wiName, project: projName };
   });
- 
+
   // 依標案分組
   var grouped = {};
   var projOrder = [];
@@ -796,11 +796,11 @@ function renderTasks() {
     var assignee = f['負責人'] && f['負責人'][0] ? f['負責人'][0].name : '';
     var dueTs = f['預計完成日'];
     var dueDate = dueTs ? fmt(dueTs) : '';
-    var progress = f['進度數值(X)'] || 0;
+    var progress = f['進度數值'] || 0;
     var wiArr = f['所屬工作項目'];
     var wiName = '';
     var projName = '其他';
- 
+
     if (wiArr && wiArr.record_ids && wiArr.record_ids[0]) {
       var wiId = wiArr.record_ids[0];
       var wi = wiMap[wiId];
@@ -812,12 +812,12 @@ function renderTasks() {
     if (!grouped[projName]) { grouped[projName] = []; projOrder.push(projName); }
     grouped[projName].push({ name: taskName, assignee: assignee, due: dueDate, dueTs: dueTs, progress: progress, wiName: wiName, id: rec.record_id });
   });
- 
+
   // 依截止日排序
   Object.keys(grouped).forEach(function(proj) {
     grouped[proj].sort(function(a,b){ return (a.dueTs||0)-(b.dueTs||0); });
   });
- 
+
   var html = '';
   // 用 projectsData 的順序來分組
   var projColors = {};
@@ -825,7 +825,7 @@ function renderTasks() {
     var pname = rec.fields['標案名稱'] || '';
     projColors[pname] = PROJECT_COLORS[i % PROJECT_COLORS.length];
   });
- 
+
   // 先按 projectsData 順序輸出
   projectsData.forEach(function(rec) {
     var pname = rec.fields['標案名稱'] || '';
@@ -842,7 +842,7 @@ function renderTasks() {
     });
     delete grouped[pname];
   });
- 
+
   // 其他剩餘
   Object.keys(grouped).forEach(function(pname) {
     if (grouped[pname].length === 0) return;
@@ -856,13 +856,13 @@ function renderTasks() {
       html += '</div>';
     });
   });
- 
+
   document.getElementById('task-list-body').innerHTML = html;
- 
+
   // 更新篩選標籤
   updateFilterTags(projColors);
 }
- 
+
 // ── 更新篩選標籤 ──
 function updateFilterTags(projColors) {
   var ft = document.querySelector('.ft');
@@ -875,13 +875,13 @@ function updateFilterTags(projColors) {
   });
   ft.innerHTML = html;
 }
- 
+
 // ── 篩選任務 ──
 function filterTasks(el, proj) {
   document.querySelectorAll('.ftag').forEach(function(t){ t.style.background=''; t.style.color=t.dataset.proj ? '' : ''; });
   el.style.background = el.style.borderColor || 'var(--accent)';
   el.style.color = '#fff';
- 
+
   var groups = document.querySelectorAll('#task-list-body .tgl');
   var items = document.querySelectorAll('#task-list-body .ti');
   if (!proj) {
@@ -902,17 +902,17 @@ function filterTasks(el, proj) {
     }
   });
 }
- 
+
 // ── 渲染甘特圖（使用真實資料）──
 function renderGanttFromData() {
   var ganttArea = document.getElementById('gantt-area');
   if (!ganttArea) return;
   ganttArea.innerHTML = '';
- 
+
   // 建立 workitem record_id → workitem 對應
   var wiMap = {};
   workitemsData.forEach(function(wi) { wiMap[wi.record_id] = wi; });
- 
+
   // 建立 task record_id → task 對應（依工作項目分組）
   var tasksByWi = {};
   tasksData.forEach(function(t) {
@@ -924,15 +924,15 @@ function renderGanttFromData() {
       });
     }
   });
- 
+
   projectsData.forEach(function(rec, i) {
     var f = rec.fields;
     var name = f['標案名稱'] || '未命名';
     var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
-    var progress = Math.round((getField(f,'標案完成') || 0) * 100);
-    var wiIds = getField(f,'工作項目') && getField(f,'工作項目').record_ids ? getField(f,'工作項目').record_ids : [];
-    var wiNames = getField(f,'工作項目') && getField(f,'工作項目').text_arr ? getField(f,'工作項目').text_arr : [];
- 
+    var progress = Math.round((f['標案完成%'] || 0) * 100);
+    var wiIds = f['工作項目'] && f['工作項目'].record_ids ? f['工作項目'].record_ids : [];
+    var wiNames = f['工作項目'] && f['工作項目'].text_arr ? f['工作項目'].text_arr : [];
+
     var rows = [];
     wiIds.forEach(function(wiId, idx) {
       var wiRecord = wiMap[wiId];
@@ -942,12 +942,12 @@ function renderGanttFromData() {
       var wiStart = wf['開始日期'] ? new Date(wf['開始日期']) : null;
       var wiEnd = wf['截止日'] ? new Date(wf['截止日']) : null;
       var weight = wf['權重'] || '';
-      var wiProg = Math.round((getField(wf,'加權進度') || 0) * 100);
+      var wiProg = Math.round((wf['加權進度'] || 0) * 100);
       var metaStr = '';
       if (wiStart && wiEnd) {
         metaStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
       }
- 
+
       // 找任務
       var relTasks = tasksByWi[wiId] || [];
       var bars = [];
@@ -955,7 +955,7 @@ function renderGanttFromData() {
         var tf = t.fields;
         var tName = tf['任務名稱'] || '';
         var tDue = tf['預計完成日'] ? new Date(tf['預計完成日']) : wiEnd;
-        var tProg = tf['進度數值(X)'] || 0;
+        var tProg = tf['進度數值'] || 0;
         // 用 3 天前當開始
         var tStart = tDue ? new Date(tDue.getTime() - 3*24*60*60*1000) : wiStart;
         if (tStart && tDue) {
@@ -967,20 +967,20 @@ function renderGanttFromData() {
           });
         }
       });
- 
+
       // 如果沒有任務，用工作項目本身的時間
       if (bars.length === 0 && wiStart && wiEnd) {
         bars.push({ s: wiStart.toISOString().slice(0,10), e: wiEnd.toISOString().slice(0,10), l: wiName, o: 0.6 });
       }
- 
+
       rows.push({ n: wiName, m: metaStr, w: (parseFloat(weight)*100||0)+'%/'+wiProg+'%', bars: bars });
     });
- 
+
     if (rows.length === 0) {
       console.log('No rows for', name, 'wiIds:', wiIds.length, 'wiMap keys:', Object.keys(wiMap).length);
       return;
     }
- 
+
     var cardId = 'proj-' + i;
     var card = document.createElement('div');
     card.className = 'gc';
@@ -992,15 +992,14 @@ function renderGanttFromData() {
       +'<input type="range" min="0" max="100" value="30" id="rng-'+cardId+'" oninput="scR(\''+cardId+'\',this.value)">'
       +'<button onclick="scG(\''+cardId+'\',200)">▶</button></div>';
     ganttArea.appendChild(card);
- 
+
     PDATA[cardId] = { color: color, rows: rows };
     buildG(cardId);
   });
 }
- 
+
 // ── 初始化 ──
 loadData();
 </script>
 </body>
 </html>
- 
