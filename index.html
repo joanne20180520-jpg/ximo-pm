@@ -650,137 +650,221 @@ function renderProjects() {
  
 // ── 渲染 B 區任務清單 ──
 function renderTasks() {
-  // 先建立工作項目 id → 標案名稱 的對應
+  // 建立 workitem record_id → {name, project, projectIdx} 對應
   var wiMap = {};
   workitemsData.forEach(function(wi) {
     var f = wi.fields;
-    var wiName = f['工作項目名稱'] || f['名稱'] || '';
-    var projArr = f['所屬標案'];
+    var wiName = f['工作項目名稱'] || '';
     var projName = '';
-    if (projArr && projArr.text_arr && projArr.text_arr.length > 0) {
-      projName = projArr.text_arr[0];
+    if (f['所屬標案'] && f['所屬標案'].text_arr && f['所屬標案'].text_arr.length > 0) {
+      projName = f['所屬標案'].text_arr[0];
     }
     wiMap[wi.record_id] = { name: wiName, project: projName };
   });
  
   // 依標案分組
   var grouped = {};
+  var projOrder = [];
   tasksData.forEach(function(rec) {
     var f = rec.fields;
     var taskName = f['任務名稱'] || '未命名';
-    var assignee = '';
-    if (f['負責人'] && f['負責人'][0]) assignee = f['負責人'][0].name;
-    var dueDate = f['預計完成日'] ? fmt(f['預計完成日']) : '';
+    var assignee = f['負責人'] && f['負責人'][0] ? f['負責人'][0].name : '';
+    var dueTs = f['預計完成日'];
+    var dueDate = dueTs ? fmt(dueTs) : '';
     var progress = f['進度數值(X)'] || 0;
     var wiArr = f['所屬工作項目'];
     var wiName = '';
     var projName = '其他';
-    if (wiArr && wiArr.text_arr && wiArr.text_arr[0]) {
-      wiName = wiArr.text_arr[0];
-    }
+ 
     if (wiArr && wiArr.record_ids && wiArr.record_ids[0]) {
-      var wi = wiMap[wiArr.record_ids[0]];
-      if (wi) { projName = wi.project || projName; }
+      var wiId = wiArr.record_ids[0];
+      var wi = wiMap[wiId];
+      if (wi) {
+        wiName = wi.name;
+        projName = wi.project || '其他';
+      }
     }
-    if (!grouped[projName]) grouped[projName] = [];
-    grouped[projName].push({ name: taskName, assignee: assignee, due: dueDate, progress: progress, wiName: wiName, id: rec.record_id });
+    if (!grouped[projName]) { grouped[projName] = []; projOrder.push(projName); }
+    grouped[projName].push({ name: taskName, assignee: assignee, due: dueDate, dueTs: dueTs, progress: progress, wiName: wiName, id: rec.record_id });
+  });
+ 
+  // 依截止日排序
+  Object.keys(grouped).forEach(function(proj) {
+    grouped[proj].sort(function(a,b){ return (a.dueTs||0)-(b.dueTs||0); });
   });
  
   var html = '';
-  var projIdx = 0;
-  Object.keys(grouped).forEach(function(proj) {
-    var color = PROJECT_COLORS[projIdx % PROJECT_COLORS.length];
-    projIdx++;
-    html += '<div class="tgl"><div class="tgd" style="background:' + color + '"></div>' + proj + '<span class="tc">' + grouped[proj].length + '</span></div>';
-    grouped[proj].forEach(function(task) {
-      var today = new Date();
-      var dueD = task.due ? new Date(task.due) : null;
-      var ds = task.due || '';
+  // 用 projectsData 的順序來分組
+  var projColors = {};
+  projectsData.forEach(function(rec, i) {
+    var pname = rec.fields['標案名稱'] || '';
+    projColors[pname] = PROJECT_COLORS[i % PROJECT_COLORS.length];
+  });
+ 
+  // 先按 projectsData 順序輸出
+  projectsData.forEach(function(rec) {
+    var pname = rec.fields['標案名稱'] || '';
+    if (!grouped[pname]) return;
+    var color = projColors[pname] || '#888';
+    html += '<div class="tgl" data-proj="'+pname+'"><div class="tgd" style="background:'+color+'"></div>'+pname+'<span class="tc">'+grouped[pname].length+'</span></div>';
+    grouped[pname].forEach(function(task) {
       html += '<div class="ti" onclick="op(\'pp-td\')">';
-      html += '<div class="tit"><div><div class="tn">' + task.name + '</div>';
-      html += '<div class="tm">' + (task.wiName || proj) + ' · ' + task.assignee + '</div></div>';
-      html += '<div class="tr2"><div class="td2">' + ds + '</div></div></div>';
-      html += '<div class="tpb"><div class="tpf" style="width:' + task.progress + '%;background:' + color + '"></div></div>';
+      html += '<div class="tit"><div><div class="tn">'+task.name+'</div>';
+      html += '<div class="tm">'+task.wiName+' · '+task.assignee+'</div></div>';
+      html += '<div class="tr2"><div class="td2">'+task.due+'</div></div></div>';
+      html += '<div class="tpb"><div class="tpf" style="width:'+task.progress+'%;background:'+color+'"></div></div>';
+      html += '</div>';
+    });
+    delete grouped[pname];
+  });
+ 
+  // 其他剩餘
+  Object.keys(grouped).forEach(function(pname) {
+    if (grouped[pname].length === 0) return;
+    html += '<div class="tgl"><div class="tgd" style="background:#888"></div>'+pname+'<span class="tc">'+grouped[pname].length+'</span></div>';
+    grouped[pname].forEach(function(task) {
+      html += '<div class="ti" onclick="op(\'pp-td\')">';
+      html += '<div class="tit"><div><div class="tn">'+task.name+'</div>';
+      html += '<div class="tm">'+task.wiName+' · '+task.assignee+'</div></div>';
+      html += '<div class="tr2"><div class="td2">'+task.due+'</div></div></div>';
+      html += '<div class="tpb"><div class="tpf" style="width:'+task.progress+'%;background:#888"></div></div>';
       html += '</div>';
     });
   });
+ 
   document.getElementById('task-list-body').innerHTML = html;
+ 
+  // 更新篩選標籤
+  updateFilterTags(projColors);
+}
+ 
+// ── 更新篩選標籤 ──
+function updateFilterTags(projColors) {
+  var ft = document.querySelector('.ft');
+  if (!ft) return;
+  var html = '<span class="ftag" style="background:var(--accent);color:#fff" onclick="filterTasks(this,\'\')">全部</span>';
+  projectsData.forEach(function(rec) {
+    var pname = rec.fields['標案名稱'] || '';
+    var color = projColors[pname] || '#888';
+    html += '<span class="ftag" onclick="filterTasks(this,\''+pname+'\')" data-proj="'+pname+'" style="border-color:'+color+';color:'+color+'">'+pname+'</span>';
+  });
+  ft.innerHTML = html;
+}
+ 
+// ── 篩選任務 ──
+function filterTasks(el, proj) {
+  document.querySelectorAll('.ftag').forEach(function(t){ t.style.background=''; t.style.color=t.dataset.proj ? '' : ''; });
+  el.style.background = el.style.borderColor || 'var(--accent)';
+  el.style.color = '#fff';
+ 
+  var groups = document.querySelectorAll('#task-list-body .tgl');
+  var items = document.querySelectorAll('#task-list-body .ti');
+  if (!proj) {
+    groups.forEach(function(g){ g.style.display=''; });
+    items.forEach(function(i){ i.style.display=''; });
+    return;
+  }
+  // 先全部隱藏
+  groups.forEach(function(g){ g.style.display = g.dataset.proj === proj ? '' : 'none'; });
+  // 顯示對應標案下的任務
+  var show = false;
+  document.querySelectorAll('#task-list-body > *').forEach(function(el) {
+    if (el.classList.contains('tgl')) {
+      show = el.dataset.proj === proj;
+      el.style.display = show ? '' : 'none';
+    } else {
+      el.style.display = show ? '' : 'none';
+    }
+  });
 }
  
 // ── 渲染甘特圖（使用真實資料）──
 function renderGanttFromData() {
-  // 清空舊的甘特圖容器
   var ganttArea = document.getElementById('gantt-area');
   if (!ganttArea) return;
   ganttArea.innerHTML = '';
+ 
+  // 建立 workitem record_id → workitem 對應
+  var wiMap = {};
+  workitemsData.forEach(function(wi) { wiMap[wi.record_id] = wi; });
+ 
+  // 建立 task record_id → task 對應（依工作項目分組）
+  var tasksByWi = {};
+  tasksData.forEach(function(t) {
+    var wiArr = t.fields['所屬工作項目'];
+    if (wiArr && wiArr.record_ids) {
+      wiArr.record_ids.forEach(function(wiId) {
+        if (!tasksByWi[wiId]) tasksByWi[wiId] = [];
+        tasksByWi[wiId].push(t);
+      });
+    }
+  });
  
   projectsData.forEach(function(rec, i) {
     var f = rec.fields;
     var name = f['標案名稱'] || '未命名';
     var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
     var progress = Math.round((f['標案完成%(Ｘ)'] || 0) * 100);
-    var startTs = f['合約開始日'];
-    var endTs = f['合約結束日'];
+    var wiIds = f['工作項目(Ｘ)'] && f['工作項目(Ｘ)'].record_ids ? f['工作項目(Ｘ)'].record_ids : [];
+    var wiNames = f['工作項目(Ｘ)'] && f['工作項目(Ｘ)'].text_arr ? f['工作項目(Ｘ)'].text_arr : [];
  
-    // 找到這個標案的工作項目
-    var wiIds = [];
-    if (f['工作項目(Ｘ)'] && f['工作項目(Ｘ)'].record_ids) {
-      wiIds = f['工作項目(Ｘ)'].record_ids;
-    }
-    var wiNames = f['工作項目(Ｘ)'] ? (f['工作項目(Ｘ)'].text_arr || []) : [];
- 
-    // 建立 PDATA 格式的 rows
     var rows = [];
-    wiNames.forEach(function(wiName, idx) {
-      // 找對應工作項目的任務
-      var wiRecord = workitemsData.find(function(w) { return w.record_id === wiIds[idx]; });
-      var wiStart = wiRecord && wiRecord.fields['開始日期'] ? new Date(wiRecord.fields['開始日期']) : new Date(startTs || Date.now());
-      var wiEnd = wiRecord && wiRecord.fields['截止日'] ? new Date(wiRecord.fields['截止日']) : new Date((startTs || Date.now()) + 7*24*60*60*1000*5);
-      var weight = wiRecord ? (wiRecord.fields['權重'] || '') : '';
-      var prog = wiRecord ? Math.round((wiRecord.fields['加權進度(X)'] || 0) * 100) : 0;
+    wiIds.forEach(function(wiId, idx) {
+      var wiRecord = wiMap[wiId];
+      if (!wiRecord) return;
+      var wf = wiRecord.fields;
+      var wiName = wf['工作項目名稱'] || wiNames[idx] || '';
+      var wiStart = wf['開始日期'] ? new Date(wf['開始日期']) : null;
+      var wiEnd = wf['截止日'] ? new Date(wf['截止日']) : null;
+      var weight = wf['權重'] || '';
+      var wiProg = Math.round((wf['加權進度(X)'] || 0) * 100);
+      var metaStr = '';
+      if (wiStart && wiEnd) {
+        metaStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
+      }
  
       // 找任務
-      var relTasks = tasksData.filter(function(t) {
-        var wiArr = t.fields['所屬工作項目'];
-        return wiArr && wiArr.record_ids && wiArr.record_ids.indexOf(wiIds[idx]) >= 0;
-      });
- 
+      var relTasks = tasksByWi[wiId] || [];
       var bars = [];
       relTasks.forEach(function(t) {
         var tf = t.fields;
-        var tEnd = tf['預計完成日'] ? new Date(tf['預計完成日']) : wiEnd;
-        var tStart = new Date(tEnd); tStart.setDate(tStart.getDate() - 3);
-        var tName = tf['任務名稱'] || '任務';
+        var tName = tf['任務名稱'] || '';
+        var tDue = tf['預計完成日'] ? new Date(tf['預計完成日']) : wiEnd;
         var tProg = tf['進度數值(X)'] || 0;
-        bars.push({
-          s: tStart.toISOString().slice(0,10),
-          e: tEnd.toISOString().slice(0,10),
-          l: tName,
-          o: tProg > 0 ? 1 : 0.45
-        });
+        // 用 3 天前當開始
+        var tStart = tDue ? new Date(tDue.getTime() - 3*24*60*60*1000) : wiStart;
+        if (tStart && tDue) {
+          bars.push({
+            s: tStart.toISOString().slice(0,10),
+            e: tDue.toISOString().slice(0,10),
+            l: tName,
+            o: tProg >= 100 ? 1 : (tProg > 0 ? 0.85 : 0.45)
+          });
+        }
       });
  
+      // 如果沒有任務，用工作項目本身的時間
       if (bars.length === 0 && wiStart && wiEnd) {
-        bars.push({ s: wiStart.toISOString().slice(0,10), e: wiEnd.toISOString().slice(0,10), l: wiName, o: 0.7 });
+        bars.push({ s: wiStart.toISOString().slice(0,10), e: wiEnd.toISOString().slice(0,10), l: wiName, o: 0.6 });
       }
  
-      rows.push({ n: wiName, m: fmt(wiStart ? wiStart.getTime() : startTs) + '–' + fmt(wiEnd ? wiEnd.getTime() : endTs), w: weight + '/' + prog, bars: bars });
+      rows.push({ n: wiName, m: metaStr, w: (parseFloat(weight)*100||0)+'%/'+wiProg+'%', bars: bars });
     });
  
-    // 建立甘特卡片 HTML
+    if (rows.length === 0) return; // 沒有工作項目就不顯示
+ 
     var cardId = 'proj-' + i;
     var card = document.createElement('div');
     card.className = 'gc';
-    card.innerHTML = '<div class="gtb"><div class="pdot" style="background:' + color + '"></div><h3>' + name + '</h3>'
-      + '<span class="pb" style="background:rgba(0,0,0,0.08);color:' + color + '">' + progress + '%</span>'
-      + '<button class="bsm" style="margin-left:auto" onclick="op(\'pp-task\')">＋ 任務</button></div>'
-      + '<div class="gb" id="gb-' + cardId + '"></div>'
-      + '<div class="gsb"><button onclick="scG(\'' + cardId + '\',-200)">◀</button>'
-      + '<input type="range" min="0" max="100" value="30" id="rng-' + cardId + '" oninput="scR(\'' + cardId + '\',this.value)">'
-      + '<button onclick="scG(\'' + cardId + '\',200)">▶</button></div>';
+    card.innerHTML = '<div class="gtb"><div class="pdot" style="background:'+color+'"></div><h3>'+name+'</h3>'
+      +'<span class="pb" style="background:rgba(0,0,0,0.07);color:'+color+'">'+progress+'%</span>'
+      +'<button class="bsm" style="margin-left:auto" onclick="op(\'pp-task\')">＋ 任務</button></div>'
+      +'<div class="gb" id="gb-'+cardId+'"></div>'
+      +'<div class="gsb"><button onclick="scG(\''+cardId+'\',-200)">◀</button>'
+      +'<input type="range" min="0" max="100" value="30" id="rng-'+cardId+'" oninput="scR(\''+cardId+'\',this.value)">'
+      +'<button onclick="scG(\''+cardId+'\',200)">▶</button></div>';
     ganttArea.appendChild(card);
  
-    // 更新 PDATA 並渲染
     PDATA[cardId] = { color: color, rows: rows };
     buildG(cardId);
   });
@@ -792,3 +876,11 @@ loadData();
 </body>
 </html>
  
+
+
+
+
+
+
+
+
