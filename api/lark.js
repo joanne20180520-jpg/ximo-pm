@@ -76,7 +76,7 @@ const TABLES = {
   expenses:  'tblsUdkQN56T6Jnk',
   payments:  'tblv9SmBvbhxNftU',
   designs:   'tblc3a8IofsGlbKu',
-  journal:   'tblVs9L5WAJcE2a3',
+  journal:   'tblVs9L5WAJcE2a3', // 日報表 https://...?table=tblVs9L5WAJcE2a3
   members:   'tblIHdb6u6S2xdJH'
 };
  

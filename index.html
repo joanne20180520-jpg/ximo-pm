@@ -9,7 +9,7 @@
   --bg:#edeae4; --surface:#fff; --sf2:#f7f5f2; --border:#e2ddd8;
   --text:#1a1916; --t2:#6b6860; --t3:#9e9b96; --accent:#1a1916;
   --c1:#2d6a4f; --c2:#1a4a7a; --c3:#7a1a2e; --c4:#4a7a1a; --c5:#5a3a8a;
-  --lw:210px; --rw:245px; --th:46px; --r:10px; --rs:6px;
+  --lw:218px; --rw:245px; --th:46px; --r:10px; --rs:6px;
   --shadow:0 2px 14px rgba(0,0,0,0.09);
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -29,21 +29,24 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 #tr{right:calc(8px + var(--rw));border-right:none;border-radius:6px 0 0 6px}
 
 /* panels */
-#lp{order:1;width:var(--lw);flex-shrink:0;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;transition:width .25s,opacity .25s,margin .25s}
+#lp{order:1;width:var(--lw);flex-shrink:0;background:transparent;box-shadow:none;border-radius:0;display:flex;flex-direction:column;gap:10px;overflow:hidden;padding:2px 0;transition:width .25s,opacity .25s,margin .25s}
 #lp.col{width:0;opacity:0;margin-right:-8px;pointer-events:none}
+.lp-card{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);border:1px solid rgba(226,221,216,.9);display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.lp-proj-card{flex-shrink:0;max-height:42%}
+.lp-task-card{flex:1;min-height:0}
 #cp{order:2;flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
 #rp{order:3;width:var(--rw);flex-shrink:0;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;transition:width .25s,opacity .25s,margin .25s}
 #rp.col{width:0;opacity:0;margin-left:-8px;pointer-events:none}
 
-/* A区 */
-.ah{padding:8px 10px 7px;display:flex;flex-direction:column;align-items:stretch;border-bottom:1px solid var(--border);flex-shrink:0;gap:6px}
+/* A区 - 標案 */
+.ah{padding:8px 10px 6px;display:flex;flex-direction:column;align-items:stretch;flex-shrink:0;gap:6px}
 .sl{font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px}
 .sa{display:flex;gap:4px;width:100%}
-.sa .badd{flex:1;text-align:center}
-.badd{padding:3px 7px;border-radius:var(--rs);border:1px solid var(--border);background:var(--sf2);font-size:10px;cursor:pointer;color:var(--t2);transition:all .15s;white-space:nowrap}
+.sa .badd{flex:1;text-align:center;min-width:0}
+.badd{padding:3px 6px;border-radius:var(--rs);border:1px solid var(--border);background:var(--sf2);font-size:10px;cursor:pointer;color:var(--t2);transition:all .15s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .badd:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
-.pl{overflow-y:auto;padding:5px;flex-shrink:0;max-height:42%}
-.pi{margin-bottom:3px;border-radius:var(--rs);overflow:hidden}
+.pl{overflow-y:auto;padding:2px 8px 8px;flex-shrink:1;min-height:0}
+.pi{margin-bottom:4px;border-radius:var(--rs);overflow:hidden}
 .pr{display:flex;align-items:center;gap:6px;padding:7px 9px;cursor:pointer;color:#fff;font-size:12px;font-weight:500;user-select:none;border-radius:var(--rs)}
 .pr .dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.5);flex-shrink:0}
 .pr .arr{font-size:9px;opacity:.8;transition:transform .2s;flex-shrink:0;margin-left:2px}
@@ -65,17 +68,18 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .si-meta{font-size:10px;color:var(--t3);display:flex;gap:6px;align-items:center}
 .sd{font-size:10px;background:var(--border);color:var(--t2);padding:1px 5px;border-radius:3px;font-weight:600}
 
-/* B区 */
-.bs{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0;border-top:1px solid var(--border)}
-.bh{padding:7px 10px 4px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.ft{display:flex;gap:3px;overflow-x:auto;padding:0 7px 5px;flex-shrink:0}
-.ftag{padding:2px 7px;border-radius:20px;font-size:10px;cursor:pointer;border:1px solid var(--border);white-space:nowrap;color:var(--t2);background:var(--sf2);transition:all .15s}
-.tl2{flex:1;overflow-y:auto;padding:5px 7px}
-.tgl{padding:6px 3px 4px;font-size:11px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:5px;border-bottom:1px solid var(--border);margin-bottom:5px}
+/* B区 - 任務 */
+.bs{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0}
+.bh{padding:8px 10px 6px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:6px}
+.bh .badd{flex:0 0 auto;padding:3px 8px}
+.ft{display:flex;gap:3px;overflow-x:auto;padding:0 8px 6px;flex-shrink:0;scrollbar-width:thin}
+.ft::-webkit-scrollbar{height:3px}
+.tl2{flex:1;overflow-y:auto;padding:2px 8px 8px;min-height:0}
+.tgl{padding:6px 2px 5px;font-size:11px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:5px;margin-bottom:4px}
 .tgd{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .tc{background:var(--sf2);border-radius:8px;padding:1px 5px;font-size:9px;color:var(--t3);font-weight:600}
-.ti{padding:7px 9px;border-radius:var(--rs);cursor:pointer;margin-bottom:4px;background:var(--surface);border:1px solid var(--border);transition:border-color .1s;position:relative}
-.ti:hover{border-color:var(--t3)}
+.ti{padding:7px 9px;border-radius:var(--rs);cursor:pointer;margin-bottom:5px;background:var(--sf2);border:1px solid var(--border);transition:border-color .1s,background .1s;position:relative}
+.ti:hover{border-color:var(--t3);background:#fff}
 .ti .bdel{position:absolute;right:6px;top:6px;background:var(--sf2);color:var(--t3);opacity:0}
 .ti:hover .bdel{opacity:1}
 .ti .bdel:hover{color:#c0392b;background:#fff3f3}
@@ -87,6 +91,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .tds{font-size:10px;color:#e05a00;font-weight:700}
 .tpb{height:2px;background:var(--border);border-radius:1px;margin-top:5px;overflow:hidden}
 .tpf{height:100%;border-radius:1px}
+.ftag{padding:2px 7px;border-radius:20px;font-size:10px;cursor:pointer;border:1px solid var(--border);white-space:nowrap;color:var(--t2);background:var(--sf2);transition:all .15s;flex-shrink:0}
 
 /* C tabs */
 #tabs{background:var(--surface);border-radius:var(--r) var(--r) 0 0;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:2px;height:var(--th);flex-shrink:0;box-shadow:var(--shadow)}
@@ -112,7 +117,46 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .jn{font-size:12px;font-weight:600}
 .jpt{font-size:10px;padding:1px 6px;border-radius:10px;color:#fff;font-weight:500}
 .jtask{font-size:11px;color:var(--t2);margin-bottom:3px}
-.jnote{font-size:10px;color:var(--t3);background:var(--sf2);padding:4px 7px;border-radius:4px;border-left:2px solid var(--border)}
+.jnote{font-size:10px;color:var(--t3);background:var(--sf2);padding:4px 7px;border-radius:4px;border-left:2px solid var(--border);white-space:pre-wrap;line-height:1.55}
+.jnote b{color:var(--text);font-weight:700}
+.jday-hdr{font-size:10px;font-weight:700;color:var(--t3);padding:8px 9px 4px;letter-spacing:.3px}
+.jvbtns{display:flex;gap:3px}
+.jvbtn{padding:2px 7px;border-radius:12px;border:1px solid var(--border);background:var(--sf2);font-size:10px;cursor:pointer;color:var(--t2)}
+.jvbtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.bjlog{padding:3px 8px;border-radius:var(--rs);border:none;background:#e05a00;color:#fff;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap}
+.bjlog:hover{background:#c44d00}
+
+/* daily log popup */
+.pp-daily{width:580px}
+.dl-date{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text)}
+.dl-proj-filter{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+.dl-ptag{padding:3px 9px;border-radius:14px;font-size:10px;cursor:pointer;border:1px solid var(--border);background:var(--sf2);color:var(--t2)}
+.dl-ptag.active{color:#fff;border-color:transparent}
+.dl-task-list{max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:12px}
+.dl-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer}
+.dl-row:last-child{border-bottom:none}
+.dl-row:hover{background:var(--sf2)}
+.dl-row input[type=checkbox]{width:15px;height:15px;flex-shrink:0;cursor:pointer}
+.dl-proj-tag{font-size:9px;padding:1px 6px;border-radius:8px;color:#fff;font-weight:600;flex-shrink:0;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl-task-main{flex:1;min-width:0}
+.dl-task-name{font-size:12px;font-weight:600;display:block}
+.dl-task-meta{font-size:10px;color:var(--t3);margin-top:1px}
+.dl-progress{font-size:10px;font-weight:700;color:#e05a00;flex-shrink:0;min-width:32px;text-align:right}
+.dl-note{width:100%;margin-top:5px;padding:4px 7px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:#fff}
+.dl-cat{padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:10px;background:#fff;flex-shrink:0;max-width:78px}
+.dl-cat-block{border-color:#e8a0a0;background:#fff8f8}
+.dl-block-box{margin-bottom:10px}
+.dl-block-box textarea{width:100%;padding:6px 9px;border:1px solid #e8a0a0;border-radius:var(--rs);font-size:12px;background:#fff8f8;font-family:inherit}
+.jblk{font-size:9px;padding:1px 6px;border-radius:8px;background:#fde8e8;color:#b42318;font-weight:700;flex-shrink:0}
+.jsec{font-size:10px;color:var(--t2);margin:4px 0 2px}
+.dl-hint{font-size:10px;color:var(--t3);margin-top:4px;line-height:1.5}
+
+/* task report popup */
+.td-cats{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.td-cat{padding:5px 10px;border-radius:16px;border:1px solid var(--border);background:var(--sf2);font-size:11px;cursor:pointer;color:var(--t2)}
+.td-cat.active{background:#e05a00;color:#fff;border-color:#e05a00}
+.td-cat.block.active{background:#b42318;border-color:#b42318}
+.td-proj{font-size:10px;padding:2px 8px;border-radius:12px;color:#fff;font-weight:600;display:inline-block;margin-bottom:8px}
 
 /* D cards */
 .dc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
@@ -276,21 +320,25 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
 <!-- ══ 左側 AB ══ -->
 <div id="lp">
-  <div class="ah">
-    <span class="sl">Projects</span>
-    <div class="sa">
-      <button class="badd" onclick="openPopup('pp-proj')">＋上傳服務建議書</button>
-      <button class="badd" onclick="openPopup('pp-work')">＋工作項目</button>
+  <div class="lp-card lp-proj-card">
+    <div class="ah">
+      <span class="sl">Projects</span>
+      <div class="sa">
+        <button class="badd" onclick="openPopup('pp-proj')">＋上傳服務建議書</button>
+        <button class="badd" onclick="openPopup('pp-work')">＋工作項目</button>
+      </div>
+    </div>
+    <div class="pl" id="pl-projects">
+      <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
     </div>
   </div>
-  <div class="pl" id="pl-projects">
-    <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
-  </div>
-  <div class="bs">
-    <div class="bh"><span class="sl">任務清單</span><button class="badd" onclick="openPopup('pp-task')">＋ 新增</button></div>
-    <div class="ft" id="task-filters"></div>
-    <div class="tl2" id="task-list-body">
-      <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
+  <div class="lp-card lp-task-card">
+    <div class="bs">
+      <div class="bh"><span class="sl">任務清單</span><button class="badd" onclick="openPopup('pp-task')">＋ 新增</button></div>
+      <div class="ft" id="task-filters"></div>
+      <div class="tl2" id="task-list-body">
+        <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
+      </div>
     </div>
   </div>
 </div>
@@ -318,6 +366,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
           <button class="vb active" onclick="setV('month',this)">月</button>
           <button class="vb" onclick="setV('quarter',this)">季</button>
         </div>
+        <button class="bjlog" onclick="openDailyLog()">填寫日誌</button>
       </div>
       <div id="gantt-area">
         <div style="padding:20px;color:var(--t3);font-size:12px;text-align:center">載入中...</div>
@@ -380,7 +429,11 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
 <!-- ══ 右側 E ══ -->
 <div id="rp">
-  <div class="eh"><h3>墨日誌小天地</h3><div class="dn"><button onclick="shiftJournal(-1)">‹</button><span id="journal-date-label" style="font-size:12px;font-weight:600"></span><button onclick="shiftJournal(1)">›</button></div></div>
+  <div class="eh"><h3>墨日誌小天地</h3><div style="display:flex;align-items:center;gap:6px">
+    <button class="bjlog" onclick="openDailyLog()">＋ 填寫今日日誌</button>
+    <div class="jvbtns"><button class="jvbtn active" id="jv-feed" onclick="setJournalView('feed',this)">近30天</button><button class="jvbtn" id="jv-day" onclick="setJournalView('day',this)">單日</button></div>
+    <div class="dn" id="journal-day-nav"><button onclick="shiftJournal(-1)">‹</button><span id="journal-date-label" style="font-size:12px;font-weight:600"></span><button onclick="shiftJournal(1)">›</button></div>
+  </div></div>
   <div class="jl" id="journal-list">
     <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
   </div>
@@ -394,7 +447,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
     <button type="button" class="proc-clear" id="proc-clear-btn" title="清除上傳" style="display:none" onclick="event.stopPropagation();clearProcUpload()">✕</button>
     <input type="file" id="proc-file" accept=".pdf,.doc,.docx,.txt,.text" hidden onchange="onProcFileSelect(this)">
     <div class="uz-title">📄 點此上傳服務建議書</div>
-    <div class="uz-hint">支援 PDF、Word（.doc/.docx）<br>建議：經費表用 Word 表格（服務細項＋金額），勿貼截圖<br>自動帶入標案名稱、工作項目、合約金額；主PM與日期請手填</div>
+    <div class="uz-hint">支援 PDF、Word（.doc/.docx）<br>經費表請用 Word 表格，表頭保留「服務細項」「複價」，勿貼截圖<br>自動帶入標案名稱、工作項目、合約金額；主PM與日期請手填</div>
     <div class="uz-file" id="proc-file-name"></div>
     <div class="uz-status" id="proc-parse-status"></div>
   </div>
@@ -432,7 +485,28 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
 <div class="po" id="pp-task"><div class="pp"><div class="pph"><h3>建立新任務</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fg"><label>任務名稱</label><input type="text" id="nt-name" placeholder="拜訪OO茶主"></div><div class="fg"><label>負責人</label><select id="nt-assignee" data-members></select></div><div class="fg"><label>所屬工作項目</label><select id="nt-wi"></select></div><div class="fg"><label>預計完成日</label><input type="date" id="nt-due"></div><div class="fg"><label>進度狀態</label><select id="nt-status"></select></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri" onclick="saveTask()">新增</button></div></div></div>
 
-<div class="po" id="pp-td"><div class="pp"><div class="pph" id="td-header" style="background:var(--c1)"><h3 id="td-title" style="color:#fff">任務詳情</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-td')">✕</button></div><div class="ppb"><div id="td-meta" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center"></div><div class="fg"><label>進度狀態</label><select id="td-status"></select></div><div class="fg"><label>備註</label><textarea id="td-note" rows="3" placeholder="填寫今日進度備註..."></textarea></div><button class="bads" style="margin-bottom:8px" onclick="cl('pp-td');openPopup('pp-task')">＋ 新增其他任務</button><button class="bsub" onclick="saveJournal()">轉換成今日日報</button></div></div></div>
+<div class="po" id="pp-td"><div class="pp"><div class="pph" id="td-header" style="background:#e05a00"><h3 id="td-title" style="color:#fff">任務回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-td')">✕</button></div><div class="ppb">
+  <div id="td-proj-tag" class="td-proj"></div>
+  <div id="td-meta" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center"></div>
+  <div class="fg"><label>今日回報分類</label><div class="td-cats" id="td-cats">
+    <span class="td-cat active" data-cat="doing" onclick="pickTaskReportCat(this)">進行中</span>
+    <span class="td-cat" data-cat="done" onclick="pickTaskReportCat(this)">今日完成</span>
+    <span class="td-cat block" data-cat="block" onclick="pickTaskReportCat(this)">卡關</span>
+    <span class="td-cat" data-cat="tomorrow" onclick="pickTaskReportCat(this)">明日預計</span>
+  </div></div>
+  <div class="fg"><label>進度狀態</label><select id="td-status"></select></div>
+  <div class="fg"><label>補充說明</label><textarea id="td-note" rows="3" placeholder="寫進今日回報的補充說明…"></textarea></div>
+  <button class="bsub" style="background:#e05a00" onclick="openDailyLogFromTask()">開啟今日回報表</button>
+  <button class="bads" style="margin-top:8px" onclick="cl('pp-td');openPopup('pp-task')">＋ 新增其他任務</button>
+</div></div></div>
+
+<div class="po" id="pp-daily-log"><div class="pp pp-daily"><div class="pph" style="background:#e05a00"><h3 style="color:#fff">每日工作回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-daily-log')">✕</button></div><div class="ppb">
+  <div class="dl-date" id="dl-date-display"></div>
+  <div class="fg"><label>回報人</label><select id="dl-author" data-members onchange="onDailyLogAuthorChange()"></select></div>
+  <div class="fg"><label>任務分類（每項選一種狀態）</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">進行中／今日完成／卡關／明日預計。有卡關請填原因。</div></div>
+  <div class="fg dl-block-box" id="dl-block-wrap" style="display:none"><label>卡關原因</label><textarea id="dl-block-reason" rows="2" placeholder="說明卡在哪、需要誰協助…"></textarea></div>
+  <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="選擇任務後自動產生…"></textarea></div>
+</div><div class="ppf"><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri" style="background:#e05a00" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
 <div class="po" id="pp-exp"><div class="pp"><div class="pph"><h3>新增支出明細</h3><button class="ppc" onclick="cl('pp-exp')">✕</button></div><div class="ppb"><div class="fg"><label>支出細項</label><input type="text" id="ex-name" placeholder="茶葉5斤"></div><div class="fg"><label>所屬工作項目</label><select id="ex-wi"></select></div><div class="fg"><label>負責人</label><select id="ex-assignee" data-members></select></div><div class="fg"><label>預估花費</label><input type="text" id="ex-est" placeholder="NT$0"></div><div class="fg"><label>日期</label><input type="date" id="ex-date"></div><div class="fg"><label>實際金額</label><input type="text" placeholder="NT$0" id="aa" oninput="calcE()"></div><div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ua" readonly style="background:#f0f0f0;color:var(--t3)"></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-exp')">取消</button><button class="bpri" onclick="saveExpense()">新增</button></div></div></div>
 
@@ -1530,6 +1604,11 @@ var membersData = [];
 var membersMap = {};
 var currentTaskId = null;
 var journalViewDate = new Date(); journalViewDate.setHours(0,0,0,0);
+var journalViewMode = 'feed';
+var dailyLogDate = new Date(); dailyLogDate.setHours(0,0,0,0);
+var dailyLogProjFilter = '';
+var dailyLogContentEdited = false;
+var dailyLogTaskExtras = {};
 var PROGRESS_OPTIONS = ['未開始','進行中10%','進行中20%','進行中30%','進行中40%','進行中50%','進行中60%','進行中70%','進行中80%','進行中90%','已完成'];
 
 function personName(field) {
@@ -2143,12 +2222,38 @@ function getTaskContext(taskId) {
   };
 }
 
+var dailyLogTaskExtras = {};
+var taskReportCategory = 'doing';
+
+function pickTaskReportCat(el) {
+  document.querySelectorAll('#td-cats .td-cat').forEach(function(c) { c.classList.remove('active'); });
+  el.classList.add('active');
+  taskReportCategory = el.dataset.cat || 'doing';
+}
+
+function openDailyLogFromTask() {
+  if (!currentTaskId) return;
+  dailyLogTaskExtras[currentTaskId] = {
+    note: document.getElementById('td-note').value.trim(),
+    status: document.getElementById('td-status').value,
+    category: taskReportCategory
+  };
+  openDailyLog(currentTaskId);
+}
+
 function openTaskDetail(taskId) {
   var ctx = getTaskContext(taskId);
   if (!ctx) return;
   currentTaskId = taskId;
-  document.getElementById('td-title').textContent = ctx.f['任務名稱'] || '任務詳情';
-  document.getElementById('td-header').style.background = ctx.color;
+  taskReportCategory = 'doing';
+  document.getElementById('td-title').textContent = ctx.f['任務名稱'] || '任務回報';
+  document.getElementById('td-header').style.background = '#e05a00';
+  var projTag = document.getElementById('td-proj-tag');
+  if (projTag) {
+    projTag.textContent = ctx.projName || '';
+    projTag.style.background = ctx.color;
+    projTag.style.display = ctx.projName ? 'inline-block' : 'none';
+  }
   var remain = daysRemaining(ctx.dueTs);
   document.getElementById('td-meta').innerHTML =
     '<span style="font-size:11px;background:var(--sf2);padding:2px 8px;border-radius:20px">' + ctx.wiName + '</span>'
@@ -2156,6 +2261,9 @@ function openTaskDetail(taskId) {
     + '<span style="font-size:12px;color:var(--t2)">' + ctx.assignee + ' · ' + (ctx.dueTs ? fmtDate(ctx.dueTs) : '—') + '</span>'
     + '<span style="font-size:11px;color:#e05a00;font-weight:600">' + remain + '</span>'
     + '<span style="font-size:11px;color:var(--t3)">' + ctx.progress + '%</span>';
+  document.querySelectorAll('#td-cats .td-cat').forEach(function(c) {
+    c.classList.toggle('active', c.dataset.cat === 'doing');
+  });
   var sel = document.getElementById('td-status');
   sel.innerHTML = PROGRESS_OPTIONS.map(function(o) {
     return '<option' + (o === (ctx.f['進度狀態'] || '') ? ' selected' : '') + '>' + o + '</option>';
@@ -2165,46 +2273,433 @@ function openTaskDetail(taskId) {
 }
 
 function saveJournal() {
-  if (!currentTaskId) return;
-  var ctx = getTaskContext(currentTaskId);
-  if (!ctx) return;
-  var status = document.getElementById('td-status').value;
-  var note = document.getElementById('td-note').value.trim();
-  var progress = parseProgressVal(status, null);
-  var todayTs = journalViewDate.getTime();
+  openDailyLog(currentTaskId);
+}
 
-  var taskFields = { '進度狀態': status, '進度數值': progress };
-  if (note) taskFields['備註'] = note;
+function weekdayLabel(d) {
+  return ['日','一','二','三','四','五','六'][d.getDay()];
+}
 
-  var journalFields = {};
-  journalFields['日期'] = todayTs;
-  journalFields['日誌內容'] = note || status;
-  journalFields['進度'] = status;
-  journalFields['任務名稱'] = ctx.f['任務名稱'] || '';
-  journalFields['標案名稱'] = ctx.projName;
-  journalFields['工作項目'] = ctx.wiName;
-  journalFields['撰寫人'] = ctx.assignee;
-  if (ctx.wiId) journalFields['所屬任務'] = [currentTaskId];
+function getDailyLogTaskItems() {
+  var wiMap = {};
+  workitemsData.forEach(function(wi) {
+    wiMap[wi.record_id] = {
+      name: wi.fields['工作項目名稱'] || '',
+      project: getProjectNameFromWi(wi)
+    };
+  });
+  var items = [];
+  tasksData.forEach(function(rec) {
+    var f = rec.fields;
+    var wiIds = getLinkIds(f['所屬工作項目']);
+    var wiId = wiIds[0] || null;
+    var wi = wiId ? wiMap[wiId] : null;
+    var projName = wi ? (wi.project || '其他') : '其他';
+    items.push({
+      id: rec.record_id,
+      taskName: f['任務名稱'] || '未命名',
+      projName: projName,
+      wiName: wi ? wi.name : '',
+      assignee: personName(f['負責人']),
+      progress: parseProgressVal(f['進度狀態'], f['進度數值']),
+      status: f['進度狀態'] || '未開始',
+      note: f['備註'] || '',
+      color: projColorByName(projName)
+    });
+  });
+  items.sort(function(a, b) {
+    if (a.projName !== b.projName) return a.projName.localeCompare(b.projName, 'zh-Hant');
+    return a.taskName.localeCompare(b.taskName, 'zh-Hant');
+  });
+  return items;
+}
 
-  Promise.all([
-    fetch(API + '?table=tasks&recordId=' + currentTaskId, {
+function formatDailyJournalText(rows) {
+  return formatDailyReportSummary({ doing: rows, done: [], block: [], tomorrow: [] });
+}
+
+var DAILY_CAT_OPTIONS = [
+  { value: '', label: '不列入' },
+  { value: 'doing', label: '進行中' },
+  { value: 'done', label: '今日完成' },
+  { value: 'block', label: '卡關' },
+  { value: 'tomorrow', label: '明日預計' }
+];
+
+function journalPersonName(rec) {
+  var f = rec.fields || {};
+  return personName(f['回報人']) || journalField(rec, ['撰寫人', '成員', '姓名']) || '';
+}
+
+function journalLinkText(rec, keys) {
+  var f = rec.fields || {};
+  for (var i = 0; i < keys.length; i++) {
+    var field = f[keys[i]];
+    if (!field) continue;
+    var text = getLinkText(field);
+    if (text) return text;
+    if (Array.isArray(field) && field[0]) {
+      var names = field.map(function(item) {
+        return item.text_arr && item.text_arr[0] ? item.text_arr[0] : (item.name || '');
+      }).filter(Boolean);
+      if (names.length) return names.join('、');
+    }
+  }
+  return '';
+}
+
+function journalTaskNames(rec, keys) {
+  var f = rec.fields || {};
+  for (var i = 0; i < keys.length; i++) {
+    var ids = getLinkIds(f[keys[i]]);
+    if (!ids.length) continue;
+    return ids.map(function(id) {
+      var task = tasksData.find(function(t) { return t.record_id === id; });
+      return task ? (task.fields['任務名稱'] || '任務') : '';
+    }).filter(Boolean).join('、');
+  }
+  return '';
+}
+
+function getExistingTaskCategories(rec) {
+  var map = {};
+  if (!rec) return map;
+  var f = rec.fields || {};
+  getLinkIds(f['進行中任務']).forEach(function(id) { map[id] = 'doing'; });
+  getLinkIds(f['已完成今日任務']).forEach(function(id) { map[id] = 'done'; });
+  getLinkIds(f['卡關任務']).forEach(function(id) { map[id] = 'block'; });
+  getLinkIds(f['明日預計任務']).forEach(function(id) { map[id] = 'tomorrow'; });
+  return map;
+}
+
+function getProjectRecordId(projName) {
+  var rec = projectsData.find(function(p) { return (p.fields['標案名稱'] || '') === projName; });
+  return rec ? rec.record_id : null;
+}
+
+function formatDailyReportSummary(groups) {
+  var lines = [];
+  function section(title, rows) {
+    if (!rows || !rows.length) return;
+    lines.push('【' + title + '】');
+    rows.forEach(function(row) {
+      var line = '/ ' + row.projName + ' · ' + row.taskName;
+      if (row.note) line += '：' + row.note;
+      lines.push(line);
+    });
+    lines.push('');
+  }
+  section('進行中', groups.doing);
+  section('今日完成', groups.done);
+  section('卡關', groups.block);
+  section('明日預計', groups.tomorrow);
+  return lines.join('\n').trim();
+}
+
+function buildDailyCatSelect(value, isBlock) {
+  var html = '<select class="dl-cat' + (isBlock ? ' dl-cat-block' : '') + '" onclick="event.stopPropagation()" onchange="onDailyLogCatChange(this)">';
+  DAILY_CAT_OPTIONS.forEach(function(opt) {
+    html += '<option value="' + opt.value + '"' + (value === opt.value ? ' selected' : '') + '>' + opt.label + '</option>';
+  });
+  return html + '</select>';
+}
+
+function onDailyLogCatChange(sel) {
+  sel.classList.toggle('dl-cat-block', sel.value === 'block');
+  toggleDailyBlockReason();
+  refreshDailyLogContent();
+}
+
+function toggleDailyBlockReason() {
+  var hasBlock = false;
+  document.querySelectorAll('#dl-task-list .dl-cat').forEach(function(sel) {
+    if (sel.value === 'block') hasBlock = true;
+  });
+  var wrap = document.getElementById('dl-block-wrap');
+  if (wrap) wrap.style.display = hasBlock ? 'block' : 'none';
+}
+
+function onDailyLogAuthorChange() {
+  var author = document.getElementById('dl-author').value || '';
+  var existing = findDailyJournalRecord(dailyLogDate.getTime(), author);
+  var blockEl = document.getElementById('dl-block-reason');
+  var contentEl = document.getElementById('dl-content');
+  if (blockEl) blockEl.value = existing ? (journalField(existing, ['卡關原因']) || '') : '';
+  if (contentEl) {
+    contentEl.value = existing ? (journalField(existing, ['備註', '日誌內容', '內容']) || '') : '';
+    dailyLogContentEdited = !!contentEl.value;
+  }
+  renderDailyLogTasks(dailyLogPreselectId);
+  dailyLogPreselectId = null;
+}
+
+var dailyLogPreselectId = null;
+
+function formatJournalHtml(text) {
+  if (!text) return '';
+  var safe = escHtml(text);
+  return safe.replace(/【([^】]+)】/g, '<b>【$1】</b>');
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderDailyLogProjFilter(items) {
+  var area = document.getElementById('dl-proj-filter');
+  if (!area) return;
+  var projs = [];
+  items.forEach(function(it) {
+    if (projs.indexOf(it.projName) < 0) projs.push(it.projName);
+  });
+  var html = '<span class="dl-ptag' + (!dailyLogProjFilter ? ' active' : '') + '" data-proj="" style="background:var(--accent);color:#fff">全部</span>';
+  projs.forEach(function(proj) {
+    var color = projColorByName(proj);
+    var active = dailyLogProjFilter === proj ? ' active' : '';
+    html += '<span class="dl-ptag' + active + '" data-proj="' + escAttr(proj) + '" style="border-color:' + color + ';color:' + color + '">' + proj + '</span>';
+  });
+  area.innerHTML = html;
+  area.querySelectorAll('.dl-ptag').forEach(function(tag) {
+    tag.addEventListener('click', function() {
+      dailyLogProjFilter = tag.dataset.proj || '';
+      renderDailyLogTasks();
+    });
+  });
+}
+
+function renderDailyLogTasks(preselectId) {
+  var area = document.getElementById('dl-task-list');
+  if (!area) return;
+  var items = getDailyLogTaskItems();
+  if (dailyLogProjFilter) items = items.filter(function(it) { return it.projName === dailyLogProjFilter; });
+  if (!items.length) {
+    area.innerHTML = '<div style="padding:14px;color:var(--t3);font-size:11px;text-align:center">尚無任務可選</div>';
+    return;
+  }
+  var author = document.getElementById('dl-author') ? document.getElementById('dl-author').value : '';
+  var existing = findDailyJournalRecord(dailyLogDate.getTime(), author);
+  var catMap = getExistingTaskCategories(existing);
+  if (preselectId) {
+    var extraCat = dailyLogTaskExtras[preselectId] && dailyLogTaskExtras[preselectId].category;
+    catMap[preselectId] = extraCat || catMap[preselectId] || 'doing';
+  }
+  var html = '';
+  items.forEach(function(it) {
+    var cat = catMap[it.id] || '';
+    var extra = dailyLogTaskExtras[it.id] || {};
+    var noteVal = extra.note !== undefined ? extra.note : it.note;
+    html += '<div class="dl-row" data-task-id="' + it.id + '">';
+    html += buildDailyCatSelect(cat, cat === 'block');
+    html += '<span class="dl-proj-tag" style="background:' + it.color + '">' + it.projName + '</span>';
+    html += '<div class="dl-task-main"><span class="dl-task-name">' + escHtml(it.taskName) + '</span>';
+    html += '<span class="dl-task-meta">' + escHtml(it.wiName) + ' · ' + escHtml(it.assignee) + '</span>';
+    html += '<input type="text" class="dl-note" placeholder="補充說明（選填）" value="' + escAttr(noteVal) + '" onclick="event.stopPropagation()">';
+    html += '</div><span class="dl-progress">' + it.progress + '%</span></div>';
+  });
+  area.innerHTML = html;
+  area.querySelectorAll('.dl-note').forEach(function(el) {
+    el.addEventListener('input', refreshDailyLogContent);
+  });
+  toggleDailyBlockReason();
+  if (!dailyLogContentEdited) refreshDailyLogContent();
+}
+
+function collectDailyLogCategories() {
+  var groups = { doing: [], done: [], block: [], tomorrow: [] };
+  var ids = { doing: [], done: [], block: [], tomorrow: [] };
+  document.querySelectorAll('#dl-task-list .dl-row').forEach(function(row) {
+    var catSel = row.querySelector('.dl-cat');
+    if (!catSel || !catSel.value) return;
+    var cat = catSel.value;
+    var id = row.dataset.taskId;
+    var ctx = getTaskContext(id);
+    if (!ctx) return;
+    var noteInput = row.querySelector('.dl-note');
+    var item = {
+      id: id,
+      projName: ctx.projName || '其他',
+      taskName: ctx.f['任務名稱'] || '未命名',
+      note: noteInput ? noteInput.value.trim() : '',
+      status: (dailyLogTaskExtras[id] && dailyLogTaskExtras[id].status) || ctx.f['進度狀態'] || '未開始'
+    };
+    groups[cat].push(item);
+    ids[cat].push(id);
+  });
+  return { groups: groups, ids: ids };
+}
+
+function collectDailyLogRows() {
+  var data = collectDailyLogCategories();
+  return data.groups.doing.concat(data.groups.done, data.groups.block, data.groups.tomorrow);
+}
+
+function refreshDailyLogContent() {
+  if (dailyLogContentEdited) return;
+  var data = collectDailyLogCategories();
+  var ta = document.getElementById('dl-content');
+  if (ta) ta.value = formatDailyReportSummary(data.groups);
+}
+
+function openDailyLog(preselectTaskId) {
+  dailyLogDate = new Date();
+  dailyLogDate.setHours(0, 0, 0, 0);
+  dailyLogProjFilter = '';
+  dailyLogContentEdited = false;
+  dailyLogTaskExtras = {};
+  dailyLogPreselectId = preselectTaskId || null;
+
+  if (preselectTaskId) {
+    var tdNote = document.getElementById('td-note');
+    var tdStatus = document.getElementById('td-status');
+    dailyLogTaskExtras[preselectTaskId] = {
+      note: tdNote ? tdNote.value.trim() : '',
+      status: tdStatus ? tdStatus.value : '',
+      category: taskReportCategory || 'doing'
+    };
+  }
+
+  var d = dailyLogDate;
+  var el = document.getElementById('dl-date-display');
+  if (el) el.textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日（星期' + weekdayLabel(d) + '）';
+
+  var items = getDailyLogTaskItems();
+  var authorSel = document.getElementById('dl-author');
+  if (authorSel) {
+    var authorNames = Object.keys(membersMap);
+    if (!authorNames.length) {
+      var nameSet = {};
+      items.forEach(function(it) { if (it.assignee) nameSet[it.assignee] = 1; });
+      authorNames = Object.keys(nameSet);
+    }
+    fillSelectOptions(authorSel, authorNames.length ? authorNames : ['（未指定）']);
+    if (preselectTaskId) {
+      var ctx = getTaskContext(preselectTaskId);
+      if (ctx && ctx.assignee) authorSel.value = ctx.assignee;
+    }
+  }
+
+  var author = authorSel ? authorSel.value : '';
+  var existing = findDailyJournalRecord(d.getTime(), author);
+  var blockEl = document.getElementById('dl-block-reason');
+  var contentEl = document.getElementById('dl-content');
+  if (blockEl) blockEl.value = existing ? (journalField(existing, ['卡關原因']) || '') : '';
+  if (contentEl) {
+    contentEl.value = existing ? (journalField(existing, ['備註', '日誌內容', '內容']) || '') : '';
+    dailyLogContentEdited = !!contentEl.value;
+  }
+
+  renderDailyLogProjFilter(items);
+  renderDailyLogTasks(preselectTaskId);
+  dailyLogPreselectId = null;
+
+  if (contentEl) contentEl.oninput = function() { dailyLogContentEdited = true; };
+  if (preselectTaskId) cl('pp-td');
+  op('pp-daily-log');
+}
+
+function findDailyJournalRecord(dayStart, authorName) {
+  var dayEnd = dayStart + 86400000;
+  var matches = journalData.filter(function(rec) {
+    var ts = journalField(rec, ['日期', '日報日期']);
+    if (!ts || ts < dayStart || ts >= dayEnd) return false;
+    if (!authorName || authorName === '（未指定）') return true;
+    return journalPersonName(rec) === authorName;
+  });
+  if (!matches.length) return null;
+  if (!authorName || authorName === '（未指定）') return matches[0];
+  return matches[0];
+}
+
+function saveDailyJournal() {
+  var data = collectDailyLogCategories();
+  var author = document.getElementById('dl-author').value || '';
+  var blockReason = (document.getElementById('dl-block-reason').value || '').trim();
+  var content = (document.getElementById('dl-content').value || '').trim();
+  var totalCount = data.groups.doing.length + data.groups.done.length + data.groups.block.length + data.groups.tomorrow.length;
+
+  if (!totalCount && !content) {
+    alert('請至少分類一個任務，或填寫備註');
+    return;
+  }
+  if (data.ids.block.length && !blockReason) {
+    alert('有卡關任務時，請填寫卡關原因');
+    return;
+  }
+  if (!content && totalCount) content = formatDailyReportSummary(data.groups);
+
+  var todayTs = dailyLogDate.getTime();
+  var projIds = [];
+  var allItems = collectDailyLogRows();
+  allItems.forEach(function(item) {
+    var pid = getProjectRecordId(item.projName);
+    if (pid && projIds.indexOf(pid) < 0) projIds.push(pid);
+  });
+
+  var journalFields = {
+    '日期': todayTs,
+    '備註': content
+  };
+  if (data.ids.doing.length) journalFields['進行中任務'] = data.ids.doing;
+  if (data.ids.done.length) journalFields['已完成今日任務'] = data.ids.done;
+  if (data.ids.block.length) journalFields['卡關任務'] = data.ids.block;
+  if (data.ids.tomorrow.length) journalFields['明日預計任務'] = data.ids.tomorrow;
+  if (blockReason) journalFields['卡關原因'] = blockReason;
+  if (projIds.length) journalFields['所屬專案'] = projIds;
+
+  var reporter = larkPerson(author);
+  if (reporter) journalFields['回報人'] = reporter;
+  else if (author && author !== '（未指定）') journalFields['回報人'] = author;
+
+  var existing = findDailyJournalRecord(todayTs, author);
+  var journalPromise = existing
+    ? fetch(API + '?table=journal&recordId=' + existing.record_id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(journalFields)
+      }).then(function(r) { return r.json(); })
+    : fetch(API + '?table=journal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(journalFields)
+      }).then(function(r) { return r.json(); });
+
+  var taskUpdates = allItems.map(function(row) {
+    var fields = {};
+    if (row.note) fields['備註'] = row.note;
+    if (row.status) {
+      fields['進度狀態'] = row.status;
+      fields['進度數值'] = parseProgressVal(row.status, null);
+    }
+    if (!Object.keys(fields).length) return Promise.resolve({ code: 0 });
+    return fetch(API + '?table=tasks&recordId=' + row.id, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(taskFields)
-    }).then(function(r){ return r.json(); }),
-    fetch(API + '?table=journal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(journalFields)
-    }).then(function(r){ return r.json(); })
-  ]).then(function() {
-    cl('pp-td');
+      body: JSON.stringify(fields)
+    }).then(function(r) { return r.json(); });
+  });
+
+  Promise.all([journalPromise].concat(taskUpdates)).then(function(results) {
+    var main = results[0];
+    if (main && main.code !== undefined && main.code !== 0) {
+      throw new Error(main.msg || '日報儲存失敗');
+    }
+    cl('pp-daily-log');
+    journalViewDate = new Date(dailyLogDate.getTime());
     loadData();
-    alert('已轉換為今日日報！');
+    alert(existing ? '已更新今日日報！' : '已儲存今日日報！');
   }).catch(function(err) {
     console.error(err);
-    alert('儲存失敗，請稍後再試');
+    alert('儲存失敗：' + (err.message || '請確認 Lark 日報表欄位名稱與類型是否正確'));
   });
+}
+
+function setJournalView(mode, btn) {
+  journalViewMode = mode;
+  document.querySelectorAll('.jvbtn').forEach(function(b) { b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  var nav = document.getElementById('journal-day-nav');
+  if (nav) nav.style.display = mode === 'day' ? 'flex' : 'none';
+  renderJournal();
 }
 
 function journalField(rec, keys) {
@@ -2220,6 +2715,12 @@ function renderJournal() {
   if (label) label.textContent = (journalViewDate.getMonth()+1) + '/' + journalViewDate.getDate();
   var area = document.getElementById('journal-list');
   if (!area) return;
+
+  if (journalViewMode === 'feed') {
+    renderJournalFeed(area);
+    return;
+  }
+
   var dayStart = journalViewDate.getTime();
   var dayEnd = dayStart + 86400000;
   var items = journalData.filter(function(rec) {
@@ -2234,26 +2735,81 @@ function renderJournal() {
     area.innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">本日尚無日誌</div>';
     return;
   }
-  var html = '';
+  area.innerHTML = items.map(function(rec) { return renderJournalCard(rec); }).join('');
+}
+
+function renderJournalFeed(area) {
+  var cutoff = Date.now() - 30 * 86400000;
+  var items = journalData.filter(function(rec) {
+    var ts = journalField(rec, ['日期', '日報日期']);
+    return ts && ts >= cutoff;
+  });
+  items.sort(function(a, b) {
+    return (journalField(b, ['日期','日報日期']) || 0) - (journalField(a, ['日期','日報日期']) || 0);
+  });
+  if (!items.length) {
+    area.innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">近 30 天尚無日誌</div>';
+    return;
+  }
+
+  var byDay = {};
   items.forEach(function(rec) {
-    var f = rec.fields || {};
-    var author = journalField(rec, ['撰寫人', '成員', '姓名']) || personName(f['負責人']) || '—';
-    var proj = journalField(rec, ['標案名稱', '所屬標案']) || (f['所屬標案'] && f['所屬標案'].text_arr ? f['所屬標案'].text_arr[0] : '');
-    if (typeof proj !== 'string') proj = String(proj);
-    var taskName = journalField(rec, ['任務名稱', '任務']) || '';
-    var progress = journalField(rec, ['進度', '進度狀態']) || '';
-    var note = journalField(rec, ['日誌內容', '備註', '內容']) || '';
-    var color = projColorByName(proj);
-    html += '<div class="ji"><div class="jt"><span class="av ' + avatarClass(author) + '">' + personInitial(author) + '</span>'
-      + '<span class="jn">' + author + '</span>';
-    if (proj) html += '<span class="jpt" style="background:' + color + '">' + proj + '</span>';
-    html += '</div><div class="jtask">' + taskName;
-    if (progress) html += ' · 進度' + (String(progress).indexOf('%') >= 0 ? progress : progress + '%');
-    html += '</div>';
-    if (note) html += '<div class="jnote">' + note + '</div>';
-    html += '</div>';
+    var ts = journalField(rec, ['日期', '日報日期']);
+    var d = new Date(ts);
+    d.setHours(0, 0, 0, 0);
+    var key = d.getTime();
+    if (!byDay[key]) byDay[key] = [];
+    byDay[key].push(rec);
+  });
+
+  var dayKeys = Object.keys(byDay).map(Number).sort(function(a, b) { return b - a; });
+  var html = '';
+  dayKeys.forEach(function(dayTs) {
+    var d = new Date(dayTs);
+    html += '<div class="jday-hdr">' + (d.getMonth()+1) + '/' + d.getDate() + '（' + weekdayLabel(d) + '）</div>';
+    byDay[dayTs].sort(function(a, b) {
+      var aBlock = getLinkIds((a.fields || {})['卡關任務']).length ? 1 : 0;
+      var bBlock = getLinkIds((b.fields || {})['卡關任務']).length ? 1 : 0;
+      return bBlock - aBlock;
+    });
+    byDay[dayTs].forEach(function(rec) {
+      html += renderJournalCard(rec, true);
+    });
   });
   area.innerHTML = html;
+}
+
+function renderJournalCard(rec, compact) {
+  var f = rec.fields || {};
+  var author = journalPersonName(rec) || '—';
+  var proj = journalLinkText(rec, ['所屬專案', '標案名稱', '所屬標案']);
+  if (!proj && f['所屬標案'] && f['所屬標案'].text_arr) proj = f['所屬標案'].text_arr[0] || '';
+  var note = journalField(rec, ['備註', '日誌內容', '內容']) || '';
+  var blockReason = journalField(rec, ['卡關原因']) || '';
+  var doing = journalTaskNames(rec, ['進行中任務']);
+  var done = journalTaskNames(rec, ['已完成今日任務']);
+  var blocked = journalTaskNames(rec, ['卡關任務']);
+  var tomorrow = journalTaskNames(rec, ['明日預計任務']);
+  var hasBlock = !!blocked || !!blockReason;
+  var color = projColorByName((proj || '').split('、')[0] || '');
+
+  var html = '<div class="ji"><div class="jt"><span class="av ' + avatarClass(author) + '">' + personInitial(author) + '</span>'
+    + '<span class="jn">' + escHtml(author) + '</span>';
+  if (proj) html += '<span class="jpt" style="background:' + color + '">' + escHtml(proj) + '</span>';
+  if (hasBlock) html += '<span class="jblk">卡關</span>';
+  html += '</div>';
+
+  if (doing) html += '<div class="jsec">進行中：' + escHtml(doing) + '</div>';
+  if (done) html += '<div class="jsec">今日完成：' + escHtml(done) + '</div>';
+  if (blocked) html += '<div class="jsec" style="color:#b42318">卡關：' + escHtml(blocked) + '</div>';
+  if (blockReason) html += '<div class="jnote" style="border-left-color:#e8a0a0">' + escHtml(blockReason) + '</div>';
+  if (tomorrow) html += '<div class="jsec">明日預計：' + escHtml(tomorrow) + '</div>';
+  if (note) html += '<div class="jnote">' + formatJournalHtml(note) + '</div>';
+  if (!compact) {
+    html += '<button type="button" class="bads" style="margin-top:6px" onclick="openDailyLog()">編輯今日日報</button>';
+  }
+  html += '</div>';
+  return html;
 }
 
 function shiftJournal(delta) {
@@ -2757,6 +3313,8 @@ loadData();
   }
   var jl = document.getElementById('journal-date-label');
   if (jl) jl.textContent = (d.getMonth()+1) + '/' + d.getDate();
+  var nav = document.getElementById('journal-day-nav');
+  if (nav) nav.style.display = journalViewMode === 'day' ? 'flex' : 'none';
 })();
 </script>
 </body>
