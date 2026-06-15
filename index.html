@@ -524,12 +524,17 @@ function dif(a,b){return Math.round((b-a)/86400000);}
 
 function getRange(){
   if(vMode==='week'){
-    var s=new Date(2026,4,1);s.setDate(s.getDate()+vOff*7);
+    var s=new Date(TODAY);s.setDate(s.getDate()+vOff*7-7);
     var e=new Date(s);e.setDate(e.getDate()+27);return{s:s,e:e};
   }else if(vMode==='month'){
-    return{s:new Date(2026,4+vOff,1),e:new Date(2026,7+vOff,0)};
+    var s=new Date(TODAY.getFullYear(),TODAY.getMonth()+vOff,1);
+    var e=new Date(TODAY.getFullYear(),TODAY.getMonth()+vOff+3,0);
+    return{s:s,e:e};
   }else{
-    return{s:new Date(2026,3+vOff*3,1),e:new Date(2026,6+vOff*3+3,0)};
+    var qStart=Math.floor(TODAY.getMonth()/3)*3;
+    var s=new Date(TODAY.getFullYear(),qStart+vOff*3,1);
+    var e=new Date(s.getFullYear(),s.getMonth()+3,0);
+    return{s:s,e:e};
   }
 }
 
@@ -613,10 +618,9 @@ function setV(m,btn){
 function shiftV(d){vOff+=d;renderAll();}
 function goToday(){
   vOff=0;renderAll();
-  ['c1','c2'].forEach(function(k){
+  document.querySelectorAll('[id^="gsw-"]').forEach(function(el){
     var r=getRange(),tx2=dif(r.s,TODAY)*CW;
-    var el=document.getElementById('gsw-'+k);
-    if(el)el.scrollLeft=Math.max(0,tx2-200);
+    el.scrollLeft=Math.max(0,tx2-200);
   });
 }
 function scG(k,d){var el=document.getElementById('gsw-'+k);if(el)el.scrollLeft+=d;}
@@ -698,11 +702,91 @@ function fmt(ts) {
 }
 
 function getWiIds(f) {
-  var wi = f['工作項目'];
-  if (!wi) return [];
-  if (wi.record_ids) return wi.record_ids;
-  if (wi[0] && wi[0].record_ids) return wi[0].record_ids;
+  return getLinkIds(f['工作項目']);
+}
+
+function getLinkIds(linkField) {
+  if (!linkField) return [];
+  if (linkField.record_ids) return linkField.record_ids.slice();
+  if (Array.isArray(linkField)) {
+    var ids = [];
+    linkField.forEach(function(item) {
+      if (!item) return;
+      if (item.record_ids) ids = ids.concat(item.record_ids);
+      else if (item.record_id) ids.push(item.record_id);
+    });
+    return ids;
+  }
   return [];
+}
+
+function getLinkText(linkField) {
+  if (!linkField) return '';
+  if (linkField.text_arr && linkField.text_arr[0]) return linkField.text_arr[0];
+  if (Array.isArray(linkField) && linkField[0]) {
+    if (linkField[0].text_arr && linkField[0].text_arr[0]) return linkField[0].text_arr[0];
+    if (linkField[0].text) return linkField[0].text;
+  }
+  return '';
+}
+
+function escAttr(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function parseTs(val) {
+  if (!val) return null;
+  var d = new Date(val);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function getProjectNameFromWi(wi) {
+  if (!wi || !wi.fields) return '';
+  return getLinkText(wi.fields['所屬標案']);
+}
+
+function getWorkitemsForProject(rec) {
+  var f = rec.fields;
+  var pname = f['標案名稱'] || '';
+  var wiIds = getWiIds(f);
+  var result = [];
+  var seen = {};
+  wiIds.forEach(function(id) {
+    var wi = workitemsData.find(function(w) { return w.record_id === id; });
+    if (wi) { seen[wi.record_id] = 1; result.push(wi); }
+  });
+  workitemsData.forEach(function(wi) {
+    if (getProjectNameFromWi(wi) === pname && !seen[wi.record_id]) {
+      seen[wi.record_id] = 1;
+      result.push(wi);
+    }
+  });
+  return result;
+}
+
+function buildExpenseSummary() {
+  var byWi = {};
+  workitemsData.forEach(function(wi) {
+    byWi[wi.record_id] = { spent: 0, untax: 0 };
+  });
+  expensesData.forEach(function(rec) {
+    var f = rec.fields;
+    var wiIds = getLinkIds(f['所屬工作項目']);
+    var amount = parseFloat(f['實際金額']) || 0;
+    var untax = parseFloat(f['未稅金額(X)'] || f['未稅金額']) || Math.round(amount / 1.05);
+    if (!wiIds.length) return;
+    wiIds.forEach(function(wiId) {
+      if (!byWi[wiId]) byWi[wiId] = { spent: 0, untax: 0 };
+      byWi[wiId].spent += amount;
+      byWi[wiId].untax += untax;
+    });
+  });
+  return byWi;
+}
+
+function toDateStr(d) {
+  if (!d) return '';
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
 function loadExtraData() {
@@ -782,37 +866,38 @@ function fmtDate(ts) {
 }
 function togNtag(el) { el.classList.toggle('on'); }
 
-// ── 費用管理 ──
+// ── 費用管理（已支出由支出明細表加總）──
 function renderBudget() {
   var area = document.getElementById('budget-area');
   if (!area) return;
+  var expenseByWi = buildExpenseSummary();
   var html = '';
   projectsData.forEach(function(rec, i) {
     var f = rec.fields;
     var name = f['標案名稱'] || '未命名';
     var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
     var contract = parseFloat(f['合約金額']) || 0;
-    var untax = f['合約未稅金額'] || 0;
-    var avail = f['可用成本'] || 0;
-    var spent = f['已支出合計'] || 0;
-    var remain = f['剩餘預算'] || f['剩餘預算(X)'] || (avail - spent);
-    var pct = avail > 0 ? Math.min(100, Math.round(spent/avail*100)) : 0;
-    var wiIds = getWiIds(f);
+    var untax = parseFloat(f['合約未稅金額']) || Math.round(contract / 1.05);
+    var avail = parseFloat(f['可用成本']) || Math.round(untax / 2);
+    var workitems = getWorkitemsForProject(rec);
+    var spent = 0;
     var wiRows = '';
-    wiIds.forEach(function(wiId) {
-      var wi = workitemsData.find(function(w){ return w.record_id === wiId; });
-      if (!wi) return;
+    workitems.forEach(function(wi) {
       var wf = wi.fields;
       var wName = wf['工作項目名稱'] || '';
       var wAvail = parseFloat(wf['可用成本']) || 0;
-      var wSpent = wf['實際花費'] || 0;
-      var wRemain = wf['剩餘預算'] || (wAvail - wSpent);
+      var exp = expenseByWi[wi.record_id] || { spent: 0, untax: 0 };
+      var wSpent = exp.spent;
+      spent += wSpent;
+      var wRemain = wAvail - wSpent;
       wiRows += '<div class="wir"><div class="wn">'+wName+'</div><div class="wns">'
         +'<div><div class="wl">可用</div><div class="wv">'+ntf(wAvail)+'</div></div>'
         +'<div><div class="wl">已支出</div><div class="wv" style="color:#c0392b">'+ntf(wSpent)+'</div></div>'
         +'<div><div class="wl">剩餘</div><div class="wv" style="color:'+color+'">'+ntf(wRemain)+'</div></div>'
         +'</div></div>';
     });
+    var remain = avail - spent;
+    var pct = avail > 0 ? Math.min(100, Math.round(spent/avail*100)) : 0;
     html += '<div class="dc"><div class="dch"><div class="pdot" style="background:'+color+'"></div><h3>'+name+'</h3></div>'
       +'<div class="bo">'
       +'<div class="bi"><div class="lb">合約金額</div><div class="vl">'+ntf(contract)+'</div></div>'
@@ -820,11 +905,11 @@ function renderBudget() {
       +'<div class="bi"><div class="lb">可用成本</div><div class="vl">'+ntf(avail)+'</div></div>'
       +'<div class="bi"><div class="lb">已支出合計</div><div class="vl" style="color:#c0392b">'+ntf(spent)+'</div></div>'
       +'<div class="bi"><div class="lb">剩餘預算</div><div class="vl" style="color:'+color+'">'+ntf(remain)+'</div></div>'
-      +'</div><div class="bbw"><div style="font-size:10px;color:var(--t3)">預算使用率 '+pct+'%</div>'
+      +'</div><div class="bbw"><div style="font-size:10px;color:var(--t3)">預算使用率 '+pct+'%（依支出明細加總）</div>'
       +'<div class="bbt"><div class="bbf" style="width:'+pct+'%;background:'+color+'"></div></div></div>'
       +wiRows+'</div>';
   });
-  area.innerHTML = html;
+  area.innerHTML = html || '<div style="padding:20px;color:var(--t3)">尚無費用資料</div>';
 }
 
 // ── 支出明細 ──
@@ -833,44 +918,47 @@ function renderExpenses() {
   if (!area) return;
   var wiMap = {};
   workitemsData.forEach(function(wi) {
-    var f = wi.fields;
-    var projName = f['所屬標案'] && f['所屬標案'].text_arr ? f['所屬標案'].text_arr[0] : '';
-    wiMap[wi.record_id] = { name: f['工作項目名稱'] || '', project: projName };
+    wiMap[wi.record_id] = {
+      name: wi.fields['工作項目名稱'] || '',
+      project: getProjectNameFromWi(wi)
+    };
   });
   var byProject = {};
   expensesData.forEach(function(rec) {
     var f = rec.fields;
-    var wiArr = f['所屬工作項目'];
-    var wiId = wiArr && wiArr.record_ids ? wiArr.record_ids[0] : null;
+    var wiIds = getLinkIds(f['所屬工作項目']);
+    var wiId = wiIds[0] || null;
     var wi = wiId ? wiMap[wiId] : null;
     var projName = wi ? wi.project : '其他';
     if (!byProject[projName]) byProject[projName] = [];
+    var amount = parseFloat(f['實際金額']) || 0;
+    var untaxVal = parseFloat(f['未稅金額(X)'] || f['未稅金額']) || Math.round(amount / 1.05);
     byProject[projName].push({
       name: f['支出細項'] || '',
-      assignee: f['負責人'] && f['負責人'][0] ? f['負責人'][0].name : '',
+      assignee: personName(f['負責人']),
       wiName: wi ? wi.name : '',
       date: fmtDate(f['日期']),
-      actual: parseFloat(f['實際金額']) || 0,
-      untax: f['未稅金額(X)'] || 0,
+      actual: amount,
+      untax: untaxVal,
       status: f['狀態'] || ''
     });
   });
   var html = '';
-  projectsData.forEach(function(rec, i) {
-    var pname = rec.fields['標案名稱'] || '';
-    if (!byProject[pname] || byProject[pname].length === 0) return;
-    var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
+  function renderProjectBlock(pname, color) {
+    var items = byProject[pname];
+    if (!items || !items.length) return '';
     var byAssignee = {};
-    byProject[pname].forEach(function(item) {
-      if (!byAssignee[item.assignee]) byAssignee[item.assignee] = [];
-      byAssignee[item.assignee].push(item);
+    items.forEach(function(item) {
+      var key = item.assignee || '未指定';
+      if (!byAssignee[key]) byAssignee[key] = [];
+      byAssignee[key].push(item);
     });
     var rows = '';
     Object.keys(byAssignee).forEach(function(aname) {
       rows += '<tr class="gr"><td colspan="7">'+aname+' · '+byAssignee[aname].length+'筆</td></tr>';
       byAssignee[aname].forEach(function(item) {
-        var stClass = item.status === '已合銷' ? 'std' : 'stp';
-        var stLabel = item.status === '已合銷' ? '已核銷' : '待核銷';
+        var stClass = (item.status === '已合銷' || item.status === '已核銷') ? 'std' : 'stp';
+        var stLabel = (item.status === '已合銷' || item.status === '已核銷') ? '已核銷' : '待核銷';
         rows += '<tr><td>'+item.name+'</td><td>'+aname+'</td><td>'+item.wiName+'</td>'
           +'<td>'+item.date+'</td>'
           +'<td style="font-weight:600">'+ntf(item.actual)+'</td>'
@@ -878,12 +966,19 @@ function renderExpenses() {
           +'<td><span class="st '+stClass+'">'+stLabel+'</span></td></tr>';
       });
     });
-    html += '<div class="dc"><div class="dch"><div class="pdot" style="background:'+color+'"></div><h3>'+pname+'</h3>'
+    return '<div class="dc"><div class="dch"><div class="pdot" style="background:'+color+'"></div><h3>'+pname+'</h3>'
       +'<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-exp\')">＋ 新增支出明細</button></div>'
       +'<div style="overflow-x:auto"><table class="dt"><thead><tr>'
       +'<th>支出細項</th><th>負責人</th><th>所屬工作項目</th><th>日期</th><th>實際金額</th><th>未稅金額</th><th>狀態</th>'
       +'</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  }
+  projectsData.forEach(function(rec, i) {
+    var pname = rec.fields['標案名稱'] || '';
+    html += renderProjectBlock(pname, PROJECT_COLORS[i % PROJECT_COLORS.length]);
   });
+  if (byProject['其他'] && byProject['其他'].length) {
+    html += renderProjectBlock('其他', '#888');
+  }
   area.innerHTML = html || '<div style="padding:20px;color:var(--t3)">尚無支出明細</div>';
 }
 
@@ -937,18 +1032,17 @@ function renderProjects() {
 function renderTasks() {
   var wiMap = {};
   workitemsData.forEach(function(wi) {
-    var f = wi.fields;
     wiMap[wi.record_id] = {
-      name: f['工作項目名稱'] || '',
-      project: f['所屬標案'] && f['所屬標案'].text_arr ? f['所屬標案'].text_arr[0] : ''
+      name: wi.fields['工作項目名稱'] || '',
+      project: getProjectNameFromWi(wi)
     };
   });
 
   var grouped = {};
   tasksData.forEach(function(rec) {
     var f = rec.fields;
-    var wiArr = f['所屬工作項目'];
-    var wiId = wiArr && wiArr.record_ids ? wiArr.record_ids[0] : null;
+    var wiIds = getLinkIds(f['所屬工作項目']);
+    var wiId = wiIds[0] || null;
     var wi = wiId ? wiMap[wiId] : null;
     var projName = wi ? (wi.project || '其他') : '其他';
     var progress = parseProgressVal(f['進度狀態'], f['進度數值']);
@@ -979,7 +1073,7 @@ function renderTasks() {
 
   function renderGroup(pname, color) {
     grouped[pname].forEach(function(task) {
-      html += '<div class="ti" onclick="openTaskDetail(\'' + task.id + '\')">';
+      html += '<div class="ti" data-proj="' + escAttr(pname) + '" onclick="openTaskDetail(\'' + task.id + '\')">';
       html += '<div class="tit"><div><div class="tn">' + task.name + '</div>';
       html += '<div class="tm">' + task.wiName + ' · ' + task.assignee + ' · ' + task.progress + '%</div></div>';
       html += '<div class="tr2"><div class="td2">' + task.dueFull + '</div><div class="tds">' + task.remain + '</div></div></div>';
@@ -992,14 +1086,14 @@ function renderTasks() {
     var pname = rec.fields['標案名稱'] || '';
     if (!grouped[pname] || !grouped[pname].length) return;
     var color = projColors[pname] || '#888';
-    html += '<div class="tgl" data-proj="' + pname + '"><div class="tgd" style="background:' + color + '"></div>' + pname + '<span class="tc">' + grouped[pname].length + '</span></div>';
+    html += '<div class="tgl" data-proj="' + escAttr(pname) + '"><div class="tgd" style="background:' + color + '"></div>' + pname + '<span class="tc">' + grouped[pname].length + '</span></div>';
     renderGroup(pname, color);
     delete grouped[pname];
   });
 
   Object.keys(grouped).forEach(function(pname) {
     if (!grouped[pname].length) return;
-    html += '<div class="tgl" data-proj="' + pname + '"><div class="tgd" style="background:#888"></div>' + pname + '<span class="tc">' + grouped[pname].length + '</span></div>';
+    html += '<div class="tgl" data-proj="' + escAttr(pname) + '"><div class="tgd" style="background:#888"></div>' + pname + '<span class="tc">' + grouped[pname].length + '</span></div>';
     renderGroup(pname, '#888');
   });
 
@@ -1011,39 +1105,43 @@ function renderTasks() {
 function updateFilterTags(projColors) {
   var ft = document.getElementById('task-filters');
   if (!ft) return;
-  var html = '<span class="ftag" style="background:var(--accent);color:#fff" onclick="filterTasks(this,\'\')">全部</span>';
+  var html = '<span class="ftag" data-proj="" style="background:var(--accent);color:#fff">全部</span>';
   projectsData.forEach(function(rec) {
     var pname = rec.fields['標案名稱'] || '';
     var color = projColors[pname] || '#888';
-    html += '<span class="ftag" onclick="filterTasks(this,\'' + pname + '\')" data-proj="' + pname + '" style="border-color:' + color + ';color:' + color + '">' + pname + '</span>';
+    html += '<span class="ftag" data-proj="' + escAttr(pname) + '" style="border-color:' + color + ';color:' + color + '">' + pname + '</span>';
   });
   ft.innerHTML = html;
+  initTaskFilters();
+}
+
+function initTaskFilters() {
+  var ft = document.getElementById('task-filters');
+  if (!ft || ft._bound) return;
+  ft._bound = true;
+  ft.addEventListener('click', function(e) {
+    var tag = e.target.closest('.ftag');
+    if (!tag) return;
+    filterTasks(tag, tag.dataset.proj || '');
+  });
 }
 
 // ── 篩選任務 ──
 function filterTasks(el, proj) {
-  document.querySelectorAll('.ftag').forEach(function(t){ t.style.background=''; t.style.color=t.dataset.proj ? '' : ''; });
-  el.style.background = el.style.borderColor || 'var(--accent)';
+  document.querySelectorAll('#task-filters .ftag').forEach(function(t) {
+    t.style.background = '';
+    t.style.color = t.dataset.proj ? (t.style.borderColor || '') : '';
+  });
+  el.style.background = el.dataset.proj ? (el.style.borderColor || 'var(--accent)') : 'var(--accent)';
   el.style.color = '#fff';
 
-  var groups = document.querySelectorAll('#task-list-body .tgl');
-  var items = document.querySelectorAll('#task-list-body .ti');
-  if (!proj) {
-    groups.forEach(function(g){ g.style.display=''; });
-    items.forEach(function(i){ i.style.display=''; });
-    return;
-  }
-  // 先全部隱藏
-  groups.forEach(function(g){ g.style.display = g.dataset.proj === proj ? '' : 'none'; });
-  // 顯示對應標案下的任務
-  var show = false;
-  document.querySelectorAll('#task-list-body > *').forEach(function(el) {
-    if (el.classList.contains('tgl')) {
-      show = el.dataset.proj === proj;
-      el.style.display = show ? '' : 'none';
-    } else {
-      el.style.display = show ? '' : 'none';
-    }
+  document.querySelectorAll('#task-list-body .tgl').forEach(function(g) {
+    var match = !proj || g.dataset.proj === proj;
+    g.style.display = match ? '' : 'none';
+  });
+  document.querySelectorAll('#task-list-body .ti').forEach(function(item) {
+    var match = !proj || item.dataset.proj === proj;
+    item.style.display = match ? '' : 'none';
   });
 }
 
@@ -1053,20 +1151,12 @@ function renderGanttFromData() {
   if (!ganttArea) return;
   ganttArea.innerHTML = '';
 
-  // 建立 workitem record_id → workitem 對應
-  var wiMap = {};
-  workitemsData.forEach(function(wi) { wiMap[wi.record_id] = wi; });
-
-  // 建立 task record_id → task 對應（依工作項目分組）
   var tasksByWi = {};
   tasksData.forEach(function(t) {
-    var wiArr = t.fields['所屬工作項目'];
-    if (wiArr && wiArr.record_ids) {
-      wiArr.record_ids.forEach(function(wiId) {
-        if (!tasksByWi[wiId]) tasksByWi[wiId] = [];
-        tasksByWi[wiId].push(t);
-      });
-    }
+    getLinkIds(t.fields['所屬工作項目']).forEach(function(wiId) {
+      if (!tasksByWi[wiId]) tasksByWi[wiId] = [];
+      tasksByWi[wiId].push(t);
+    });
   });
 
   if (!projectsData.length) {
@@ -1079,56 +1169,54 @@ function renderGanttFromData() {
     var name = f['標案名稱'] || '未命名';
     var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
     var progress = Math.round((f['標案完成%'] || 0) * 100);
-    var wiIds = getWiIds(f);
-    var wiNames = f['工作項目'] && f['工作項目'][0] && f['工作項目'][0].text_arr ? f['工作項目'][0].text_arr : [];
-
+    var contractStart = parseTs(f['合約開始日']);
+    var contractEnd = parseTs(f['合約結束日']);
+    var workitems = getWorkitemsForProject(rec);
     var rows = [];
-    wiIds.forEach(function(wiId, idx) {
-      var wiRecord = wiMap[wiId];
-      if (!wiRecord) return;
+
+    workitems.forEach(function(wiRecord) {
       var wf = wiRecord.fields;
-      var wiName = wf['工作項目名稱'] || wiNames[idx] || '';
-      var wiStart = wf['開始日期'] ? new Date(wf['開始日期']) : null;
-      var wiEnd = wf['截止日'] ? new Date(wf['截止日']) : null;
+      var wiId = wiRecord.record_id;
+      var wiName = wf['工作項目名稱'] || '';
+      var wiStart = parseTs(wf['開始日期']) || contractStart;
+      var wiEnd = parseTs(wf['截止日']) || contractEnd;
       var weight = wf['權重'] || '';
       var wiProg = Math.round((wf['加權進度'] || 0) * 100);
       var metaStr = '';
-      if (wiStart && wiEnd) {
-        metaStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
-      }
+      if (wiStart && wiEnd) metaStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
+      else if (wiEnd) metaStr = fmt(wiEnd.getTime());
 
-      // 找任務
       var relTasks = tasksByWi[wiId] || [];
       var bars = [];
       relTasks.forEach(function(t) {
         var tf = t.fields;
         var tName = tf['任務名稱'] || '';
-        var tDue = tf['預計完成日'] ? new Date(tf['預計完成日']) : wiEnd;
-        var tProg = tf['進度數值'] || 0;
-        // 用 3 天前當開始
-        var tStart = tDue ? new Date(tDue.getTime() - 3*24*60*60*1000) : wiStart;
-        if (tStart && tDue) {
-          bars.push({
-            s: tStart.toISOString().slice(0,10),
-            e: tDue.toISOString().slice(0,10),
-            l: tName,
-            o: tProg >= 100 ? 1 : (tProg > 0 ? 0.85 : 0.45)
-          });
-        }
+        var tDue = parseTs(tf['預計完成日']);
+        if (!tDue) return;
+        var tStart = new Date(tDue.getTime() - 3 * 86400000);
+        if (wiStart && tStart < wiStart) tStart = wiStart;
+        var tProg = parseProgressVal(tf['進度狀態'], tf['進度數值']);
+        bars.push({
+          s: toDateStr(tStart),
+          e: toDateStr(tDue),
+          l: tName,
+          o: tProg >= 100 ? 1 : (tProg > 0 ? 0.85 : 0.45)
+        });
       });
 
-      // 如果沒有任務，用工作項目本身的時間
-      if (bars.length === 0 && wiStart && wiEnd) {
-        bars.push({ s: wiStart.toISOString().slice(0,10), e: wiEnd.toISOString().slice(0,10), l: wiName, o: 0.6 });
+      if (!bars.length && wiEnd) {
+        var barStart = wiStart || new Date(wiEnd.getTime() - 7 * 86400000);
+        bars.push({ s: toDateStr(barStart), e: toDateStr(wiEnd), l: wiName, o: 0.6 });
+      } else if (!bars.length && wiStart) {
+        var barEnd = wiEnd || new Date(wiStart.getTime() + 7 * 86400000);
+        bars.push({ s: toDateStr(wiStart), e: toDateStr(barEnd), l: wiName, o: 0.6 });
       }
 
-      rows.push({ n: wiName, m: metaStr, w: (parseFloat(weight)*100||0)+'%/'+wiProg+'%', bars: bars });
+      if (!bars.length) return;
+      rows.push({ n: wiName, m: metaStr, w: (parseFloat(weight) * 100 || 0) + '%/' + wiProg + '%', bars: bars });
     });
 
-    if (rows.length === 0) {
-      console.log('No rows for', name, 'wiIds:', wiIds.length, 'wiMap keys:', Object.keys(wiMap).length);
-      return;
-    }
+    if (!rows.length) return;
 
     var cardId = 'proj-' + i;
     var card = document.createElement('div');
@@ -1145,6 +1233,10 @@ function renderGanttFromData() {
     PDATA[cardId] = { color: color, rows: rows };
     buildG(cardId);
   });
+
+  if (!ganttArea.children.length) {
+    ganttArea.innerHTML = '<div style="padding:20px;color:var(--t3);font-size:12px;text-align:center">尚無可顯示的任務時程（請確認工作項目與任務有設定日期）</div>';
+  }
 }
 
 // ── 任務詳情 / 日誌 ──
@@ -1152,10 +1244,10 @@ function getTaskContext(taskId) {
   var rec = tasksData.find(function(t){ return t.record_id === taskId; });
   if (!rec) return null;
   var f = rec.fields;
-  var wiArr = f['所屬工作項目'];
-  var wiId = wiArr && wiArr.record_ids ? wiArr.record_ids[0] : null;
+  var wiIds = getLinkIds(f['所屬工作項目']);
+  var wiId = wiIds[0] || null;
   var wi = workitemsData.find(function(w){ return w.record_id === wiId; });
-  var projName = wi && wi.fields['所屬標案'] && wi.fields['所屬標案'].text_arr ? wi.fields['所屬標案'].text_arr[0] : '';
+  var projName = wi ? getProjectNameFromWi(wi) : '';
   return {
     rec: rec,
     f: f,
@@ -1453,7 +1545,7 @@ function refreshFormSelects() {
   if (wiSel) {
     fillSelectOptions(wiSel,
       workitemsData.map(function(w){
-        var proj = w.fields['所屬標案'] && w.fields['所屬標案'].text_arr ? w.fields['所屬標案'].text_arr[0] : '';
+        var proj = getProjectNameFromWi(w);
         return (proj ? proj + ' · ' : '') + (w.fields['工作項目名稱'] || '');
       }),
       workitemsData.map(function(w){ return w.record_id; })
