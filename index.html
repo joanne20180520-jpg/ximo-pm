@@ -589,7 +589,14 @@ function goToday(){
 function scG(k,d){var el=document.getElementById('gsw-'+k);if(el)el.scrollLeft+=d;}
 function scR(k,v){var el=document.getElementById('gsw-'+k);if(el){var max=el.scrollWidth-el.clientWidth;el.scrollLeft=(v/100)*max;}}
  
-// ── 標案顏色對應 ──
+// ── 取得含某字的欄位值 ──
+function getField(fields, keyword) {
+  var keys = Object.keys(fields);
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i].indexOf(keyword) >= 0) return fields[keys[i]];
+  }
+  return null;
+}
 var PROJECT_COLORS = [
   '#2d6a4f','#1a4a7a','#7a1a2e','#4a7a1a','#5a3a8a','#7a5a1a','#1a6a7a'
 ];
@@ -651,12 +658,12 @@ function renderBudget() {
     var name = f['標案名稱'] || '未命名';
     var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
     var contract = parseFloat(f['合約金額']) || 0;
-    var untax = f['合約未稅金額(X)'] || 0;
-    var avail = f['可用成本(X)'] || 0;
-    var spent = f['已支出合計(X)'] || 0;
-    var remain = f['剩餘預算(Ｘ)'] || f['剩餘預算(X)'] || (avail - spent);
+    var untax = getField(f,'合約未稅') || 0;
+    var avail = getField(f,'可用成本') || 0;
+    var spent = getField(f,'已支出') || 0;
+    var remain = getField(f,'剩餘預算') || f['剩餘預算(X)'] || (avail - spent);
     var pct = avail > 0 ? Math.min(100, Math.round(spent/avail*100)) : 0;
-    var wiIds = f['工作項目(Ｘ)'] && f['工作項目(Ｘ)'].record_ids ? f['工作項目(Ｘ)'].record_ids : [];
+    var wiIds = getField(f,'工作項目') && getField(f,'工作項目').record_ids ? getField(f,'工作項目').record_ids : [];
     var wiRows = '';
     wiIds.forEach(function(wiId) {
       var wi = workitemsData.find(function(w){ return w.record_id === wiId; });
@@ -664,8 +671,8 @@ function renderBudget() {
       var wf = wi.fields;
       var wName = wf['工作項目名稱'] || '';
       var wAvail = parseFloat(wf['可用成本']) || 0;
-      var wSpent = wf['實際花費(X)'] || 0;
-      var wRemain = wf['剩餘預算(X)'] || (wAvail - wSpent);
+      var wSpent = getField(wf,'實際花費') || 0;
+      var wRemain = getField(wf,'剩餘預算') || (wAvail - wSpent);
       wiRows += '<div class="wir"><div class="wn">'+wName+'</div><div class="wns">'
         +'<div><div class="wl">可用</div><div class="wv">'+ntf(wAvail)+'</div></div>'
         +'<div><div class="wl">已支出</div><div class="wv" style="color:#c0392b">'+ntf(wSpent)+'</div></div>'
@@ -753,7 +760,7 @@ function renderProjects() {
     var f = rec.fields;
     var name = f['標案名稱'] || '未命名';
     var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
-    var workitems = f['工作項目(Ｘ)'] ? (f['工作項目(Ｘ)'].text_arr || []) : [];
+    var workitems = getField(f,'工作項目') ? (getField(f,'工作項目').text_arr || []) : [];
     var subHTML = '';
     workitems.forEach(function(wi) {
       subHTML += '<div class="si"><span>' + wi + '</span></div>';
@@ -922,9 +929,9 @@ function renderGanttFromData() {
     var f = rec.fields;
     var name = f['標案名稱'] || '未命名';
     var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
-    var progress = Math.round((f['標案完成%(Ｘ)'] || 0) * 100);
-    var wiIds = f['工作項目(Ｘ)'] && f['工作項目(Ｘ)'].record_ids ? f['工作項目(Ｘ)'].record_ids : [];
-    var wiNames = f['工作項目(Ｘ)'] && f['工作項目(Ｘ)'].text_arr ? f['工作項目(Ｘ)'].text_arr : [];
+    var progress = Math.round((getField(f,'標案完成') || 0) * 100);
+    var wiIds = getField(f,'工作項目') && getField(f,'工作項目').record_ids ? getField(f,'工作項目').record_ids : [];
+    var wiNames = getField(f,'工作項目') && getField(f,'工作項目').text_arr ? getField(f,'工作項目').text_arr : [];
  
     var rows = [];
     wiIds.forEach(function(wiId, idx) {
@@ -935,7 +942,7 @@ function renderGanttFromData() {
       var wiStart = wf['開始日期'] ? new Date(wf['開始日期']) : null;
       var wiEnd = wf['截止日'] ? new Date(wf['截止日']) : null;
       var weight = wf['權重'] || '';
-      var wiProg = Math.round((wf['加權進度(X)'] || 0) * 100);
+      var wiProg = Math.round((getField(wf,'加權進度') || 0) * 100);
       var metaStr = '';
       if (wiStart && wiEnd) {
         metaStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
