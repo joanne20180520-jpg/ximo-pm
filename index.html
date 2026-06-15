@@ -124,11 +124,19 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .jpage-toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .jpage-toolbar h3{font-size:14px;font-weight:700;flex:1}
 .jpage-feed{flex:1;overflow-y:auto;padding:10px 14px}
-.jgroup-block{margin-bottom:14px}
-.jgroup-hdr{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text);padding:8px 4px 10px;border-bottom:2px solid var(--border);margin-bottom:8px}
-.jgroup-body{padding:0 2px}
-.jperson-row{margin-bottom:10px}
-.jperson-hdr{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;margin-bottom:6px;padding:4px 2px}
+.jt-group{padding:8px 2px 6px;font-size:12px;font-weight:700;color:var(--text);border-bottom:2px solid var(--border);margin:14px 0 8px;display:flex;align-items:center;gap:8px}
+.jt-group:first-child{margin-top:0}
+.jt-wrap{overflow-x:auto;margin-bottom:8px}
+.jt{width:100%;border-collapse:collapse;font-size:11px}
+.jt th{padding:6px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--t3);border-bottom:1px solid var(--border);background:var(--sf2);white-space:nowrap}
+.jt td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top;color:var(--t2);line-height:1.45}
+.jt tr:hover td{background:#faf9f7}
+.jt-tag{display:inline-block;padding:1px 6px;border-radius:6px;background:var(--sf2);font-size:10px;margin:0 3px 2px 0;white-space:nowrap}
+.jt-proj{display:inline-block;padding:1px 7px;border-radius:8px;color:#fff;font-size:9px;font-weight:600}
+.jt-person{display:flex;align-items:center;gap:5px;font-weight:600;color:var(--text);white-space:nowrap}
+.jt-block{color:var(--danger);font-weight:600}
+.jt-reason{color:var(--danger);font-size:10px}
+.jt-empty{color:var(--t3)}
 .dn{display:flex;align-items:center;gap:4px}
 .dn button{border:none;background:none;cursor:pointer;color:var(--t2);padding:2px 4px;border-radius:4px;font-size:12px}
 .dn button:hover{background:var(--sf2)}
@@ -462,7 +470,6 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
             <div class="fg"><label>付款總金額</label><input type="text" id="p-total" placeholder="NT$0" oninput="updatePayUpper()"><div class="p-upper" id="p-upper"></div></div>
             <div class="bss">
               <button class="bsub" onclick="prevPay()">確認資料預覽</button>
-              <button class="bsub2" onclick="submitPayment(true)">寄送通知並存檔</button>
             </div>
           </div>
         </div>
@@ -592,7 +599,6 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
     <div class="ppf">
       <button class="bcan" onclick="cl('pp-prev')">返回修改</button>
       <button class="bpri" onclick="doPrint()">🖨 確認列印</button>
-      <button class="bpri" style="background:#1a4a7a" onclick="submitPayment(true);cl('pp-prev')">寄送通知並存檔</button>
     </div>
   </div>
 </div>
@@ -1515,16 +1521,36 @@ function prevPay() {
 }
 
 function doPrint() {
-  var url = buildPayPrintUrl({ print: true });
-  var iframe = document.getElementById('prev-iframe');
-  if (iframe && iframe.contentWindow) {
-    try {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      return;
-    } catch (e) {}
-  }
-  window.open(url, '_blank', 'width=900,height=800');
+  var data = collectPaymentFields();
+  if (!data.total) { alert('請填寫付款總金額'); return; }
+  if (!data.payee) { alert('請填寫支付對象'); return; }
+
+  savePaymentRecord(data).then(function() {
+    var iframe = document.getElementById('prev-iframe');
+    var printed = false;
+    if (iframe && iframe.contentWindow) {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        printed = true;
+      } catch (e) {}
+    }
+    if (!printed) {
+      window.open(buildPayPrintUrl({ print: true }), '_blank', 'width=900,height=800');
+    }
+    var printPath = buildPayPrintUrl({ embed: true }).replace(/^\//, '');
+    return sendPaymentNotify(data, printPath);
+  }).then(function(notifyRes) {
+    cl('pp-prev');
+    if (notifyRes && notifyRes.notify && notifyRes.notify.skipped) {
+      alert('已列印並存檔（通知未設定：請在 Vercel 設定 LARK_WEBHOOK_URL）');
+    } else {
+      alert('已列印、存檔並寄送通知！');
+    }
+  }).catch(function(err) {
+    console.error(err);
+    alert('操作失敗：' + (err.message || '請稍後再試'));
+  });
 }
 
 // ── 甘特圖 ──
@@ -3036,77 +3062,67 @@ function collectJournalContent(rec) {
   };
 }
 
-function mergeJournalContents(contents) {
-  var merged = { doing: [], done: [], blocked: [], tomorrow: [], blockReasons: [], notes: [], projs: [], hasBlock: false };
-  contents.forEach(function(c) {
-    if (c.proj && merged.projs.indexOf(c.proj) < 0) merged.projs.push(c.proj);
-    function pushUnique(arr, val) {
-      if (!val) return;
-      val.split('、').forEach(function(part) {
-        part = part.trim();
-        if (part && arr.indexOf(part) < 0) arr.push(part);
-      });
-    }
-    pushUnique(merged.doing, c.doing);
-    pushUnique(merged.done, c.done);
-    pushUnique(merged.blocked, c.blocked);
-    pushUnique(merged.tomorrow, c.tomorrow);
-    if (c.blockReason && merged.blockReasons.indexOf(c.blockReason) < 0) merged.blockReasons.push(c.blockReason);
-    if (c.note && merged.notes.indexOf(c.note) < 0) merged.notes.push(c.note);
-    if (c.hasBlock) merged.hasBlock = true;
-  });
-  return merged;
+function journalIsBlockedActive(rec) {
+  var f = rec.fields || {};
+  if (getLinkIds(f['卡關任務']).length) return true;
+  var status = journalField(rec, ['狀態']);
+  return status === '卡關';
 }
 
-function renderJournalRows(merged) {
-  var html = '<div class="jc-rows">';
-  function row(cls, label, arr) {
-    if (!arr.length) return '';
-    return '<div class="jc-row"><span class="jc-lbl ' + cls + '">' + label + '</span><span class="jc-val">' + escHtml(arr.join('、')) + '</span></div>';
+function journalTagsHtml(text) {
+  if (!text) return '<span class="jt-empty">—</span>';
+  return text.split('、').map(function(t) {
+    t = t.trim();
+    return t ? '<span class="jt-tag">' + escHtml(t) + '</span>' : '';
+  }).join('');
+}
+
+function renderJournalTableHead(mode) {
+  if (mode === 'block') {
+    return '<tr><th>日期</th><th>所屬專案</th><th>卡關任務</th><th>卡關原因</th><th>回報人</th></tr>';
   }
-  html += row('doing', '進行中', merged.doing);
-  html += row('done', '完成', merged.done);
-  html += row('block', '卡關', merged.blocked);
-  html += row('tomorrow', '明日', merged.tomorrow);
-  html += '</div>';
-  merged.blockReasons.forEach(function(r) {
-    html += '<div class="jc-reason">' + escHtml(r) + '</div>';
-  });
-  var hasStructured = merged.doing.length || merged.done.length || merged.blocked.length || merged.tomorrow.length;
-  merged.notes.forEach(function(n) {
-    if (!hasStructured) html += '<div class="jc-reason" style="border-left-color:var(--border);background:var(--sf2);color:var(--t2)">' + formatJournalHtml(n) + '</div>';
-  });
+  if (mode === 'person') {
+    return '<tr><th>日期</th><th>所屬專案</th><th>進行中</th><th>今日完成</th><th>卡關</th><th>明日預計</th><th>備註</th></tr>';
+  }
+  return '<tr><th>回報人</th><th>所屬專案</th><th>進行中</th><th>今日完成</th><th>卡關</th><th>明日預計</th><th>備註</th></tr>';
+}
+
+function renderJournalTableRow(rec, mode) {
+  var c = collectJournalContent(rec);
+  var author = journalPersonName(rec) || '—';
+  var ts = journalTs(rec);
+  var dateStr = ts ? fmtDate(ts) : '—';
+  var color = c.proj ? projColorByName(c.proj.split('、')[0]) : '#888';
+  var projHtml = c.proj ? '<span class="jt-proj" style="background:' + color + '">' + escHtml(c.proj) + '</span>' : '<span class="jt-empty">—</span>';
+  var personHtml = '<span class="jt-person"><span class="av ' + avatarClass(author) + '">' + personInitial(author) + '</span>' + escHtml(author) + '</span>';
+  var note = c.note && !(c.doing || c.done || c.blocked || c.tomorrow) ? escHtml(c.note) : (c.note ? escHtml(c.note) : '');
+
+  if (mode === 'block') {
+    return '<tr><td>' + dateStr + '</td><td>' + projHtml + '</td><td class="jt-block">' + journalTagsHtml(c.blocked) + '</td>'
+      + '<td class="jt-reason">' + (c.blockReason ? escHtml(c.blockReason) : '<span class="jt-empty">—</span>') + '</td><td>' + personHtml + '</td></tr>';
+  }
+  if (mode === 'person') {
+    return '<tr><td>' + dateStr + '</td><td>' + projHtml + '</td><td>' + journalTagsHtml(c.doing) + '</td><td>' + journalTagsHtml(c.done) + '</td>'
+      + '<td class="jt-block">' + journalTagsHtml(c.blocked) + '</td><td>' + journalTagsHtml(c.tomorrow) + '</td><td>' + (note || '<span class="jt-empty">—</span>') + '</td></tr>';
+  }
+  return '<tr><td>' + personHtml + '</td><td>' + projHtml + '</td><td>' + journalTagsHtml(c.doing) + '</td><td>' + journalTagsHtml(c.done) + '</td>'
+    + '<td class="jt-block">' + journalTagsHtml(c.blocked) + '</td><td>' + journalTagsHtml(c.tomorrow) + '</td><td>' + (note || '<span class="jt-empty">—</span>') + '</td></tr>';
+}
+
+function renderJournalTable(recs, mode) {
+  if (!recs.length) return '';
+  var html = '<div class="jt-wrap"><table class="jt"><thead>' + renderJournalTableHead(mode) + '</thead><tbody>';
+  recs.forEach(function(rec) { html += renderJournalTableRow(rec, mode); });
+  html += '</tbody></table></div>';
   return html;
 }
 
-function renderJournalPersonCard(author, merged, opts) {
-  opts = opts || {};
-  var color = merged.projs[0] ? projColorByName(merged.projs[0]) : '';
-  var projLabel = merged.projs.join('、');
-  var html = '<div class="ji"><div class="jc' + (merged.hasBlock ? ' has-block' : '') + '">';
-  if (!opts.hideAuthor) {
-    html += '<div class="jc-hdr"><span class="av ' + avatarClass(author) + '">' + personInitial(author) + '</span>'
-      + '<span class="jn">' + escHtml(author) + '</span>';
-    if (projLabel) html += '<span class="jpt" style="background:' + color + '">' + escHtml(projLabel) + '</span>';
-    if (merged.hasBlock) html += '<span class="jblk">卡關</span>';
-    html += '</div>';
-  } else if (projLabel || merged.hasBlock) {
-    html += '<div class="jc-hdr" style="border-bottom:none;padding-bottom:4px;margin-bottom:4px">';
-    if (projLabel) html += '<span class="jpt" style="background:' + color + '">' + escHtml(projLabel) + '</span>';
-    if (merged.hasBlock) html += '<span class="jblk">卡關</span>';
-    html += '</div>';
-  }
-  html += renderJournalRows(merged);
-  html += '</div></div>';
-  return html;
-}
-
-function renderJournalHtml(mode, area, compact) {
+function renderJournalHtml(mode, area) {
   if (!area) return;
   var items = getJournalItemsInRange(30);
-  if (mode === 'block') items = items.filter(journalHasBlock);
+  if (mode === 'block') items = items.filter(journalIsBlockedActive);
   if (!items.length) {
-    area.innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">' + (mode === 'block' ? '近 30 天尚無卡關日誌' : '近 30 天尚無日誌') + '</div>';
+    area.innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">' + (mode === 'block' ? '目前無卡關項目' : '近 30 天尚無日誌') + '</div>';
     return;
   }
 
@@ -3121,14 +3137,16 @@ function renderJournalHtml(mode, area, compact) {
     var html = '';
     names.forEach(function(name) {
       var recs = byPerson[name].sort(function(a, b) { return (journalTs(b) || 0) - (journalTs(a) || 0); });
-      var contents = recs.map(collectJournalContent);
-      var merged = mergeJournalContents(contents);
-      html += '<div class="jgroup-block">';
-      html += '<div class="jgroup-hdr"><span class="av ' + avatarClass(name) + '">' + personInitial(name) + '</span>' + escHtml(name) + '<span class="tc" style="font-size:10px;color:var(--t3);font-weight:600">' + recs.length + ' 筆回報</span></div>';
-      html += '<div class="jgroup-body">' + renderJournalPersonCard(name, merged, { hideAuthor: true }) + '</div>';
-      html += '</div>';
+      html += '<div class="jt-group"><span class="av ' + avatarClass(name) + '">' + personInitial(name) + '</span>' + escHtml(name) + '<span style="font-size:10px;color:var(--t3);font-weight:600">' + recs.length + ' 筆紀錄</span></div>';
+      html += renderJournalTable(recs, 'person');
     });
     area.innerHTML = html;
+    return;
+  }
+
+  if (mode === 'block') {
+    items.sort(function(a, b) { return (journalTs(b) || 0) - (journalTs(a) || 0); });
+    area.innerHTML = renderJournalTable(items, 'block');
     return;
   }
 
@@ -3145,25 +3163,11 @@ function renderJournalHtml(mode, area, compact) {
   var html2 = '';
   dayKeys.forEach(function(dayTs) {
     var d = new Date(dayTs);
-    var dayRecs = byDay[dayTs];
-    var byPersonDay = {};
-    dayRecs.forEach(function(rec) {
-      var author = journalPersonName(rec) || '未指定';
-      if (!byPersonDay[author]) byPersonDay[author] = [];
-      byPersonDay[author].push(rec);
+    var recs = byDay[dayTs].sort(function(a, b) {
+      return (journalPersonName(a) || '').localeCompare(journalPersonName(b) || '', 'zh-Hant');
     });
-    html2 += '<div class="jgroup-block">';
-    html2 += '<div class="jday-hdr">' + (d.getMonth()+1) + '/' + d.getDate() + '（' + weekdayLabel(d) + '）</div>';
-    html2 += '<div class="jgroup-body">';
-    Object.keys(byPersonDay).sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); }).forEach(function(name) {
-      var recs = byPersonDay[name];
-      var merged = mergeJournalContents(recs.map(collectJournalContent));
-      html2 += '<div class="jperson-row">';
-      html2 += '<div class="jperson-hdr"><span class="av ' + avatarClass(name) + '">' + personInitial(name) + '</span>' + escHtml(name) + '</div>';
-      html2 += renderJournalPersonCard(name, merged, { hideAuthor: true });
-      html2 += '</div>';
-    });
-    html2 += '</div></div>';
+    html2 += '<div class="jt-group">' + (d.getFullYear()) + '/' + (d.getMonth()+1) + '/' + d.getDate() + '（' + weekdayLabel(d) + '）<span style="font-size:10px;color:var(--t3);font-weight:600">' + recs.length + ' 筆紀錄</span></div>';
+    html2 += renderJournalTable(recs, 'date');
   });
   area.innerHTML = html2;
 }
@@ -3171,57 +3175,42 @@ function renderJournalHtml(mode, area, compact) {
 function renderJournalPage() {
   var area = document.getElementById('journal-page-list');
   if (!area) return;
-  renderJournalHtml(journalViewMode, area, false);
+  renderJournalHtml(journalViewMode, area);
 }
 
-function renderJournalCard(rec, compact, showDate) {
-  var f = rec.fields || {};
-  var author = journalPersonName(rec) || '—';
-  var proj = journalLinkText(rec, ['所屬專案', '標案名稱', '所屬標案']);
-  if (!proj && f['所屬標案'] && f['所屬標案'].text_arr) proj = f['所屬標案'].text_arr[0] || '';
-  var note = journalField(rec, ['備註', '日誌內容', '內容']) || '';
-  var blockReason = journalField(rec, ['卡關原因']) || '';
-  var doing = journalTaskNames(rec, ['進行中任務']);
-  var done = journalTaskNames(rec, ['已完成今日任務']);
-  var blocked = journalTaskNames(rec, ['卡關任務']);
-  var tomorrow = journalTaskNames(rec, ['明日預計任務']);
-  if (!doing && !done && !blocked && !tomorrow && note) {
-    var parsed = parseJournalNoteSections(note);
-    doing = parsed.doing;
-    done = parsed.done;
-    blocked = parsed.block;
-    tomorrow = parsed.tomorrow;
-  }
-  var hasBlock = journalHasBlock(rec) || !!blocked || !!blockReason;
-  var hasStructured = !!(doing || done || blocked || tomorrow);
-  var color = projColorByName((proj || '').split('、')[0] || '');
-  var ts = journalTs(rec);
-  var dateLabel = ts ? ((new Date(ts).getMonth()+1) + '/' + new Date(ts).getDate()) : '';
+function savePaymentRecord(data) {
+  var fields = {
+    '申請部門': data.dept,
+    '申請日期': dateInputToTs(data.date),
+    '支付對象': data.payee,
+    '廠商名稱': data.vendor,
+    '支付性質': data.nature,
+    '支付方式': data.method,
+    '事由': data.reason,
+    '備註': data.remark,
+    '付款總金額': parseFloat(data.total)
+  };
+  return fetch(API + '?table=payments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields)
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '存檔失敗');
+    return res;
+  });
+}
 
-  var html = '<div class="ji"><div class="jc' + (hasBlock ? ' has-block' : '') + '">';
-  html += '<div class="jc-hdr"><span class="av ' + avatarClass(author) + '">' + personInitial(author) + '</span>'
-    + '<span class="jn">' + escHtml(author) + '</span>';
-  if (showDate && dateLabel) html += '<span style="font-size:9px;color:var(--t3);margin-left:auto">' + dateLabel + '</span>';
-  if (proj) html += '<span class="jpt" style="background:' + color + '">' + escHtml(proj) + '</span>';
-  if (hasBlock) html += '<span class="jblk">卡關</span>';
-  html += '</div><div class="jc-rows">';
-
-  function row(cls, label, val) {
-    if (!val) return '';
-    return '<div class="jc-row"><span class="jc-lbl ' + cls + '">' + label + '</span><span class="jc-val">' + escHtml(val) + '</span></div>';
-  }
-  html += row('doing', '進行中', doing);
-  html += row('done', '完成', done);
-  html += row('block', '卡關', blocked);
-  html += row('tomorrow', '明日', tomorrow);
-  html += '</div>';
-  if (blockReason) html += '<div class="jc-reason">' + escHtml(blockReason) + '</div>';
-  if (note && !hasStructured) html += '<div class="jc-reason" style="border-left-color:var(--border);background:var(--sf2);color:var(--t2)">' + formatJournalHtml(note) + '</div>';
-  if (!compact) {
-    html += '<button type="button" class="bads" style="margin-top:8px" onclick="openDailyLog()">編輯今日日報</button>';
-  }
-  html += '</div></div>';
-  return html;
+function sendPaymentNotify(data, printPath) {
+  return fetch(API + '?action=notify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      dept: data.dept,
+      reason: data.reason,
+      amount: data.amountDisplay,
+      printPath: printPath
+    })
+  }).then(function(r) { return r.json(); });
 }
 
 // ── 設計任務單 ──
@@ -3674,55 +3663,6 @@ function collectPaymentFields() {
     natureList: nats,
     amountDisplay: totalNum ? 'NT$' + parseInt(totalNum,10).toLocaleString() : ''
   };
-}
-
-function submitPayment(sendNotify) {
-  var data = collectPaymentFields();
-  if (!data.total) { alert('請填寫付款總金額'); return; }
-  if (!data.payee) { alert('請填寫支付對象'); return; }
-
-  var fields = {
-    '申請部門': data.dept,
-    '申請日期': dateInputToTs(data.date),
-    '支付對象': data.payee,
-    '廠商名稱': data.vendor,
-    '支付性質': data.nature,
-    '支付方式': data.method,
-    '事由': data.reason,
-    '備註': data.remark,
-    '付款總金額': parseFloat(data.total)
-  };
-
-  var printPath = buildPayPrintUrl({ embed: true }).replace(/^\//, '');
-
-  fetch(API + '?table=payments', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(fields)
-  }).then(function(r){ return r.json(); }).then(function(res) {
-    if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '存檔失敗');
-    if (!sendNotify) { alert('已存檔至 Lark'); return null; }
-    return fetch(API + '?action=notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        dept: data.dept,
-        reason: data.reason,
-        amount: data.amountDisplay,
-        printPath: printPath
-      })
-    }).then(function(r){ return r.json(); });
-  }).then(function(notifyRes) {
-    if (notifyRes === null) return;
-    if (notifyRes && notifyRes.notify && notifyRes.notify.skipped) {
-      alert('已存檔至 Lark（通知未設定：請在 Vercel 設定 LARK_WEBHOOK_URL）');
-    } else {
-      alert('已存檔並寄送通知！');
-    }
-  }).catch(function(err) {
-    console.error(err);
-    alert('操作失敗：' + (err.message || '請稍後再試'));
-  });
 }
 
 // ── 初始化 ──
