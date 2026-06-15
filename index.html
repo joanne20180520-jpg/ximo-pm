@@ -641,7 +641,10 @@ function loadData() {
 }
 
 function ntf(n) { return 'NT$' + Math.round(n).toLocaleString(); }
-function fmtDate(ts) {
+function fmt2(d) {
+  var s = String(d.getFullYear()).slice(2) + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+  return s;
+}
   if (!ts) return '—';
   var d = new Date(ts);
   return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
@@ -760,13 +763,27 @@ function renderProjects() {
     var f = rec.fields;
     var name = f['標案名稱'] || '未命名';
     var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
-    var workitems = f['工作項目'] && f['工作項目'][0] ? (f['工作項目'][0].text_arr || []) : [];
+    var wiIds = f['工作項目'] && f['工作項目'][0] && f['工作項目'][0].record_ids ? f['工作項目'][0].record_ids : [];
     var subHTML = '';
-    workitems.forEach(function(wi) {
-      subHTML += '<div class="si"><span>' + wi + '</span></div>';
+    wiIds.forEach(function(wiId) {
+      var wi = workitemsData.find(function(w){ return w.record_id === wiId; });
+      if (!wi) return;
+      var wf = wi.fields;
+      var wName = wf['工作項目名稱'] || '';
+      var startTs = wf['開始日期'];
+      var endTs = wf['截止日'];
+      var dateStr = '';
+      var daysStr = '';
+      if (startTs && endTs) {
+        var s = new Date(startTs), e = new Date(endTs);
+        var days = Math.round((e - s) / 86400000) + 1;
+        dateStr = fmt2(s) + '-' + fmt2(e);
+        daysStr = days + 'Ds';
+      }
+      subHTML += '<div class="si"><span>' + wName + '</span><span style="font-size:10px;color:var(--t3);margin-left:auto;display:flex;gap:6px"><span>' + dateStr + '</span><span style="color:#e05a00;font-weight:600">' + daysStr + '</span></span></div>';
     });
     html += '<div class="pi">';
-    html += '<div class="pr" style="background:' + color + '" onclick="tgp(this)" data-id="' + rec.record_id + '" data-color="' + color + '">';
+    html += '<div class="pr" style="background:' + color + '" onclick="tgp(this)">';
     html += '<div class="dot"></div><span>' + name + '</span><span class="arr">▶</span></div>';
     html += '<div class="sl2">' + subHTML + '</div></div>';
   });
