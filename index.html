@@ -227,7 +227,20 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .bads{width:100%;padding:6px;border:1px dashed var(--border);border-radius:var(--rs);background:none;color:var(--t3);cursor:pointer;font-size:11px}
 .bads:hover{border-color:var(--accent);color:var(--accent)}
 
-/* payment preview */
+/* procurement upload */
+.upload-zone{border:2px dashed var(--border);border-radius:var(--r);padding:20px;text-align:center;background:var(--sf2);margin-bottom:12px;cursor:pointer;transition:border-color .15s}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent)}
+.upload-zone .uz-title{font-size:13px;font-weight:600;margin-bottom:4px}
+.upload-zone .uz-hint{font-size:10px;color:var(--t3);line-height:1.5}
+.upload-zone .uz-file{font-size:11px;color:var(--c2);margin-top:8px;font-weight:600}
+.upload-zone .uz-status{font-size:10px;color:var(--t2);margin-top:6px;min-height:14px}
+.proc-preview{margin-top:10px}
+.proc-wi{margin:4px 0 6px}
+.proc-wi .srow{grid-template-columns:1fr 70px 90px}
+.manual-toggle{margin-top:10px;font-size:11px;color:var(--t2)}
+.manual-toggle summary{cursor:pointer;padding:6px 0;font-weight:600}
+.manual-toggle[open] summary{margin-bottom:8px}
+
 .pp-pay{width:900px;max-width:96vw;display:flex;flex-direction:column;max-height:90vh}
 .pp-pay .ppb{flex:1;overflow:hidden;padding:0;background:#f0f0f0}
 #prev-iframe{width:100%;height:72vh;border:none;display:block;background:#fff}
@@ -252,7 +265,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
   <div class="ah">
     <span class="sl">Projects</span>
     <div class="sa">
-      <button class="badd" onclick="openPopup('pp-proj')">＋標案</button>
+      <button class="badd" onclick="openPopup('pp-proj')">＋上傳採購書</button>
       <button class="badd" onclick="openPopup('pp-work')">＋工作項目</button>
     </div>
   </div>
@@ -362,7 +375,43 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 </div><!-- /body -->
 
 <!-- ══ POPUPS ══ -->
-<div class="po" id="pp-proj"><div class="pp"><div class="pph"><h3>建立新標案</h3><button class="ppc" onclick="cl('pp-proj')">✕</button></div><div class="ppb2"><div><div class="fg"><label>標案名稱</label><input type="text" id="np-name" placeholder="115花蓮山茶"></div><div class="fg"><label>主PM</label><select id="np-pm" data-members></select></div><div class="fg"><label>合約開始日</label><input type="date" id="np-start"></div><div class="fg"><label>合約結束日</label><input type="date" id="np-end"></div><div class="fg"><label>合約金額</label><input type="text" placeholder="NT$0" id="ca" oninput="calcP()"></div></div><div><div class="fbox"><div class="fi"><div class="fl">合約未稅金額</div><div class="fv" id="fu">—</div></div><div class="fi"><div class="fl">可用成本</div><div class="fv" id="fc">—</div></div><div class="fi"><div class="fl">已支出合計</div><div class="fv">NT$0</div></div><div class="fi"><div class="fl">剩餘預算</div><div class="fv" id="fr">—</div></div></div><div style="font-size:10px;color:var(--t3);line-height:1.8">合約未稅 = 合約金額 ÷ 1.05<br>可用成本 = 合約未稅 ÷ 2<br>剩餘預算 = 可用成本 − 已支出</div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-proj')">取消</button><button class="bpri" onclick="saveProject()">新增</button></div></div></div>
+<div class="po" id="pp-proj"><div class="pp ppw"><div class="pph"><h3>上傳採購書建立標案</h3><button class="ppc" onclick="cl('pp-proj')">✕</button></div><div class="ppb">
+  <div class="upload-zone" id="proc-upload-zone" onclick="document.getElementById('proc-file').click()">
+    <input type="file" id="proc-file" accept=".pdf,.doc,.docx,.txt,.text" hidden onchange="onProcFileSelect(this)">
+    <div class="uz-title">📄 點此上傳採購書</div>
+    <div class="uz-hint">支援 PDF、Word（.doc/.docx）、純文字<br>系統會自動辨識標案名稱、合約金額、工作項目</div>
+    <div class="uz-file" id="proc-file-name"></div>
+    <div class="uz-status" id="proc-parse-status"></div>
+  </div>
+  <div class="proc-preview" id="proc-preview" style="display:none">
+    <div class="ppb2">
+      <div>
+        <div class="fg"><label>標案名稱</label><input type="text" id="np-name" placeholder="115花蓮山茶" oninput="calcP()"></div>
+        <div class="fg"><label>主PM</label><select id="np-pm" data-members></select></div>
+        <div class="fg"><label>合約開始日</label><input type="date" id="np-start"></div>
+        <div class="fg"><label>合約結束日</label><input type="date" id="np-end"></div>
+        <div class="fg"><label>合約金額</label><input type="text" placeholder="NT$0" id="ca" oninput="calcP()"></div>
+      </div>
+      <div>
+        <div class="fbox">
+          <div class="fi"><div class="fl">合約未稅金額</div><div class="fv" id="fu">—</div></div>
+          <div class="fi"><div class="fl">可用成本</div><div class="fv" id="fc">—</div></div>
+          <div class="fi"><div class="fl">已支出合計</div><div class="fv" id="np-spent">NT$0</div></div>
+          <div class="fi"><div class="fl">剩餘預算</div><div class="fv" id="fr">—</div></div>
+        </div>
+        <div style="font-size:10px;color:var(--t3);line-height:1.8">合約未稅 = 合約金額 ÷ 1.05<br>可用成本 = 合約未稅 ÷ 2<br>剩餘預算 = 可用成本 − 已支出</div>
+      </div>
+    </div>
+    <div class="fg"><label>工作項目（可編輯，系統已自動帶入）</label><div class="proc-wi" id="np-workitems"></div><button type="button" class="bads" onclick="addProjWorkItem()">＋ 新增工作項目</button></div>
+  </div>
+  <details class="manual-toggle"><summary>改用手動填寫（不經檔案）</summary>
+    <div class="ppb2" style="margin-top:8px">
+      <div><div class="fg"><label>標案名稱</label><input type="text" id="np-name-manual" placeholder="115花蓮山茶"></div></div>
+      <div><div class="fg"><label>合約金額</label><input type="text" id="ca-manual" placeholder="NT$0"></div></div>
+    </div>
+    <button type="button" class="bads" onclick="applyManualProject()">套用到上方欄位</button>
+  </details>
+</div><div class="ppf"><button class="bcan" onclick="cl('pp-proj')">取消</button><button class="bpri" id="np-save-btn" onclick="saveProjectImport()" disabled>確認新增標案</button></div></div></div>
 
 <div class="po" id="pp-work"><div class="pp ppw"><div class="pph"><h3>建立標案的工作項目</h3><button class="ppc" onclick="cl('pp-work')">✕</button></div><div class="ppb"><div class="fg"><label>標案</label><select id="nw-proj"></select></div><div class="fg"><label>開始日期</label><input type="date" id="nw-start"></div><div style="display:grid;grid-template-columns:1fr 90px 1fr 70px 50px;gap:6px;padding:4px 0;font-size:10px;color:var(--t3)"><span>工作項目名稱</span><span>天數</span><span>負責夥伴</span><span>可用成本</span><span>權重</span></div><div class="slist" id="sl"></div><button class="bads" onclick="addS()">＋ 新增工作項目</button></div><div class="ppf"><button class="bcan" onclick="cl('pp-work')">取消</button><button class="bpri" onclick="saveWorkItems()">新增</button></div></div></div>
 
@@ -391,6 +440,8 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script>
 // ── 基本互動 ──
 var lc=false, rc=false;
@@ -433,6 +484,318 @@ function calcP(){
   document.getElementById('fu').textContent=f(u);
   document.getElementById('fc').textContent=f(c);
   document.getElementById('fr').textContent=f(c);
+  var sp=document.getElementById('np-spent');
+  if(sp) sp.textContent='NT$0';
+  distributeProjWorkItemCosts(c);
+}
+
+// ── 採購書上傳辨識 ──
+var parsedProjWorkItems = [];
+
+function initProcUpload() {
+  var zone = document.getElementById('proc-upload-zone');
+  if (!zone || zone._bound) return;
+  zone._bound = true;
+  zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', function() { zone.classList.remove('drag'); });
+  zone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    zone.classList.remove('drag');
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      document.getElementById('proc-file').files = e.dataTransfer.files;
+      onProcFileSelect(document.getElementById('proc-file'));
+    }
+  });
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+}
+
+function setProcStatus(msg, isErr) {
+  var el = document.getElementById('proc-parse-status');
+  if (el) { el.textContent = msg; el.style.color = isErr ? '#c0392b' : 'var(--t2)'; }
+}
+
+function onProcFileSelect(input) {
+  var file = input.files && input.files[0];
+  if (!file) return;
+  document.getElementById('proc-file-name').textContent = file.name;
+  setProcStatus('正在讀取檔案…');
+  extractProcurementText(file).then(function(text) {
+    if (!text || text.length < 20) throw new Error('檔案內容太少，請確認是否為採購書');
+    var parsed = parseProcurementText(text);
+    applyProcurementParse(parsed);
+    setProcStatus('已辨識：' + (parsed.name || '（請確認標案名稱）') + (parsed.workItems.length ? ' · ' + parsed.workItems.length + ' 個工作項目' : ''));
+    document.getElementById('proc-preview').style.display = '';
+    document.getElementById('np-save-btn').disabled = false;
+  }).catch(function(err) {
+    console.error(err);
+    setProcStatus('讀取失敗：' + (err.message || '請換檔案格式再試'), true);
+  });
+}
+
+function extractProcurementText(file) {
+  var name = (file.name || '').toLowerCase();
+  if (name.endsWith('.txt') || name.endsWith('.text')) {
+    return file.text();
+  }
+  if (name.endsWith('.pdf')) {
+    return file.arrayBuffer().then(function(buf) {
+      if (!window.pdfjsLib) throw new Error('PDF 元件載入中，請稍後再試');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      return pdfjsLib.getDocument({ data: buf }).promise.then(function(pdf) {
+        var chain = Promise.resolve('');
+        for (var p = 1; p <= pdf.numPages; p++) {
+          (function(pageNum) {
+            chain = chain.then(function(acc) {
+              return pdf.getPage(pageNum).then(function(page) {
+                return page.getTextContent().then(function(c) {
+                  return acc + c.items.map(function(it) { return it.str; }).join(' ') + '\n';
+                });
+              });
+            });
+          })(p);
+        }
+        return chain;
+      });
+    });
+  }
+  if (name.endsWith('.docx') || name.endsWith('.doc')) {
+    return file.arrayBuffer().then(function(buf) {
+      if (!window.mammoth) throw new Error('Word 元件載入中，請稍後再試');
+      return mammoth.extractRawText({ arrayBuffer: buf }).then(function(r) { return r.value; });
+    });
+  }
+  return Promise.reject(new Error('不支援的格式，請用 PDF、Word 或 TXT'));
+}
+
+function parseProcurementText(raw) {
+  var text = String(raw).replace(/\r/g, '\n');
+  var flat = text.replace(/\s+/g, ' ');
+  var result = { name: '', amount: 0, startDate: '', endDate: '', workItems: [] };
+
+  var namePatterns = [
+    /採購案名[稱]?[：:\s]+([^\n，,。；;]{4,60})/,
+    /案\s*名[：:\s]+([^\n，,。；;]{4,60})/,
+    /標案名稱[：:\s]+([^\n，,。；;]{4,60})/,
+    /契約名稱[：:\s]+([^\n，,。；;]{4,60})/,
+    /履約標的[：:\s]+([^\n，,。；;]{4,60})/,
+    /(\d{3,4}\s*[^\s，,。；;]{2,24}(?:計畫|專案|案|山茶|農場|活動))/
+  ];
+  namePatterns.forEach(function(re) {
+    if (result.name) return;
+    var m = flat.match(re) || text.match(re);
+    if (m && m[1]) result.name = m[1].trim().replace(/\s+/g, '');
+  });
+
+  var amountPatterns = [
+    /契約金額[：:\s]*(?:新臺幣|新台幣|NT\$?)?\s*([\d,，]+(?:\.\d+)?)/i,
+    /總\s*價[：:\s]*(?:新臺幣|新台幣|NT\$?)?\s*([\d,，]+(?:\.\d+)?)/i,
+    /採購金額[：:\s]*(?:新臺幣|新台幣|NT\$?)?\s*([\d,，]+(?:\.\d+)?)/i,
+    /預算金額[：:\s]*(?:新臺幣|新台幣|NT\$?)?\s*([\d,，]+(?:\.\d+)?)/i,
+    /決標金額[：:\s]*(?:新臺幣|新台幣|NT\$?)?\s*([\d,，]+(?:\.\d+)?)/i
+  ];
+  amountPatterns.forEach(function(re) {
+    if (result.amount) return;
+    var m = flat.match(re);
+    if (m && m[1]) result.amount = parseMoney(m[1]);
+  });
+
+  var dateRange = flat.match(/(?:履約期限|契約期間|執行期間|期間)[：:\s]*(?:自)?\s*(\d{2,4}[./年-]\d{1,2}[./月-]\d{1,2}日?)\s*(?:至|到|~|—|-)\s*(\d{2,4}[./年-]\d{1,2}[./月-]\d{1,2}日?)/);
+  if (dateRange) {
+    result.startDate = normalizeRocDate(dateRange[1]);
+    result.endDate = normalizeRocDate(dateRange[2]);
+  }
+
+  var seen = {};
+  var wiRes = [
+    /(?:工作項目|履約項目|執行項目|服務項目)[：:\s]*([^\n]+)/g,
+    /(?:項次|項目)[\s]*[一二三四五六七八九十\d]+[、.:：)\s]+([^\n\d]{2,40})/g,
+    /^\s*(\d{1,2})[.、．]\s*([^\n\d]{3,40})/gm
+  ];
+  wiRes.forEach(function(re) {
+    var m;
+    while ((m = re.exec(text)) !== null) {
+      var label = (m[2] || m[1] || '').trim().replace(/[：:;；。,，].*$/, '');
+      if (label.length < 2 || label.length > 40) continue;
+      if (/金額|單價|合計|備註|說明|日期/.test(label)) continue;
+      if (seen[label]) continue;
+      seen[label] = 1;
+      result.workItems.push({ name: label, days: 7, cost: 0, weight: 0 });
+    }
+  });
+
+  if (!result.workItems.length) {
+    ['規劃', '執行', '成果發表', '驗收', '結案'].forEach(function(k) {
+      if (flat.indexOf(k) >= 0 && !seen[k]) {
+        seen[k] = 1;
+        result.workItems.push({ name: k, days: 7, cost: 0, weight: 0 });
+      }
+    });
+  }
+
+  var n = result.workItems.length || 1;
+  var w = Math.round(100 / n);
+  result.workItems.forEach(function(it, i) {
+    it.weight = i === n - 1 ? (100 - w * (n - 1)) : w;
+  });
+  return result;
+}
+
+function normalizeRocDate(s) {
+  if (!s) return '';
+  s = String(s).replace(/年|月/g, '/').replace(/日/g, '').trim();
+  var p = s.split(/[./-]/).filter(Boolean);
+  if (p.length < 3) return '';
+  var y = parseInt(p[0], 10);
+  if (y < 1911) y += 1911;
+  var m = String(parseInt(p[1], 10)).padStart(2, '0');
+  var d = String(parseInt(p[2], 10)).padStart(2, '0');
+  return y + '-' + m + '-' + d;
+}
+
+function applyProcurementParse(parsed) {
+  if (parsed.name) document.getElementById('np-name').value = parsed.name;
+  if (parsed.amount) document.getElementById('ca').value = 'NT$' + Math.round(parsed.amount).toLocaleString();
+  if (parsed.startDate) document.getElementById('np-start').value = parsed.startDate;
+  if (parsed.endDate) document.getElementById('np-end').value = parsed.endDate;
+  parsedProjWorkItems = parsed.workItems.length ? parsed.workItems.slice() : [{ name: '執行', days: 30, cost: 0, weight: 100 }];
+  renderProjWorkItems();
+  calcP();
+  refreshFormSelects();
+}
+
+function renderProjWorkItems() {
+  var box = document.getElementById('np-workitems');
+  if (!box) return;
+  var html = '<div style="display:grid;grid-template-columns:1fr 70px 90px 50px;gap:6px;padding:4px 0;font-size:10px;color:var(--t3)"><span>工作項目名稱</span><span>天數</span><span>可用成本</span><span>權重</span></div>';
+  parsedProjWorkItems.forEach(function(it, idx) {
+    html += '<div class="srow" data-idx="' + idx + '">'
+      + '<input type="text" value="' + escAttr(it.name) + '" oninput="parsedProjWorkItems[' + idx + '].name=this.value">'
+      + '<div class="dc2"><button type="button" onclick="adjProjWi(this,-1)">−</button><span>' + it.days + '</span><button type="button" onclick="adjProjWi(this,1)">＋</button></div>'
+      + '<input type="text" value="' + (it.cost ? 'NT$' + Math.round(it.cost).toLocaleString() : '') + '" placeholder="NT$0" oninput="parsedProjWorkItems[' + idx + '].cost=parseMoney(this.value);calcP()">'
+      + '<input type="text" value="' + it.weight + '%" oninput="parsedProjWorkItems[' + idx + '].weight=parseFloat(this.value)||0">'
+      + '</div>';
+  });
+  box.innerHTML = html;
+}
+
+function adjProjWi(btn, d) {
+  var row = btn.closest('.srow');
+  var idx = parseInt(row.getAttribute('data-idx'), 10);
+  var span = row.querySelector('.dc2 span');
+  parsedProjWorkItems[idx].days = Math.max(1, parsedProjWorkItems[idx].days + d);
+  span.textContent = parsedProjWorkItems[idx].days;
+}
+
+function addProjWorkItem() {
+  parsedProjWorkItems.push({ name: '', days: 7, cost: 0, weight: 0 });
+  renderProjWorkItems();
+  calcP();
+}
+
+function distributeProjWorkItemCosts(availCost) {
+  if (!parsedProjWorkItems.length || !availCost) return;
+  var need = parsedProjWorkItems.filter(function(it) { return !it.cost; });
+  if (!need.length) return;
+  var per = Math.round(availCost / parsedProjWorkItems.length);
+  parsedProjWorkItems.forEach(function(it) {
+    if (!it.cost) it.cost = per;
+  });
+  renderProjWorkItems();
+}
+
+function applyManualProject() {
+  var n = document.getElementById('np-name-manual').value.trim();
+  var a = document.getElementById('ca-manual').value.trim();
+  if (n) document.getElementById('np-name').value = n;
+  if (a) document.getElementById('ca').value = a;
+  if (!parsedProjWorkItems.length) parsedProjWorkItems = [{ name: '執行', days: 30, cost: 0, weight: 100 }];
+  document.getElementById('proc-preview').style.display = '';
+  document.getElementById('np-save-btn').disabled = false;
+  renderProjWorkItems();
+  calcP();
+  setProcStatus('已套用手動填寫內容');
+}
+
+function resetProcForm() {
+  parsedProjWorkItems = [];
+  ['proc-file-name', 'proc-parse-status'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = '';
+  });
+  var f = document.getElementById('proc-file');
+  if (f) f.value = '';
+  var prev = document.getElementById('proc-preview');
+  if (prev) prev.style.display = 'none';
+  var btn = document.getElementById('np-save-btn');
+  if (btn) btn.disabled = true;
+  ['np-name', 'ca'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['np-start', 'np-end'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  var box = document.getElementById('np-workitems');
+  if (box) box.innerHTML = '';
+  calcP();
+}
+
+function getProjectRecordId(res) {
+  if (!res) return null;
+  if (res.data && res.data.record && res.data.record.record_id) return res.data.record.record_id;
+  if (res.data && res.data.record_id) return res.data.record_id;
+  return null;
+}
+
+function saveProjectImport() {
+  var name = document.getElementById('np-name').value.trim();
+  if (!name) { alert('請填寫標案名稱（或上傳採購書自動帶入）'); return; }
+  var pm = document.getElementById('np-pm').value;
+  var start = document.getElementById('np-start').value;
+  var end = document.getElementById('np-end').value;
+  var amount = parseMoney(document.getElementById('ca').value);
+  var fields = { '標案名稱': name };
+  var pmField = larkPerson(pm);
+  if (pmField) fields['主PM'] = pmField;
+  if (start) fields['合約開始日'] = dateInputToTs(start);
+  if (end) fields['合約結束日'] = dateInputToTs(end);
+  if (amount) fields['合約金額'] = amount;
+
+  var items = parsedProjWorkItems.filter(function(it) { return it.name && it.name.trim(); });
+  var startTs = start ? dateInputToTs(start) : Date.now();
+
+  apiPost('projects', fields).then(function(res) {
+    var projId = getProjectRecordId(res);
+    if (!projId || !items.length) return res;
+    var chain = Promise.resolve();
+    items.forEach(function(item) {
+      chain = chain.then(function() {
+        var endTs = startTs + (item.days - 1) * 86400000;
+        var wiFields = {
+          '工作項目名稱': item.name.trim(),
+          '所屬標案': [projId],
+          '開始日期': startTs,
+          '截止日': endTs,
+          '可用成本': item.cost || 0,
+          '權重': parseWeight(String(item.weight))
+        };
+        var partner = larkPerson(pm);
+        if (partner) wiFields['負責夥伴'] = partner;
+        return apiPost('workitems', wiFields);
+      });
+    });
+    return chain.then(function() { return res; });
+  }).then(function() {
+    cl('pp-proj');
+    resetProcForm();
+    loadData();
+    alert('標案與工作項目已新增！');
+  }).catch(function(err) {
+    alert('新增失敗：' + err.message);
+  });
 }
 function calcE(){
   var v=parseInt(document.getElementById('aa').value.replace(/\D/g,''))||0;
@@ -1435,7 +1798,7 @@ function buildMembersMap() {
   membersMap = {};
   membersData.forEach(function(m) {
     var f = m.fields || {};
-    var name = f['姓名'] || f['名稱'] || personName(f['成員']) || '';
+    var name = memberLabel(f['姓名'] || f['名稱'] || f['成員']);
     var id = f['open_id'] || f['user_id'] || f['User ID'] || f['userid']
       || (f['成員'] && f['成員'][0] && (f['成員'][0].id || f['成員'][0].open_id));
     if (name) membersMap[name] = { id: id, name: name };
@@ -1446,6 +1809,18 @@ function buildMembersMap() {
       membersMap[p[0].name] = { id: p[0].id || p[0].open_id, name: p[0].name };
     }
   });
+  projectsData.forEach(function(p) {
+    var pm = p.fields['主PM'];
+    if (pm && pm[0] && pm[0].name && !membersMap[pm[0].name]) {
+      membersMap[pm[0].name] = { id: pm[0].id || pm[0].open_id, name: pm[0].name };
+    }
+  });
+}
+
+function memberLabel(field) {
+  if (!field) return '';
+  if (typeof field === 'string') return field.trim();
+  return personName(field);
 }
 
 function getMemberNames() {
@@ -1458,7 +1833,7 @@ function fillSelectOptions(sel, options, values) {
   if (!sel) return;
   sel.innerHTML = options.map(function(label, i) {
     var val = values ? values[i] : label;
-    return '<option value="' + val + '">' + label + '</option>';
+    return '<option value="' + escAttr(String(val)) + '">' + escAttr(String(label)) + '</option>';
   }).join('');
 }
 
@@ -1501,6 +1876,10 @@ function apiPut(table, recordId, fields) {
 
 function preparePopup(id) {
   refreshFormSelects();
+  if (id === 'pp-proj') {
+    initProcUpload();
+    refreshFormSelects();
+  }
   if (id === 'pp-work') {
     var sl = document.getElementById('sl');
     if (sl && !sl.children.length) {
@@ -1567,30 +1946,6 @@ function refreshFormSelects() {
   if (statusSel) {
     fillSelectOptions(statusSel, PROGRESS_OPTIONS);
   }
-}
-
-function saveProject() {
-  var name = document.getElementById('np-name').value.trim();
-  if (!name) { alert('請填寫標案名稱'); return; }
-  var pm = document.getElementById('np-pm').value;
-  var start = document.getElementById('np-start').value;
-  var end = document.getElementById('np-end').value;
-  var amount = parseMoney(document.getElementById('ca').value);
-  var fields = { '標案名稱': name };
-  var pmField = larkPerson(pm);
-  if (pmField) fields['主PM'] = pmField;
-  if (start) fields['合約開始日'] = dateInputToTs(start);
-  if (end) fields['合約結束日'] = dateInputToTs(end);
-  if (amount) fields['合約金額'] = amount;
-
-  apiPost('projects', fields).then(function() {
-    cl('pp-proj');
-    document.getElementById('np-name').value = '';
-    loadData();
-    alert('標案已新增！');
-  }).catch(function(err) {
-    alert('新增失敗：' + err.message);
-  });
 }
 
 function saveWorkItems() {
