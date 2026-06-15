@@ -1,5 +1,13 @@
 {
+  "functions": {
+    "api/parse-budget.js": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
   "rewrites": [
+    { "source": "/api/parse-budget", "destination": "/api/parse-budget.js" },
+    { "source": "/api/lark", "destination": "/api/lark.js" },
     { "source": "/api/(.*)", "destination": "/api/lark.js" }
   ]
 }

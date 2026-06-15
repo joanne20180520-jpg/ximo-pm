@@ -1,0 +1,7 @@
+{
+  "name": "ximo-pm",
+  "private": true,
+  "dependencies": {
+    "tesseract.js": "^5.1.1"
+  }
+}

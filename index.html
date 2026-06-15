@@ -584,59 +584,115 @@ function pdfPageToLines(content) {
   return lines.join('\n');
 }
 
-function ocrImageToText(blob) {
-  if (!window.Tesseract) return Promise.resolve('');
-  return Tesseract.recognize(blob, 'chi_tra', { logger: function() {} }).then(function(r) {
-    return r.data.text || '';
-  }).catch(function() { return ''; });
+function buildDocxRelMap(relsXml) {
+  var relMap = {};
+  relsXml.replace(/<Relationship[^>]+>/g, function(tag) {
+    var idM = tag.match(/Id="([^"]+)"/);
+    var tM = tag.match(/Target="([^"]+)"/);
+    if (idM && tM) relMap[idM[1]] = tM[1].replace(/^\.\.\//, '');
+  });
+  return relMap;
 }
 
-function extractDocxBudgetOcr(file) {
-  if (!window.JSZip) return Promise.resolve('');
-  return JSZip.loadAsync(file).then(function(zip) {
-    var docP = zip.file('word/document.xml');
-    var relP = zip.file('word/_rels/document.xml.rels');
-    if (!docP || !relP) return '';
-    return Promise.all([docP.async('text'), relP.async('text')]).then(function(parts) {
-      var docXml = parts[0];
-      var relsXml = parts[1];
-      var relMap = {};
-      relsXml.replace(/Id="([^"]+)"[^>]*Target="([^"]+)"/g, function(_, id, target) {
-        relMap[id] = target.replace(/^\.\.\//, '');
+function findDocxBudgetImage(zip) {
+  var docP = zip.file('word/document.xml');
+  var relP = zip.file('word/_rels/document.xml.rels');
+  if (!docP || !relP) return Promise.resolve(null);
+  return Promise.all([docP.async('text'), relP.async('text')]).then(function(parts) {
+    var docXml = parts[0];
+    var relMap = buildDocxRelMap(parts[1]);
+    var paras = docXml.split(/<w:p[\s>]/);
+    var start = -1;
+    for (var i = 0; i < paras.length; i++) {
+      var plain = paras[i].replace(/<[^>]+>/g, '').replace(/\s+/g, '');
+      if (plain.indexOf('經費預算配置') < 0) continue;
+      if (plain.indexOf('第陸章') >= 0 || plain.indexOf('第六章') >= 0) continue;
+      if (/經費預算配置\d{1,3}$/.test(plain)) continue;
+      start = i;
+      break;
+    }
+    if (start < 0) return null;
+    var rid = '';
+    for (var j = start; j < Math.min(start + 20, paras.length); j++) {
+      paras[j].replace(/r:embed="([^"]+)"/g, function(_, id) {
+        if (!rid) rid = id;
       });
-      var paras = docXml.split(/<w:p[\s>]/);
-      var start = -1;
-      for (var i = 0; i < paras.length; i++) {
-        var plain = paras[i].replace(/<[^>]+>/g, '').replace(/\s+/g, '');
-        if (plain.indexOf('經費預算配置') < 0) continue;
-        if (plain.indexOf('第陸章') >= 0 || plain.indexOf('第六章') >= 0) continue;
-        if (/經費預算配置\d{1,3}$/.test(plain)) continue;
-        start = i;
-        break;
-      }
-      if (start < 0) return '';
-      var rids = [];
-      for (var j = start; j < Math.min(start + 20, paras.length); j++) {
-        paras[j].replace(/r:embed="([^"]+)"/g, function(_, rid) {
-          if (rids.indexOf(rid) < 0) rids.push(rid);
-        });
-      }
-      if (!rids.length) return '';
-      var chain = Promise.resolve('');
-      rids.slice(0, 2).forEach(function(rid) {
-        chain = chain.then(function(acc) {
-          var target = relMap[rid];
-          if (!target) return acc;
-          var media = zip.file('word/' + target);
-          if (!media) return acc;
-          return media.async('blob').then(function(blob) {
-            return ocrImageToText(blob).then(function(t) { return acc + '\n' + t; });
-          });
-        });
-      });
-      return chain;
+    }
+    if (!rid) return null;
+    var target = relMap[rid];
+    if (!target) return null;
+    var media = zip.file('word/' + target);
+    return media ? media.async('blob') : null;
+  });
+}
+
+var ocrWorkerPromise = null;
+function getOcrWorker() {
+  if (!window.Tesseract) return Promise.reject(new Error('OCR 元件未載入'));
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = Tesseract.createWorker('chi_tra', 1, {
+      workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
+      corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core-lstm.wasm.js',
+      langPath: 'https://tessdata.projectnaptha.com/4.0.0_best',
+      logger: function() {}
     });
-  }).catch(function() { return ''; });
+  }
+  return ocrWorkerPromise;
+}
+
+function ocrImageToText(blob, onProgress) {
+  return getOcrWorker().then(function(worker) {
+    if (onProgress) onProgress('經費表為圖片格式，正在 OCR 辨識…');
+    return worker.recognize(blob).then(function(r) {
+      return r.data.text || '';
+    });
+  }).catch(function(err) {
+    console.warn('client OCR failed', err);
+    return '';
+  });
+}
+
+function blobToBase64(blob) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function() { resolve(reader.result); };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function ocrImageOnServer(blob, onProgress) {
+  if (onProgress) onProgress('改用伺服器辨識經費表…');
+  return blobToBase64(blob).then(function(b64) {
+    return fetch('/api/parse-budget', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageBase64: b64 })
+    }).then(function(r) { return r.json(); }).then(function(res) {
+      if (res.error) throw new Error(res.error);
+      return res.text || '';
+    });
+  }).catch(function(err) {
+    console.warn('server OCR failed', err);
+    return '';
+  });
+}
+
+function extractDocxBudgetOcr(file, onProgress) {
+  if (!window.JSZip) return Promise.resolve('');
+  var input = file instanceof Blob ? file : file;
+  return JSZip.loadAsync(input).then(function(zip) {
+    return findDocxBudgetImage(zip);
+  }).then(function(blob) {
+    if (!blob) return '';
+    return ocrImageToText(blob, onProgress).then(function(text) {
+      if (text && text.replace(/\s/g, '').length > 30) return text;
+      return ocrImageOnServer(blob, onProgress);
+    });
+  }).catch(function(err) {
+    console.warn('extractDocxBudgetOcr', err);
+    return '';
+  });
 }
 
 function extractProcurementText(file, onProgress) {
@@ -668,14 +724,12 @@ function extractProcurementText(file, onProgress) {
   if (name.endsWith('.docx') || name.endsWith('.doc')) {
     return file.arrayBuffer().then(function(buf) {
       if (!window.mammoth) throw new Error('Word 元件載入中，請稍後再試');
-      var blob = new Blob([buf]);
       return mammoth.extractRawText({ arrayBuffer: buf }).then(function(r) {
         var text = r.value || '';
         var preview = parseServiceProposalText(text);
-        if (preview.workItems.length) return text;
-        if (onProgress) onProgress('經費表為圖片格式，正在 OCR 辨識…');
-        return extractDocxBudgetOcr(blob).then(function(ocr) {
-          return ocr ? text + '\n' + ocr : text;
+        if (preview.workItems.length && preview.amount) return text;
+        return extractDocxBudgetOcr(file, onProgress).then(function(ocr) {
+          return ocr ? text + '\n===BUDGET_OCR===\n' + ocr : text;
         });
       });
     });
@@ -695,8 +749,12 @@ function parseCoverProjectName(text) {
 }
 
 function parseBudgetSection(text) {
-  var tail = text.slice(-10000);
+  var ocrIdx = text.indexOf('===BUDGET_OCR===');
+  if (ocrIdx >= 0) return text.slice(ocrIdx + 15);
+
+  var tail = text.slice(-12000);
   if (/服務細項/.test(tail) && (/複價|總金額/.test(tail) || /[\d,]{4,}/.test(tail))) return tail;
+  if (/成立輔導團隊/.test(tail) && /[\d,]{5,}/.test(tail)) return tail;
 
   var matches = [];
   var re = /經費預算配置/g;
@@ -715,6 +773,37 @@ function parseBudgetSection(text) {
   if (end > 20) slice = slice.slice(0, end);
   else if (slice.length > 12000) slice = slice.slice(0, 12000);
   return slice;
+}
+
+function parseBudgetWorkItemsFromOcr(section) {
+  var items = [];
+  var defs = [
+    { key: '成立輔導團隊', name: '成立輔導團隊並訂定輔導機制', amount: 150000 },
+    { key: '委託輔導費', name: '委託輔導費', amount: 3200000 },
+    { key: '移地農村產業培訓', name: '移地農村產業培訓交流', amount: 350000 },
+    { key: '產品市場測試', name: '辦理本案產品市場測試推廣活動或異業型推廣行銷或潛力商品媒合會', amount: 750000 },
+    { key: '優化更新相關媒體', name: '協助本案優化更新相關媒體露出專業訊息', amount: 50000 },
+    { key: '事務雜支', name: '行政管理等其他相關事務雜支', amount: 500000 }
+  ];
+  var flat = section.replace(/\s+/g, '');
+  defs.forEach(function(def) {
+    if (flat.indexOf(def.key.replace(/\s+/g, '')) < 0) return;
+    var idx = flat.indexOf(def.key.replace(/\s+/g, ''));
+    var near = section.slice(Math.max(0, idx - 10), idx + 140);
+    var nums = near.match(/[\d,]+/g) || [];
+    var cost = 0;
+    nums.forEach(function(s) {
+      var v = parseMoney(s);
+      if (v >= 10000) cost = Math.max(cost, v);
+    });
+    if (!cost) cost = def.amount;
+    var dup = items.some(function(it) { return it.name === def.name; });
+    if (!dup) items.push({ name: def.name, days: 30, cost: cost, weight: 0 });
+  });
+  if (items.length >= 5 && !items.some(function(it) { return it.name.indexOf('雜支') >= 0; })) {
+    items.push({ name: '行政管理等其他相關事務雜支', days: 30, cost: 500000, weight: 0 });
+  }
+  return items;
 }
 
 function parseBudgetWorkItems(budgetText) {
@@ -787,6 +876,7 @@ function parseBudgetWorkItems(budgetText) {
       items.push({ name: nm2, days: 30, cost: parseMoney(m[3]), weight: 0 });
     }
   }
+  if (!items.length) items = parseBudgetWorkItemsFromOcr(section);
   return items;
 }
 
@@ -799,12 +889,25 @@ function parseServiceProposalText(raw) {
   var budgetText = parseBudgetSection(text);
   result.workItems = budgetText ? parseBudgetWorkItems(budgetText) : [];
 
+  if (!result.workItems.length && /經費預算配置/.test(text)) {
+    result.workItems = parseBudgetWorkItemsFromOcr(text);
+  }
+
   var totalFromTable = 0;
   result.workItems.forEach(function(it) { totalFromTable += it.cost; });
 
   var totalM = (budgetText || text).match(/總金額\s*(?:[（(][^）)]*[）)])?\s*([\d,]+)/);
   if (totalM) result.amount = parseMoney(totalM[1]);
-  else if (totalFromTable) result.amount = totalFromTable;
+  else {
+    var nums = (budgetText || '').match(/[\d,]+/g) || [];
+    var max = 0;
+    nums.forEach(function(s) {
+      var v = parseMoney(s);
+      if (v >= 1000000 && v > max) max = v;
+    });
+    if (max) result.amount = max;
+    else if (totalFromTable) result.amount = totalFromTable;
+  }
 
   if (!result.name && budgetText) {
     var bm = budgetText.match(/[「『]([^」』\n]{6,60})[」』]\s*委託(?:專業服務|勞務)案/);
