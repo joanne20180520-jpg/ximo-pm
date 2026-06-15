@@ -390,7 +390,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
 <!-- ══ POPUPS ══ -->
 <div class="po" id="pp-proj"><div class="pp ppw"><div class="pph"><h3>上傳服務建議書建立標案</h3><button class="ppc" onclick="cl('pp-proj')">✕</button></div><div class="ppb">
-  <div class="upload-zone" id="proc-upload-zone" onclick="document.getElementById('proc-file').click()">
+  <div class="upload-zone" id="proc-upload-zone" onclick="procPickFile()">
     <button type="button" class="proc-clear" id="proc-clear-btn" title="清除上傳" style="display:none" onclick="event.stopPropagation();clearProcUpload()">✕</button>
     <input type="file" id="proc-file" accept=".pdf,.doc,.docx,.txt,.text" hidden onchange="onProcFileSelect(this)">
     <div class="uz-title">📄 點此上傳服務建議書</div>
@@ -508,6 +508,15 @@ function calcP(){
 
 // ── 服務建議書上傳辨識 ──
 var parsedProjWorkItems = [];
+var procUploadSeq = 0;
+
+function procPickFile() {
+  var input = document.getElementById('proc-file');
+  if (input) {
+    input.value = '';
+    input.click();
+  }
+}
 
 function initProcUpload() {
   var zone = document.getElementById('proc-upload-zone');
@@ -534,18 +543,48 @@ function setProcStatus(msg, isErr) {
 }
 
 function clearProcUpload() {
+  procUploadSeq++;
   resetProcForm();
   setProcStatus('已清除，請重新上傳');
+}
+
+function resetProcFormForNewUpload() {
+  parsedProjWorkItems = [];
+  document.getElementById('proc-preview').style.display = 'none';
+  document.getElementById('np-save-btn').disabled = true;
+  ['np-name', 'ca'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['np-start', 'np-end'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  var pmSel = document.getElementById('np-pm');
+  if (pmSel && pmSel.options.length) pmSel.selectedIndex = 0;
+  var box = document.getElementById('np-workitems');
+  if (box) box.innerHTML = '';
+  document.getElementById('fu').textContent = '—';
+  document.getElementById('fc').textContent = '—';
+  document.getElementById('fr').textContent = '—';
+  var sp = document.getElementById('np-spent');
+  if (sp) sp.textContent = 'NT$0';
 }
 
 function onProcFileSelect(input) {
   var file = input.files && input.files[0];
   if (!file) return;
+  procUploadSeq++;
+  var uploadId = procUploadSeq;
+  resetProcFormForNewUpload();
   document.getElementById('proc-file-name').textContent = file.name;
   var clearBtn = document.getElementById('proc-clear-btn');
   if (clearBtn) clearBtn.style.display = '';
   setProcStatus('正在讀取服務建議書…');
-  extractProcurementText(file, function(msg) { setProcStatus(msg); }).then(function(text) {
+  extractProcurementText(file, function(msg) {
+    if (uploadId === procUploadSeq) setProcStatus(msg);
+  }).then(function(text) {
+    if (uploadId !== procUploadSeq) return;
     if (!text || text.length < 20) throw new Error('檔案內容太少，請確認是否為服務建議書');
     var parsed = parseServiceProposalText(text);
     applyProcurementParse(parsed);
@@ -557,6 +596,7 @@ function onProcFileSelect(input) {
     document.getElementById('proc-preview').style.display = '';
     document.getElementById('np-save-btn').disabled = false;
   }).catch(function(err) {
+    if (uploadId !== procUploadSeq) return;
     console.error(err);
     setProcStatus('讀取失敗：' + (err.message || '請換檔案格式再試'), true);
   });
@@ -626,26 +666,16 @@ function findDocxBudgetImage(zip) {
   });
 }
 
-var ocrWorkerPromise = null;
-function getOcrWorker() {
-  if (!window.Tesseract) return Promise.reject(new Error('OCR 元件未載入'));
-  if (!ocrWorkerPromise) {
-    ocrWorkerPromise = Tesseract.createWorker('chi_tra', 1, {
-      workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
-      corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core-lstm.wasm.js',
-      langPath: 'https://tessdata.projectnaptha.com/4.0.0_best',
-      logger: function() {}
-    });
-  }
-  return ocrWorkerPromise;
-}
-
 function ocrImageToText(blob, onProgress) {
-  return getOcrWorker().then(function(worker) {
-    if (onProgress) onProgress('經費表為圖片格式，正在 OCR 辨識…');
-    return worker.recognize(blob).then(function(r) {
-      return r.data.text || '';
-    });
+  if (!window.Tesseract) return Promise.resolve('');
+  if (onProgress) onProgress('經費表為圖片格式，正在 OCR 辨識…');
+  return Tesseract.recognize(blob, 'chi_tra', {
+    workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
+    corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core-lstm.wasm.js',
+    langPath: 'https://tessdata.projectnaptha.com/4.0.0_best',
+    logger: function() {}
+  }).then(function(r) {
+    return (r.data && r.data.text) ? r.data.text : '';
   }).catch(function(err) {
     console.warn('client OCR failed', err);
     return '';
@@ -695,6 +725,12 @@ function extractDocxBudgetOcr(file, onProgress) {
   });
 }
 
+function hasParsedBudgetTable(text) {
+  if (/===BUDGET_OCR===/.test(text)) return true;
+  if (/服務細項/.test(text) && /複價/.test(text)) return true;
+  return false;
+}
+
 function extractProcurementText(file, onProgress) {
   var name = (file.name || '').toLowerCase();
   if (name.endsWith('.txt') || name.endsWith('.text')) {
@@ -726,8 +762,7 @@ function extractProcurementText(file, onProgress) {
       if (!window.mammoth) throw new Error('Word 元件載入中，請稍後再試');
       return mammoth.extractRawText({ arrayBuffer: buf }).then(function(r) {
         var text = r.value || '';
-        var preview = parseServiceProposalText(text);
-        if (preview.workItems.length && preview.amount) return text;
+        if (hasParsedBudgetTable(text)) return text;
         return extractDocxBudgetOcr(file, onProgress).then(function(ocr) {
           return ocr ? text + '\n===BUDGET_OCR===\n' + ocr : text;
         });
@@ -889,7 +924,7 @@ function parseServiceProposalText(raw) {
   var budgetText = parseBudgetSection(text);
   result.workItems = budgetText ? parseBudgetWorkItems(budgetText) : [];
 
-  if (!result.workItems.length && /經費預算配置/.test(text)) {
+  if (!result.workItems.length && /經費預算配置/.test(text) && /===BUDGET_OCR===/.test(text)) {
     result.workItems = parseBudgetWorkItemsFromOcr(text);
   }
 
