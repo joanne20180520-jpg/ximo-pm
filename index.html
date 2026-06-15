@@ -1147,11 +1147,6 @@ function renderGanttFromData() {
   });
 }
 
-    PDATA[cardId] = { color: color, rows: rows };
-    buildG(cardId);
-  });
-}
-
 // ── 任務詳情 / 日誌 ──
 function getTaskContext(taskId) {
   var rec = tasksData.find(function(t){ return t.record_id === taskId; });
