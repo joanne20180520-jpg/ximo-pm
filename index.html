@@ -645,6 +645,7 @@ function fmt2(d) {
   var s = String(d.getFullYear()).slice(2) + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
   return s;
 }
+function fmtDate(ts) {
   if (!ts) return '—';
   var d = new Date(ts);
   return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
