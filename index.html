@@ -735,11 +735,15 @@ function loadData() {
     workitemsData = results[1].records || [];
     tasksData = results[2].records || [];
     expensesData = results[3].records || [];
+    var loadErr = results[0].error || results[1].error || results[2].error || results[3].error;
     renderProjects();
     renderTasks();
     renderGanttFromData();
     renderBudget();
     renderExpenses();
+    if (loadErr && !projectsData.length) {
+      showDataHint(loadErr);
+    }
     loadExtraData();
   }).catch(function(err) {
     console.error('載入失敗', err);
@@ -752,7 +756,18 @@ function loadData() {
     renderGanttFromData();
     renderBudget();
     renderExpenses();
+    showDataHint(err.message || '連線失敗');
   });
+}
+
+function showDataHint(msg) {
+  var hint = '<div style="padding:10px;margin:4px;background:#fff3e0;border-radius:6px;font-size:10px;color:#b06000;line-height:1.5">'
+    + 'Lark 資料目前讀不到。<br>請到 <b>Lark 開發者後台</b> 重新複製 App ID、App Secret，貼到 Vercel 環境變數後按 Redeploy。'
+    + '</div>';
+  var pl = document.getElementById('pl-projects');
+  if (pl && pl.innerHTML.indexOf('Lark 資料目前讀不到') < 0) pl.innerHTML = hint + pl.innerHTML;
+  var ga = document.getElementById('gantt-area');
+  if (ga && !ga.children.length) ga.innerHTML = hint;
 }
 
 function ntf(n) { return 'NT$' + Math.round(n).toLocaleString(); }
@@ -1053,6 +1068,11 @@ function renderGanttFromData() {
       });
     }
   });
+
+  if (!projectsData.length) {
+    ganttArea.innerHTML = '<div style="padding:20px;color:var(--t3);font-size:12px;text-align:center">尚無時程資料</div>';
+    return;
+  }
 
   projectsData.forEach(function(rec, i) {
     var f = rec.fields;
