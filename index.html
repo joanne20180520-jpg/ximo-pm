@@ -22,17 +22,17 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 /* body */
 #body{position:fixed;top:var(--th);left:0;right:0;bottom:0;display:flex;gap:8px;padding:8px}
 
-/* toggle buttons */
-.tog{position:fixed;top:50%;transform:translateY(-50%);width:20px;height:52px;background:var(--surface);border:1px solid var(--border);cursor:pointer;color:var(--t2);display:flex;align-items:center;justify-content:center;border-radius:6px;transition:all .15s;z-index:50}
+/* toggle buttons - fixed on screen edges */
+.tog{position:fixed;top:50%;transform:translateY(-50%);width:20px;height:52px;background:var(--surface);border:1px solid var(--border);cursor:pointer;color:var(--t2);display:flex;align-items:center;justify-content:center;font-size:10px;z-index:200;box-shadow:var(--shadow);transition:left .25s,right .25s}
 .tog:hover{background:var(--sf2);color:var(--text)}
 #tl{left:calc(8px + var(--lw));border-left:none;border-radius:0 6px 6px 0}
 #tr{right:calc(8px + var(--rw));border-right:none;border-radius:6px 0 0 6px}
 
 /* panels */
-#lp{order:1;width:var(--lw);flex-shrink:0;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;transition:width .25s,opacity .25s;z-index:40}
+#lp{order:1;width:var(--lw);flex-shrink:0;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;transition:width .25s,opacity .25s,margin .25s}
 #lp.col{width:0;opacity:0;margin-right:-8px;pointer-events:none}
 #cp{order:2;flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
-#rp{order:3;width:var(--rw);flex-shrink:0;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;transition:width .25s,opacity .25s;z-index:40}
+#rp{order:3;width:var(--rw);flex-shrink:0;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;transition:width .25s,opacity .25s,margin .25s}
 #rp.col{width:0;opacity:0;margin-left:-8px;pointer-events:none}
 
 /* A区 */
@@ -47,12 +47,11 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .pr .dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.5);flex-shrink:0}
 .pr .arr{margin-left:auto;font-size:9px;opacity:.8;transition:transform .2s}
 .pr.open .arr{transform:rotate(90deg)}
-.pr-pm{font-size:10px;opacity:0.9;margin-left:4px}
-.pr-date{font-size:10px;opacity:0.8}
 .sl2{display:none;margin:2px 0 3px 4px}
 .sl2.open{display:block}
 .si{padding:5px 9px 5px 12px;font-size:11px;color:var(--t2);font-weight:500;cursor:pointer;border-radius:var(--rs);display:flex;align-items:center;justify-content:space-between}
 .si:hover{background:var(--sf2)}
+.sd{font-size:10px;background:var(--border);color:var(--t2);padding:1px 5px;border-radius:3px;font-weight:600}
 
 /* B区 */
 .bs{display:flex;flex-direction:column;flex:1;overflow:hidden;min-height:0;border-top:1px solid var(--border)}
@@ -65,7 +64,6 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .tc{background:var(--sf2);border-radius:8px;padding:1px 5px;font-size:9px;color:var(--t3);font-weight:600}
 .ti{padding:7px 9px;border-radius:var(--rs);cursor:pointer;margin-bottom:4px;background:var(--surface);border:1px solid var(--border);transition:border-color .1s}
 .ti:hover{border-color:var(--t3)}
-.ti.selected{border-color:var(--accent);background:rgba(26,25,22,0.05)}
 .tit{display:flex;align-items:flex-start;justify-content:space-between;gap:5px}
 .tn{font-size:12px;font-weight:600}
 .tm{font-size:10px;color:var(--t3);margin-top:1px}
@@ -129,20 +127,19 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .gdr{display:flex;height:26px;border-bottom:1px solid var(--border);background:var(--sf2);position:relative}
 .gdc{display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--t3);border-right:1px solid rgba(226,221,216,0.4);flex-shrink:0}
 .gdc.tdc{background:rgba(220,50,50,0.07);color:#c0392b;font-weight:700}
-.gtr{height:44px;border-bottom:1px solid var(--border);position:relative;cursor:pointer}
+.gtr{height:44px;border-bottom:1px solid var(--border);position:relative}
 .gtr:last-child{border-bottom:none}
-.gbar{position:absolute;height:20px;top:50%;transform:translateY(-50%);border-radius:4px;display:flex;align-items:center;padding:0 6px;font-size:10px;color:rgba(255,255,255,.95);white-space:nowrap;cursor:pointer}
+.gbar{position:absolute;height:20px;top:50%;transform:translateY(-50%);border-radius:4px;display:flex;align-items:center;padding:0 6px;font-size:10px;color:rgba(255,255,255,.95);white-space:nowrap;overflow:hidden;font-weight:500;cursor:pointer}
 .gbar:hover{opacity:.82}
 .tline{position:absolute;top:0;bottom:0;width:2px;background:#e03030;z-index:5;pointer-events:none}
 .tlineh{position:absolute;top:0;width:2px;height:52px;background:#e03030;z-index:5;pointer-events:none}
 .gsb{padding:5px 14px 8px;display:flex;align-items:center;gap:7px;border-top:1px solid var(--border)}
-.gsb button{width:22px;height:22px;border:1px solid var(--border);border-radius:var(--rs);background:var(--sf2);cursor:pointer;font-size:11px;color:var(--t2);display:flex;align-items:center;justify-content:center}
-.gsb button:hover{background:var(--accent);color:#fff}
+.gsb button{width:22px;height:22px;border:1px solid var(--border);border-radius:var(--rs);background:var(--sf2);cursor:pointer;font-size:11px;color:var(--t2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .gsb input[type=range]{flex:1;height:4px;cursor:pointer;accent-color:var(--t3)}
 
 /* gantt controls */
 .gctl{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px;padding:7px 12px;display:flex;align-items:center;gap:7px}
-.gnb{width:26px;height:26px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--t2);transition:all .15s}
+.gnb{width:26px;height:26px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--t2)}
 .gnb:hover{background:var(--sf2)}
 .tbtn{padding:4px 10px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);cursor:pointer;font-size:11px;color:var(--t2);font-weight:500}
 .tbtn:hover{background:var(--sf2)}
@@ -153,6 +150,33 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .vb.active{background:var(--accent);color:#fff}
 .vb:hover:not(.active){background:var(--sf2)}
 
+/* budget */
+.bo{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.bi .lb{font-size:10px;color:var(--t3);margin-bottom:2px}
+.bi .vl{font-size:12px;font-weight:600}
+.bbw{padding:0 14px 10px}
+.bbt{height:5px;background:var(--sf2);border-radius:3px;margin-top:5px;overflow:hidden}
+.bbf{height:100%;border-radius:3px}
+.wir{padding:7px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);cursor:pointer}
+.wir:hover{background:var(--sf2)}
+.wir:last-child{border-bottom:none}
+.wn{font-size:12px;flex:1}
+.wns{display:flex;gap:12px}
+.wl{font-size:10px;color:var(--t3)}
+.wv{font-size:11px;font-weight:600}
+
+/* table */
+.dt{width:100%;border-collapse:collapse}
+.dt th{padding:7px 10px;font-size:10px;font-weight:600;color:var(--t3);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+.dt td{padding:7px 10px;font-size:11px;border-bottom:1px solid var(--border)}
+.dt tr:last-child td{border-bottom:none}
+.dt tr:hover td{background:var(--sf2)}
+.gr td{background:var(--sf2);font-weight:600;font-size:11px;color:var(--t2);padding:5px 10px}
+.st{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500}
+.std{background:#e6f4ee;color:#1a7a45}
+.stp{background:#fff3e0;color:#b06000}
+.ds{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500;background:#fff3e0;color:#b06000}
+
 /* payment form */
 .pfw{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px}
 .fg{margin-bottom:11px}
@@ -160,15 +184,20 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .fg input,.fg select,.fg textarea{width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;background:var(--sf2);color:var(--text);outline:none;font-family:inherit}
 .fg input:focus,.fg select:focus{border-color:var(--accent);background:#fff}
 .ntags{display:flex;gap:5px;flex-wrap:wrap}
-.ntag{padding:3px 10px;border-radius:20px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--sf2);color:var(--t2);transition:all .15s}
+.ntag{padding:3px 10px;border-radius:20px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--sf2);color:var(--t2)}
 .ntag.on{background:#f5c518;border-color:#e0b000;color:#5a4200}
+.ntag.on2{background:#1a4a7a;border-color:#1a4a7a;color:#fff}
 .bsub{width:100%;padding:9px;border-radius:var(--rs);border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;margin-top:6px}
+
+/* avatar */
+.av{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0}
+.avl{background:#1a4a7a}.avy{background:#2d6a4f}
 
 /* popup */
 .po{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:300;display:none;align-items:center;justify-content:center}
 .po.open{display:flex}
 .pp{background:var(--surface);border-radius:var(--r);width:520px;max-width:90vw;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
-.ppw{width:820px}
+.ppw{width:660px}
 .pph{padding:13px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:1}
 .pph h3{font-size:14px;font-weight:700}
 .ppc{border:none;background:none;cursor:pointer;font-size:16px;color:var(--t3);padding:3px;border-radius:4px}
@@ -178,48 +207,28 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .ppf{padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:7px}
 .bcan{padding:6px 13px;border-radius:var(--rs);border:1px solid var(--border);background:var(--sf2);font-size:12px;cursor:pointer;color:var(--t2)}
 .bpri{padding:6px 16px;border-radius:var(--rs);border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer}
-
-/* 列印預覽 */
-.print-preview{padding:20px;background:#fff;color:#1a1916;font-family:-apple-system,'PingFang TC',sans-serif;font-size:13px}
-.print-header{display:flex;justify-content:space-between;margin-bottom:20px}
-.print-title{font-size:24px;font-weight:700;text-align:center;margin:20px 0}
-.print-table{width:100%;border-collapse:collapse;margin:15px 0}
-.print-table th,.print-table td{border:1px solid #333;padding:10px;text-align:left;font-size:12px}
-.print-table th{background:#f5f5f5;font-weight:600}
-.print-signature{margin-top:30px;display:flex;justify-content:space-around}
-.print-sig-item{text-align:center;min-width:120px}
-.print-sig-line{border-bottom:1px solid #333;min-height:60px;margin-bottom:10px}
-
-/* avatar */
-.av{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0}
-.avl{background:#1a4a7a}
-
-/* table */
-.dt{width:100%;border-collapse:collapse}
-.dt th{padding:7px 10px;font-size:10px;font-weight:600;color:var(--t3);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
-.dt td{padding:7px 10px;font-size:11px;border-bottom:1px solid var(--border)}
-.dt tr:last-child td{border-bottom:none}
-.dt tr:hover td{background:var(--sf2)}
+.fbox{background:var(--sf2);border-radius:var(--rs);padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.fi .fl{font-size:10px;color:var(--t3);margin-bottom:1px}
+.fi .fv{font-size:12px;font-weight:600}
+.slist{margin:4px 0 6px}
+.srow{display:grid;grid-template-columns:1fr 80px 1fr 70px 50px;gap:6px;align-items:center;margin-bottom:5px;padding:6px;background:var(--sf2);border-radius:var(--rs)}
+.srow input,.srow select{padding:5px 6px;border:1px solid var(--border);border-radius:3px;font-size:11px;background:#fff;font-family:inherit}
+.dc2{display:flex;align-items:center;gap:3px}
+.dc2 button{width:17px;height:17px;border:1px solid var(--border);border-radius:3px;background:#fff;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center}
+.dc2 span{font-size:11px;font-weight:600;min-width:16px;text-align:center}
+.bads{width:100%;padding:6px;border:1px dashed var(--border);border-radius:var(--rs);background:none;color:var(--t3);cursor:pointer;font-size:11px}
+.bads:hover{border-color:var(--accent);color:var(--accent)}
 
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-
-@media print {
-  body { background: #fff; }
-  #topbar, #tl, #tr, #lp, #rp, .ppf, .print-buttons { display: none !important; }
-  #cp { position: static; width: 100%; height: auto; }
-  #tabs { display: none; }
-  #content { flex: none; overflow: visible; padding: 0; background: #fff; }
-  .page { display: block !important; }
-  .print-preview { padding: 40px; }
-}
 </style>
 </head>
 <body>
 
 <div id="topbar"><div class="logo">璽墨</div></div>
 
+<!-- 收合按鈕 -->
 <button class="tog" id="tl" onclick="toggleL()">◀</button>
 <button class="tog" id="tr" onclick="toggleR()">▶</button>
 
@@ -229,14 +238,21 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 <div id="lp">
   <div class="ah">
     <span class="sl">Projects</span>
+    <div class="sa">
+      <button class="badd" onclick="op('pp-proj')">＋標案</button>
+      <button class="badd" onclick="op('pp-work')">＋工作項目</button>
+    </div>
   </div>
   <div class="pl" id="pl-projects">
     <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
   </div>
   <div class="bs">
-    <div class="bh"><span class="sl">任務清單</span></div>
-    <div class="ft" id="filter-tags">
-      <span class="ftag" style="background:var(--accent);color:#fff" onclick="filterTasks(this,'')">全部</span>
+    <div class="bh"><span class="sl">任務清單</span><button class="badd" onclick="op('pp-task')">＋ 新增</button></div>
+    <div class="ft">
+      <span class="ftag" style="background:var(--accent);color:#fff" onclick="sf(this)">全部</span>
+      <span class="ftag" onclick="sf(this,'var(--c1)')">高雄山茶</span>
+      <span class="ftag" onclick="sf(this,'var(--c2)')">台中農場</span>
+      <span class="ftag" onclick="sf(this,'var(--c3)')">台南農場</span>
     </div>
     <div class="tl2" id="task-list-body">
       <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
@@ -285,14 +301,14 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
     <!-- 付款金費單 -->
     <div id="pg-p" class="page">
-      <div class="dc"><div class="dch"><h3>付款申請單</h3></div>
+      <div class="dc"><div class="dch"><h3>付款申請單</h3><span style="font-size:11px;color:var(--t3);margin-left:8px">填寫後確認資料列印</span></div>
         <div class="pfw">
           <div>
             <div class="fg"><label>申請部門</label><input type="text" id="p-dept" value="璽墨"></div>
-            <div class="fg"><label>申請日期</label><input type="date" id="p-date"></div>
-            <div class="fg"><label>支付對象</label><input type="text" id="p-payee" placeholder="請輸入"></div>
-            <div class="fg"><label>廠商名稱</label><input type="text" id="p-vendor" placeholder="請輸入"></div>
-            <div class="fg"><label>支付性質</label><div class="ntags" id="p-nature">
+            <div class="fg"><label>申請日期</label><input type="date" id="p-date" value="2026-06-12"></div>
+            <div class="fg"><label>支付對象</label><input type="text" id="p-payee" placeholder="OOO"></div>
+            <div class="fg"><label>廠商名稱</label><input type="text" id="p-vendor" placeholder="OOOO"></div>
+            <div class="fg"><label>支付性質</label><div class="ntags">
               <span class="ntag" onclick="togNtag(this)">貨款</span>
               <span class="ntag" onclick="togNtag(this)">工程款</span>
               <span class="ntag" onclick="togNtag(this)">薪工資</span>
@@ -303,10 +319,10 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
           </div>
           <div>
             <div class="fg"><label>支付方式</label><select id="p-method"><option>現金</option><option>匯款</option><option>支票</option></select></div>
-            <div class="fg"><label>事由</label><input type="text" id="p-reason" placeholder="請輸入"></div>
-            <div class="fg"><label>備註</label><input type="text" id="p-remark" placeholder="請輸入"></div>
-            <div class="fg"><label>付款總金額</label><input type="text" id="p-total" placeholder="請輸入"></div>
-            <button class="bsub" onclick="previewPayment()">確認資料預覽</button>
+            <div class="fg"><label>事由</label><input type="text" id="p-reason" placeholder="填寫付款事由"></div>
+            <div class="fg"><label>備註</label><input type="text" id="p-remark" placeholder="備註說明"></div>
+            <div class="fg"><label>付款總金額</label><input type="text" id="p-total" placeholder="NT$0"></div>
+            <button class="bsub" onclick="prevPay()">確認資料預覽</button>
           </div>
         </div>
       </div>
@@ -314,12 +330,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
     <!-- 設計任務單 -->
     <div id="pg-d" class="page">
-      <div class="dc"><div class="dch"><h3>設計任務單</h3></div>
-        <table class="dt">
-          <thead><tr><th>項目</th><th>狀態</th><th>設計師</th><th>初稿</th><th>完稿</th><th>成品</th></tr></thead>
-          <tbody id="designs-body"><tr><td colspan="6" style="text-align:center;color:var(--t3)">載入中...</td></tr></tbody>
-        </table>
-      </div>
+      <div class="dc"><div class="dch"><div class="pdot" style="background:var(--c1)"></div><h3>山茶評鑒</h3><button class="bsm" style="margin-left:auto" onclick="op('pp-des')">＋ 新增設計任務單</button></div><div style="overflow-x:auto"><table class="dt"><thead><tr><th>設計項目名稱</th><th>所屬工作項目</th><th>負責PM</th><th>項目</th><th>設計需求</th><th>設計師</th><th>狀態</th><th>預算</th><th>初稿</th><th>完稿</th><th>成品</th></tr></thead><tbody><tr class="gr"><td colspan="11">Lynn · 1筆</td></tr><tr><td style="font-weight:500">制度修改</td><td>山茶評鑒</td><td><span class="av avy">Y</span> Yann</td><td>A</td><td>Logo修改</td><td><span class="av avl">L</span> Lynn</td><td><span class="ds">進行中</span></td><td>—</td><td>6/12</td><td>6/25</td><td>8/14</td></tr></tbody></table></div></div>
     </div>
 
   </div>
@@ -327,517 +338,686 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
 <!-- ══ 右側 E ══ -->
 <div id="rp">
-  <div class="eh"><h3>日誌</h3></div>
-  <div class="jl" id="journal-list">
-    <div style="padding:12px;color:var(--t3);font-size:11px">選擇任務新增日誌</div>
+  <div class="eh"><h3>墨日誌小天地</h3><div class="dn"><button>‹</button><span style="font-size:12px;font-weight:600">6/11</span><button>›</button></div></div>
+  <div class="jl">
+    <div class="ji"><div class="jt"><span class="av avl">L</span><span class="jn">Lynn</span><span class="jpt" style="background:var(--c1)">高雄山茶</span></div><div class="jtask">拜訪OO茶主 · 6/12 · 進度50%</div><div class="jnote">今日與茶主確認樣品規格，下次帶合約</div></div>
+    <div class="ji"><div class="jt"><span class="av avy">Y</span><span class="jn">Yann</span><span class="jpt" style="background:var(--c2)">台中農場</span></div><div class="jtask">購買禮物 · 6/18 · 進度70%</div><div class="jnote">禮盒已選定，等待報價確認</div></div>
+    <div class="ji"><div class="jt"><span class="av avl">L</span><span class="jn">Lynn</span><span class="jpt" style="background:var(--c1)">高雄山茶</span></div><div class="jtask">茶葉樣品確認 · 6/15 · 進度30%</div><div class="jnote">樣品已收到，待品質確認</div></div>
   </div>
 </div>
 
 </div><!-- /body -->
 
 <!-- ══ POPUPS ══ -->
-<div class="po" id="pp-task"><div class="pp"><div class="pph"><h3 id="modal-task-name">任務詳情</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fbox" style="background:var(--sf2);border-radius:var(--rs);padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px"><div><div style="font-size:10px;color:var(--t3);margin-bottom:1px">工作項目</div><div style="font-size:12px;font-weight:600" id="modal-workitem">-</div></div><div><div style="font-size:10px;color:var(--t3);margin-bottom:1px">負責人</div><div style="font-size:12px;font-weight:600" id="modal-assignee">-</div></div></div><div class="fbox" style="background:var(--sf2);border-radius:var(--rs);padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px"><div><div style="font-size:10px;color:var(--t3);margin-bottom:1px">預計完成日</div><div style="font-size:12px;font-weight:600" id="modal-due">-</div></div><div><div style="font-size:10px;color:var(--t3);margin-bottom:1px">進度</div><div style="font-size:12px;font-weight:600" id="modal-progress">-</div></div></div><div class="fg"><label>新增日誌</label><textarea id="journal-content" placeholder="記錄進度..." style="height:80px"></textarea></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri" onclick="addJournal()">新增日誌</button></div></div></div>
+<div class="po" id="pp-proj"><div class="pp"><div class="pph"><h3>建立新標案</h3><button class="ppc" onclick="cl('pp-proj')">✕</button></div><div class="ppb2"><div><div class="fg"><label>標案名稱</label><input type="text" placeholder="115花蓮山茶"></div><div class="fg"><label>主PM</label><select><option>Lynn</option><option>Yann</option></select></div><div class="fg"><label>合約開始日</label><input type="date"></div><div class="fg"><label>合約結束日</label><input type="date"></div><div class="fg"><label>合約金額</label><input type="text" placeholder="NT$0" id="ca" oninput="calcP()"></div></div><div><div class="fbox"><div class="fi"><div class="fl">合約未稅金額</div><div class="fv" id="fu">—</div></div><div class="fi"><div class="fl">可用成本</div><div class="fv" id="fc">—</div></div><div class="fi"><div class="fl">已支出合計</div><div class="fv">NT$0</div></div><div class="fi"><div class="fl">剩餘預算</div><div class="fv" id="fr">—</div></div></div><div style="font-size:10px;color:var(--t3);line-height:1.8">合約未稅 = 合約金額 ÷ 1.05<br>可用成本 = 合約未稅 ÷ 2<br>剩餘預算 = 可用成本 − 已支出</div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-proj')">取消</button><button class="bpri">新增</button></div></div></div>
+
+<div class="po" id="pp-work"><div class="pp ppw"><div class="pph"><h3>建立標案的工作項目</h3><button class="ppc" onclick="cl('pp-work')">✕</button></div><div class="ppb"><div class="fg"><label>標案</label><select><option>115高雄山茶</option><option>116台中農場</option></select></div><div class="fg"><label>開始日期</label><input type="date"></div><div style="display:grid;grid-template-columns:1fr 90px 1fr 70px 50px;gap:6px;padding:4px 0;font-size:10px;color:var(--t3)"><span>工作項目名稱</span><span>天數</span><span>負責夥伴</span><span>可用成本</span><span>權重</span></div><div class="slist" id="sl"><div class="srow"><input type="text" placeholder="成果發表"><div class="dc2"><button onclick="adj(this,-1)">−</button><span>6</span><button onclick="adj(this,1)">＋</button></div><select><option>林OO</option><option>張OO</option></select><input type="text" placeholder="NT$30,000"><input type="text" placeholder="40%"></div></div><button class="bads" onclick="addS()">＋ 新增工作項目</button></div><div class="ppf"><button class="bcan" onclick="cl('pp-work')">取消</button><button class="bpri">新增</button></div></div></div>
+
+<div class="po" id="pp-task"><div class="pp"><div class="pph"><h3>建立新任務</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fg"><label>任務名稱</label><input type="text" placeholder="拜訪OO茶主"></div><div class="fg"><label>負責人</label><select><option>Lynn</option><option>Yann</option></select></div><div class="fg"><label>所屬工作項目</label><select><option>三茶評鑒</option><option>成果展</option><option>南投茶園</option></select></div><div class="fg"><label>預計完成日</label><input type="date"></div><div class="fg"><label>進度狀態</label><select><option>未開始</option><option>進行中10%</option><option>進行中20%</option><option>進行中30%</option><option>進行中40%</option><option>進行中50%</option><option>進行中60%</option><option>進行中70%</option><option>進行中80%</option><option>進行中90%</option><option>已完成</option></select></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri">新增</button></div></div></div>
+
+<div class="po" id="pp-td"><div class="pp"><div class="pph" style="background:var(--c1)"><h3 style="color:#fff">拜訪OO茶主</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-td')">✕</button></div><div class="ppb"><div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center"><span style="font-size:11px;background:var(--sf2);padding:2px 8px;border-radius:20px">三茶評鑒</span><span class="av avl">L</span><span style="font-size:12px;color:var(--t2)">Lynn · 6/12</span><span style="font-size:11px;color:#e05a00;font-weight:600">3DS</span></div><div class="fg"><label>進度狀態</label><select><option>進行中50%</option></select></div><div class="fg"><label>備註</label><textarea rows="3" placeholder="填寫今日進度備註..."></textarea></div><button class="bads" style="margin-bottom:8px" onclick="cl('pp-td');op('pp-task')">＋ 新增其他任務</button><button class="bsub" onclick="cl('pp-td');alert('已轉換為今日日報！')">轉換成今日日報</button></div></div></div>
+
+<div class="po" id="pp-exp"><div class="pp"><div class="pph"><h3>新增支出明細</h3><button class="ppc" onclick="cl('pp-exp')">✕</button></div><div class="ppb"><div class="fg"><label>支出細項</label><input type="text" placeholder="茶葉5斤"></div><div class="fg"><label>所屬工作項目</label><select><option>拜訪南投茶園</option><option>山茶評鑒</option></select></div><div class="fg"><label>負責人</label><select><option>Lynn</option><option>Yann</option></select></div><div class="fg"><label>預估花費</label><input type="text" placeholder="NT$0"></div><div class="fg"><label>日期</label><input type="date"></div><div class="fg"><label>實際金額</label><input type="text" placeholder="NT$0" id="aa" oninput="calcE()"></div><div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ua" readonly style="background:#f0f0f0;color:var(--t3)"></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-exp')">取消</button><button class="bpri">新增</button></div></div></div>
+
+<div class="po" id="pp-des"><div class="pp ppw"><div class="pph"><h3>建立新設計任務</h3><button class="ppc" onclick="cl('pp-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" placeholder="Logo"></div><div class="fg"><label>所屬工作項目</label><select><option>三茶評鑒</option><option>成果展</option></select></div><div class="fg"><label>負責PM</label><select><option>Lynn</option><option>Yann</option></select></div><div class="fg"><label>項目</label><input type="text" placeholder="A"></div><div class="fg"><label>設計需求</label><input type="text" placeholder="AA"></div><div class="fg"><label>設計師</label><select><option>張OO</option><option>林OO</option></select></div><div class="fg"><label>狀態</label><select><option>進行中</option><option>待開始</option><option>已完成</option></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date"></div><div class="fg"><label>完稿交付日</label><input type="date"></div><div class="fg"><label>成品交付日</label><input type="date"></div><div class="fg"><label>備註</label><textarea rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-des')">取消</button><button class="bpri">新增</button></div></div></div>
 
 <!-- 付款預覽 -->
-<div class="po" id="pp-payment-preview" style="align-items:flex-start;padding-top:30px"><div class="pp ppw" style="max-height:82vh;overflow-y:auto"><div class="pph"><h3>付款申請單預覽</h3><button class="ppc" onclick="cl('pp-payment-preview')">✕</button></div><div id="payment-preview-body" class="print-preview"></div><div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:7px;print-buttons"><button class="bcan" onclick="cl('pp-payment-preview')">取消</button><button class="bpri" onclick="sendPaymentNotification()">寄送通知</button><button class="bpri" onclick="window.print()">列印</button></div></div></div>
+<div class="po" id="pp-prev" style="align-items:flex-start;padding-top:30px"><div class="pp" style="width:820px;max-height:82vh"><div class="pph"><h3>付款申請單預覽</h3><button class="ppc" onclick="cl('pp-prev')">✕</button></div><div class="ppb" id="prev-body" style="padding:20px"></div><div class="ppf"><button class="bcan" onclick="cl('pp-prev')">返回修改</button><button class="bpri" onclick="doPrint()">🖨 確認列印</button></div></div></div>
 
 <script>
-// ══════════════════════════════════════════
-// 工具函數
-// ══════════════════════════════════════════
-
-function parseDate(str) {
-  if (!str) return null;
-  if (typeof str === 'number') return new Date(str);
-  var p = str.split('-');
-  if (p.length === 3) {
-    return new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
-  }
-  return new Date(str);
+// ── 基本互動 ──
+var lc=false, rc=false;
+function toggleL(){
+  lc=!lc;
+  document.getElementById('lp').classList.toggle('col',lc);
+  var btn=document.getElementById('tl');
+  btn.textContent=lc?'▶':'◀';
+  btn.style.left=lc?'0':'calc(8px + var(--lw))';
 }
-
-function toYMD(d) {
-  if (!d) return '';
-  return d.getFullYear() + '-'
-    + String(d.getMonth() + 1).padStart(2, '0') + '-'
-    + String(d.getDate()).padStart(2, '0');
+function toggleR(){
+  rc=!rc;
+  document.getElementById('rp').classList.toggle('col',rc);
+  var btn=document.getElementById('tr');
+  btn.textContent=rc?'◀':'▶';
+  btn.style.right=rc?'0':'calc(8px + var(--rw))';
 }
-
-function fmt(ts) {
-  if (!ts) return '';
-  var d = (typeof ts === 'number') ? new Date(ts) : parseDate(ts);
-  return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
-}
-
-function fmt2(d) {
-  return (d.getMonth() + 1) + '/' + d.getDate();
-}
-
-function dif(a, b) {
-  return Math.round((b - a) / 86400000);
-}
-
-function ntf(n) { return 'NT$' + Math.round(n).toLocaleString(); }
-
-// ══════════════════════════════════════════
-// 基本 UI 互動
-// ══════════════════════════════════════════
-var lc = false, rc = false;
-var currentSelectedTask = null;
-var TODAY = new Date(2026, 5, 12);
-
-function toggleL() {
-  lc = !lc;
-  document.getElementById('lp').classList.toggle('col', lc);
-  var btn = document.getElementById('tl');
-  btn.textContent = lc ? '▶' : '◀';
-  btn.style.left = lc ? '0' : 'calc(8px + var(--lw))';
-}
-
-function toggleR() {
-  rc = !rc;
-  document.getElementById('rp').classList.toggle('col', rc);
-  var btn = document.getElementById('tr');
-  btn.textContent = rc ? '◀' : '▶';
-  btn.style.right = rc ? '0' : 'calc(8px + var(--rw))';
-}
-
-function sw(btn, id) {
-  document.querySelectorAll('.ntab').forEach(function(t) { t.classList.remove('active'); });
-  document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+function tgp(row){row.classList.toggle('open');row.nextElementSibling.classList.toggle('open');}
+function sw(btn,id){
+  document.querySelectorAll('.ntab').forEach(function(t){t.classList.remove('active');});
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   btn.classList.add('active');
   document.getElementById(id).classList.add('active');
 }
-
-function op(id) { document.getElementById(id).classList.add('open'); }
-function cl(id) { document.getElementById(id).classList.remove('open'); }
-
-document.querySelectorAll('.po').forEach(function(o) {
-  o.addEventListener('click', function(e) { if (e.target === o) o.classList.remove('open'); });
+function sf(el,color){
+  document.querySelectorAll('.ftag').forEach(function(t){t.style.background='';t.style.color='';});
+  el.style.background=color||'var(--accent)';
+  el.style.color='#fff';
+}
+function op(id){document.getElementById(id).classList.add('open');}
+function cl(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.po').forEach(function(o){
+  o.addEventListener('click',function(e){if(e.target===o)o.classList.remove('open');});
 });
+function calcP(){
+  var v=parseInt(document.getElementById('ca').value.replace(/\D/g,''))||0;
+  var u=Math.round(v/1.05),c=Math.round(u/2);
+  var f=function(n){return n?'NT$'+n.toLocaleString():'—';};
+  document.getElementById('fu').textContent=f(u);
+  document.getElementById('fc').textContent=f(c);
+  document.getElementById('fr').textContent=f(c);
+}
+function calcE(){
+  var v=parseInt(document.getElementById('aa').value.replace(/\D/g,''))||0;
+  document.getElementById('ua').value=v?'NT$'+Math.round(v/1.05).toLocaleString():'';
+}
+function adj(btn,d){var s=btn.parentElement.querySelector('span');s.textContent=Math.max(1,parseInt(s.textContent)+d);}
+function addS(){
+  var r=document.createElement('div');r.className='srow';
+  r.innerHTML='<input type="text" placeholder="工作項目名稱"><div class="dc2"><button onclick="adj(this,-1)">−</button><span>5</span><button onclick="adj(this,1)">＋</button></div><select><option>林OO</option><option>張OO</option></select><input type="text" placeholder="NT$0"><input type="text" placeholder="0%">';
+  document.getElementById('sl').appendChild(r);
+}
 
-function togNtag(el) { el.classList.toggle('on'); }
+// ── 付款列印 ──
+function prevPay(){
+  var dept=document.getElementById('p-dept').value;
+  var date=document.getElementById('p-date').value;
+  var payee=document.getElementById('p-payee').value;
+  var vendor=document.getElementById('p-vendor').value;
+  var method=document.getElementById('p-method').value;
+  var reason=document.getElementById('p-reason').value;
+  var remark=document.getElementById('p-remark').value;
+  var total=document.getElementById('p-total').value;
+  var nats=[];
+  document.querySelectorAll('.ntag.on,.ntag.on2').forEach(function(t){nats.push(t.textContent);});
+  var nature=nats.join('、');
+  var nums=total.replace(/[^0-9]/g,'').padStart(8,'0');
+  var labs=['仟','佰','拾','萬','仟','佰','拾','元'];
+  var amtH='';
+  for(var i=0;i<8;i++){amtH+='<span style="border-bottom:1px solid #333;min-width:18px;display:inline-block;text-align:center;margin:0 1px">'+(nums[i]==='0'?'':nums[i])+'</span>'+labs[i]+' ';}
+  amtH+='整';
+  document.getElementById('prev-body').innerHTML=
+    '<div style="font-family:-apple-system,PingFang TC,sans-serif;font-size:13px;color:#1a1916">'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:4px">璽墨</div>'
+    +'<h2 style="text-align:center;font-size:20px;font-weight:700;margin-bottom:12px">付款申請單</h2>'
+    +'<div style="margin-bottom:10px">申請日期：'+date+'</div>'
+    +'<table style="width:100%;border-collapse:collapse;margin-bottom:12px">'
+    +'<tr><td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600;width:15%">申請部門</td><td style="border:1px solid #ccc;padding:8px;background:#e8f4e8;width:20%">'+dept+'</td>'
+    +'<td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600;width:15%">支付對象</td><td style="border:1px solid #ccc;padding:8px;background:#e8f4e8;width:20%">'+payee+'</td>'
+    +'<td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600;width:15%">廠商名稱</td><td style="border:1px solid #ccc;padding:8px;background:#e8f4e8">'+vendor+'</td></tr>'
+    +'<tr><td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600">支付性質</td><td colspan="3" style="border:1px solid #ccc;padding:8px">'+nature+'</td>'
+    +'<td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600">支付方式</td><td style="border:1px solid #ccc;padding:8px">'+method+'</td></tr>'
+    +'<tr><td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600">事由</td><td colspan="3" style="border:1px solid #ccc;padding:8px;background:#e8f4e8">'+reason+'</td>'
+    +'<td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600">備註</td><td style="border:1px solid #ccc;padding:8px;background:#e8f4e8">'+remark+'</td></tr>'
+    +'<tr><td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600">付款總金額</td>'
+    +'<td colspan="3" style="border:1px solid #ccc;padding:8px;font-size:12px">'+amtH+'</td>'
+    +'<td style="border:1px solid #ccc;padding:8px;background:#f5f5f5;font-weight:600">合計</td><td style="border:1px solid #ccc;padding:8px;font-weight:700">'+total+'</td></tr>'
+    +'</table>'
+    +'<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'
+    +'<tr><td style="border:1px solid #ccc;padding:12px 16px;text-align:center;width:33%">董事長室：<br><br></td>'
+    +'<td style="border:1px solid #ccc;padding:12px 16px;text-align:center;width:33%">主管：<br><br></td>'
+    +'<td style="border:1px solid #ccc;padding:12px 16px;text-align:center;width:33%">申請人：<br><br></td></tr>'
+    +'</table>'
+    +'<div style="font-size:11px;color:#666;display:flex;justify-content:space-between">'
+    +'<span>版本：01-2020-12</span>'
+    +'<span>財務部/主管：________ &nbsp; 出納：________ &nbsp; 會計：________</span>'
+    +'</div></div>';
+  op('pp-prev');
+}
+function doPrint(){
+  var content=document.getElementById('prev-body').innerHTML;
+  var w=window.open('','_blank','width=860,height=700');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>付款申請單</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:-apple-system,"PingFang TC",sans-serif;padding:28px}@media print{body{padding:14px}}</style></head><body>'+content+'<script>window.onload=function(){window.print();}<\/script></body></html>');
+  w.document.close();
+}
 
-// ══════════════════════════════════════════
-// API 資料載入
-// ══════════════════════════════════════════
+// ── 甘特圖 ──
+var PDATA={
+  c1:{color:'#2d6a4f',rows:[
+    {n:'山茶評鑒',m:'6/10–6/13 · 3Ds',w:'30/15',bars:[{s:'2026-06-10',e:'2026-06-13',l:'拜訪OO茶主',o:1},{s:'2026-06-25',e:'2026-07-02',l:'拜訪OO茶主',o:.45}]},
+    {n:'成果展',m:'6/14–6/20 · 5Ds',w:'40/25',bars:[{s:'2026-06-14',e:'2026-06-20',l:'拜訪OO茶主',o:1}]},
+    {n:'南投茶園',m:'6/12–6/18 · 5Ds',w:'20/15',bars:[{s:'2026-06-12',e:'2026-06-18',l:'拜訪OO茶主',o:1},{s:'2026-06-28',e:'2026-07-05',l:'拜訪OO茶主',o:.45}]},
+    {n:'農場主拜訪',m:'6/20–6/26 · 5Ds',w:'10/5',bars:[{s:'2026-07-08',e:'2026-07-15',l:'拜訪OO茶主',o:.45}]}
+  ]},
+  c2:{color:'#1a4a7a',rows:[
+    {n:'台中評鑒',m:'6/10–6/13',w:'30/20',bars:[{s:'2026-06-10',e:'2026-06-13',l:'拜訪OO茶主',o:1},{s:'2026-06-25',e:'2026-07-02',l:'拜訪OO茶主',o:.45}]},
+    {n:'成果發表',m:'6/14–6/18',w:'40/30',bars:[{s:'2026-06-14',e:'2026-06-18',l:'拜訪OO茶主',o:1}]},
+    {n:'茶農訪視',m:'6/19–6/23',w:'30/15',bars:[{s:'2026-06-19',e:'2026-06-23',l:'拜訪OO茶主',o:1},{s:'2026-07-08',e:'2026-07-15',l:'拜訪OO茶主',o:.45}]}
+  ]}
+};
+var vMode='month', vOff=0, CW=28;
+var TODAY=new Date(2026,5,12);
+
+function dif(a,b){return Math.round((b-a)/86400000);}
+
+function getRange(){
+  if(vMode==='week'){
+    var s=new Date(2026,4,1);s.setDate(s.getDate()+vOff*7);
+    var e=new Date(s);e.setDate(e.getDate()+27);return{s:s,e:e};
+  }else if(vMode==='month'){
+    return{s:new Date(2026,4+vOff,1),e:new Date(2026,7+vOff,0)};
+  }else{
+    return{s:new Date(2026,3+vOff*3,1),e:new Date(2026,6+vOff*3+3,0)};
+  }
+}
+
+function buildG(key){
+  var proj=PDATA[key];
+  var r=getRange(),vs=r.s,ve=r.e;
+  var total=dif(vs,ve)+1,tw=total*CW;
+  var toff=dif(vs,TODAY),tx=toff*CW;
+
+  // months
+  var mHTML='',mc=new Date(vs.getFullYear(),vs.getMonth(),1);
+  while(mc<=ve){
+    var ms=new Date(Math.max(mc,vs)),me2=new Date(Math.min(new Date(mc.getFullYear(),mc.getMonth()+1,0),ve));
+    var days=dif(ms,me2)+1;
+    mHTML+='<div class="gmc" style="width:'+(days*CW)+'px">'+(mc.getMonth()+1)+'月</div>';
+    mc.setMonth(mc.getMonth()+1);
+  }
+
+  // dates
+  var dHTML='';
+  for(var i=0;i<total;i++){
+    var d=new Date(vs);d.setDate(d.getDate()+i);
+    var isTd=dif(TODAY,d)===0;
+    var lbl=(d.getDate()===1||d.getDate()%5===0)?((d.getMonth()+1)+'/'+d.getDate()):'';
+    dHTML+='<div class="gdc'+(isTd?' tdc':'')+'" style="width:'+CW+'px">'+lbl+'</div>';
+  }
+
+  var tlHTML=toff>=0&&toff<=total?'<div class="tline" style="left:'+tx+'px"></div>':'';
+  var tlHdr=toff>=0&&toff<=total?'<div class="tlineh" style="left:'+tx+'px"></div>':'';
+
+  // fixed left
+  var fixH='<div class="gfh"><span>工作項目</span></div>';
+  proj.rows.forEach(function(row){
+    fixH+='<div class="grl"><div class="grn">'+row.n+'</div><div class="grm">'+row.m+'</div></div>';
+  });
+
+  // timeline
+  var tmH='<div class="gmr" style="width:'+tw+'px;position:relative">'+mHTML+tlHdr+'</div>';
+  tmH+='<div class="gdr" style="width:'+tw+'px;position:relative">'+dHTML+'</div>';
+  proj.rows.forEach(function(row){
+    var bH=tlHTML;
+    row.bars.forEach(function(bar){
+      var bs=new Date(bar.s),be=new Date(bar.e);
+      var bx=dif(vs,bs)*CW,bw=(dif(bs,be)+1)*CW-2;
+      if(bx+bw<0||bx>tw)return;
+      var ax=Math.max(0,bx),aw=Math.min(bw,tw-ax);
+      bH+='<div class="gbar" style="left:'+ax+'px;width:'+aw+'px;background:'+proj.color+';opacity:'+bar.o+'">'+bar.l+'</div>';
+    });
+    tmH+='<div class="gtr" style="width:'+tw+'px">'+bH+'</div>';
+  });
+
+  var gb=document.getElementById('gb-'+key);
+  gb.innerHTML='<div class="gf">'+fixH+'</div><div class="gsw" id="gsw-'+key+'"><div class="gtc" style="width:'+tw+'px">'+tmH+'</div></div>';
+
+  var sw2=document.getElementById('gsw-'+key);
+  var rng=document.getElementById('rng-'+key);
+  sw2.onscroll=function(){
+    var max=sw2.scrollWidth-sw2.clientWidth;
+    if(max>0)rng.value=(sw2.scrollLeft/max)*100;
+  };
+  if(toff>5)sw2.scrollLeft=Math.max(0,tx-200);
+}
+
+function updLabel(){
+  var r=getRange();
+  document.getElementById('drl').textContent=(r.s.getMonth()+1)+'/'+r.s.getDate()+' — '+(r.e.getMonth()+1)+'/'+r.e.getDate();
+}
+function renderAll(){
+  updLabel();
+  // 重新渲染所有甘特圖
+  if(projectsData.length > 0) {
+    renderGanttFromData();
+  }
+}
+function setV(m,btn){
+  vMode=m;vOff=0;
+  document.querySelectorAll('.vb').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  renderAll();
+}
+function shiftV(d){vOff+=d;renderAll();}
+function goToday(){
+  vOff=0;renderAll();
+  ['c1','c2'].forEach(function(k){
+    var r=getRange(),tx2=dif(r.s,TODAY)*CW;
+    var el=document.getElementById('gsw-'+k);
+    if(el)el.scrollLeft=Math.max(0,tx2-200);
+  });
+}
+function scG(k,d){var el=document.getElementById('gsw-'+k);if(el)el.scrollLeft+=d;}
+function scR(k,v){var el=document.getElementById('gsw-'+k);if(el){var max=el.scrollWidth-el.clientWidth;el.scrollLeft=(v/100)*max;}}
+
+// ── 取得含某字的欄位值 ──
+function getField(fields, keyword) {
+  var keys = Object.keys(fields);
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i].indexOf(keyword) >= 0) return fields[keys[i]];
+  }
+  return null;
+}
+var PROJECT_COLORS = [
+  '#2d6a4f','#1a4a7a','#7a1a2e','#4a7a1a','#5a3a8a','#7a5a1a','#1a6a7a'
+];
+
+// ── 從 API 讀取資料 ──
 var API = '/api/lark';
 var projectsData = [];
 var workitemsData = [];
 var tasksData = [];
+
+function fmt(ts) {
+  if (!ts) return '';
+  var d = new Date(ts);
+  return (d.getMonth()+1) + '/' + d.getDate();
+}
+
 var expensesData = [];
-var designsData = [];
 
 function loadData() {
   document.getElementById('pl-projects').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
   document.getElementById('task-list-body').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
 
   Promise.all([
-    fetch(API + '?table=projects').then(function(r) { return r.json(); }),
-    fetch(API + '?table=workitems').then(function(r) { return r.json(); }),
-    fetch(API + '?table=tasks').then(function(r) { return r.json(); }),
-    fetch(API + '?table=expenses').then(function(r) { return r.json(); }),
-    fetch(API + '?table=designs').then(function(r) { return r.json(); })
+    fetch(API + '?table=projects').then(function(r){return r.json();}),
+    fetch(API + '?table=workitems').then(function(r){return r.json();}),
+    fetch(API + '?table=tasks').then(function(r){return r.json();}),
+    fetch(API + '?table=expenses').then(function(r){return r.json();})
   ]).then(function(results) {
-    projectsData  = results[0].records || [];
+    projectsData = results[0].records || [];
     workitemsData = results[1].records || [];
-    tasksData     = results[2].records || [];
-    expensesData  = results[3].records || [];
-    designsData   = results[4].records || [];
+    tasksData = results[2].records || [];
+    expensesData = results[3].records || [];
     renderProjects();
     renderTasks();
+    renderGanttFromData();
     renderBudget();
     renderExpenses();
-    renderDesigns();
-    setTodayDate();
   }).catch(function(err) {
     console.error('載入失敗', err);
-    document.getElementById('pl-projects').innerHTML = '<div style="padding:12px;color:#c0392b;font-size:11px">載入失敗：' + err.message + '</div>';
+    document.getElementById('pl-projects').innerHTML = '<div style="padding:12px;color:#c0392b;font-size:11px">載入失敗，請重試</div>';
   });
 }
 
-// ══════════════════════════════════════════
-// 渲染 A 區：標案列表
-// ══════════════════════════════════════════
-function renderProjects() {
-  var html = '';
-  var PROJECT_COLORS = ['#2d6a4f', '#1a4a7a', '#7a1a2e', '#4a7a1a', '#5a3a8a'];
-  
-  projectsData.forEach(function(rec, i) {
-    var f = rec.fields;
-    var name  = f['標案名稱'] || '未命名';
-    var pm    = (f['主PM'] && f['主PM'][0]) ? f['主PM'][0].name : '待指派';
-    var startRaw = f['合約開始日'];
-    var endRaw   = f['合約結束日'];
-    var dateStr = '';
-    if (startRaw && endRaw) {
-      var s = parseDate(startRaw);
-      var e = parseDate(endRaw);
-      dateStr = fmt(s) + ' ~ ' + fmt(e);
-    }
-    var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
-    var progress = Math.round((f['標案完成%'] || 0) * 100);
-
-    html += '<div class="pi">'
-      + '<div class="pr" style="background:' + color + '">'
-      + '<div class="dot"></div>'
-      + '<span>' + name + '</span>'
-      + '<span class="pr-pm">' + pm + '</span>'
-      + '<span class="pr-date">' + dateStr + '</span>'
-      + '</div>'
-      + '</div>';
-  });
-  document.getElementById('pl-projects').innerHTML = html;
+function ntf(n) { return 'NT$' + Math.round(n).toLocaleString(); }
+function fmt2(d) {
+  var s = String(d.getFullYear()).slice(2) + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
+  return s;
 }
-
-// ══════════════════════════════════════════
-// 渲染 B 區：任務清單
-// ══════════════════════════════════════════
-function renderTasks() {
-  var wiMap = {};
-  workitemsData.forEach(function(wi) {
-    var f = wi.fields;
-    var projName = (f['所屬標案'] && f['所屬標案'].text_arr && f['所屬標案'].text_arr.length > 0)
-      ? f['所屬標案'].text_arr[0] : '';
-    wiMap[wi.record_id] = { name: f['工作項目名稱'] || '', project: projName };
-  });
-
-  var grouped = {};
-  tasksData.forEach(function(rec) {
-    var f        = rec.fields;
-    var taskName = f['任務名稱'] || '未命名';
-    var assignee = (f['負責人'] && f['負責人'][0]) ? f['負責人'][0].name : '';
-    var dueRaw   = f['預計完成日'];
-    var dueDate  = dueRaw ? fmt(dueRaw) : '';
-    var progress = f['進度數值'] || 0;
-    var wiArr    = f['所屬工作項目'];
-    var wiName = '', projName = '其他';
-
-    if (wiArr && wiArr.record_ids && wiArr.record_ids[0]) {
-      var wi = wiMap[wiArr.record_ids[0]];
-      if (wi) { wiName = wi.name; projName = wi.project || '其他'; }
-    }
-
-    if (!grouped[projName]) grouped[projName] = [];
-    grouped[projName].push({ name: taskName, assignee: assignee, due: dueDate, dueRaw: dueRaw, progress: progress, wiName: wiName, id: rec.record_id });
-  });
-
-  Object.keys(grouped).forEach(function(proj) {
-    grouped[proj].sort(function(a, b) { return (a.dueRaw || 0) - (b.dueRaw || 0); });
-  });
-
-  var PROJECT_COLORS = ['#2d6a4f', '#1a4a7a', '#7a1a2e', '#4a7a1a', '#5a3a8a'];
-  var projColors = {};
-  projectsData.forEach(function(rec, i) {
-    projColors[rec.fields['標案名稱'] || ''] = PROJECT_COLORS[i % PROJECT_COLORS.length];
-  });
-
-  var html = '';
-  projectsData.forEach(function(rec) {
-    var pname = rec.fields['標案名稱'] || '';
-    if (!grouped[pname] || grouped[pname].length === 0) return;
-    var color = projColors[pname] || '#888';
-    html += '<div class="tgl" data-proj="' + pname + '"><div class="tgd" style="background:' + color + '"></div>'
-      + pname + '<span class="tc">' + grouped[pname].length + '</span></div>';
-    grouped[pname].forEach(function(task) {
-      var remaining = '';
-      if (task.dueRaw) {
-        var due = parseDate(task.dueRaw);
-        var days = dif(TODAY, due);
-        remaining = days + 'D';
-        if (days < 0) remaining = '<span style="color:#c0392b">逾期</span>';
-      }
-      html += '<div class="ti" onclick="selectTaskFromList(this, \'' + task.id + '\')">'
-        + '<div class="tit"><div><div class="tn">' + task.name + '</div>'
-        + '<div class="tm">' + task.wiName + ' · ' + task.assignee + '</div></div>'
-        + '<div class="tr2"><div class="td2">' + task.due + '</div><div class="tds">' + remaining + '</div></div></div>'
-        + '<div class="tpb"><div class="tpf" style="width:' + task.progress + '%;background:' + color + '"></div></div>'
-        + '</div>';
-    });
-  });
-
-  document.getElementById('task-list-body').innerHTML = html;
-  updateFilterTags(projColors);
+function fmtDate(ts) {
+  if (!ts) return '—';
+  var d = new Date(ts);
+  return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
 }
+function togNtag(el) { el.classList.toggle('on'); }
 
-function updateFilterTags(projColors) {
-  var ft = document.getElementById('filter-tags');
-  var html = '<span class="ftag" style="background:var(--accent);color:#fff" onclick="filterTasks(this,\'\')">全部</span>';
-  projectsData.forEach(function(rec) {
-    var pname = rec.fields['標案名稱'] || '';
-    var color = projColors[pname] || '#888';
-    html += '<span class="ftag" onclick="filterTasks(this,\'' + pname + '\')" data-proj="' + pname
-      + '" style="border-color:' + color + ';color:' + color + '">' + pname + '</span>';
-  });
-  ft.innerHTML = html;
-}
-
-function filterTasks(el, proj) {
-  document.querySelectorAll('.ftag').forEach(function(t) {
-    if (t.dataset.proj) { t.style.background = ''; t.style.color = t.style.borderColor || ''; }
-    else { t.style.background = ''; t.style.color = ''; }
-  });
-  el.style.background = el.style.borderColor || 'var(--accent)';
-  el.style.color = '#fff';
-
-  if (!proj) {
-    document.querySelectorAll('#task-list-body > *').forEach(function(el) { el.style.display = ''; });
-    return;
-  }
-  var show = false;
-  document.querySelectorAll('#task-list-body > *').forEach(function(el) {
-    if (el.classList.contains('tgl')) { show = el.dataset.proj === proj; }
-    el.style.display = show ? '' : 'none';
-  });
-}
-
-// ══════════════════════════════════════════
-// 任務選擇和日誌
-// ══════════════════════════════════════════
-function selectTaskFromList(el, taskId) {
-  document.querySelectorAll('.ti').forEach(function(t) { t.classList.remove('selected'); });
-  el.classList.add('selected');
-  showTaskDetail(taskId);
-}
-
-function showTaskDetail(taskId) {
-  var task = tasksData.find(function(t) { return t.record_id === taskId; });
-  if (!task) return;
-  
-  currentSelectedTask = task;
-  var f = task.fields;
-  var taskName = f['任務名稱'] || '未命名';
-  var wiId = (f['所屬工作項目'] && f['所屬工作項目'].record_ids) ? f['所屬工作項目'].record_ids[0] : null;
-  var wi = wiId ? workitemsData.find(function(w) { return w.record_id === wiId; }) : null;
-  var wiName = wi ? (wi.fields['工作項目名稱'] || '') : '—';
-  var assignee = (f['負責人'] && f['負責人'][0]) ? f['負責人'][0].name : '—';
-  var dueRaw = f['預計完成日'];
-  var due = dueRaw ? fmt(dueRaw) : '—';
-  var progress = (f['進度數值'] || 0) + '%';
-
-  document.getElementById('modal-task-name').textContent = taskName;
-  document.getElementById('modal-workitem').textContent = wiName;
-  document.getElementById('modal-assignee').textContent = assignee;
-  document.getElementById('modal-due').textContent = due;
-  document.getElementById('modal-progress').textContent = progress;
-  document.getElementById('journal-content').value = '';
-  
-  op('pp-task');
-}
-
-function addJournal() {
-  if (!currentSelectedTask) return;
-  var content = document.getElementById('journal-content').value.trim();
-  if (!content) {
-    alert('請輸入日誌內容');
-    return;
-  }
-  
-  var f = currentSelectedTask.fields;
-  var taskName = f['任務名稱'] || '未命名';
-  var assignee = (f['負責人'] && f['負責人'][0]) ? f['負責人'][0].name : 'Unknown';
-  var wiId = (f['所屬工作項目'] && f['所屬工作項目'].record_ids) ? f['所屬工作項目'].record_ids[0] : null;
-  var wi = wiId ? workitemsData.find(function(w) { return w.record_id === wiId; }) : null;
-  var wiName = wi ? (wi.fields['工作項目名稱'] || '') : 'Unknown';
-  
-  var journalHTML = '<div class="ji">'
-    + '<div class="jt">'
-    + '<span class="av avl">L</span>'
-    + '<span class="jn">' + assignee + '</span>'
-    + '<span class="jpt" style="background:#2d6a4f">' + wiName + '</span>'
-    + '</div>'
-    + '<div class="jtask">' + taskName + '</div>'
-    + '<div class="jnote">' + content + '</div>'
-    + '</div>';
-  
-  var journalList = document.getElementById('journal-list');
-  if (journalList.innerHTML.includes('選擇任務新增日誌')) {
-    journalList.innerHTML = journalHTML;
-  } else {
-    journalList.innerHTML = journalHTML + journalList.innerHTML;
-  }
-  
-  cl('pp-task');
-}
-
-// ══════════════════════════════════════════
-// 費用管理
-// ══════════════════════════════════════════
+// ── 費用管理 ──
 function renderBudget() {
   var area = document.getElementById('budget-area');
   if (!area) return;
   var html = '';
-  var PROJECT_COLORS = ['#2d6a4f', '#1a4a7a', '#7a1a2e', '#4a7a1a', '#5a3a8a'];
-  
   projectsData.forEach(function(rec, i) {
-    var f       = rec.fields;
-    var name    = f['標案名稱'] || '未命名';
-    var color   = PROJECT_COLORS[i % PROJECT_COLORS.length];
+    var f = rec.fields;
+    var name = f['標案名稱'] || '未命名';
+    var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
     var contract = parseFloat(f['合約金額']) || 0;
-    var spent   = f['已支出合計'] || 0;
-    var remain  = f['剩餘預算'] || (contract - spent);
-    var pct     = contract > 0 ? Math.min(100, Math.round(spent / contract * 100)) : 0;
-
-    html += '<div class="dc"><div class="dch"><div class="pdot" style="background:' + color + '"></div>'
-      + '<h3>' + name + '</h3></div>'
-      + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;padding:12px 14px;border-bottom:1px solid var(--border)">'
-      + '<div><div style="font-size:10px;color:var(--t3);margin-bottom:2px">合約金額</div><div style="font-size:12px;font-weight:600">' + ntf(contract) + '</div></div>'
-      + '<div><div style="font-size:10px;color:var(--t3);margin-bottom:2px">已支出</div><div style="font-size:12px;font-weight:600">' + ntf(spent) + '</div></div>'
-      + '<div><div style="font-size:10px;color:var(--t3);margin-bottom:2px">剩餘</div><div style="font-size:12px;font-weight:600">' + ntf(remain) + '</div></div>'
-      + '<div><div style="font-size:10px;color:var(--t3);margin-bottom:2px">進度</div><div style="font-size:12px;font-weight:600">' + pct + '%</div></div>'
-      + '<div><div style="font-size:10px;color:var(--t3);margin-bottom:2px">狀態</div><div style="font-size:12px;font-weight:600;color:' + (pct >= 80 ? '#c0392b' : '#2d6a4f') + '">' + (pct >= 100 ? '超預算' : '進行中') + '</div></div>'
-      + '</div>'
-      + '</div>';
+    var untax = f['合約未稅金額'] || 0;
+    var avail = f['可用成本'] || 0;
+    var spent = f['已支出合計'] || 0;
+    var remain = f['剩餘預算'] || f['剩餘預算(X)'] || (avail - spent);
+    var pct = avail > 0 ? Math.min(100, Math.round(spent/avail*100)) : 0;
+    var wiIds = f['工作項目'] && f['工作項目'][0] && f['工作項目'][0].record_ids ? f['工作項目'][0].record_ids : [];
+    var wiRows = '';
+    wiIds.forEach(function(wiId) {
+      var wi = workitemsData.find(function(w){ return w.record_id === wiId; });
+      if (!wi) return;
+      var wf = wi.fields;
+      var wName = wf['工作項目名稱'] || '';
+      var wAvail = parseFloat(wf['可用成本']) || 0;
+      var wSpent = wf['實際花費'] || 0;
+      var wRemain = wf['剩餘預算'] || (wAvail - wSpent);
+      wiRows += '<div class="wir"><div class="wn">'+wName+'</div><div class="wns">'
+        +'<div><div class="wl">可用</div><div class="wv">'+ntf(wAvail)+'</div></div>'
+        +'<div><div class="wl">已支出</div><div class="wv" style="color:#c0392b">'+ntf(wSpent)+'</div></div>'
+        +'<div><div class="wl">剩餘</div><div class="wv" style="color:'+color+'">'+ntf(wRemain)+'</div></div>'
+        +'</div></div>';
+    });
+    html += '<div class="dc"><div class="dch"><div class="pdot" style="background:'+color+'"></div><h3>'+name+'</h3></div>'
+      +'<div class="bo">'
+      +'<div class="bi"><div class="lb">合約金額</div><div class="vl">'+ntf(contract)+'</div></div>'
+      +'<div class="bi"><div class="lb">合約未稅</div><div class="vl">'+ntf(untax)+'</div></div>'
+      +'<div class="bi"><div class="lb">可用成本</div><div class="vl">'+ntf(avail)+'</div></div>'
+      +'<div class="bi"><div class="lb">已支出合計</div><div class="vl" style="color:#c0392b">'+ntf(spent)+'</div></div>'
+      +'<div class="bi"><div class="lb">剩餘預算</div><div class="vl" style="color:'+color+'">'+ntf(remain)+'</div></div>'
+      +'</div><div class="bbw"><div style="font-size:10px;color:var(--t3)">預算使用率 '+pct+'%</div>'
+      +'<div class="bbt"><div class="bbf" style="width:'+pct+'%;background:'+color+'"></div></div></div>'
+      +wiRows+'</div>';
   });
-  document.getElementById('budget-area').innerHTML = html;
+  area.innerHTML = html;
 }
 
+// ── 支出明細 ──
 function renderExpenses() {
   var area = document.getElementById('expense-area');
   if (!area) return;
-  var html = '<table class="dt"><thead><tr><th>項目</th><th>金額</th><th>日期</th><th>負責人</th></tr></thead><tbody>';
+  var wiMap = {};
+  workitemsData.forEach(function(wi) {
+    var f = wi.fields;
+    var projName = f['所屬標案'] && f['所屬標案'].text_arr ? f['所屬標案'].text_arr[0] : '';
+    wiMap[wi.record_id] = { name: f['工作項目名稱'] || '', project: projName };
+  });
+  var byProject = {};
   expensesData.forEach(function(rec) {
     var f = rec.fields;
-    var item = f['支出細項'] || '—';
-    var amt  = f['實際金額'] || 0;
-    var date = f['日期'] ? fmt(f['日期']) : '—';
-    var person = (f['負責人'] && f['負責人'][0]) ? f['負責人'][0].name : '—';
-    html += '<tr><td>' + item + '</td><td>' + ntf(amt) + '</td><td>' + date + '</td><td>' + person + '</td></tr>';
-  });
-  html += '</tbody></table>';
-  document.getElementById('expense-area').innerHTML = html;
-}
-
-function renderDesigns() {
-  var area = document.getElementById('designs-body');
-  if (!area) return;
-  var html = '';
-  designsData.forEach(function(rec) {
-    var f = rec.fields;
-    var name = f['設計項目名稱'] || '—';
-    var status = f['狀態'] ? (f['狀態'][0] || '—') : '—';
-    var designer = (f['設計師'] && f['設計師'][0]) ? f['設計師'][0].name : '—';
-    var draft = f['初稿交付日'] ? fmt(f['初稿交付日']) : '—';
-    var final = f['完稿交付日'] ? fmt(f['完稿交付日']) : '—';
-    var deliver = f['成品交付日'] ? fmt(f['成品交付日']) : '—';
-    html += '<tr><td>' + name + '</td><td>' + status + '</td><td>' + designer + '</td><td>' + draft + '</td><td>' + final + '</td><td>' + deliver + '</td></tr>';
-  });
-  document.getElementById('designs-body').innerHTML = html || '<tr><td colspan="6" style="text-align:center;color:var(--t3)">暫無資料</td></tr>';
-}
-
-// ══════════════════════════════════════════
-// 付款申請單
-// ══════════════════════════════════════════
-function setTodayDate() {
-  var today = new Date();
-  document.getElementById('p-date').value = toYMD(today);
-}
-
-function previewPayment() {
-  var dept = document.getElementById('p-dept').value || '璽墨';
-  var date = document.getElementById('p-date').value;
-  var payee = document.getElementById('p-payee').value || '—';
-  var vendor = document.getElementById('p-vendor').value || '—';
-  var method = document.getElementById('p-method').value;
-  var reason = document.getElementById('p-reason').value || '—';
-  var remark = document.getElementById('p-remark').value || '—';
-  var total = document.getElementById('p-total').value || '0';
-  
-  var natures = [];
-  document.querySelectorAll('#p-nature .ntag.on').forEach(function(t) { natures.push(t.textContent); });
-  var nature = natures.length > 0 ? natures.join('、') : '—';
-  
-  var totalNum = parseInt(total.replace(/[^0-9]/g, '')) || 0;
-  var nums = String(totalNum).padStart(8, '0');
-  var labs = ['仟', '佰', '拾', '萬', '仟', '佰', '拾', '元'];
-  var amtH = '';
-  for (var i = 0; i < 8; i++) {
-    amtH += '<span style="border-bottom:1px solid #333;min-width:18px;display:inline-block;text-align:center;margin:0 1px">' + (nums[i] === '0' ? '' : nums[i]) + '</span>' + labs[i] + ' ';
-  }
-  amtH += '整';
-  
-  var dateObj = parseDate(date);
-  var dateStr = dateObj ? dateObj.getFullYear() + ' 年 ' + (dateObj.getMonth() + 1) + ' 月 ' + dateObj.getDate() + ' 日' : '—';
-  
-  var html = '<div style="font-family:-apple-system,PingFang TC,sans-serif;font-size:13px;color:#1a1916">'
-    + '<div style="display:flex;justify-content:space-between;margin-bottom:10px">'
-    + '<div style="font-size:15px;font-weight:700">璽墨</div>'
-    + '<div style="text-align:right"><div style="font-size:12px">申請日期：</div><div style="font-size:12px;font-weight:600">' + dateStr + '</div></div>'
-    + '</div>'
-    + '<h2 style="text-align:center;font-size:20px;font-weight:700;margin:20px 0">付款申請單</h2>'
-    + '<table style="width:100%;border-collapse:collapse;margin-bottom:15px">'
-    + '<tr><td style="border:1px solid #333;padding:8px;background:#f5f5f5;font-weight:600;width:20%">申請部門</td><td style="border:1px solid #333;padding:8px;background:#e8f4e8">' + dept + '</td>'
-    + '<td style="border:1px solid #333;padding:8px;background:#f5f5f5;font-weight:600;width:20%">支付對象</td><td style="border:1px solid #333;padding:8px;background:#e8f4e8">' + payee + '</td></tr>'
-    + '<tr><td style="border:1px solid #333;padding:8px;background:#f5f5f5;font-weight:600">廠商名稱</td><td colspan="3" style="border:1px solid #333;padding:8px;background:#e8f4e8">' + vendor + '</td></tr>'
-    + '<tr><td style="border:1px solid #333;padding:8px;background:#f5f5f5;font-weight:600">支付性質</td><td colspan="3" style="border:1px solid #333;padding:8px">' + nature + '</td></tr>'
-    + '<tr><td style="border:1px solid #333;padding:8px;background:#f5f5f5;font-weight:600">支付方式</td><td style="border:1px solid #333;padding:8px">' + method + '</td>'
-    + '<td style="border:1px solid #333;padding:8px;background:#f5f5f5;font-weight:600">事由</td><td style="border:1px solid #333;padding:8px">' + reason + '</td></tr>'
-    + '<tr><td style="border:1px solid #333;padding:8px;background:#f5f5f5;font-weight:600">備註</td><td colspan="3" style="border:1px solid #333;padding:8px">' + remark + '</td></tr>'
-    + '<tr><td style="border:1px solid #333;padding:8px;background:#f5f5f5;font-weight:600">付款總金額</td>'
-    + '<td colspan="3" style="border:1px solid #333;padding:8px;font-size:12px">' + amtH + '</td></tr>'
-    + '</table>'
-    + '<table style="width:100%;border-collapse:collapse;margin-bottom:20px">'
-    + '<tr><td style="border:1px solid #333;padding:15px;text-align:center">董事長室：<br><br><br></td>'
-    + '<td style="border:1px solid #333;padding:15px;text-align:center">主管：<br><br><br></td>'
-    + '<td style="border:1px solid #333;padding:15px;text-align:center">申請人：<br><br><br></td></tr>'
-    + '</table>'
-    + '<div style="font-size:11px;color:#666;text-align:right">版本：01-2020-12</div>'
-    + '</div>';
-  
-  document.getElementById('payment-preview-body').innerHTML = html;
-  op('pp-payment-preview');
-}
-
-function sendPaymentNotification() {
-  var dept = document.getElementById('p-dept').value || '璽墨';
-  var payee = document.getElementById('p-payee').value || '—';
-  var vendor = document.getElementById('p-vendor').value || '—';
-  var reason = document.getElementById('p-reason').value || '—';
-  var total = document.getElementById('p-total').value || '0';
-  
-  var message = '付款申請單已提交\n申請部門：' + dept + '\n支付對象：' + payee + '\n廠商名稱：' + vendor + '\n事由：' + reason + '\n金額：' + total;
-  
-  fetch('/api/lark?table=payments&action=create', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      fields: {
-        '申請部門': dept,
-        '申請日期': document.getElementById('p-date').value,
-        '支付對象': payee,
-        '廠商名稱': vendor,
-        '支付方式': document.getElementById('p-method').value,
-        '事由': reason,
-        '備註': document.getElementById('p-remark').value,
-        '付款總金額': parseFloat(total.replace(/[^0-9]/g, '')) || 0
-      }
-    })
-  }).then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.success) {
-        alert('付款申請單已提交並發送通知');
-        document.getElementById('p-payee').value = '';
-        document.getElementById('p-vendor').value = '';
-        document.getElementById('p-reason').value = '';
-        document.getElementById('p-remark').value = '';
-        document.getElementById('p-total').value = '';
-        document.querySelectorAll('#p-nature .ntag').forEach(function(t) { t.classList.remove('on'); });
-        cl('pp-payment-preview');
-      } else {
-        alert('提交失敗：' + (data.error || 'Unknown error'));
-      }
-    })
-    .catch(function(err) {
-      alert('提交失敗：' + err.message);
+    var wiArr = f['所屬工作項目'];
+    var wiId = wiArr && wiArr.record_ids ? wiArr.record_ids[0] : null;
+    var wi = wiId ? wiMap[wiId] : null;
+    var projName = wi ? wi.project : '其他';
+    if (!byProject[projName]) byProject[projName] = [];
+    byProject[projName].push({
+      name: f['支出細項'] || '',
+      assignee: f['負責人'] && f['負責人'][0] ? f['負責人'][0].name : '',
+      wiName: wi ? wi.name : '',
+      date: fmtDate(f['日期']),
+      actual: parseFloat(f['實際金額']) || 0,
+      untax: f['未稅金額(X)'] || 0,
+      status: f['狀態'] || ''
     });
+  });
+  var html = '';
+  projectsData.forEach(function(rec, i) {
+    var pname = rec.fields['標案名稱'] || '';
+    if (!byProject[pname] || byProject[pname].length === 0) return;
+    var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
+    var byAssignee = {};
+    byProject[pname].forEach(function(item) {
+      if (!byAssignee[item.assignee]) byAssignee[item.assignee] = [];
+      byAssignee[item.assignee].push(item);
+    });
+    var rows = '';
+    Object.keys(byAssignee).forEach(function(aname) {
+      rows += '<tr class="gr"><td colspan="7">'+aname+' · '+byAssignee[aname].length+'筆</td></tr>';
+      byAssignee[aname].forEach(function(item) {
+        var stClass = item.status === '已合銷' ? 'std' : 'stp';
+        var stLabel = item.status === '已合銷' ? '已核銷' : '待核銷';
+        rows += '<tr><td>'+item.name+'</td><td>'+aname+'</td><td>'+item.wiName+'</td>'
+          +'<td>'+item.date+'</td>'
+          +'<td style="font-weight:600">'+ntf(item.actual)+'</td>'
+          +'<td>'+ntf(item.untax)+'</td>'
+          +'<td><span class="st '+stClass+'">'+stLabel+'</span></td></tr>';
+      });
+    });
+    html += '<div class="dc"><div class="dch"><div class="pdot" style="background:'+color+'"></div><h3>'+pname+'</h3>'
+      +'<button class="bsm" style="margin-left:auto" onclick="op(\'pp-exp\')">＋ 新增支出明細</button></div>'
+      +'<div style="overflow-x:auto"><table class="dt"><thead><tr>'
+      +'<th>支出細項</th><th>負責人</th><th>所屬工作項目</th><th>日期</th><th>實際金額</th><th>未稅金額</th><th>狀態</th>'
+      +'</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  });
+  area.innerHTML = html || '<div style="padding:20px;color:var(--t3)">尚無支出明細</div>';
 }
 
-// ══════════════════════════════════════════
-// 初始化
-// ══════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', function() {
-  loadData();
-});
+// ── 渲染 A 區標案列表 ──
+function renderProjects() {
+  var html = '';
+  projectsData.forEach(function(rec, i) {
+    var f = rec.fields;
+    var name = f['標案名稱'] || '未命名';
+    var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
+    var wiIds = f['工作項目'] && f['工作項目'][0] && f['工作項目'][0].record_ids ? f['工作項目'][0].record_ids : [];
+    var subHTML = '';
+    wiIds.forEach(function(wiId) {
+      var wi = workitemsData.find(function(w){ return w.record_id === wiId; });
+      if (!wi) return;
+      var wf = wi.fields;
+      var wName = wf['工作項目名稱'] || '';
+      var startTs = wf['開始日期'];
+      var endTs = wf['截止日'];
+      var dateStr = '';
+      var daysStr = '';
+      if (startTs && endTs) {
+        var s = new Date(startTs), e = new Date(endTs);
+        var days = Math.round((e - s) / 86400000) + 1;
+        dateStr = fmt2(s) + '-' + fmt2(e);
+        daysStr = days + 'Ds';
+      }
+      subHTML += '<div class="si"><span>' + wName + '</span><span style="font-size:10px;color:var(--t3);margin-left:auto;display:flex;gap:6px"><span>' + dateStr + '</span><span style="color:#e05a00;font-weight:600">' + daysStr + '</span></span></div>';
+    });
+    html += '<div class="pi">';
+    html += '<div class="pr" style="background:' + color + '" onclick="tgp(this)">';
+    html += '<div class="dot"></div><span>' + name + '</span><span class="arr">▶</span></div>';
+    html += '<div class="sl2">' + subHTML + '</div></div>';
+  });
+  document.getElementById('pl-projects').innerHTML = html;
+}
+
+// ── 渲染 B 區任務清單 ──
+function renderTasks() {
+  // 建立 workitem record_id → {name, project, projectIdx} 對應
+  var wiMap = {};
+  workitemsData.forEach(function(wi) {
+    var f = wi.fields;
+    var wiName = f['工作項目名稱'] || '';
+    var projName = '';
+    if (f['所屬標案'] && f['所屬標案'].text_arr && f['所屬標案'].text_arr.length > 0) {
+      projName = f['所屬標案'].text_arr[0];
+    }
+    wiMap[wi.record_id] = { name: wiName, project: projName };
+  });
+
+  // 依標案分組
+  var grouped = {};
+  var projOrder = [];
+  tasksData.forEach(function(rec) {
+    var f = rec.fields;
+    var taskName = f['任務名稱'] || '未命名';
+    var assignee = f['負責人'] && f['負責人'][0] ? f['負責人'][0].name : '';
+    var dueTs = f['預計完成日'];
+    var dueDate = dueTs ? fmt(dueTs) : '';
+    var progress = f['進度數值'] || 0;
+    var wiArr = f['所屬工作項目'];
+    var wiName = '';
+    var projName = '其他';
+
+    if (wiArr && wiArr.record_ids && wiArr.record_ids[0]) {
+      var wiId = wiArr.record_ids[0];
+      var wi = wiMap[wiId];
+      if (wi) {
+        wiName = wi.name;
+        projName = wi.project || '其他';
+      }
+    }
+    if (!grouped[projName]) { grouped[projName] = []; projOrder.push(projName); }
+    grouped[projName].push({ name: taskName, assignee: assignee, due: dueDate, dueTs: dueTs, progress: progress, wiName: wiName, id: rec.record_id });
+  });
+
+  // 依截止日排序
+  Object.keys(grouped).forEach(function(proj) {
+    grouped[proj].sort(function(a,b){ return (a.dueTs||0)-(b.dueTs||0); });
+  });
+
+  var html = '';
+  // 用 projectsData 的順序來分組
+  var projColors = {};
+  projectsData.forEach(function(rec, i) {
+    var pname = rec.fields['標案名稱'] || '';
+    projColors[pname] = PROJECT_COLORS[i % PROJECT_COLORS.length];
+  });
+
+  // 先按 projectsData 順序輸出
+  projectsData.forEach(function(rec) {
+    var pname = rec.fields['標案名稱'] || '';
+    if (!grouped[pname]) return;
+    var color = projColors[pname] || '#888';
+    html += '<div class="tgl" data-proj="'+pname+'"><div class="tgd" style="background:'+color+'"></div>'+pname+'<span class="tc">'+grouped[pname].length+'</span></div>';
+    grouped[pname].forEach(function(task) {
+      html += '<div class="ti" onclick="op(\'pp-td\')">';
+      html += '<div class="tit"><div><div class="tn">'+task.name+'</div>';
+      html += '<div class="tm">'+task.wiName+' · '+task.assignee+'</div></div>';
+      html += '<div class="tr2"><div class="td2">'+task.due+'</div></div></div>';
+      html += '<div class="tpb"><div class="tpf" style="width:'+task.progress+'%;background:'+color+'"></div></div>';
+      html += '</div>';
+    });
+    delete grouped[pname];
+  });
+
+  // 其他剩餘
+  Object.keys(grouped).forEach(function(pname) {
+    if (grouped[pname].length === 0) return;
+    html += '<div class="tgl"><div class="tgd" style="background:#888"></div>'+pname+'<span class="tc">'+grouped[pname].length+'</span></div>';
+    grouped[pname].forEach(function(task) {
+      html += '<div class="ti" onclick="op(\'pp-td\')">';
+      html += '<div class="tit"><div><div class="tn">'+task.name+'</div>';
+      html += '<div class="tm">'+task.wiName+' · '+task.assignee+'</div></div>';
+      html += '<div class="tr2"><div class="td2">'+task.due+'</div></div></div>';
+      html += '<div class="tpb"><div class="tpf" style="width:'+task.progress+'%;background:#888"></div></div>';
+      html += '</div>';
+    });
+  });
+
+  document.getElementById('task-list-body').innerHTML = html;
+
+  // 更新篩選標籤
+  updateFilterTags(projColors);
+}
+
+// ── 更新篩選標籤 ──
+function updateFilterTags(projColors) {
+  var ft = document.querySelector('.ft');
+  if (!ft) return;
+  var html = '<span class="ftag" style="background:var(--accent);color:#fff" onclick="filterTasks(this,\'\')">全部</span>';
+  projectsData.forEach(function(rec) {
+    var pname = rec.fields['標案名稱'] || '';
+    var color = projColors[pname] || '#888';
+    html += '<span class="ftag" onclick="filterTasks(this,\''+pname+'\')" data-proj="'+pname+'" style="border-color:'+color+';color:'+color+'">'+pname+'</span>';
+  });
+  ft.innerHTML = html;
+}
+
+// ── 篩選任務 ──
+function filterTasks(el, proj) {
+  document.querySelectorAll('.ftag').forEach(function(t){ t.style.background=''; t.style.color=t.dataset.proj ? '' : ''; });
+  el.style.background = el.style.borderColor || 'var(--accent)';
+  el.style.color = '#fff';
+
+  var groups = document.querySelectorAll('#task-list-body .tgl');
+  var items = document.querySelectorAll('#task-list-body .ti');
+  if (!proj) {
+    groups.forEach(function(g){ g.style.display=''; });
+    items.forEach(function(i){ i.style.display=''; });
+    return;
+  }
+  // 先全部隱藏
+  groups.forEach(function(g){ g.style.display = g.dataset.proj === proj ? '' : 'none'; });
+  // 顯示對應標案下的任務
+  var show = false;
+  document.querySelectorAll('#task-list-body > *').forEach(function(el) {
+    if (el.classList.contains('tgl')) {
+      show = el.dataset.proj === proj;
+      el.style.display = show ? '' : 'none';
+    } else {
+      el.style.display = show ? '' : 'none';
+    }
+  });
+}
+
+// ── 渲染甘特圖（使用真實資料）──
+function renderGanttFromData() {
+  var ganttArea = document.getElementById('gantt-area');
+  if (!ganttArea) return;
+  ganttArea.innerHTML = '';
+
+  // 建立 workitem record_id → workitem 對應
+  var wiMap = {};
+  workitemsData.forEach(function(wi) { wiMap[wi.record_id] = wi; });
+
+  // 建立 task record_id → task 對應（依工作項目分組）
+  var tasksByWi = {};
+  tasksData.forEach(function(t) {
+    var wiArr = t.fields['所屬工作項目'];
+    if (wiArr && wiArr.record_ids) {
+      wiArr.record_ids.forEach(function(wiId) {
+        if (!tasksByWi[wiId]) tasksByWi[wiId] = [];
+        tasksByWi[wiId].push(t);
+      });
+    }
+  });
+
+  projectsData.forEach(function(rec, i) {
+    var f = rec.fields;
+    var name = f['標案名稱'] || '未命名';
+    var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
+    var progress = Math.round((f['標案完成%'] || 0) * 100);
+    var wiIds = f['工作項目'] && f['工作項目'][0] && f['工作項目'][0].record_ids ? f['工作項目'][0].record_ids : [];
+    var wiNames = f['工作項目'] && f['工作項目'][0] && f['工作項目'][0].text_arr ? f['工作項目'][0].text_arr : [];
+
+    var rows = [];
+    wiIds.forEach(function(wiId, idx) {
+      var wiRecord = wiMap[wiId];
+      if (!wiRecord) return;
+      var wf = wiRecord.fields;
+      var wiName = wf['工作項目名稱'] || wiNames[idx] || '';
+      var wiStart = wf['開始日期'] ? new Date(wf['開始日期']) : null;
+      var wiEnd = wf['截止日'] ? new Date(wf['截止日']) : null;
+      var weight = wf['權重'] || '';
+      var wiProg = Math.round((wf['加權進度'] || 0) * 100);
+      var metaStr = '';
+      if (wiStart && wiEnd) {
+        metaStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
+      }
+
+      // 找任務
+      var relTasks = tasksByWi[wiId] || [];
+      var bars = [];
+      relTasks.forEach(function(t) {
+        var tf = t.fields;
+        var tName = tf['任務名稱'] || '';
+        var tDue = tf['預計完成日'] ? new Date(tf['預計完成日']) : wiEnd;
+        var tProg = tf['進度數值'] || 0;
+        // 用 3 天前當開始
+        var tStart = tDue ? new Date(tDue.getTime() - 3*24*60*60*1000) : wiStart;
+        if (tStart && tDue) {
+          bars.push({
+            s: tStart.toISOString().slice(0,10),
+            e: tDue.toISOString().slice(0,10),
+            l: tName,
+            o: tProg >= 100 ? 1 : (tProg > 0 ? 0.85 : 0.45)
+          });
+        }
+      });
+
+      // 如果沒有任務，用工作項目本身的時間
+      if (bars.length === 0 && wiStart && wiEnd) {
+        bars.push({ s: wiStart.toISOString().slice(0,10), e: wiEnd.toISOString().slice(0,10), l: wiName, o: 0.6 });
+      }
+
+      rows.push({ n: wiName, m: metaStr, w: (parseFloat(weight)*100||0)+'%/'+wiProg+'%', bars: bars });
+    });
+
+    if (rows.length === 0) {
+      console.log('No rows for', name, 'wiIds:', wiIds.length, 'wiMap keys:', Object.keys(wiMap).length);
+      return;
+    }
+
+    var cardId = 'proj-' + i;
+    var card = document.createElement('div');
+    card.className = 'gc';
+    card.innerHTML = '<div class="gtb"><div class="pdot" style="background:'+color+'"></div><h3>'+name+'</h3>'
+      +'<span class="pb" style="background:rgba(0,0,0,0.07);color:'+color+'">'+progress+'%</span>'
+      +'<button class="bsm" style="margin-left:auto" onclick="op(\'pp-task\')">＋ 任務</button></div>'
+      +'<div class="gb" id="gb-'+cardId+'"></div>'
+      +'<div class="gsb"><button onclick="scG(\''+cardId+'\',-200)">◀</button>'
+      +'<input type="range" min="0" max="100" value="30" id="rng-'+cardId+'" oninput="scR(\''+cardId+'\',this.value)">'
+      +'<button onclick="scG(\''+cardId+'\',200)">▶</button></div>';
+    ganttArea.appendChild(card);
+
+    PDATA[cardId] = { color: color, rows: rows };
+    buildG(cardId);
+  });
+}
+
+// ── 初始化 ──
+loadData();
 </script>
 </body>
 </html>
