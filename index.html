@@ -9,6 +9,7 @@
   --bg:#edeae4; --surface:#fff; --sf2:#f7f5f2; --border:#e2ddd8;
   --text:#1a1916; --t2:#6b6860; --t3:#9e9b96; --accent:#1a1916;
   --c1:#2d6a4f; --c2:#1a4a7a; --c3:#7a1a2e; --c4:#4a7a1a; --c5:#5a3a8a;
+  --report:#2d6a4f; --report-hover:#245a42; --warn:#b45309; --danger:#b42318;
   --lw:218px; --rw:245px; --th:46px; --r:10px; --rs:6px;
   --shadow:0 2px 14px rgba(0,0,0,0.09);
 }
@@ -88,7 +89,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .tm{font-size:10px;color:var(--t3);margin-top:1px}
 .tr2{text-align:right;flex-shrink:0}
 .td2{font-size:11px;font-weight:600}
-.tds{font-size:10px;color:#e05a00;font-weight:700}
+.tds{font-size:10px;color:var(--warn);font-weight:700}
 .tpb{height:2px;background:var(--border);border-radius:1px;margin-top:5px;overflow:hidden}
 .tpf{height:100%;border-radius:1px}
 .ftag{padding:2px 7px;border-radius:20px;font-size:10px;cursor:pointer;border:1px solid var(--border);white-space:nowrap;color:var(--t2);background:var(--sf2);transition:all .15s;flex-shrink:0}
@@ -110,21 +111,33 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .dn{display:flex;align-items:center;gap:4px}
 .dn button{border:none;background:none;cursor:pointer;color:var(--t2);padding:2px 4px;border-radius:4px;font-size:12px}
 .dn button:hover{background:var(--sf2)}
-.jl{flex:1;overflow-y:auto;padding:4px}
-.ji{padding:9px;border-radius:var(--rs);margin-bottom:3px}
-.ji:hover{background:var(--sf2)}
-.jt{display:flex;align-items:center;gap:5px;margin-bottom:4px}
-.jn{font-size:12px;font-weight:600}
-.jpt{font-size:10px;padding:1px 6px;border-radius:10px;color:#fff;font-weight:500}
-.jtask{font-size:11px;color:var(--t2);margin-bottom:3px}
-.jnote{font-size:10px;color:var(--t3);background:var(--sf2);padding:4px 7px;border-radius:4px;border-left:2px solid var(--border);white-space:pre-wrap;line-height:1.55}
-.jnote b{color:var(--text);font-weight:700}
-.jday-hdr{font-size:10px;font-weight:700;color:var(--t3);padding:8px 9px 4px;letter-spacing:.3px}
+.jl{flex:1;overflow-y:auto;padding:6px}
+.ji{padding:0;margin-bottom:10px}
+.jc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:10px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.jc.has-block{border-color:#e8c4c4;background:#fffcfc}
+.jc-hdr{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.jn{font-size:12px;font-weight:700}
+.jpt{font-size:9px;padding:2px 7px;border-radius:10px;color:#fff;font-weight:600}
+.jblk{font-size:9px;padding:2px 7px;border-radius:10px;background:#fde8e8;color:var(--danger);font-weight:700}
+.jc-rows{display:flex;flex-direction:column;gap:5px}
+.jc-row{display:flex;gap:6px;align-items:flex-start;font-size:10px;line-height:1.45}
+.jc-lbl{flex-shrink:0;min-width:52px;padding:2px 6px;border-radius:8px;font-weight:600;text-align:center;font-size:9px}
+.jc-lbl.doing{background:#e6f4ee;color:#1a7a45}
+.jc-lbl.done{background:#e8f0fa;color:#1a4a7a}
+.jc-lbl.block{background:#fde8e8;color:var(--danger)}
+.jc-lbl.tomorrow{background:#f3f0e8;color:#6b5a1a}
+.jc-val{flex:1;color:var(--t2);word-break:break-word}
+.jc-reason{margin-top:6px;padding:7px 9px;background:#fff8f8;border-radius:6px;border-left:3px solid #e8a0a0;font-size:10px;color:var(--danger);line-height:1.5}
+.jday-hdr{font-size:10px;font-weight:700;color:var(--t3);padding:10px 4px 5px;letter-spacing:.3px}
 .jvbtns{display:flex;gap:3px}
 .jvbtn{padding:2px 7px;border-radius:12px;border:1px solid var(--border);background:var(--sf2);font-size:10px;cursor:pointer;color:var(--t2)}
 .jvbtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-.bjlog{padding:3px 8px;border-radius:var(--rs);border:none;background:#e05a00;color:#fff;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap}
-.bjlog:hover{background:#c44d00}
+.bjlog{padding:3px 8px;border-radius:var(--rs);border:none;background:var(--report);color:#fff;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap}
+.bjlog:hover{background:var(--report-hover)}
+.pph-report{background:var(--report) !important}
+.pph-report h3{color:#fff !important}
+.btn-report{background:var(--report) !important}
+.btn-report:hover{background:var(--report-hover) !important}
 
 /* daily log popup */
 .pp-daily{width:580px}
@@ -141,7 +154,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .dl-task-main{flex:1;min-width:0}
 .dl-task-name{font-size:12px;font-weight:600;display:block}
 .dl-task-meta{font-size:10px;color:var(--t3);margin-top:1px}
-.dl-progress{font-size:10px;font-weight:700;color:#e05a00;flex-shrink:0;min-width:32px;text-align:right}
+.dl-progress{font-size:10px;font-weight:700;color:var(--report);flex-shrink:0;min-width:32px;text-align:right}
 .dl-note{width:100%;margin-top:5px;padding:4px 7px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:#fff}
 .dl-cat{padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:10px;background:#fff;flex-shrink:0;max-width:78px}
 .dl-cat-block{border-color:#e8a0a0;background:#fff8f8}
@@ -154,8 +167,8 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 /* task report popup */
 .td-cats{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
 .td-cat{padding:5px 10px;border-radius:16px;border:1px solid var(--border);background:var(--sf2);font-size:11px;cursor:pointer;color:var(--t2)}
-.td-cat.active{background:#e05a00;color:#fff;border-color:#e05a00}
-.td-cat.block.active{background:#b42318;border-color:#b42318}
+.td-cat.active{background:var(--report);color:#fff;border-color:var(--report)}
+.td-cat.block.active{background:var(--danger);border-color:var(--danger)}
 .td-proj{font-size:10px;padding:2px 8px;border-radius:12px;color:#fff;font-weight:600;display:inline-block;margin-bottom:8px}
 
 /* D cards */
@@ -168,30 +181,30 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .bsm:hover{border-color:var(--accent);color:var(--accent)}
 
 /* Gantt */
-.gc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px;overflow:hidden}
+.gc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .gtb{padding:8px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
 .gtb h3{font-size:13px;font-weight:600;flex:1}
 .gb{display:flex;overflow:hidden;border-bottom:1px solid var(--border)}
 .gf{width:190px;flex-shrink:0;border-right:2px solid var(--border);background:var(--surface)}
 .gfh{height:52px;background:var(--sf2);border-bottom:1px solid var(--border);display:flex;align-items:flex-end;padding:0 10px 6px}
 .gfh span{font-size:10px;font-weight:600;color:var(--t3)}
-.grl{height:44px;padding:6px 10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;justify-content:center}
+.grl{height:40px;padding:5px 10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;justify-content:center}
 .grl:last-child{border-bottom:none}
-.grn{font-size:12px;font-weight:500}
-.grm{font-size:10px;color:var(--t3);margin-top:1px}
+.grn{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grm{font-size:9px;color:var(--t3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gsw{flex:1;overflow-x:auto;overflow-y:hidden;min-width:0}
 .gtc{display:inline-block}
 .gmr{display:flex;height:26px;border-bottom:1px solid var(--border);background:var(--sf2)}
 .gmc{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--t2);border-right:1px solid var(--border);flex-shrink:0}
 .gdr{display:flex;height:26px;border-bottom:1px solid var(--border);background:var(--sf2);position:relative}
 .gdc{display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--t3);border-right:1px solid rgba(226,221,216,0.4);flex-shrink:0}
-.gdc.tdc{background:rgba(220,50,50,0.07);color:#c0392b;font-weight:700}
-.gtr{height:44px;border-bottom:1px solid var(--border);position:relative}
+.gdc.tdc{background:rgba(45,106,79,.08);color:var(--report);font-weight:700}
+.gtr{height:40px;border-bottom:1px solid var(--border);position:relative}
 .gtr:last-child{border-bottom:none}
-.gbar{position:absolute;height:20px;top:50%;transform:translateY(-50%);border-radius:4px;display:flex;align-items:center;padding:0 6px;font-size:10px;color:rgba(255,255,255,.95);white-space:nowrap;overflow:hidden;font-weight:500;cursor:pointer}
-.gbar:hover{opacity:.82}
-.tline{position:absolute;top:0;bottom:0;width:2px;background:#e03030;z-index:5;pointer-events:none}
-.tlineh{position:absolute;top:0;width:2px;height:52px;background:#e03030;z-index:5;pointer-events:none}
+.gbar{position:absolute;height:22px;top:50%;transform:translateY(-50%);border-radius:6px;display:flex;align-items:center;padding:0 8px;font-size:10px;color:rgba(255,255,255,.98);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;cursor:pointer;min-width:4px;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.gbar:hover{opacity:.88}
+.tline{position:absolute;top:0;bottom:0;width:2px;background:var(--report);z-index:5;pointer-events:none}
+.tlineh{position:absolute;top:0;width:2px;height:52px;background:var(--report);z-index:5;pointer-events:none}
 .gsb{padding:5px 14px 8px;display:flex;align-items:center;gap:7px;border-top:1px solid var(--border)}
 .gsb button{width:22px;height:22px;border:1px solid var(--border);border-radius:var(--rs);background:var(--sf2);cursor:pointer;font-size:11px;color:var(--t2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .gsb input[type=range]{flex:1;height:4px;cursor:pointer;accent-color:var(--t3)}
@@ -485,7 +498,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
 <div class="po" id="pp-task"><div class="pp"><div class="pph"><h3>建立新任務</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fg"><label>任務名稱</label><input type="text" id="nt-name" placeholder="拜訪OO茶主"></div><div class="fg"><label>負責人</label><select id="nt-assignee" data-members></select></div><div class="fg"><label>所屬工作項目</label><select id="nt-wi"></select></div><div class="fg"><label>預計完成日</label><input type="date" id="nt-due"></div><div class="fg"><label>進度狀態</label><select id="nt-status"></select></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri" onclick="saveTask()">新增</button></div></div></div>
 
-<div class="po" id="pp-td"><div class="pp"><div class="pph" id="td-header" style="background:#e05a00"><h3 id="td-title" style="color:#fff">任務回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-td')">✕</button></div><div class="ppb">
+<div class="po" id="pp-td"><div class="pp"><div class="pph pph-report" id="td-header"><h3 id="td-title">任務回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-td')">✕</button></div><div class="ppb">
   <div id="td-proj-tag" class="td-proj"></div>
   <div id="td-meta" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center"></div>
   <div class="fg"><label>今日回報分類</label><div class="td-cats" id="td-cats">
@@ -496,17 +509,17 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
   </div></div>
   <div class="fg"><label>進度狀態</label><select id="td-status"></select></div>
   <div class="fg"><label>補充說明</label><textarea id="td-note" rows="3" placeholder="寫進今日回報的補充說明…"></textarea></div>
-  <button class="bsub" style="background:#e05a00" onclick="openDailyLogFromTask()">開啟今日回報表</button>
-  <button class="bads" style="margin-top:8px" onclick="cl('pp-td');openPopup('pp-task')">＋ 新增其他任務</button>
+  <button class="bsub btn-report" onclick="openDailyLogFromTask()">開啟今日回報表</button>
+  <button class="bads" style="margin-top:8px" onclick="openNewTaskFromContext()">＋ 建立新任務</button>
 </div></div></div>
 
-<div class="po" id="pp-daily-log"><div class="pp pp-daily"><div class="pph" style="background:#e05a00"><h3 style="color:#fff">每日工作回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-daily-log')">✕</button></div><div class="ppb">
+<div class="po" id="pp-daily-log"><div class="pp pp-daily"><div class="pph pph-report"><h3>每日工作回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-daily-log')">✕</button></div><div class="ppb">
   <div class="dl-date" id="dl-date-display"></div>
   <div class="fg"><label>回報人</label><select id="dl-author" data-members onchange="onDailyLogAuthorChange()"></select></div>
   <div class="fg"><label>任務分類（每項選一種狀態）</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">進行中／今日完成／卡關／明日預計。有卡關請填原因。</div></div>
   <div class="fg dl-block-box" id="dl-block-wrap" style="display:none"><label>卡關原因</label><textarea id="dl-block-reason" rows="2" placeholder="說明卡在哪、需要誰協助…"></textarea></div>
   <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="選擇任務後自動產生…"></textarea></div>
-</div><div class="ppf"><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri" style="background:#e05a00" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
+</div><div class="ppf"><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
 <div class="po" id="pp-exp"><div class="pp"><div class="pph"><h3>新增支出明細</h3><button class="ppc" onclick="cl('pp-exp')">✕</button></div><div class="ppb"><div class="fg"><label>支出細項</label><input type="text" id="ex-name" placeholder="茶葉5斤"></div><div class="fg"><label>所屬工作項目</label><select id="ex-wi"></select></div><div class="fg"><label>負責人</label><select id="ex-assignee" data-members></select></div><div class="fg"><label>預估花費</label><input type="text" id="ex-est" placeholder="NT$0"></div><div class="fg"><label>日期</label><input type="date" id="ex-date"></div><div class="fg"><label>實際金額</label><input type="text" placeholder="NT$0" id="aa" oninput="calcE()"></div><div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ua" readonly style="background:#f0f0f0;color:var(--t3)"></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-exp')">取消</button><button class="bpri" onclick="saveExpense()">新增</button></div></div></div>
 
@@ -1474,12 +1487,24 @@ var PDATA={
 var vMode='month', vOff=0, CW=28;
 var TODAY=new Date(); TODAY.setHours(0,0,0,0);
 
+function getCellWidth(){
+  if(vMode==='week')return 52;
+  if(vMode==='month')return 28;
+  return 18;
+}
+
 function dif(a,b){return Math.round((b-a)/86400000);}
 
 function getRange(){
   if(vMode==='week'){
-    var s=new Date(TODAY);s.setDate(s.getDate()+vOff*7-7);
-    var e=new Date(s);e.setDate(e.getDate()+27);return{s:s,e:e};
+    var s=new Date(TODAY);
+    s.setDate(s.getDate()+vOff*7);
+    var dow=s.getDay();
+    var monOff=dow===0?-6:1-dow;
+    s.setDate(s.getDate()+monOff);
+    var e=new Date(s);
+    e.setDate(e.getDate()+6);
+    return{s:s,e:e};
   }else if(vMode==='month'){
     var s=new Date(TODAY.getFullYear(),TODAY.getMonth()+vOff,1);
     var e=new Date(TODAY.getFullYear(),TODAY.getMonth()+vOff+3,0);
@@ -1494,6 +1519,7 @@ function getRange(){
 
 function buildG(key){
   var proj=PDATA[key];
+  CW=getCellWidth();
   var r=getRange(),vs=r.s,ve=r.e;
   var total=dif(vs,ve)+1,tw=total*CW;
   var toff=dif(vs,TODAY),tx=toff*CW;
@@ -1512,7 +1538,7 @@ function buildG(key){
   for(var i=0;i<total;i++){
     var d=new Date(vs);d.setDate(d.getDate()+i);
     var isTd=dif(TODAY,d)===0;
-    var lbl=(d.getDate()===1||d.getDate()%5===0)?((d.getMonth()+1)+'/'+d.getDate()):'';
+    var lbl=vMode==='week'?((d.getMonth()+1)+'/'+d.getDate()):((d.getDate()===1||d.getDate()%5===0)?((d.getMonth()+1)+'/'+d.getDate()):'');
     dHTML+='<div class="gdc'+(isTd?' tdc':'')+'" style="width:'+CW+'px">'+lbl+'</div>';
   }
 
@@ -1572,6 +1598,7 @@ function setV(m,btn){
 function shiftV(d){vOff+=d;renderAll();}
 function goToday(){
   vOff=0;renderAll();
+  CW=getCellWidth();
   document.querySelectorAll('[id^="gsw-"]').forEach(function(el){
     var r=getRange(),tx2=dif(r.s,TODAY)*CW;
     el.scrollLeft=Math.max(0,tx2-200);
@@ -1973,7 +2000,7 @@ function renderProjects() {
         dateStr = fmtDate(endWi);
         daysStr = daysRemaining(endWi);
       }
-      subHTML += '<div class="si"><span>' + wName + '</span><span class="si-meta"><span>' + dateStr + '</span><span style="color:#e05a00;font-weight:600">' + daysStr + '</span>'
+      subHTML += '<div class="si"><span>' + wName + '</span><span class="si-meta"><span>' + dateStr + '</span><span style="color:var(--warn);font-weight:600">' + daysStr + '</span>'
         + '<button type="button" class="bdel" title="刪除工作項目" onclick="deleteWorkItem(\'' + wi.record_id + '\',\'' + escAttr(wName).replace(/'/g, "\\'") + '\')">×</button></span></div>';
     });
     html += '<div class="pi">';
@@ -2148,33 +2175,44 @@ function renderGanttFromData() {
       else if (wiEnd) metaStr = fmt(wiEnd.getTime());
 
       var relTasks = tasksByWi[wiId] || [];
-      var bars = [];
+      if (!relTasks.length && wiEnd) {
+        var barStart = wiStart || new Date(wiEnd.getTime() - 7 * 86400000);
+        rows.push({
+          n: wiName,
+          m: metaStr,
+          bars: [{ s: toDateStr(barStart), e: toDateStr(wiEnd), l: wiName, o: 0.6 }]
+        });
+        return;
+      }
+      if (!relTasks.length && wiStart) {
+        var barEnd = wiEnd || new Date(wiStart.getTime() + 7 * 86400000);
+        rows.push({
+          n: wiName,
+          m: metaStr,
+          bars: [{ s: toDateStr(wiStart), e: toDateStr(barEnd), l: wiName, o: 0.6 }]
+        });
+        return;
+      }
+
       relTasks.forEach(function(t) {
         var tf = t.fields;
-        var tName = tf['任務名稱'] || '';
+        var tName = tf['任務名稱'] || '未命名';
         var tDue = parseTs(tf['預計完成日']);
         if (!tDue) return;
         var tStart = new Date(tDue.getTime() - 3 * 86400000);
         if (wiStart && tStart < wiStart) tStart = wiStart;
         var tProg = parseProgressVal(tf['進度狀態'], tf['進度數值']);
-        bars.push({
-          s: toDateStr(tStart),
-          e: toDateStr(tDue),
-          l: tName,
-          o: tProg >= 100 ? 1 : (tProg > 0 ? 0.85 : 0.45)
+        rows.push({
+          n: tName,
+          m: wiName + (metaStr ? ' · ' + metaStr : ''),
+          bars: [{
+            s: toDateStr(tStart),
+            e: toDateStr(tDue),
+            l: tName,
+            o: tProg >= 100 ? 1 : (tProg > 0 ? 0.9 : 0.55)
+          }]
         });
       });
-
-      if (!bars.length && wiEnd) {
-        var barStart = wiStart || new Date(wiEnd.getTime() - 7 * 86400000);
-        bars.push({ s: toDateStr(barStart), e: toDateStr(wiEnd), l: wiName, o: 0.6 });
-      } else if (!bars.length && wiStart) {
-        var barEnd = wiEnd || new Date(wiStart.getTime() + 7 * 86400000);
-        bars.push({ s: toDateStr(wiStart), e: toDateStr(barEnd), l: wiName, o: 0.6 });
-      }
-
-      if (!bars.length) return;
-      rows.push({ n: wiName, m: metaStr, w: (parseFloat(weight) * 100 || 0) + '%/' + wiProg + '%', bars: bars });
     });
 
     if (!rows.length) return;
@@ -2231,6 +2269,21 @@ function pickTaskReportCat(el) {
   taskReportCategory = el.dataset.cat || 'doing';
 }
 
+function openNewTaskFromContext() {
+  var ctx = currentTaskId ? getTaskContext(currentTaskId) : null;
+  cl('pp-td');
+  preparePopup('pp-task');
+  document.getElementById('nt-name').value = '';
+  document.getElementById('nt-name').placeholder = '輸入全新任務名稱…';
+  if (ctx) {
+    if (ctx.wiId) document.getElementById('nt-wi').value = ctx.wiId;
+    if (ctx.assignee) document.getElementById('nt-assignee').value = ctx.assignee;
+    var due = document.getElementById('nt-due');
+    if (due && ctx.dueTs) due.value = tsToDateInput(ctx.dueTs);
+  }
+  op('pp-task');
+}
+
 function openDailyLogFromTask() {
   if (!currentTaskId) return;
   dailyLogTaskExtras[currentTaskId] = {
@@ -2247,7 +2300,6 @@ function openTaskDetail(taskId) {
   currentTaskId = taskId;
   taskReportCategory = 'doing';
   document.getElementById('td-title').textContent = ctx.f['任務名稱'] || '任務回報';
-  document.getElementById('td-header').style.background = '#e05a00';
   var projTag = document.getElementById('td-proj-tag');
   if (projTag) {
     projTag.textContent = ctx.projName || '';
@@ -2259,7 +2311,7 @@ function openTaskDetail(taskId) {
     '<span style="font-size:11px;background:var(--sf2);padding:2px 8px;border-radius:20px">' + ctx.wiName + '</span>'
     + '<span class="av ' + avatarClass(ctx.assignee) + '">' + personInitial(ctx.assignee) + '</span>'
     + '<span style="font-size:12px;color:var(--t2)">' + ctx.assignee + ' · ' + (ctx.dueTs ? fmtDate(ctx.dueTs) : '—') + '</span>'
-    + '<span style="font-size:11px;color:#e05a00;font-weight:600">' + remain + '</span>'
+    + '<span style="font-size:11px;color:var(--warn);font-weight:600">' + remain + '</span>'
     + '<span style="font-size:11px;color:var(--t3)">' + ctx.progress + '%</span>';
   document.querySelectorAll('#td-cats .td-cat').forEach(function(c) {
     c.classList.toggle('active', c.dataset.cat === 'doing');
@@ -2791,24 +2843,31 @@ function renderJournalCard(rec, compact) {
   var blocked = journalTaskNames(rec, ['卡關任務']);
   var tomorrow = journalTaskNames(rec, ['明日預計任務']);
   var hasBlock = !!blocked || !!blockReason;
+  var hasStructured = !!(doing || done || blocked || tomorrow);
   var color = projColorByName((proj || '').split('、')[0] || '');
 
-  var html = '<div class="ji"><div class="jt"><span class="av ' + avatarClass(author) + '">' + personInitial(author) + '</span>'
+  var html = '<div class="ji"><div class="jc' + (hasBlock ? ' has-block' : '') + '">';
+  html += '<div class="jc-hdr"><span class="av ' + avatarClass(author) + '">' + personInitial(author) + '</span>'
     + '<span class="jn">' + escHtml(author) + '</span>';
   if (proj) html += '<span class="jpt" style="background:' + color + '">' + escHtml(proj) + '</span>';
   if (hasBlock) html += '<span class="jblk">卡關</span>';
-  html += '</div>';
+  html += '</div><div class="jc-rows">';
 
-  if (doing) html += '<div class="jsec">進行中：' + escHtml(doing) + '</div>';
-  if (done) html += '<div class="jsec">今日完成：' + escHtml(done) + '</div>';
-  if (blocked) html += '<div class="jsec" style="color:#b42318">卡關：' + escHtml(blocked) + '</div>';
-  if (blockReason) html += '<div class="jnote" style="border-left-color:#e8a0a0">' + escHtml(blockReason) + '</div>';
-  if (tomorrow) html += '<div class="jsec">明日預計：' + escHtml(tomorrow) + '</div>';
-  if (note) html += '<div class="jnote">' + formatJournalHtml(note) + '</div>';
-  if (!compact) {
-    html += '<button type="button" class="bads" style="margin-top:6px" onclick="openDailyLog()">編輯今日日報</button>';
+  function row(cls, label, val) {
+    if (!val) return '';
+    return '<div class="jc-row"><span class="jc-lbl ' + cls + '">' + label + '</span><span class="jc-val">' + escHtml(val) + '</span></div>';
   }
+  html += row('doing', '進行中', doing);
+  html += row('done', '完成', done);
+  html += row('block', '卡關', blocked);
+  html += row('tomorrow', '明日', tomorrow);
   html += '</div>';
+  if (blockReason) html += '<div class="jc-reason">' + escHtml(blockReason) + '</div>';
+  if (note && !hasStructured) html += '<div class="jc-reason" style="border-left-color:var(--border);background:var(--sf2);color:var(--t2)">' + formatJournalHtml(note) + '</div>';
+  if (!compact) {
+    html += '<button type="button" class="bads" style="margin-top:8px" onclick="openDailyLog()">編輯今日日報</button>';
+  }
+  html += '</div></div>';
   return html;
 }
 
