@@ -114,6 +114,19 @@ export default async function handler(req, res) {
       });
     }
 
+    if (req.method === 'GET') {
+      if (!TABLES[table]) return res.status(400).json({ error: 'Invalid table: ' + table });
+      try {
+        const token = await getToken();
+        const records = await getRecords(token, TABLES[table]);
+        return res.status(200).json({ records: records });
+      } catch (err) {
+        console.error('GET ' + table, err);
+        // 讀取失敗時回空陣列，前台照常顯示（與舊版行為一致）
+        return res.status(200).json({ records: [], error: err.message });
+      }
+    }
+
     const token = await getToken();
 
     if (action === 'notify' && req.method === 'POST') {
@@ -135,24 +148,18 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, notify: result });
     }
 
-    if (req.method === 'GET') {
-      if (!TABLES[table]) return res.status(400).json({ error: 'Invalid table: ' + table });
-      const records = await getRecords(token, TABLES[table]);
-      return res.status(200).json({ records: records });
-    }
- 
     if (req.method === 'POST') {
       if (!TABLES[table]) return res.status(400).json({ error: 'Invalid table' });
       const result = await createRecord(token, TABLES[table], req.body);
       return res.status(200).json(result);
     }
- 
+
     if (req.method === 'PUT') {
       if (!TABLES[table] || !recordId) return res.status(400).json({ error: 'Invalid params' });
       const result = await updateRecord(token, TABLES[table], recordId, req.body);
       return res.status(200).json(result);
     }
- 
+
     return res.status(405).json({ error: 'Method not allowed' });
  
   } catch (err) {

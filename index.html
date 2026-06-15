@@ -724,9 +724,7 @@ function loadExtraData() {
 function loadData() {
   document.getElementById('pl-projects').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
   document.getElementById('task-list-body').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
-  document.getElementById('journal-list').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
 
-  // 核心 4 張表：與舊版相同，確保主要畫面先顯示
   Promise.all([
     fetch(API + '?table=projects').then(function(r){return r.json();}),
     fetch(API + '?table=workitems').then(function(r){return r.json();}),
@@ -745,23 +743,15 @@ function loadData() {
     loadExtraData();
   }).catch(function(err) {
     console.error('載入失敗', err);
-    showLoadError('請稍後再試');
-  });
-}
-
-function showLoadError(msg) {
-  var html = '<div style="padding:12px;color:#c0392b;font-size:11px;line-height:1.6">'
-    + '<div style="font-weight:600;margin-bottom:4px">無法讀取飛書資料</div>'
-    + '<div style="color:var(--t2);font-size:10px">' + msg + '</div>'
-    + '<div style="color:var(--t3);font-size:10px;margin-top:6px">請到 Vercel 設定 Lark 金鑰（APP_ID、APP_SECRET、APP_TOKEN）</div>'
-    + '</div>';
-  document.getElementById('pl-projects').innerHTML = html;
-  document.getElementById('task-list-body').innerHTML = html;
-  document.getElementById('journal-list').innerHTML = html;
-  var areas = ['gantt-area','budget-area','expense-area','design-area'];
-  areas.forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.innerHTML = html;
+    projectsData = [];
+    workitemsData = [];
+    tasksData = [];
+    expensesData = [];
+    renderProjects();
+    renderTasks();
+    renderGanttFromData();
+    renderBudget();
+    renderExpenses();
   });
 }
 
