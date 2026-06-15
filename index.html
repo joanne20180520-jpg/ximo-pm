@@ -17,8 +17,14 @@
 body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;font-size:13px}
 
 /* topbar */
-#topbar{position:fixed;top:0;left:0;right:0;height:var(--th);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 14px;z-index:100}
-.logo{font-size:16px;font-weight:700;letter-spacing:2px}
+#topbar{position:fixed;top:0;left:0;right:0;height:var(--th);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:12px;z-index:100}
+.logo{font-size:15px;font-weight:700;letter-spacing:2px;flex-shrink:0}
+.topnav{display:flex;align-items:center;gap:2px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+.topnav::-webkit-scrollbar{display:none}
+.tbar-tab{padding:6px 12px;border-radius:var(--rs);border:none;background:none;font-size:12px;cursor:pointer;color:var(--t2);transition:all .15s;white-space:nowrap;flex-shrink:0}
+.tbar-tab:hover{background:var(--sf2);color:var(--text)}
+.tbar-tab.active{background:var(--accent);color:#fff}
+.topbar-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto}
 
 /* body */
 #body{position:fixed;top:var(--th);left:0;right:0;bottom:0;display:flex;gap:8px;padding:8px}
@@ -35,7 +41,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .lp-card{background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);border:1px solid rgba(226,221,216,.9);display:flex;flex-direction:column;overflow:hidden;min-width:0}
 .lp-proj-card{flex-shrink:0;max-height:42%}
 .lp-task-card{flex:1;min-height:0}
-#cp{order:2;flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+#cp{order:2;flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow)}
 #rp{order:3;width:var(--rw);flex-shrink:0;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow);display:flex;flex-direction:column;overflow:hidden;transition:width .25s,opacity .25s,margin .25s}
 #rp.col{width:0;opacity:0;margin-left:-8px;pointer-events:none}
 
@@ -94,24 +100,39 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .tpf{height:100%;border-radius:1px}
 .ftag{padding:2px 7px;border-radius:20px;font-size:10px;cursor:pointer;border:1px solid var(--border);white-space:nowrap;color:var(--t2);background:var(--sf2);transition:all .15s;flex-shrink:0}
 
-/* C tabs */
-#tabs{background:var(--surface);border-radius:var(--r) var(--r) 0 0;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:2px;height:var(--th);flex-shrink:0;box-shadow:var(--shadow)}
-.ntab{padding:5px 11px;border-radius:var(--rs);border:none;background:none;font-size:13px;cursor:pointer;color:var(--t2);transition:all .15s;white-space:nowrap}
-.ntab:hover{background:var(--sf2)}
-.ntab.active{background:var(--accent);color:#fff}
-
-/* D content */
-#content{flex:1;overflow-y:auto;background:var(--bg);border-radius:0 0 var(--r) var(--r);padding:10px}
+/* C content */
+#content{flex:1;overflow-y:auto;background:var(--bg);border-radius:var(--r);padding:10px}
 .page{display:none}
 .page.active{display:block}
 
-/* E区 */
+/* E区 - 右側團隊任務 */
 .eh{height:auto;min-height:var(--th);padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;gap:6px}
 .eh h3{font-size:12px;font-weight:700}
-.eh-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
-.eh-actions{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-.jv-expand{padding:3px 8px;border-radius:var(--rs);border:1px solid var(--border);background:var(--sf2);font-size:10px;cursor:pointer;color:var(--t2);white-space:nowrap}
-.jv-expand:hover{border-color:var(--report);color:var(--report)}
+.eh-sub{font-size:10px;color:var(--t3);line-height:1.4}
+.rp-filters{display:flex;gap:3px;overflow-x:auto;padding:0 8px 6px;flex-shrink:0;scrollbar-width:thin}
+.rt-group{margin-bottom:8px}
+.rt-hdr{display:flex;align-items:center;gap:6px;padding:6px 8px 4px;font-weight:700;font-size:12px}
+.rt-hdr .tc{margin-left:auto}
+.rt-task{padding:6px 8px;border-radius:var(--rs);background:var(--sf2);margin:0 6px 4px;cursor:pointer;border:1px solid var(--border);transition:border-color .1s}
+.rt-task:hover{border-color:var(--t3);background:#fff}
+.rt-name{font-size:11px;font-weight:600}
+.rt-meta{font-size:9px;color:var(--t3);margin-top:2px}
+.rt-due{font-size:9px;color:var(--warn);font-weight:600;margin-top:2px}
+
+/* journal page */
+.jpage{display:flex;gap:10px;min-height:calc(100vh - var(--th) - 36px)}
+.jpage-side{width:200px;flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px;height:fit-content;position:sticky;top:0}
+.jpage-side h4{font-size:12px;font-weight:700;margin-bottom:8px}
+.jpage-soon{font-size:10px;color:var(--t3);line-height:1.55;padding:8px;background:var(--sf2);border-radius:var(--rs);border:1px dashed var(--border)}
+.jpage-res{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.jpage-res a{font-size:10px;color:var(--c2);text-decoration:none;padding:6px 8px;background:var(--sf2);border-radius:var(--rs)}
+.jpage-res a:hover{background:#e8f0fa}
+.jpage-main{flex:1;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);display:flex;flex-direction:column;overflow:hidden}
+.jpage-toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.jpage-toolbar h3{font-size:14px;font-weight:700;flex:1}
+.jpage-feed{flex:1;overflow-y:auto;padding:10px 14px}
+.jpage-feed .ji{margin-bottom:12px}
+.jpage-feed .jc{padding:12px}
 .dn{display:flex;align-items:center;gap:4px}
 .dn button{border:none;background:none;cursor:pointer;color:var(--t2);padding:2px 4px;border-radius:4px;font-size:12px}
 .dn button:hover{background:var(--sf2)}
@@ -337,7 +358,20 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 </head>
 <body>
 
-<div id="topbar"><div class="logo">璽墨</div></div>
+<div id="topbar">
+  <div class="logo">璽墨</div>
+  <nav class="topnav">
+    <button class="tbar-tab active" onclick="sw(this,'pg-s')">時程管理</button>
+    <button class="tbar-tab" onclick="sw(this,'pg-b')">費用管理</button>
+    <button class="tbar-tab" onclick="sw(this,'pg-e')">支出明細</button>
+    <button class="tbar-tab" onclick="sw(this,'pg-p')">付款申請</button>
+    <button class="tbar-tab" onclick="sw(this,'pg-d')">設計任務單</button>
+    <button class="tbar-tab" onclick="sw(this,'pg-journal')">墨日誌</button>
+  </nav>
+  <div class="topbar-actions">
+    <button class="bjlog" onclick="openDailyLog()">＋ 填寫今日日誌</button>
+  </div>
+</div>
 
 <!-- 收合按鈕 -->
 <button class="tog" id="tl" onclick="toggleL()">◀</button>
@@ -372,13 +406,6 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
 <!-- ══ 中間 CD ══ -->
 <div id="cp">
-  <div id="tabs">
-    <button class="ntab active" onclick="sw(this,'pg-s')">時程管理</button>
-    <button class="ntab" onclick="sw(this,'pg-b')">費用管理</button>
-    <button class="ntab" onclick="sw(this,'pg-e')">支出明細</button>
-    <button class="ntab" onclick="sw(this,'pg-p')">付款金費單</button>
-    <button class="ntab" onclick="sw(this,'pg-d')">設計任務單</button>
-  </div>
   <div id="content">
 
     <!-- 時程管理 -->
@@ -451,26 +478,44 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
       <div id="design-area"><div style="padding:20px;color:var(--t3);font-size:12px;text-align:center">載入中...</div></div>
     </div>
 
+    <!-- 墨日誌 -->
+    <div id="pg-journal" class="page">
+      <div class="jpage">
+        <aside class="jpage-side">
+          <h4>精選資源</h4>
+          <p class="jpage-soon">Lark 圈子整合開發中，完成後會顯示在這裡。</p>
+          <div class="jpage-res">
+            <a href="https://ajpfe1xdus5o.jp.larksuite.com/base/LngibdyrAaEinbsoxBrjj9AdpAg?table=tblVs9L5WAJcE2a3" target="_blank" rel="noopener">開啟 Lark 日報表</a>
+          </div>
+        </aside>
+        <div class="jpage-main">
+          <div class="jpage-toolbar">
+            <h3>墨日誌小天地</h3>
+            <div class="jvbtns" id="journal-page-tabs">
+              <button class="jvbtn active" onclick="setJournalView('date',this)">依日期</button>
+              <button class="jvbtn" onclick="setJournalView('person',this)">依人員</button>
+              <button class="jvbtn" onclick="setJournalView('block',this)">卡關</button>
+            </div>
+            <button class="bjlog" onclick="openDailyLog()">＋ 填寫今日日誌</button>
+          </div>
+          <div class="jpage-feed" id="journal-page-list">
+            <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
-<!-- ══ 右側 E ══ -->
+<!-- ══ 右側：團隊任務 ══ -->
 <div id="rp">
-  <div class="eh eh-journal">
-    <div class="eh-row">
-      <h3>墨日誌小天地</h3>
-      <button type="button" class="jv-expand" onclick="openJournalBoard()">展開檢視</button>
-    </div>
-    <div class="eh-actions">
-      <button class="bjlog" onclick="openDailyLog()">＋ 填寫今日日誌</button>
-      <div class="jvbtns">
-        <button class="jvbtn active" id="jv-date" onclick="setJournalView('date',this)">依日期</button>
-        <button class="jvbtn" id="jv-person" onclick="setJournalView('person',this)">依人員</button>
-        <button class="jvbtn" id="jv-block" onclick="setJournalView('block',this)">卡關</button>
-      </div>
-    </div>
+  <div class="eh">
+    <h3>團隊任務</h3>
+    <span class="eh-sub">每位同仁目前的任務進度</span>
   </div>
-  <div class="jl" id="journal-list">
+  <div class="rp-filters" id="team-filters"></div>
+  <div class="tl2" id="team-task-list">
     <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
   </div>
 </div>
@@ -544,18 +589,6 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
   <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="選擇任務後自動產生…"></textarea></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
-<div class="po" id="pp-journal-board"><div class="pp pp-jboard"><div class="pph pph-report"><h3>日誌總覽</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-journal-board')">✕</button></div><div class="ppb" style="padding-top:8px">
-  <div class="eh-actions" style="margin-bottom:10px">
-    <div class="jvbtns" id="jboard-tabs">
-      <button class="jvbtn active" onclick="setJournalBoardView('date',this)">依日期</button>
-      <button class="jvbtn" onclick="setJournalBoardView('person',this)">依人員</button>
-      <button class="jvbtn" onclick="setJournalBoardView('block',this)">卡關</button>
-    </div>
-    <button class="bjlog" style="margin-left:auto" onclick="cl('pp-journal-board');openDailyLog()">＋ 填寫今日日誌</button>
-  </div>
-  <div class="jboard-list" id="journal-board-list"></div>
-</div></div></div>
-
 <div class="po" id="pp-exp"><div class="pp"><div class="pph"><h3>新增支出明細</h3><button class="ppc" onclick="cl('pp-exp')">✕</button></div><div class="ppb"><div class="fg"><label>支出細項</label><input type="text" id="ex-name" placeholder="茶葉5斤"></div><div class="fg"><label>所屬工作項目</label><select id="ex-wi"></select></div><div class="fg"><label>負責人</label><select id="ex-assignee" data-members></select></div><div class="fg"><label>預估花費</label><input type="text" id="ex-est" placeholder="NT$0"></div><div class="fg"><label>日期</label><input type="date" id="ex-date"></div><div class="fg"><label>實際金額</label><input type="text" placeholder="NT$0" id="aa" oninput="calcE()"></div><div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ua" readonly style="background:#f0f0f0;color:var(--t3)"></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-exp')">取消</button><button class="bpri" onclick="saveExpense()">新增</button></div></div></div>
 
 <div class="po" id="pp-des"><div class="pp ppw"><div class="pph"><h3>建立新設計任務</h3><button class="ppc" onclick="cl('pp-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ds-name" placeholder="Logo"></div><div class="fg"><label>所屬工作項目</label><select id="ds-wi"></select></div><div class="fg"><label>負責PM</label><select id="ds-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ds-item" placeholder="A"></div><div class="fg"><label>設計需求</label><input type="text" id="ds-req" placeholder="AA"></div><div class="fg"><label>設計師</label><select id="ds-designer" data-members></select></div><div class="fg"><label>狀態</label><select id="ds-status"><option>進行中</option><option>待開始</option><option>已完成</option></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" id="ds-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" id="ds-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ds-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ds-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ds-deliver"></div><div class="fg"><label>備註</label><textarea id="ds-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-des')">取消</button><button class="bpri" onclick="saveDesign()">新增</button></div></div></div>
@@ -600,10 +633,11 @@ function toggleR(){
 }
 function tgp(row){row.classList.toggle('open');row.nextElementSibling.classList.toggle('open');}
 function sw(btn,id){
-  document.querySelectorAll('.ntab').forEach(function(t){t.classList.remove('active');});
+  document.querySelectorAll('.tbar-tab').forEach(function(t){t.classList.remove('active');});
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   btn.classList.add('active');
   document.getElementById(id).classList.add('active');
+  if(id==='pg-journal') renderJournalPage();
 }
 function sf(el,color){
   document.querySelectorAll('.ftag').forEach(function(t){t.style.background='';t.style.color='';});
@@ -1703,7 +1737,6 @@ var membersMap = {};
 var currentTaskId = null;
 var journalViewDate = new Date(); journalViewDate.setHours(0,0,0,0);
 var journalViewMode = 'date';
-var journalBoardViewMode = 'date';
 var dailyLogDate = new Date(); dailyLogDate.setHours(0,0,0,0);
 var dailyLogProjFilter = '';
 var dailyLogContentEdited = false;
@@ -1859,7 +1892,8 @@ function loadExtraData() {
     journalData = results[1].records || [];
     membersData = results[2].records || [];
     renderDesigns();
-    renderJournal();
+    renderJournalPage();
+    renderTeamPanel();
     buildMembersMap();
     fillMemberSelects();
   });
@@ -1882,6 +1916,7 @@ function loadData() {
     var loadErr = results[0].error || results[1].error || results[2].error || results[3].error;
     renderProjects();
     renderTasks();
+    renderTeamPanel();
     renderGanttFromData();
     renderBudget();
     renderExpenses();
@@ -1897,6 +1932,7 @@ function loadData() {
     expensesData = [];
     renderProjects();
     renderTasks();
+    renderTeamPanel();
     renderGanttFromData();
     renderBudget();
     renderExpenses();
@@ -2161,6 +2197,98 @@ function renderTasks() {
 
   document.getElementById('task-list-body').innerHTML = html || '<div style="padding:12px;color:var(--t3);font-size:11px">尚無任務</div>';
   updateFilterTags(projColors);
+  renderTeamPanel();
+}
+
+// ── 右側：依同仁顯示任務 ──
+var teamFilterPerson = '';
+
+function renderTeamPanel() {
+  var area = document.getElementById('team-task-list');
+  if (!area) return;
+
+  var wiMap = {};
+  workitemsData.forEach(function(wi) {
+    wiMap[wi.record_id] = {
+      name: wi.fields['工作項目名稱'] || '',
+      project: getProjectNameFromWi(wi)
+    };
+  });
+
+  var projColors = {};
+  projectsData.forEach(function(rec, i) {
+    projColors[rec.fields['標案名稱'] || ''] = PROJECT_COLORS[i % PROJECT_COLORS.length];
+  });
+
+  var byPerson = {};
+  tasksData.forEach(function(rec) {
+    var f = rec.fields;
+    var assignee = personName(f['負責人']) || '未指定';
+    var wiIds = getLinkIds(f['所屬工作項目']);
+    var wi = wiIds[0] ? wiMap[wiIds[0]] : null;
+    var projName = wi ? (wi.project || '其他') : '其他';
+    var progress = parseProgressVal(f['進度狀態'], f['進度數值']);
+    if (progress >= 100) return;
+    if (!byPerson[assignee]) byPerson[assignee] = [];
+    byPerson[assignee].push({
+      id: rec.record_id,
+      name: f['任務名稱'] || '未命名',
+      projName: projName,
+      wiName: wi ? wi.name : '',
+      dueTs: f['預計完成日'] || 0,
+      dueFull: f['預計完成日'] ? fmtDate(f['預計完成日']) : '—',
+      remain: daysRemaining(f['預計完成日']),
+      progress: progress,
+      color: projColors[projName] || '#888'
+    });
+  });
+
+  var persons = Object.keys(byPerson).sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
+  updateTeamFilters(persons);
+
+  if (!persons.length) {
+    area.innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">尚無進行中任務</div>';
+    return;
+  }
+
+  var html = '';
+  persons.forEach(function(person) {
+    if (teamFilterPerson && person !== teamFilterPerson) return;
+    var tasks = byPerson[person].sort(function(a, b) { return (a.dueTs || 0) - (b.dueTs || 0); });
+    html += '<div class="rt-group" data-person="' + escAttr(person) + '">';
+    html += '<div class="rt-hdr"><span class="av ' + avatarClass(person) + '">' + personInitial(person) + '</span>'
+      + escHtml(person) + '<span class="tc">' + tasks.length + '</span></div>';
+    tasks.forEach(function(task) {
+      html += '<div class="rt-task" onclick="openTaskDetail(\'' + task.id + '\')">';
+      html += '<div class="rt-name">' + escHtml(task.name) + '</div>';
+      html += '<div class="rt-meta"><span class="jpt" style="background:' + task.color + ';font-size:8px;padding:1px 5px">' + escHtml(task.projName) + '</span> · ' + task.progress + '%</div>';
+      html += '<div class="rt-due">' + task.dueFull + (task.remain ? ' · ' + task.remain : '') + '</div>';
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+
+  area.innerHTML = html || '<div style="padding:12px;color:var(--t3);font-size:11px">尚無符合的任務</div>';
+}
+
+function updateTeamFilters(persons) {
+  var ft = document.getElementById('team-filters');
+  if (!ft) return;
+  var html = '<span class="ftag" data-person=""' + (!teamFilterPerson ? ' style="background:var(--accent);color:#fff"' : '') + '>全部</span>';
+  persons.forEach(function(name) {
+    var active = teamFilterPerson === name ? ' style="background:var(--accent);color:#fff"' : '';
+    html += '<span class="ftag" data-person="' + escAttr(name) + '"' + active + '>' + escHtml(name) + '</span>';
+  });
+  ft.innerHTML = html;
+  if (!ft._bound) {
+    ft._bound = true;
+    ft.addEventListener('click', function(e) {
+      var tag = e.target.closest('.ftag');
+      if (!tag) return;
+      teamFilterPerson = tag.dataset.person || '';
+      renderTeamPanel();
+    });
+  }
 }
 
 // ── 更新篩選標籤 ──
@@ -2822,6 +2950,7 @@ function saveDailyJournal() {
     if (data && data.records) {
       tasksData = data.records;
       renderTasks();
+    renderTeamPanel();
       renderGanttFromData();
     }
     alert(existing ? '已更新今日日報！' : '已儲存今日日報！');
@@ -2833,11 +2962,22 @@ function saveDailyJournal() {
 
 function setJournalView(mode, btn) {
   journalViewMode = mode;
-  journalBoardViewMode = mode;
-  document.querySelectorAll('#rp .jvbtn').forEach(function(b) { b.classList.remove('active'); });
+  document.querySelectorAll('#journal-page-tabs .jvbtn').forEach(function(b) { b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
-  renderJournal();
-  renderJournalBoard();
+  renderJournalPage();
+}
+
+function reloadJournal() {
+  return fetch(API + '?table=journal').then(function(r) { return r.json(); })
+    .then(function(data) {
+      journalData = data.records || [];
+      renderJournalPage();
+      return journalData;
+    })
+    .catch(function(err) {
+      console.error('日誌載入失敗', err);
+      return journalData;
+    });
 }
 
 function journalTs(rec) {
@@ -2851,20 +2991,6 @@ function journalTs(rec) {
 function journalHasBlock(rec) {
   var f = rec.fields || {};
   return !!getLinkIds(f['卡關任務']).length || !!journalField(rec, ['卡關原因']);
-}
-
-function reloadJournal() {
-  return fetch(API + '?table=journal').then(function(r) { return r.json(); })
-    .then(function(data) {
-      journalData = data.records || [];
-      renderJournal();
-      renderJournalBoard();
-      return journalData;
-    })
-    .catch(function(err) {
-      console.error('日誌載入失敗', err);
-      return journalData;
-    });
 }
 
 function parseJournalNoteSections(note) {
@@ -2891,6 +3017,8 @@ function getJournalItemsInRange(days) {
   }).sort(function(a, b) {
     return (journalTs(b) || 0) - (journalTs(a) || 0);
   });
+}
+
 function journalField(rec, keys) {
   var f = rec.fields || {};
   for (var i = 0; i < keys.length; i++) {
@@ -2951,32 +3079,10 @@ function renderJournalHtml(mode, area, compact) {
   area.innerHTML = html2;
 }
 
-function renderJournal() {
-  var area = document.getElementById('journal-list');
-  renderJournalHtml(journalViewMode, area, true);
-}
-
-function openJournalBoard() {
-  journalBoardViewMode = journalViewMode;
-  document.querySelectorAll('#jboard-tabs .jvbtn').forEach(function(b, i) {
-    var modes = ['date', 'person', 'block'];
-    b.classList.toggle('active', modes[i] === journalBoardViewMode);
-  });
-  renderJournalBoard();
-  op('pp-journal-board');
-}
-
-function setJournalBoardView(mode, btn) {
-  journalBoardViewMode = mode;
-  document.querySelectorAll('#jboard-tabs .jvbtn').forEach(function(b) { b.classList.remove('active'); });
-  if (btn) btn.classList.add('active');
-  renderJournalBoard();
-}
-
-function renderJournalBoard() {
-  var area = document.getElementById('journal-board-list');
+function renderJournalPage() {
+  var area = document.getElementById('journal-page-list');
   if (!area) return;
-  renderJournalHtml(journalBoardViewMode || journalViewMode, area, false);
+  renderJournalHtml(journalViewMode, area, false);
 }
 
 function renderJournalCard(rec, compact, showDate) {
