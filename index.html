@@ -634,35 +634,179 @@ function buildDocxRelMap(relsXml) {
   return relMap;
 }
 
-function findDocxBudgetImage(zip) {
+function isTocBudgetLine(plain) {
+  if (/第[一二三四五六七八九十陸柒捌玖]章/.test(plain) && /\d{1,3}$/.test(plain)) return true;
+  if (/經費預算配置\d{1,3}$/.test(plain)) return true;
+  if (/經費預算\d{1,3}$/.test(plain)) return true;
+  return false;
+}
+
+function isBudgetAnchor(plain) {
+  return /經費預算配置|經費預算|預算配置|詳細價目表|價目表|預算編列|費用概算|預算表/.test(plain);
+}
+
+function parseDocxXmlTables(docXml) {
+  var tables = [];
+  docXml.split(/<w:tbl[\s>]/).forEach(function(tbl, idx) {
+    if (idx === 0) return;
+    var rows = [];
+    tbl.split(/<w:tr[\s>]/).forEach(function(tr, ri) {
+      if (ri === 0) return;
+      var cells = [];
+      tr.split(/<w:tc[\s>]/).forEach(function(tc, ci) {
+        if (ci === 0) return;
+        cells.push(tc.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim());
+      });
+      if (cells.length) rows.push(cells);
+    });
+    if (rows.length >= 2) tables.push(rows);
+  });
+  return tables;
+}
+
+function tableToText(rows) {
+  return rows.map(function(r) { return r.join('\t'); }).join('\n');
+}
+
+function findBudgetTableRows(tables) {
+  var best = null;
+  var bestScore = 0;
+  tables.forEach(function(rows) {
+    var header = (rows[0] || []).join(' ');
+    var score = 0;
+    if (/序號|項次/.test(header)) score += 2;
+    if (/服務細項|服務項目|工作項目|項目名稱|執行項目|工作內容|細項/.test(header)) score += 3;
+    if (/複價|金額|預算|小計|合計/.test(header)) score += 2;
+    var moneyRows = 0;
+    rows.slice(1).forEach(function(r) {
+      if (r.some(function(c) { return parseMoney(c) >= 1000; })) moneyRows++;
+    });
+    score += Math.min(moneyRows, 6);
+    if (/總金額|總計/.test(rows[rows.length - 1] ? rows[rows.length - 1].join('') : '')) score += 1;
+    if (score > bestScore && moneyRows >= 2) {
+      bestScore = score;
+      best = rows;
+    }
+  });
+  return best;
+}
+
+function parseBudgetTableRows(rows) {
+  var items = [];
+  if (!rows || rows.length < 2) return items;
+  var header = rows[0];
+  var nameCol = -1;
+  var amtCol = -1;
+  header.forEach(function(h, i) {
+    if (nameCol < 0 && /服務細項|服務項目|工作項目|項目名稱|執行項目|工作內容|細項內容|細項/.test(h)) nameCol = i;
+    if (/複價|金額|預算|小計/.test(h)) amtCol = i;
+  });
+  if (nameCol < 0) nameCol = header.length > 1 ? 1 : 0;
+  if (amtCol < 0) amtCol = header.length - 1;
+
+  rows.slice(1).forEach(function(row) {
+    var joined = row.join(' ');
+    if (/總金額|總計|合計/.test(joined) && !/^\d/.test((row[0] || '').trim())) return;
+    var name = (row[nameCol] || '').replace(/\s+/g, ' ').trim();
+    if (!name || name.length < 2 || /序號|項次|服務細項|說明/.test(name)) return;
+    var cost = 0;
+    row.forEach(function(cell, ci) {
+      if (ci === nameCol) return;
+      var v = parseMoney(cell);
+      if (v >= 1000) cost = Math.max(cost, v);
+    });
+    if (!cost) cost = parseMoney(row[amtCol] || '');
+    if (cost >= 1000) items.push({ name: name, days: 30, cost: cost, weight: 0 });
+  });
+  return items;
+}
+
+function findDocxBudgetImageBlobs(zip) {
   var docP = zip.file('word/document.xml');
   var relP = zip.file('word/_rels/document.xml.rels');
-  if (!docP || !relP) return Promise.resolve(null);
+  if (!docP || !relP) return Promise.resolve([]);
   return Promise.all([docP.async('text'), relP.async('text')]).then(function(parts) {
     var docXml = parts[0];
     var relMap = buildDocxRelMap(parts[1]);
     var paras = docXml.split(/<w:p[\s>]/);
-    var start = -1;
+    var starts = [];
     for (var i = 0; i < paras.length; i++) {
       var plain = paras[i].replace(/<[^>]+>/g, '').replace(/\s+/g, '');
-      if (plain.indexOf('經費預算配置') < 0) continue;
-      if (plain.indexOf('第陸章') >= 0 || plain.indexOf('第六章') >= 0) continue;
-      if (/經費預算配置\d{1,3}$/.test(plain)) continue;
-      start = i;
-      break;
+      if (!isBudgetAnchor(plain)) continue;
+      if (isTocBudgetLine(plain)) continue;
+      starts.push(i);
     }
-    if (start < 0) return null;
-    var rid = '';
-    for (var j = start; j < Math.min(start + 20, paras.length); j++) {
-      paras[j].replace(/r:embed="([^"]+)"/g, function(_, id) {
-        if (!rid) rid = id;
+    if (!starts.length) {
+      for (var k = 0; k < paras.length; k++) {
+        var p2 = paras[k].replace(/<[^>]+>/g, '').replace(/\s+/g, '');
+        if (/第[五六陸伍]章/.test(p2) && /經費|預算|價目/.test(p2) && !isTocBudgetLine(p2)) starts.push(k);
+      }
+    }
+    var rids = [];
+    var seen = {};
+    starts.forEach(function(start) {
+      for (var j = start; j < Math.min(start + 25, paras.length); j++) {
+        paras[j].replace(/r:embed="([^"]+)"/g, function(_, id) {
+          if (!seen[id]) { seen[id] = 1; rids.push(id); }
+        });
+      }
+    });
+    if (!starts.length) {
+      var from = Math.floor(paras.length * 0.6);
+      for (var j = from; j < paras.length; j++) {
+        paras[j].replace(/r:embed="([^"]+)"/g, function(_, id) {
+          if (!seen[id]) { seen[id] = 1; rids.push(id); }
+        });
+      }
+    }
+    var blobs = [];
+    rids.forEach(function(rid) {
+      var target = relMap[rid];
+      if (!target) return;
+      var media = zip.file('word/' + target);
+      if (media) blobs.push(media.async('blob'));
+    });
+    return blobs.length ? Promise.all(blobs) : [];
+  });
+}
+
+function extractDocxBudgetData(file, onProgress) {
+  if (!window.JSZip) return Promise.resolve({ tableText: '', ocrText: '' });
+  return JSZip.loadAsync(file).then(function(zip) {
+    var docP = zip.file('word/document.xml');
+    if (!docP) return { tableText: '', ocrText: '' };
+    return docP.async('text').then(function(docXml) {
+      var tableRows = findBudgetTableRows(parseDocxXmlTables(docXml));
+      var tableText = tableRows ? tableToText(tableRows) : '';
+      if (tableRows && parseBudgetTableRows(tableRows).length) {
+        return { tableText: tableText, ocrText: '' };
+      }
+      return findDocxBudgetImageBlobs(zip).then(function(blobs) {
+        if (!blobs.length) return { tableText: tableText, ocrText: '' };
+        var chain = Promise.resolve('');
+        blobs.slice(0, 3).forEach(function(blob) {
+          chain = chain.then(function(acc) {
+            if (acc.replace(/\s/g, '').length > 40) return acc;
+            return ocrImageToText(blob, onProgress).then(function(t) {
+              if (t && t.replace(/\s/g, '').length > 30) return t;
+              return ocrImageOnServer(blob, onProgress);
+            }).then(function(t) { return acc + '\n' + t; });
+          });
+        });
+        return chain.then(function(ocrText) {
+          return { tableText: tableText, ocrText: ocrText.trim() };
+        });
       });
-    }
-    if (!rid) return null;
-    var target = relMap[rid];
-    if (!target) return null;
-    var media = zip.file('word/' + target);
-    return media ? media.async('blob') : null;
+    });
+  }).catch(function(err) {
+    console.warn('extractDocxBudgetData', err);
+    return { tableText: '', ocrText: '' };
+  });
+}
+
+function findDocxBudgetImage(zip) {
+  return findDocxBudgetImageBlobs(zip).then(function(blobs) {
+    return blobs.length ? blobs[0] : null;
   });
 }
 
@@ -709,25 +853,17 @@ function ocrImageOnServer(blob, onProgress) {
 }
 
 function extractDocxBudgetOcr(file, onProgress) {
-  if (!window.JSZip) return Promise.resolve('');
-  var input = file instanceof Blob ? file : file;
-  return JSZip.loadAsync(input).then(function(zip) {
-    return findDocxBudgetImage(zip);
-  }).then(function(blob) {
-    if (!blob) return '';
-    return ocrImageToText(blob, onProgress).then(function(text) {
-      if (text && text.replace(/\s/g, '').length > 30) return text;
-      return ocrImageOnServer(blob, onProgress);
-    });
-  }).catch(function(err) {
-    console.warn('extractDocxBudgetOcr', err);
-    return '';
+  return extractDocxBudgetData(file, onProgress).then(function(data) {
+    var parts = [];
+    if (data.tableText) parts.push(data.tableText);
+    if (data.ocrText) parts.push(data.ocrText);
+    return parts.join('\n');
   });
 }
 
 function hasParsedBudgetTable(text) {
-  if (/===BUDGET_OCR===/.test(text)) return true;
-  if (/服務細項/.test(text) && /複價/.test(text)) return true;
+  if (/===BUDGET_(OCR|TABLE)===/.test(text)) return true;
+  if (/服務細項|服務項目|工作項目/.test(text) && /複價|金額|預算/.test(text)) return true;
   return false;
 }
 
@@ -763,8 +899,11 @@ function extractProcurementText(file, onProgress) {
       return mammoth.extractRawText({ arrayBuffer: buf }).then(function(r) {
         var text = r.value || '';
         if (hasParsedBudgetTable(text)) return text;
-        return extractDocxBudgetOcr(file, onProgress).then(function(ocr) {
-          return ocr ? text + '\n===BUDGET_OCR===\n' + ocr : text;
+        return extractDocxBudgetData(file, onProgress).then(function(data) {
+          var extra = '';
+          if (data.tableText) extra += '\n===BUDGET_TABLE===\n' + data.tableText;
+          if (data.ocrText) extra += '\n===BUDGET_OCR===\n' + data.ocrText;
+          return extra ? text + extra : text;
         });
       });
     });
@@ -784,28 +923,33 @@ function parseCoverProjectName(text) {
 }
 
 function parseBudgetSection(text) {
+  var tableIdx = text.indexOf('===BUDGET_TABLE===');
+  if (tableIdx >= 0) {
+    var tablePart = text.slice(tableIdx + 17);
+    var end = tablePart.indexOf('===BUDGET_OCR===');
+    return end >= 0 ? tablePart.slice(0, end) : tablePart;
+  }
   var ocrIdx = text.indexOf('===BUDGET_OCR===');
   if (ocrIdx >= 0) return text.slice(ocrIdx + 15);
 
   var tail = text.slice(-12000);
-  if (/服務細項/.test(tail) && (/複價|總金額/.test(tail) || /[\d,]{4,}/.test(tail))) return tail;
-  if (/成立輔導團隊/.test(tail) && /[\d,]{5,}/.test(tail)) return tail;
+  if (/服務細項|服務項目|工作項目/.test(tail) && (/複價|總金額|金額|預算/.test(tail) || /[\d,]{4,}/.test(tail))) return tail;
 
   var matches = [];
-  var re = /經費預算配置/g;
+  var anchors = /經費預算配置|經費預算|預算配置|詳細價目表|預算編列/g;
   var m;
-  while ((m = re.exec(text)) !== null) {
-    var ctx = text.slice(Math.max(0, m.index - 6), m.index + 16).replace(/\s/g, '');
-    if (/第[陸六]章/.test(ctx)) continue;
-    if (/經費預算配置\d{1,3}/.test(ctx)) continue;
+  while ((m = anchors.exec(text)) !== null) {
+    var ctx = text.slice(Math.max(0, m.index - 8), m.index + 20).replace(/\s/g, '');
+    if (/第[陸六伍五]章/.test(ctx) && /\d{1,3}$/.test(ctx.slice(-4))) continue;
+    if (/經費預算配置\d{1,3}/.test(ctx) || /經費預算\d{1,3}/.test(ctx)) continue;
     matches.push(m.index);
   }
   var idx = matches.length ? matches[matches.length - 1] : -1;
-  if (idx < 0) idx = text.search(/詳細價目表/);
+  if (idx < 0) idx = text.search(/詳細價目表|價目表/);
   if (idx < 0) return '';
   var slice = text.slice(idx);
-  var end = slice.search(/第[柒七]章|附件一|附錄|簽章|簽名/);
-  if (end > 20) slice = slice.slice(0, end);
+  var end2 = slice.search(/第[柒七捌八]章|附件一|附錄|簽章|簽名/);
+  if (end2 > 20) slice = slice.slice(0, end2);
   else if (slice.length > 12000) slice = slice.slice(0, 12000);
   return slice;
 }
@@ -843,6 +987,12 @@ function parseBudgetWorkItemsFromOcr(section) {
 
 function parseBudgetWorkItems(budgetText) {
   var items = [];
+  if (/\t/.test(budgetText) && /序號|項次|服務|工作|項目/.test(budgetText)) {
+    var rows = budgetText.split('\n').map(function(l) { return l.split('\t'); }).filter(function(r) { return r.length > 1; });
+    items = parseBudgetTableRows(rows);
+    if (items.length) return items;
+  }
+
   var section = budgetText.split(/總金額|總\s*計/)[0];
   var lines = section.split('\n').map(function(l) { return l.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
   var inTable = false;
@@ -850,8 +1000,8 @@ function parseBudgetWorkItems(budgetText) {
 
   while (i < lines.length) {
     var line = lines[i];
-    if (/服務細項|單價|複價|序號/.test(line) && /複價|服務細項/.test(line)) { inTable = true; i++; continue; }
-    if (!inTable && /服務細項/.test(line)) { inTable = true; i++; continue; }
+    if (/服務細項|服務項目|工作項目|單價|複價|序號|項次/.test(line) && /複價|金額|預算|服務|工作|項目/.test(line)) { inTable = true; i++; continue; }
+    if (!inTable && /服務細項|服務項目|工作項目/.test(line)) { inTable = true; i++; continue; }
     if (!inTable) { i++; continue; }
     if (/^單位[：:]|^元$|說明$|詳細價目表/.test(line)) { i++; continue; }
 
@@ -924,7 +1074,7 @@ function parseServiceProposalText(raw) {
   var budgetText = parseBudgetSection(text);
   result.workItems = budgetText ? parseBudgetWorkItems(budgetText) : [];
 
-  if (!result.workItems.length && /經費預算配置/.test(text) && /===BUDGET_OCR===/.test(text)) {
+  if (!result.workItems.length && /===BUDGET_(OCR|TABLE)===/.test(text)) {
     result.workItems = parseBudgetWorkItemsFromOcr(text);
   }
 
