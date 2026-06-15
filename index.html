@@ -394,7 +394,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
     <button type="button" class="proc-clear" id="proc-clear-btn" title="清除上傳" style="display:none" onclick="event.stopPropagation();clearProcUpload()">✕</button>
     <input type="file" id="proc-file" accept=".pdf,.doc,.docx,.txt,.text" hidden onchange="onProcFileSelect(this)">
     <div class="uz-title">📄 點此上傳服務建議書</div>
-    <div class="uz-hint">支援 PDF、Word（.doc/.docx）<br>自動帶入：封面標案名稱、第陸章經費預算配置（服務細項＋金額）<br>主PM、合約日期等請手動填寫</div>
+    <div class="uz-hint">支援 PDF、Word（.doc/.docx）<br>建議：經費表用 Word 表格（服務細項＋金額），勿貼截圖<br>自動帶入標案名稱、工作項目、合約金額；主PM與日期請手填</div>
     <div class="uz-file" id="proc-file-name"></div>
     <div class="uz-status" id="proc-parse-status"></div>
   </div>
@@ -681,8 +681,10 @@ function findBudgetTableRows(tables) {
     var header = (rows[0] || []).join(' ');
     var score = 0;
     if (/序號|項次/.test(header)) score += 2;
-    if (/服務細項|服務項目|工作項目|項目名稱|執行項目|工作內容|細項|項目/.test(header)) score += 3;
+    if (/服務細項|服務項目|工作項目|項目名稱|執行項目|工作內容|細項/.test(header)) score += 3;
     if (/複價|金額|預算|小計|費用|單價/.test(header)) score += 2;
+    var hasNameCol = /服務細項|服務項目|工作項目|項目名稱|執行項目|工作內容|細項/.test(header);
+    var hasAmtCol = /複價|金額|預算|小計|費用/.test(header);
     var moneyRows = 0;
     rows.slice(1).forEach(function(r) {
       if (/總金額|總計|合計/.test(r.join(''))) return;
@@ -690,7 +692,7 @@ function findBudgetTableRows(tables) {
     });
     score += Math.min(moneyRows, 6);
     if (/總金額|總計|合計/.test(rows[rows.length - 1] ? rows[rows.length - 1].join('') : '')) score += 1;
-    if (score > bestScore && moneyRows >= 1) {
+    if (score > bestScore && hasNameCol && hasAmtCol && moneyRows >= 2) {
       bestScore = score;
       best = rows;
     }
@@ -705,7 +707,7 @@ function parseBudgetTableRows(rows) {
   var nameCol = -1;
   var amtCol = -1;
   header.forEach(function(h, i) {
-    if (nameCol < 0 && /服務細項|服務項目|工作項目|項目名稱|執行項目|工作內容|細項內容|細項|項目/.test(h)) nameCol = i;
+    if (nameCol < 0 && /服務細項|服務項目|工作項目|項目名稱|執行項目|工作內容|細項內容|細項/.test(h)) nameCol = i;
     if (/複價|金額|預算|小計|費用/.test(h)) amtCol = i;
   });
   if (nameCol < 0) nameCol = header.length > 1 ? 1 : 0;
@@ -786,7 +788,7 @@ function extractDocxBudgetData(file, onProgress) {
       var tableRows = findBudgetTableRows(parseDocxXmlTables(docXml));
       var tableText = tableRows ? tableToText(tableRows) : '';
       var tableItems = tableRows ? parseBudgetTableRows(tableRows) : [];
-      if (tableItems.length) {
+      if (tableItems.length >= 2) {
         return { tableText: tableText, ocrText: '' };
       }
       return findDocxBudgetImageBlobs(zip).then(function(blobs) {
