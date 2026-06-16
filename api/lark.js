@@ -76,16 +76,30 @@ async function deleteRecord(token, tableId, recordId) {
   return await res.json();
 }
 
-const TABLES = {
+// 各表 table_id：換公司 Lark 時在 Vercel 改環境變數即可，不必改程式
+// LARK_APP_TOKEN = 多維表格 base 的 app_token
+// LARK_TABLE_PROJECTS / WORKITEMS / TASKS / … 見 TABLE_DEFAULTS 的 key
+const TABLE_DEFAULTS = {
   projects:  'tbl8ldUZKRcteYFu',
   workitems: 'tblc5QbFf04I3DFl',
   tasks:     'tbl7mC8KaVVXQOVG',
   expenses:  'tblsUdkQN56T6Jnk',
   payments:  'tblv9SmBvbhxNftU',
   designs:   'tblc3a8IofsGlbKu',
-  journal:   'tblVs9L5WAJcE2a3', // 日報表 https://...?table=tblVs9L5WAJcE2a3
+  journal:   'tblVs9L5WAJcE2a3',
   members:   'tblIHdb6u6S2xdJH'
 };
+
+function buildTables() {
+  const out = {};
+  Object.keys(TABLE_DEFAULTS).forEach(function(key) {
+    const envKey = 'LARK_TABLE_' + key.toUpperCase();
+    out[key] = (process.env[envKey] || TABLE_DEFAULTS[key] || '').trim();
+  });
+  return out;
+}
+
+const TABLES = buildTables();
  
 async function sendWebhook(text) {
   const url = process.env.LARK_WEBHOOK_URL;
@@ -125,7 +139,8 @@ export default async function handler(req, res) {
           hasAppToken: !!APP_TOKEN,
           appIdLen: APP_ID ? APP_ID.length : 0,
           appSecretLen: APP_SECRET ? APP_SECRET.length : 0,
-          appTokenLen: APP_TOKEN ? APP_TOKEN.length : 0
+          appTokenLen: APP_TOKEN ? APP_TOKEN.length : 0,
+          tables: TABLES
         },
         tokenError: lark
       });
