@@ -2045,11 +2045,40 @@ function parseTs(val) {
   return isNaN(d2.getTime()) ? null : d2;
 }
 
-function formatWeight(val) {
+function formatPct(val) {
   if (val === '' || val == null) return '';
   var n = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.]/g, ''));
-  if (isNaN(n) || n <= 0) return '';
+  if (isNaN(n)) return '';
   return (n <= 1 ? Math.round(n * 100) : Math.round(n)) + '%';
+}
+
+function formatWeight(val) {
+  return formatPct(val);
+}
+
+function getWiProgressPct(wf, wiId) {
+  if (!wf) return '';
+  var p = formatPct(wf['加權進度']);
+  if (p) return p;
+  p = formatPct(wf['任務平均進度']);
+  if (p) return p;
+  if (!wiId) return '';
+  var sum = 0, count = 0;
+  tasksData.forEach(function(t) {
+    if (getLinkIds(t.fields['所屬工作項目']).indexOf(wiId) < 0) return;
+    sum += parseProgressVal(t.fields['進度狀態'], t.fields['進度數值']);
+    count++;
+  });
+  return count ? (Math.round(sum / count) + '%') : '';
+}
+
+function formatWeightProgress(wf, wiId) {
+  var w = formatPct(wf && wf['權重']);
+  var p = getWiProgressPct(wf, wiId);
+  if (w && p) return w + '/' + p;
+  if (w) return w + '/—';
+  if (p) return '—/' + p;
+  return '';
 }
 
 function getProjectNameFromWi(wi) {
@@ -2317,7 +2346,7 @@ function renderProjects() {
       var wName = wf['工作項目名稱'] || '';
       var wiStart = parseTs(wf['開始日期']) || parseTs(f['合約開始日']);
       var wiEnd = parseTs(wf['截止日']);
-      var weightStr = formatWeight(wf['權重']);
+      var weightStr = formatWeightProgress(wf, wi.record_id);
       var dateStr = '';
       var daysStr = wiEnd ? daysRemaining(wf['截止日']) : '';
       if (wiStart && wiEnd) dateStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
@@ -2621,7 +2650,7 @@ function renderGanttFromData() {
       var wiName = wf['工作項目名稱'] || '';
       var wiStart = parseTs(wf['開始日期']) || contractStart;
       var wiEnd = parseTs(wf['截止日']) || contractEnd;
-      var weightStr = formatWeight(wf['權重']);
+      var weightStr = formatWeightProgress(wf, wiId);
       var metaStr = '';
       if (wiStart && wiEnd) metaStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
       else if (wiEnd) metaStr = fmt(wiEnd.getTime());
