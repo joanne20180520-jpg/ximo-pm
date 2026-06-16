@@ -67,12 +67,17 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .bdel:hover{background:rgba(180,40,40,.9)}
 .sl2{display:none;margin:2px 0 3px 4px}
 .sl2.open{display:block}
-.si{padding:5px 9px 5px 12px;font-size:11px;color:var(--t2);font-weight:500;cursor:default;border-radius:var(--rs);display:flex;align-items:center;justify-content:space-between;gap:4px}
+.si{padding:6px 9px 6px 12px;font-size:11px;color:var(--t2);font-weight:500;cursor:default;border-radius:var(--rs);display:flex;flex-direction:column;gap:3px}
 .si:hover{background:var(--sf2)}
 .si .bdel{background:transparent;color:var(--t3);opacity:0}
 .si:hover .bdel{opacity:1}
 .si .bdel:hover{color:#c0392b;background:rgba(192,57,43,.12)}
-.si-meta{font-size:10px;color:var(--t3);display:flex;gap:6px;align-items:center}
+.si-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.si-name{font-size:11px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.si-weight{font-size:9px;color:var(--t3);font-weight:700;flex-shrink:0}
+.si-meta{font-size:10px;color:var(--t3);display:flex;gap:8px;align-items:center;justify-content:space-between}
+.si-date{flex:1;min-width:0;white-space:nowrap}
+.si-remain{color:var(--warn);font-weight:600;flex-shrink:0;white-space:nowrap}
 .sd{font-size:10px;background:var(--border);color:var(--t2);padding:1px 5px;border-radius:3px;font-weight:600}
 
 /* B区 - 任務 */
@@ -585,7 +590,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
 <div class="po" id="pp-work"><div class="pp ppw"><div class="pph"><h3>建立標案的工作項目</h3><button class="ppc" onclick="cl('pp-work')">✕</button></div><div class="ppb"><div class="fg"><label>標案</label><select id="nw-proj"></select></div><div class="fg"><label>開始日期</label><input type="date" id="nw-start"></div><div style="display:grid;grid-template-columns:1fr 90px 1fr 70px 50px;gap:6px;padding:4px 0;font-size:10px;color:var(--t3)"><span>工作項目名稱</span><span>天數</span><span>負責夥伴</span><span>可用成本</span><span>權重</span></div><div class="slist" id="sl"></div><button class="bads" onclick="addS()">＋ 新增工作項目</button></div><div class="ppf"><button class="bcan" onclick="cl('pp-work')">取消</button><button class="bpri" onclick="saveWorkItems()">新增</button></div></div></div>
 
-<div class="po" id="pp-task"><div class="pp"><div class="pph"><h3>建立新任務</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fg"><label>任務名稱</label><input type="text" id="nt-name" placeholder="拜訪OO茶主"></div><div class="fg"><label>負責人</label><select id="nt-assignee" data-members></select></div><div class="fg"><label>所屬工作項目</label><select id="nt-wi"></select></div><div class="fg"><label>預計完成日</label><input type="date" id="nt-due"></div><div class="fg"><label>進度狀態</label><select id="nt-status"></select></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri" onclick="saveTask()">新增</button></div></div></div>
+<div class="po" id="pp-task"><div class="pp"><div class="pph"><h3>建立新任務</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fg"><label>任務名稱</label><input type="text" id="nt-name" placeholder="拜訪OO茶主"></div><div class="fg"><label>負責人</label><select id="nt-assignee" data-members></select></div><div class="fg"><label>所屬工作項目</label><select id="nt-wi"></select></div><div class="fg"><label>開始日期</label><input type="date" id="nt-start"></div><div class="fg"><label>預計完成日</label><input type="date" id="nt-due"></div><div class="fg"><label>進度狀態</label><select id="nt-status"></select></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri" onclick="saveTask()">新增</button></div></div></div>
 
 <div class="po" id="pp-td"><div class="pp"><div class="pph pph-report" id="td-header"><h3 id="td-title">任務回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-td')">✕</button></div><div class="ppb">
   <div id="td-proj-tag" class="td-proj"></div>
@@ -1510,6 +1515,7 @@ function saveProjectImport() {
   apiPost('projects', fields).then(function(res) {
     var projId = getProjectRecordId(res);
     if (!projId || !items.length) return res;
+    var wiIds = [];
     var chain = Promise.resolve();
     items.forEach(function(item) {
       chain = chain.then(function() {
@@ -1524,10 +1530,15 @@ function saveProjectImport() {
         };
         var partner = larkPerson(pm);
         if (partner) wiFields['負責夥伴'] = partner;
-        return apiPost('workitems', wiFields);
+        return apiPost('workitems', wiFields).then(function(wiRes) {
+          var wiId = getProjectRecordId(wiRes);
+          if (wiId) wiIds.push(wiId);
+        });
       });
     });
-    return chain.then(function() { return res; });
+    return chain.then(function() {
+      if (wiIds.length) return apiPut('projects', projId, { '工作項目': wiIds });
+    }).then(function() { return res; });
   }).then(function() {
     cl('pp-proj');
     resetProcForm();
@@ -1754,7 +1765,8 @@ function paintGantt(key,proj,vs,ve,total,cw){
       if(bx+bw<0||bx>tw)return;
       var ax=Math.max(0,bx),aw=Math.min(bw,tw-ax);
       var top = 4 + bi * 20;
-      bH+='<div class="gbar" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:16px;background:'+proj.color+';opacity:'+bar.o+'">'+bar.l+'</div>';
+      var clickAttr = bar.id ? ' onclick="openTaskDetail(\'' + bar.id + '\')"' : '';
+      bH+='<div class="gbar" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:16px;background:'+proj.color+';opacity:'+bar.o+'"'+clickAttr+' title="'+escAttr(bar.l)+'">'+bar.l+'</div>';
     });
     tmH+='<div class="gtr" style="width:'+tw+'px;height:'+rowH+'px">'+bH+'</div>';
   });
@@ -1942,9 +1954,10 @@ function parseProgressVal(status, num) {
   var m = String(status).match(/(\d+)/);
   return m ? parseInt(m[1], 10) : 0;
 }
-function daysRemaining(ts) {
-  if (!ts) return '';
-  var due = new Date(ts); due.setHours(0,0,0,0);
+function daysRemaining(val) {
+  var due = parseTs(val);
+  if (!due) return '';
+  due.setHours(0,0,0,0);
   var diff = Math.ceil((due - TODAY) / 86400000);
   if (diff < 0) return Math.abs(diff) + 'D 逾期';
   if (diff === 0) return '今天';
@@ -2010,8 +2023,33 @@ function escAttr(s) {
 
 function parseTs(val) {
   if (!val) return null;
-  var d = new Date(val);
-  return isNaN(d.getTime()) ? null : d;
+  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  if (typeof val === 'number') {
+    var n = val < 1e11 ? val * 1000 : val;
+    var d = new Date(n);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof val === 'string') {
+    var d1 = new Date(val);
+    if (!isNaN(d1.getTime())) return d1;
+    var m = val.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (m) return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+    return null;
+  }
+  if (Array.isArray(val) && val.length) return parseTs(val[0]);
+  if (typeof val === 'object') {
+    if (val.value != null) return parseTs(val.value);
+    if (val.text != null) return parseTs(val.text);
+  }
+  var d2 = new Date(val);
+  return isNaN(d2.getTime()) ? null : d2;
+}
+
+function formatWeight(val) {
+  if (val === '' || val == null) return '';
+  var n = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.]/g, ''));
+  if (isNaN(n) || n <= 0) return '';
+  return (n <= 1 ? Math.round(n * 100) : Math.round(n)) + '%';
 }
 
 function getProjectNameFromWi(wi) {
@@ -2022,6 +2060,7 @@ function getProjectNameFromWi(wi) {
 function getWorkitemsForProject(rec) {
   var f = rec.fields;
   var pname = f['標案名稱'] || '';
+  var projId = rec.record_id;
   var wiIds = getWiIds(f);
   var result = [];
   var seen = {};
@@ -2030,7 +2069,9 @@ function getWorkitemsForProject(rec) {
     if (wi) { seen[wi.record_id] = 1; result.push(wi); }
   });
   workitemsData.forEach(function(wi) {
-    if (getProjectNameFromWi(wi) === pname && !seen[wi.record_id]) {
+    if (seen[wi.record_id]) return;
+    var linkedIds = getLinkIds(wi.fields['所屬標案']);
+    if (linkedIds.indexOf(projId) >= 0 || getProjectNameFromWi(wi) === pname) {
       seen[wi.record_id] = 1;
       result.push(wi);
     }
@@ -2136,9 +2177,9 @@ function fmt2(d) {
   var s = String(d.getFullYear()).slice(2) + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
   return s;
 }
-function fmtDate(ts) {
-  if (!ts) return '—';
-  var d = new Date(ts);
+function fmtDate(val) {
+  var d = parseTs(val);
+  if (!d) return '—';
   return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
 }
 function togNtag(el) { el.classList.toggle('on'); }
@@ -2274,20 +2315,22 @@ function renderProjects() {
     workitems.forEach(function(wi) {
       var wf = wi.fields;
       var wName = wf['工作項目名稱'] || '';
-      var startWi = wf['開始日期'];
-      var endWi = wf['截止日'];
+      var wiStart = parseTs(wf['開始日期']) || parseTs(f['合約開始日']);
+      var wiEnd = parseTs(wf['截止日']);
+      var weightStr = formatWeight(wf['權重']);
       var dateStr = '';
-      var daysStr = '';
-      if (startWi && endWi) {
-        dateStr = fmtDate(startWi) + '-' + fmtDate(endWi);
-        daysStr = Math.round((new Date(endWi) - new Date(startWi)) / 86400000) + 1 + 'Ds';
-      } else if (endWi) {
-        dateStr = fmtDate(endWi);
-        daysStr = daysRemaining(endWi);
-      }
-      subHTML += '<div class="si"><span>' + wName + '</span><span class="si-meta"><span>' + dateStr + '</span><span style="color:var(--warn);font-weight:600">' + daysStr + '</span>'
+      var daysStr = wiEnd ? daysRemaining(wf['截止日']) : '';
+      if (wiStart && wiEnd) dateStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
+      else if (wiEnd) dateStr = fmt(wiEnd.getTime());
+      else if (wiStart) dateStr = fmt(wiStart.getTime()) + '–';
+      subHTML += '<div class="si">'
+        + '<div class="si-row"><span class="si-name">' + escHtml(wName) + '</span>'
+        + (weightStr ? '<span class="si-weight">' + weightStr + '</span>' : '')
         + '<button type="button" class="bdel" title="修改工作項目" style="margin-right:2px" onclick="event.stopPropagation();openEditWorkItem(\'' + wi.record_id + '\')">✎</button>'
-        + '<button type="button" class="bdel" title="刪除工作項目" onclick="deleteWorkItem(\'' + wi.record_id + '\',\'' + escAttr(wName).replace(/'/g, "\\'") + '\')">×</button></span></div>';
+        + '<button type="button" class="bdel" title="刪除工作項目" onclick="deleteWorkItem(\'' + wi.record_id + '\',\'' + escAttr(wName).replace(/'/g, "\\'") + '\')">×</button></div>'
+        + '<div class="si-meta"><span class="si-date">' + dateStr + '</span>'
+        + (daysStr ? '<span class="si-remain">' + daysStr + '</span>' : '')
+        + '</div></div>';
     });
     html += '<div class="pi">';
     html += '<div class="pr" style="background:' + color + '" onclick="tgp(this)">';
@@ -2578,27 +2621,31 @@ function renderGanttFromData() {
       var wiName = wf['工作項目名稱'] || '';
       var wiStart = parseTs(wf['開始日期']) || contractStart;
       var wiEnd = parseTs(wf['截止日']) || contractEnd;
-      var weight = wf['權重'] || '';
-      var wiProg = Math.round((wf['加權進度'] || 0) * 100);
+      var weightStr = formatWeight(wf['權重']);
       var metaStr = '';
       if (wiStart && wiEnd) metaStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
       else if (wiEnd) metaStr = fmt(wiEnd.getTime());
+      if (weightStr) metaStr = metaStr ? (metaStr + ' · ' + weightStr) : weightStr;
 
       var relTasks = tasksByWi[wiId] || [];
       var bars = [];
       relTasks.forEach(function(t) {
         var tf = t.fields;
         var tName = tf['任務名稱'] || '未命名';
+        var tStart = parseTs(tf['開始日期']);
         var tDue = parseTs(tf['預計完成日']);
         if (!tDue) return;
-        var tStart = new Date(tDue.getTime() - 3 * 86400000);
-        if (wiStart && tStart < wiStart) tStart = wiStart;
+        if (!tStart) {
+          tStart = new Date(tDue.getTime() - 3 * 86400000);
+          if (wiStart && tStart < wiStart) tStart = wiStart;
+        }
         var tProg = parseProgressVal(tf['進度狀態'], tf['進度數值']);
         bars.push({
           s: toDateStr(tStart),
           e: toDateStr(tDue),
           l: tName,
-          o: tProg >= 100 ? 1 : (tProg > 0 ? 0.9 : 0.55)
+          o: tProg >= 100 ? 1 : (tProg > 0 ? 0.9 : 0.55),
+          id: t.record_id
         });
       });
 
@@ -2667,6 +2714,7 @@ function getTaskContext(taskId) {
     projName: projName,
     color: projColorByName(projName),
     assignee: personName(f['負責人']),
+    startTs: f['開始日期'],
     dueTs: f['預計完成日'],
     progress: parseProgressVal(f['進度狀態'], f['進度數值'])
   };
@@ -2690,6 +2738,8 @@ function openNewTaskFromContext() {
   if (ctx) {
     if (ctx.wiId) document.getElementById('nt-wi').value = ctx.wiId;
     if (ctx.assignee) document.getElementById('nt-assignee').value = ctx.assignee;
+    var start = document.getElementById('nt-start');
+    if (start && ctx.startTs) start.value = tsToDateInput(ctx.startTs);
     var due = document.getElementById('nt-due');
     if (due && ctx.dueTs) due.value = tsToDateInput(ctx.dueTs);
   }
@@ -2719,10 +2769,13 @@ function openTaskDetail(taskId) {
     projTag.style.display = ctx.projName ? 'inline-block' : 'none';
   }
   var remain = daysRemaining(ctx.dueTs);
+  var startLabel = ctx.startTs ? fmtDate(ctx.startTs) : '';
+  var dueLabel = ctx.dueTs ? fmtDate(ctx.dueTs) : '—';
+  var dateRange = startLabel ? (startLabel + ' – ' + dueLabel) : dueLabel;
   document.getElementById('td-meta').innerHTML =
     '<span style="font-size:11px;background:var(--sf2);padding:2px 8px;border-radius:20px">' + ctx.wiName + '</span>'
     + '<span class="av ' + avatarClass(ctx.assignee) + '">' + personInitial(ctx.assignee) + '</span>'
-    + '<span style="font-size:12px;color:var(--t2)">' + ctx.assignee + ' · ' + (ctx.dueTs ? fmtDate(ctx.dueTs) : '—') + '</span>'
+    + '<span style="font-size:12px;color:var(--t2)">' + ctx.assignee + ' · ' + dateRange + '</span>'
     + '<span style="font-size:11px;color:var(--warn);font-weight:600">' + remain + '</span>'
     + '<span style="font-size:11px;color:var(--t3)">' + ctx.progress + '%</span>';
   document.querySelectorAll('#td-cats .td-cat').forEach(function(c) {
@@ -3928,6 +3981,7 @@ function saveWorkItems() {
   if (!items.length) { alert('請至少新增一個工作項目'); return; }
 
   var startTs = dateInputToTs(startStr);
+  var wiIds = [];
   var chain = Promise.resolve();
   items.forEach(function(item) {
     chain = chain.then(function() {
@@ -3942,11 +3996,21 @@ function saveWorkItems() {
       };
       var partner = larkPerson(item.partner);
       if (partner) fields['負責夥伴'] = partner;
-      return apiPost('workitems', fields);
+      return apiPost('workitems', fields).then(function(res) {
+        var wiId = getProjectRecordId(res);
+        if (wiId) wiIds.push(wiId);
+      });
     });
   });
 
   chain.then(function() {
+    if (!wiIds.length) return;
+    var projRec = projectsData.find(function(p) { return p.record_id === projId; });
+    var existingIds = projRec ? getWiIds(projRec.fields) : [];
+    var merged = existingIds.slice();
+    wiIds.forEach(function(id) { if (merged.indexOf(id) < 0) merged.push(id); });
+    return apiPut('projects', projId, { '工作項目': merged });
+  }).then(function() {
     cl('pp-work');
     document.getElementById('sl').innerHTML = '';
     loadData();
@@ -3960,6 +4024,7 @@ function saveTask() {
   var name = document.getElementById('nt-name').value.trim();
   var wiId = document.getElementById('nt-wi').value;
   var assignee = document.getElementById('nt-assignee').value;
+  var start = document.getElementById('nt-start').value;
   var due = document.getElementById('nt-due').value;
   var status = document.getElementById('nt-status').value;
   if (!name) { alert('請填寫任務名稱'); return; }
@@ -3971,6 +4036,7 @@ function saveTask() {
     '進度狀態': status,
     '進度數值': parseProgressVal(status, null)
   };
+  if (start) fields['開始日期'] = dateInputToTs(start);
   if (due) fields['預計完成日'] = dateInputToTs(due);
   var person = larkPerson(assignee);
   if (person) fields['負責人'] = person;
