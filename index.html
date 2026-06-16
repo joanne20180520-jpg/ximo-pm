@@ -360,6 +360,31 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+/* ── 確認對話框 ── */
+.confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:500;display:flex;align-items:center;justify-content:center}
+.confirm-box{background:var(--surface);border-radius:var(--r);width:340px;box-shadow:0 12px 40px rgba(0,0,0,.18);overflow:hidden}
+.confirm-hdr{padding:14px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.confirm-icon{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.confirm-icon.del{background:#fde8e8;color:var(--danger)}
+.confirm-icon.edit{background:#fff3e0;color:var(--warn)}
+.confirm-hdr h4{font-size:13px;font-weight:700}
+.confirm-body{padding:12px 16px 14px;font-size:12px;color:var(--t2);line-height:1.6}
+.confirm-name{font-weight:700;color:var(--text);display:block;margin-top:2px}
+.confirm-foot{padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:7px}
+.confirm-cancel{padding:6px 13px;border-radius:var(--rs);border:1px solid var(--border);background:var(--sf2);font-size:12px;cursor:pointer;color:var(--t2)}
+.confirm-cancel:hover{background:var(--border)}
+.confirm-ok{padding:6px 16px;border-radius:var(--rs);border:none;font-size:12px;font-weight:600;cursor:pointer;color:#fff}
+.confirm-ok.del{background:var(--danger)}
+.confirm-ok.del:hover{background:#9b1d14}
+.confirm-ok.edit{background:var(--accent)}
+.confirm-ok.edit:hover{background:#333}
+
+/* ── 復原提示條 ── */
+.undo-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;border-radius:var(--r);padding:9px 14px;display:flex;align-items:center;gap:10px;font-size:12px;box-shadow:0 4px 16px rgba(0,0,0,.22);z-index:600;opacity:0;pointer-events:none;transition:opacity .2s;white-space:nowrap}
+.undo-toast.show{opacity:1;pointer-events:auto}
+.undo-btn{padding:4px 10px;border-radius:var(--rs);border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;font-size:11px;font-weight:600;cursor:pointer}
+.undo-btn:hover{background:rgba(255,255,255,.22)}
 </style>
 </head>
 <body>
@@ -605,6 +630,52 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
   </div>
 </div>
 
+<!-- 修改任務 -->
+<div class="po" id="pp-edit-task"><div class="pp"><div class="pph"><h3>修改任務</h3><button class="ppc" onclick="cl('pp-edit-task')">✕</button></div><div class="ppb">
+  <div class="fg"><label>任務名稱</label><input type="text" id="et-name"></div>
+  <div class="fg"><label>負責人</label><select id="et-assignee" data-members></select></div>
+  <div class="fg"><label>所屬工作項目</label><select id="et-wi"></select></div>
+  <div class="fg"><label>預計完成日</label><input type="date" id="et-due"></div>
+  <div class="fg"><label>進度狀態</label><select id="et-status"></select></div>
+</div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-task')">取消</button><button class="bpri" onclick="saveEditTask()">儲存</button></div></div></div>
+
+<!-- 修改工作項目 -->
+<div class="po" id="pp-edit-wi"><div class="pp"><div class="pph"><h3>修改工作項目</h3><button class="ppc" onclick="cl('pp-edit-wi')">✕</button></div><div class="ppb">
+  <div class="fg"><label>工作項目名稱</label><input type="text" id="ew-name"></div>
+  <div class="fg"><label>負責人</label><select id="ew-assignee" data-members></select></div>
+  <div class="fg"><label>開始日期</label><input type="date" id="ew-start"></div>
+  <div class="fg"><label>截止日</label><input type="date" id="ew-end"></div>
+  <div class="fg"><label>可用成本</label><input type="text" id="ew-cost" placeholder="NT$0"></div>
+</div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-wi')">取消</button><button class="bpri" onclick="saveEditWorkItem()">儲存</button></div></div></div>
+
+<!-- 修改標案 -->
+<div class="po" id="pp-edit-proj"><div class="pp"><div class="pph"><h3>修改標案</h3><button class="ppc" onclick="cl('pp-edit-proj')">✕</button></div><div class="ppb">
+  <div class="fg"><label>標案名稱</label><input type="text" id="ep-name"></div>
+  <div class="fg"><label>主PM</label><select id="ep-pm" data-members></select></div>
+  <div class="fg"><label>合約開始日</label><input type="date" id="ep-start"></div>
+  <div class="fg"><label>合約結束日</label><input type="date" id="ep-end"></div>
+  <div class="fg"><label>合約金額</label><input type="text" id="ep-amount" placeholder="NT$0"></div>
+</div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-proj')">取消</button><button class="bpri" onclick="saveEditProject()">儲存</button></div></div></div>
+
+<!-- 確認對話框 -->
+<div id="confirm-overlay" class="confirm-overlay" style="display:none">
+  <div class="confirm-box">
+    <div class="confirm-hdr">
+      <div class="confirm-icon" id="confirm-icon">⚠</div>
+      <h4 id="confirm-title">確認操作</h4>
+    </div>
+    <div class="confirm-body" id="confirm-body"></div>
+    <div class="confirm-foot">
+      <button class="confirm-cancel" onclick="confirmCancel()">取消</button>
+      <button class="confirm-ok" id="confirm-ok-btn" onclick="confirmOk()">確認</button>
+    </div>
+  </div>
+</div>
+<!-- 復原提示條 -->
+<div class="undo-toast" id="undo-toast">
+  <span id="undo-toast-msg">已刪除</span>
+  <button class="undo-btn" onclick="undoLast()">↩ 復原</button>
+</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -1745,6 +1816,97 @@ var PROJECT_COLORS = [
 
 // ── 從 API 讀取資料 ──
 var API = '/api/lark';
+
+// ── 復原堆疊 ──
+var undoStack = [];
+var undoToastTimer = null;
+
+function showUndoToast(msg) {
+  var toast = document.getElementById('undo-toast');
+  var msgEl = document.getElementById('undo-toast-msg');
+  if (!toast || !msgEl) return;
+  msgEl.textContent = msg;
+  toast.classList.add('show');
+  if (undoToastTimer) clearTimeout(undoToastTimer);
+  undoToastTimer = setTimeout(function() {
+    toast.classList.remove('show');
+  }, 5000);
+}
+
+function hideUndoToast() {
+  var toast = document.getElementById('undo-toast');
+  if (toast) toast.classList.remove('show');
+  if (undoToastTimer) clearTimeout(undoToastTimer);
+}
+
+function undoLast() {
+  var last = undoStack.pop();
+  if (!last) return;
+  hideUndoToast();
+  if (last.type === 'delete') {
+    apiPost(last.table, last.data).then(function() {
+      loadData();
+    }).catch(function(err) { alert('復原失敗：' + err.message); });
+  } else if (last.type === 'update') {
+    apiPut(last.table, last.recordId, last.data).then(function() {
+      loadData();
+    }).catch(function(err) { alert('復原失敗：' + err.message); });
+  }
+}
+
+// ── 確認對話框 ──
+var confirmCallback = null;
+
+function showConfirm(opts) {
+  // opts: { type:'del'|'edit', title, body, okText, onOk }
+  var overlay = document.getElementById('confirm-overlay');
+  var icon = document.getElementById('confirm-icon');
+  var titleEl = document.getElementById('confirm-title');
+  var bodyEl = document.getElementById('confirm-body');
+  var okBtn = document.getElementById('confirm-ok-btn');
+  if (!overlay) return;
+  icon.className = 'confirm-icon ' + (opts.type || 'del');
+  icon.textContent = opts.type === 'edit' ? '✎' : '🗑';
+  titleEl.textContent = opts.title || '確認操作';
+  bodyEl.innerHTML = opts.body || '';
+  okBtn.className = 'confirm-ok ' + (opts.type || 'del');
+  okBtn.textContent = opts.okText || '確認';
+  confirmCallback = opts.onOk || null;
+  overlay.style.display = 'flex';
+}
+
+function confirmOk() {
+  document.getElementById('confirm-overlay').style.display = 'none';
+  if (confirmCallback) confirmCallback();
+  confirmCallback = null;
+}
+
+function confirmCancel() {
+  document.getElementById('confirm-overlay').style.display = 'none';
+  confirmCallback = null;
+}
+
+// 點遮罩關閉
+document.addEventListener('DOMContentLoaded', function() {
+  var overlay = document.getElementById('confirm-overlay');
+  if (overlay) overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) confirmCancel();
+  });
+});
+
+// ── 時間進度計算 ──
+function calcTimeProgress(startTs, endTs) {
+  if (!startTs || !endTs) return null;
+  var start = typeof startTs === 'number' ? new Date(startTs) : new Date(startTs);
+  var end = typeof endTs === 'number' ? new Date(endTs) : new Date(endTs);
+  var today = new Date(); today.setHours(0,0,0,0);
+  start.setHours(0,0,0,0);
+  end.setHours(0,0,0,0);
+  if (today <= start) return 0;
+  if (today >= end) return 100;
+  return Math.round((today - start) / (end - start) * 100);
+}
+
 var projectsData = [];
 var workitemsData = [];
 var tasksData = [];
@@ -2124,6 +2286,7 @@ function renderProjects() {
         daysStr = daysRemaining(endWi);
       }
       subHTML += '<div class="si"><span>' + wName + '</span><span class="si-meta"><span>' + dateStr + '</span><span style="color:var(--warn);font-weight:600">' + daysStr + '</span>'
+        + '<button type="button" class="bdel" title="修改工作項目" style="margin-right:2px" onclick="event.stopPropagation();openEditWorkItem(\'' + wi.record_id + '\')">✎</button>'
         + '<button type="button" class="bdel" title="刪除工作項目" onclick="deleteWorkItem(\'' + wi.record_id + '\',\'' + escAttr(wName).replace(/'/g, "\\'") + '\')">×</button></span></div>';
     });
     html += '<div class="pi">';
@@ -2131,6 +2294,7 @@ function renderProjects() {
     html += '<div class="dot"></div><div class="pr-main"><span class="pr-name">' + name + '</span>';
     if (meta) html += '<div class="pr-meta">' + meta + '</div>';
     html += '</div><span class="pr-pct">' + progress + '%</span>';
+    html += '<button type="button" class="bdel" title="修改標案" style="margin-right:2px" onclick="event.stopPropagation();openEditProject(\'' + rec.record_id + '\')">✎</button>';
     html += '<button type="button" class="bdel" title="刪除標案" onclick="event.stopPropagation();deleteProject(\'' + rec.record_id + '\',\'' + escAttr(name).replace(/'/g, "\\'") + '\')">×</button>';
     html += '<span class="arr">▶</span></div>';
     html += '<div class="sl2">' + subHTML + '</div></div>';
@@ -2155,7 +2319,18 @@ function renderTasks() {
     var wiId = wiIds[0] || null;
     var wi = wiId ? wiMap[wiId] : null;
     var projName = wi ? (wi.project || '其他') : '其他';
-    var progress = parseProgressVal(f['進度狀態'], f['進度數值']);
+    // 取工作項目的開始日，找不到就用所屬標案合約開始日
+    var wiRec = wiId ? workitemsData.find(function(w){ return w.record_id === wiId; }) : null;
+    var startTs = wiRec ? wiRec.fields['開始日期'] : null;
+    if (!startTs && wiRec) {
+      var projRec = projectsData.find(function(p){
+        var wids = getLinkIds(p.fields['工作項目']);
+        return wids.indexOf(wiId) >= 0;
+      });
+      if (projRec) startTs = projRec.fields['合約開始日'];
+    }
+    var timeProgress = calcTimeProgress(startTs, f['預計完成日']);
+    var progress = timeProgress !== null ? timeProgress : parseProgressVal(f['進度狀態'], f['進度數值']);
     if (!grouped[projName]) grouped[projName] = [];
     grouped[projName].push({
       id: rec.record_id,
@@ -2184,6 +2359,7 @@ function renderTasks() {
   function renderGroup(pname, color) {
     grouped[pname].forEach(function(task) {
       html += '<div class="ti" data-proj="' + escAttr(pname) + '" onclick="openTaskDetail(\'' + task.id + '\')">';
+      html += '<button type="button" class="bdel" title="修改任務" style="margin-right:2px;right:28px" onclick="event.stopPropagation();openEditTask(\'' + task.id + '\')">✎</button>';
       html += '<button type="button" class="bdel" title="刪除任務" onclick="event.stopPropagation();deleteTask(\'' + task.id + '\',\'' + escAttr(task.name).replace(/'/g, "\\'") + '\')">×</button>';
       html += '<div class="tit"><div><div class="tn">' + task.name + '</div>';
       html += '<div class="tm">' + task.wiName + ' · ' + task.assignee + ' · ' + task.progress + '%</div></div>';
@@ -2248,7 +2424,18 @@ function renderTeamPanel() {
     var wiIds = getLinkIds(f['所屬工作項目']);
     var wi = wiIds[0] ? wiMap[wiIds[0]] : null;
     var projName = wi ? (wi.project || '其他') : '其他';
-    var progress = parseProgressVal(f['進度狀態'], f['進度數值']);
+    var wiId2 = wiIds[0] || null;
+    var wiRec3 = wiId2 ? workitemsData.find(function(w){ return w.record_id === wiId2; }) : null;
+    var startTs3 = wiRec3 ? wiRec3.fields['開始日期'] : null;
+    if (!startTs3 && wiRec3) {
+      var projRec3 = projectsData.find(function(p){
+        var wids = getLinkIds(p.fields['工作項目']);
+        return wids.indexOf(wiId2) >= 0;
+      });
+      if (projRec3) startTs3 = projRec3.fields['合約開始日'];
+    }
+    var timeProgress3 = calcTimeProgress(startTs3, f['預計完成日']);
+    var progress = timeProgress3 !== null ? timeProgress3 : parseProgressVal(f['進度狀態'], f['進度數值']);
     if (!isTodayTeamTask(f['預計完成日'], progress)) return;
     if (!byPerson[assignee]) byPerson[assignee] = [];
     byPerson[assignee].push({
@@ -2952,6 +3139,15 @@ function saveDailyJournal() {
       fields['進度數值'] = parseProgressVal(row.status, null);
     }
     if (!Object.keys(fields).length) return Promise.resolve({ code: 0 });
+    // 儲存舊資料供復原使用
+    var oldRec = tasksData.find(function(r){ return r.record_id === row.id; });
+    if (oldRec) {
+      var oldFields = {};
+      if (fields['備註'] !== undefined) oldFields['備註'] = oldRec.fields['備註'] || '';
+      if (fields['進度狀態'] !== undefined) oldFields['進度狀態'] = oldRec.fields['進度狀態'] || '';
+      if (fields['進度數值'] !== undefined) oldFields['進度數值'] = oldRec.fields['進度數值'] || 0;
+      undoStack.push({ type: 'update', table: 'tasks', recordId: row.id, data: oldFields });
+    }
     return fetch(API + '?table=tasks&recordId=' + row.id, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -3379,28 +3575,260 @@ function apiDelete(table, recordId) {
   });
 }
 
+
+// ── 修改功能 ──
+var editingTaskId = null;
+var editingWiId = null;
+var editingProjId = null;
+
+function openEditTask(taskId) {
+  var rec = tasksData.find(function(r){ return r.record_id === taskId; });
+  if (!rec) return;
+  editingTaskId = taskId;
+  var f = rec.fields;
+  refreshEditSelects();
+  document.getElementById('et-name').value = f['任務名稱'] || '';
+  var assigneeSel = document.getElementById('et-assignee');
+  var assigneeName = personName(f['負責人']);
+  for (var i = 0; i < assigneeSel.options.length; i++) {
+    if (assigneeSel.options[i].text === assigneeName) { assigneeSel.selectedIndex = i; break; }
+  }
+  var wiSel = document.getElementById('et-wi');
+  var wiIds = getLinkIds(f['所屬工作項目']);
+  var wiId = wiIds[0] || '';
+  for (var j = 0; j < wiSel.options.length; j++) {
+    if (wiSel.options[j].value === wiId) { wiSel.selectedIndex = j; break; }
+  }
+  document.getElementById('et-due').value = f['預計完成日'] ? tsToDateInput(f['預計完成日']) : '';
+  var statusSel = document.getElementById('et-status');
+  for (var k = 0; k < statusSel.options.length; k++) {
+    if (statusSel.options[k].value === (f['進度狀態'] || '')) { statusSel.selectedIndex = k; break; }
+  }
+  op('pp-edit-task');
+}
+
+function saveEditTask() {
+  if (!editingTaskId) return;
+  var rec = tasksData.find(function(r){ return r.record_id === editingTaskId; });
+  var oldFields = rec ? {
+    '任務名稱': rec.fields['任務名稱'] || '',
+    '負責人': rec.fields['負責人'],
+    '所屬工作項目': rec.fields['所屬工作項目'],
+    '預計完成日': rec.fields['預計完成日'],
+    '進度狀態': rec.fields['進度狀態'] || '',
+    '進度數值': rec.fields['進度數值'] || 0
+  } : null;
+  var status = document.getElementById('et-status').value;
+  var fields = {
+    '任務名稱': document.getElementById('et-name').value.trim(),
+    '負責人': document.getElementById('et-assignee').value,
+    '所屬工作項目': [document.getElementById('et-wi').value],
+    '預計完成日': dateInputToTs(document.getElementById('et-due').value),
+    '進度狀態': status,
+    '進度數值': parseProgressVal(status, null)
+  };
+  if (!fields['任務名稱']) { alert('請填寫任務名稱'); return; }
+  showConfirm({
+    type: 'edit',
+    title: '確認修改任務',
+    body: '確定要儲存這筆修改嗎？<br><span class="confirm-name">「' + fields['任務名稱'] + '」</span>',
+    okText: '儲存',
+    onOk: function() {
+      if (oldFields) undoStack.push({ type: 'update', table: 'tasks', recordId: editingTaskId, data: oldFields });
+      apiPut('tasks', editingTaskId, fields).then(function() {
+        cl('pp-edit-task');
+        loadData();
+        showUndoToast('任務已修改');
+      }).catch(function(err) { alert('修改失敗：' + err.message); });
+    }
+  });
+}
+
+function openEditWorkItem(wiId) {
+  var rec = workitemsData.find(function(r){ return r.record_id === wiId; });
+  if (!rec) return;
+  editingWiId = wiId;
+  var f = rec.fields;
+  refreshEditSelects();
+  document.getElementById('ew-name').value = f['工作項目名稱'] || '';
+  var assigneeSel = document.getElementById('ew-assignee');
+  var assigneeName = personName(f['負責人']);
+  for (var i = 0; i < assigneeSel.options.length; i++) {
+    if (assigneeSel.options[i].text === assigneeName) { assigneeSel.selectedIndex = i; break; }
+  }
+  document.getElementById('ew-start').value = f['開始日期'] ? tsToDateInput(f['開始日期']) : '';
+  document.getElementById('ew-end').value = f['截止日'] ? tsToDateInput(f['截止日']) : '';
+  document.getElementById('ew-cost').value = f['可用成本'] ? 'NT$' + Math.round(f['可用成本']).toLocaleString() : '';
+  op('pp-edit-wi');
+}
+
+function saveEditWorkItem() {
+  if (!editingWiId) return;
+  var rec = workitemsData.find(function(r){ return r.record_id === editingWiId; });
+  var oldFields = rec ? {
+    '工作項目名稱': rec.fields['工作項目名稱'] || '',
+    '負責人': rec.fields['負責人'],
+    '開始日期': rec.fields['開始日期'],
+    '截止日': rec.fields['截止日'],
+    '可用成本': rec.fields['可用成本']
+  } : null;
+  var name = document.getElementById('ew-name').value.trim();
+  if (!name) { alert('請填寫工作項目名稱'); return; }
+  var costRaw = document.getElementById('ew-cost').value.replace(/[^\d]/g, '');
+  var fields = {
+    '工作項目名稱': name,
+    '負責人': document.getElementById('ew-assignee').value,
+    '開始日期': dateInputToTs(document.getElementById('ew-start').value),
+    '截止日': dateInputToTs(document.getElementById('ew-end').value)
+  };
+  if (costRaw) fields['可用成本'] = parseInt(costRaw, 10);
+  showConfirm({
+    type: 'edit',
+    title: '確認修改工作項目',
+    body: '確定要儲存這筆修改嗎？<br><span class="confirm-name">「' + name + '」</span>',
+    okText: '儲存',
+    onOk: function() {
+      if (oldFields) undoStack.push({ type: 'update', table: 'workitems', recordId: editingWiId, data: oldFields });
+      apiPut('workitems', editingWiId, fields).then(function() {
+        cl('pp-edit-wi');
+        loadData();
+        showUndoToast('工作項目已修改');
+      }).catch(function(err) { alert('修改失敗：' + err.message); });
+    }
+  });
+}
+
+function openEditProject(projId) {
+  var rec = projectsData.find(function(r){ return r.record_id === projId; });
+  if (!rec) return;
+  editingProjId = projId;
+  var f = rec.fields;
+  refreshEditSelects();
+  document.getElementById('ep-name').value = f['標案名稱'] || '';
+  var pmSel = document.getElementById('ep-pm');
+  var pmName = personName(f['主PM']);
+  for (var i = 0; i < pmSel.options.length; i++) {
+    if (pmSel.options[i].text === pmName) { pmSel.selectedIndex = i; break; }
+  }
+  document.getElementById('ep-start').value = f['合約開始日'] ? tsToDateInput(f['合約開始日']) : '';
+  document.getElementById('ep-end').value = f['合約結束日'] ? tsToDateInput(f['合約結束日']) : '';
+  document.getElementById('ep-amount').value = f['合約金額'] ? 'NT$' + Math.round(f['合約金額']).toLocaleString() : '';
+  op('pp-edit-proj');
+}
+
+function saveEditProject() {
+  if (!editingProjId) return;
+  var rec = projectsData.find(function(r){ return r.record_id === editingProjId; });
+  var oldFields = rec ? {
+    '標案名稱': rec.fields['標案名稱'] || '',
+    '主PM': rec.fields['主PM'],
+    '合約開始日': rec.fields['合約開始日'],
+    '合約結束日': rec.fields['合約結束日'],
+    '合約金額': rec.fields['合約金額']
+  } : null;
+  var name = document.getElementById('ep-name').value.trim();
+  if (!name) { alert('請填寫標案名稱'); return; }
+  var amtRaw = document.getElementById('ep-amount').value.replace(/[^\d]/g, '');
+  var amount = amtRaw ? parseInt(amtRaw, 10) : 0;
+  var fields = {
+    '標案名稱': name,
+    '主PM': document.getElementById('ep-pm').value,
+    '合約開始日': dateInputToTs(document.getElementById('ep-start').value),
+    '合約結束日': dateInputToTs(document.getElementById('ep-end').value)
+  };
+  if (amount) {
+    fields['合約金額'] = amount;
+    fields['合約未稅金額'] = Math.round(amount / 1.05);
+    fields['可用成本'] = Math.round(amount / 1.05 / 2);
+  }
+  showConfirm({
+    type: 'edit',
+    title: '確認修改標案',
+    body: '確定要儲存這筆修改嗎？<br><span class="confirm-name">「' + name + '」</span>',
+    okText: '儲存',
+    onOk: function() {
+      if (oldFields) undoStack.push({ type: 'update', table: 'projects', recordId: editingProjId, data: oldFields });
+      apiPut('projects', editingProjId, fields).then(function() {
+        cl('pp-edit-proj');
+        loadData();
+        showUndoToast('標案已修改');
+      }).catch(function(err) { alert('修改失敗：' + err.message); });
+    }
+  });
+}
+
+function refreshEditSelects() {
+  var names = getMemberNames();
+  ['et-assignee', 'ew-assignee', 'ep-pm'].forEach(function(id) {
+    var sel = document.getElementById(id);
+    if (sel) fillSelectOptions(sel, names);
+  });
+  var etWi = document.getElementById('et-wi');
+  if (etWi) {
+    fillSelectOptions(etWi,
+      workitemsData.map(function(w){
+        var proj = getProjectNameFromWi(w);
+        return (proj ? proj + ' · ' : '') + (w.fields['工作項目名稱'] || '');
+      }),
+      workitemsData.map(function(w){ return w.record_id; })
+    );
+  }
+  var etStatus = document.getElementById('et-status');
+  if (etStatus) fillSelectOptions(etStatus, PROGRESS_OPTIONS);
+}
+
 function deleteProject(id, name) {
-  if (!confirm('確定刪除標案「' + name + '」？\n此操作會從 Lark 多維表格刪除該筆記錄。')) return;
-  apiDelete('projects', id).then(function() {
-    loadData();
-    alert('標案已刪除');
-  }).catch(function(err) { alert('刪除失敗：' + err.message); });
+  var rec = projectsData.find(function(r){ return r.record_id === id; });
+  showConfirm({
+    type: 'del',
+    title: '刪除標案',
+    body: '確定要刪除這個標案嗎？<br><span class="confirm-name">「' + name + '」</span>刪除後可透過復原按鈕還原。',
+    okText: '刪除',
+    onOk: function() {
+      var savedData = rec ? Object.assign({}, rec.fields) : null;
+      apiDelete('projects', id).then(function() {
+        if (savedData) undoStack.push({ type: 'delete', table: 'projects', data: savedData });
+        loadData();
+        showUndoToast('標案「' + name + '」已刪除');
+      }).catch(function(err) { alert('刪除失敗：' + err.message); });
+    }
+  });
 }
 
 function deleteWorkItem(id, name) {
-  if (!confirm('確定刪除工作項目「' + name + '」？')) return;
-  apiDelete('workitems', id).then(function() {
-    loadData();
-    alert('工作項目已刪除');
-  }).catch(function(err) { alert('刪除失敗：' + err.message); });
+  var rec = workitemsData.find(function(r){ return r.record_id === id; });
+  showConfirm({
+    type: 'del',
+    title: '刪除工作項目',
+    body: '確定要刪除這個工作項目嗎？<br><span class="confirm-name">「' + name + '」</span>刪除後可透過復原按鈕還原。',
+    okText: '刪除',
+    onOk: function() {
+      var savedData = rec ? Object.assign({}, rec.fields) : null;
+      apiDelete('workitems', id).then(function() {
+        if (savedData) undoStack.push({ type: 'delete', table: 'workitems', data: savedData });
+        loadData();
+        showUndoToast('工作項目「' + name + '」已刪除');
+      }).catch(function(err) { alert('刪除失敗：' + err.message); });
+    }
+  });
 }
 
 function deleteTask(id, name) {
-  if (!confirm('確定刪除任務「' + name + '」？')) return;
-  apiDelete('tasks', id).then(function() {
-    loadData();
-    alert('任務已刪除');
-  }).catch(function(err) { alert('刪除失敗：' + err.message); });
+  var rec = tasksData.find(function(r){ return r.record_id === id; });
+  showConfirm({
+    type: 'del',
+    title: '刪除任務',
+    body: '確定要刪除這個任務嗎？<br><span class="confirm-name">「' + name + '」</span>刪除後可透過復原按鈕還原。',
+    okText: '刪除',
+    onOk: function() {
+      var savedData = rec ? Object.assign({}, rec.fields) : null;
+      apiDelete('tasks', id).then(function() {
+        if (savedData) undoStack.push({ type: 'delete', table: 'tasks', data: savedData });
+        loadData();
+        showUndoToast('任務「' + name + '」已刪除');
+      }).catch(function(err) { alert('刪除失敗：' + err.message); });
+    }
+  });
 }
 
 function preparePopup(id) {
@@ -3438,6 +3866,8 @@ function preparePopup(id) {
 }
 
 function refreshFormSelects() {
+  // also refresh edit selects if they exist
+  if (document.getElementById('et-assignee')) refreshEditSelects();
   var names = getMemberNames();
   document.querySelectorAll('select[data-members]').forEach(function(sel) {
     fillSelectOptions(sel, names);
