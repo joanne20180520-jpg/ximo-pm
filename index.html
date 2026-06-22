@@ -802,11 +802,11 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
   <span id="undo-toast-msg">已刪除</span>
   <button class="undo-btn" onclick="undoLast()">↩ 復原</button>
 </div>
-<script src="https://sf1-lark-tos.larksuitecdn.com/obj/lark-static-sg/lark/h5sdk/h5-js-sdk-1.5.16.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script defer src="https://sf1-lark-tos.larksuitecdn.com/obj/lark-static-sg/lark/h5sdk/h5-js-sdk-1.5.16.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 // ── 基本互動 ──
 var lc=false, rc=false;
@@ -2747,28 +2747,69 @@ function toDateStr(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
+function fetchJsonWithTimeout(url, ms) {
+  var timeoutMs = ms || 25000;
+  return new Promise(function(resolve, reject) {
+    var timer = setTimeout(function() {
+      reject(new Error('資料載入逾時（' + url + '）'));
+    }, timeoutMs);
+    fetch(url).then(function(r) {
+      return r.json();
+    }).then(function(data) {
+      clearTimeout(timer);
+      resolve(data);
+    }).catch(function(err) {
+      clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
+
+function safeRenderAfterLoad() {
+  try {
+    renderProjects();
+    renderTasks();
+    renderTeamPanel();
+    renderGanttFromData();
+    renderBudget();
+    renderExpenses();
+  } catch (renderErr) {
+    console.error('畫面渲染失敗', renderErr);
+    var pl = document.getElementById('pl-projects');
+    if (pl) pl.innerHTML = '<div style="padding:12px;color:#b42318;font-size:11px">畫面渲染失敗：' + escHtml(renderErr.message || String(renderErr)) + '</div>';
+    var tb = document.getElementById('task-list-body');
+    if (tb) tb.innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">—</div>';
+  }
+}
+
 function loadExtraData() {
   Promise.all([
-    fetch(API + '?table=designs').then(function(r){return r.json();}).catch(function(){return {};}),
-    fetch(API + '?table=journal').then(function(r){return r.json();}).catch(function(){return {};}),
-    fetch(API + '?table=members').then(function(r){return r.json();}).catch(function(){return {};})
+    fetchJsonWithTimeout(API + '?table=designs', 25000).catch(function() { return {}; }),
+    fetchJsonWithTimeout(API + '?table=journal', 25000).catch(function() { return {}; }),
+    fetchJsonWithTimeout(API + '?table=members', 25000).catch(function() { return {}; })
   ]).then(function(results) {
     designsData = results[0].records || [];
     journalData = results[1].records || [];
     membersData = results[2].records || [];
-    renderDesigns();
-    renderJournalPage();
-    renderGanttFromData();
-    buildMembersMap();
-    fillMemberSelects();
-    var cachedUser = getCurrentLoginUser();
-    if (cachedUser) {
-      enrichLoginUserFromMembers(cachedUser);
-      storeLoginUser(cachedUser);
+    try {
+      renderDesigns();
+      renderJournalPage();
+      renderGanttFromData();
+      buildMembersMap();
+      fillMemberSelects();
+      var cachedUser = getCurrentLoginUser();
+      if (cachedUser) {
+        enrichLoginUserFromMembers(cachedUser);
+        storeLoginUser(cachedUser);
+      }
+      updateTodoLoginLabel();
+      applyLoginUserToForms();
+      renderTeamPanel();
+    } catch (renderErr) {
+      console.error('延伸資料渲染失敗', renderErr);
     }
-    updateTodoLoginLabel();
-    applyLoginUserToForms();
-    renderTeamPanel();
+  }).catch(function(err) {
+    console.error('延伸資料載入失敗', err);
   });
 }
 
@@ -2777,22 +2818,17 @@ function loadData() {
   document.getElementById('task-list-body').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
 
   Promise.all([
-    fetch(API + '?table=projects').then(function(r){return r.json();}),
-    fetch(API + '?table=workitems').then(function(r){return r.json();}),
-    fetch(API + '?table=tasks').then(function(r){return r.json();}),
-    fetch(API + '?table=expenses').then(function(r){return r.json();})
+    fetchJsonWithTimeout(API + '?table=projects'),
+    fetchJsonWithTimeout(API + '?table=workitems'),
+    fetchJsonWithTimeout(API + '?table=tasks'),
+    fetchJsonWithTimeout(API + '?table=expenses')
   ]).then(function(results) {
     projectsData = results[0].records || [];
     workitemsData = results[1].records || [];
     tasksData = results[2].records || [];
     expensesData = results[3].records || [];
     var loadErr = results[0].error || results[1].error || results[2].error || results[3].error;
-    renderProjects();
-    renderTasks();
-    renderTeamPanel();
-    renderGanttFromData();
-    renderBudget();
-    renderExpenses();
+    safeRenderAfterLoad();
     if (loadErr && !projectsData.length) {
       showDataHint(loadErr);
     }
@@ -2803,12 +2839,7 @@ function loadData() {
     workitemsData = [];
     tasksData = [];
     expensesData = [];
-    renderProjects();
-    renderTasks();
-    renderTeamPanel();
-    renderGanttFromData();
-    renderBudget();
-    renderExpenses();
+    safeRenderAfterLoad();
     showDataHint(err.message || '連線失敗');
   });
 }
