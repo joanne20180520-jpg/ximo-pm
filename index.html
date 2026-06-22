@@ -755,9 +755,9 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
 <!-- 標案封存至知識庫 -->
 <div class="po" id="pp-archive-proj"><div class="pp"><div class="pph"><h3>封存標案至知識庫</h3><button class="ppc" onclick="cancelArchiveProject()">✕</button></div><div class="ppb">
-  <p style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:12px">請貼上<strong>此標案專用</strong>的 WIKI 知識庫頁面連結（每次封存可指向不同多維表格）。系統會自動辨識該頁面的多維表格，並輸出與後台相同結構的內容（僅此標案相關的工作項目、任務、支出、設計）。封存後標案將從前台隱藏；日後在該多維表格將狀態改為「未開始」或「進行中」即可重新顯示。</p>
+  <p style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:12px">請貼上知識庫<strong>存放位置</strong>連結（資料夾或空白頁面皆可）。若該位置尚無多維表格，系統會<strong>自動從範本複製</strong>一份新頁面（標題為標案名稱），再寫入與後台相同結構的內容（僅此標案相關的工作項目、任務、支出、設計）。封存後標案將從前台隱藏。</p>
   <div id="ap-export-preview" class="ap-export-preview">載入中…</div>
-  <div class="fg"><label>知識庫頁面連結</label><input type="url" id="ap-wiki-url" placeholder="https://..." oninput="refreshArchivePreview()"></div>
+  <div class="fg"><label>知識庫存放位置連結</label><input type="url" id="ap-wiki-url" placeholder="https://...（知識庫資料夾或頁面）" oninput="refreshArchivePreview()"></div>
   <div id="ap-proj-name" style="font-size:11px;color:var(--t3)"></div>
 </div><div class="ppf"><button class="bcan" onclick="cancelArchiveProject()">取消</button><button class="bpri" onclick="confirmArchiveProject()">確認封存</button></div></div></div>
 
@@ -4783,7 +4783,10 @@ function renderArchivePreview(projId) {
         + '<li>設計 ' + (res.counts.designs || 0) + ' 筆</li>'
         + '</ul>';
       if (wikiUrl) {
-        if (res.wikiTarget && res.wikiTarget.tableNames) {
+        if (res.wikiTarget && res.wikiTarget.mode === 'template_copy') {
+          html += '<div class="ap-export-title" style="margin-top:8px">將自動從範本建立</div>'
+            + '<div style="font-size:11px;color:var(--t2);line-height:1.6">' + escHtml(res.wikiTarget.note || '封存時會複製範本並寫入資料') + '</div>';
+        } else if (res.wikiTarget && res.wikiTarget.tableNames) {
           html += '<div class="ap-export-title" style="margin-top:8px">目標多維表格已辨識</div>'
             + '<ul class="ap-export-list">'
             + '<li>標案表：' + (res.wikiTarget.tableNames.projects || '') + '</li>'
@@ -4793,7 +4796,12 @@ function renderArchivePreview(projId) {
             + '<li>設計表：' + (res.wikiTarget.tableNames.designs || '') + '</li>'
             + '</ul>';
         } else if (res.wikiTargetError) {
-          html += '<div style="margin-top:8px;font-size:11px;color:var(--danger)">無法辨識目標表格：' + res.wikiTargetError + '</div>';
+          var errMsg = res.wikiTargetError;
+          if (res.archiveTemplateConfigured) {
+            html += '<div style="margin-top:8px;font-size:11px;color:var(--t2)">此位置尚無表格，封存時將嘗試從範本自動複製。</div>';
+          } else {
+            html += '<div style="margin-top:8px;font-size:11px;color:var(--danger)">無法辨識目標表格：' + errMsg + '</div>';
+          }
         }
       }
       el.innerHTML = html;
@@ -4859,10 +4867,11 @@ function confirmArchiveProject() {
         if (oldFields) undoStack.push({ type: 'update', table: 'projects', recordId: savedProjId, data: oldFields });
         loadData();
         showUndoToast('標案已封存');
+        var openUrl = res.wikiUrl || url;
         var msg = (res.wikiNote || res.summary || '');
         if (res.copyError && !res.copiedToWikiBase) msg += '\n' + res.copyError;
         if (confirm(msg + '\n\n是否開啟知識庫頁面？')) {
-          window.open(url, '_blank', 'noopener');
+          window.open(openUrl, '_blank', 'noopener');
         }
       }).catch(function(err) {
         alert('封存失敗：' + err.message);

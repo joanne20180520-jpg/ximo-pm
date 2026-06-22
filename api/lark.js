@@ -100,6 +100,7 @@ function buildTables() {
 }
 
 const TABLES = buildTables();
+const WIKI_ARCHIVE_TEMPLATE = (process.env.LARK_WIKI_ARCHIVE_TEMPLATE || '').trim();
 
 const ARCHIVE_TABLE_KEYWORDS = {
   projects: ['標案', '專案', 'project'],
@@ -116,6 +117,131 @@ async function larkApiGet(accessToken, apiPath) {
   const data = await res.json();
   if (data.code !== 0) throw new Error(data.msg || 'Lark API error');
   return data.data;
+}
+
+async function larkApiPost(accessToken, apiPath, body) {
+  const res = await fetch(BASE_URL + apiPath, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + accessToken,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body || {})
+  });
+  const data = await res.json();
+  if (data.code !== 0) throw new Error(data.msg || 'Lark API error');
+  return data.data;
+}
+
+function buildWikiNodeUrl(baseUrl, nodeToken) {
+  try {
+    const u = new URL(String(baseUrl || '').trim());
+    return u.origin + '/wiki/' + nodeToken;
+  } catch (e) {
+    return 'https://www.larksuite.com/wiki/' + nodeToken;
+  }
+}
+
+function getWikiTokenFromUrl(url) {
+  const parsed = extractLarkUrlToken(url);
+  return parsed && parsed.token ? parsed.token : '';
+}
+
+async function copyWikiNode(accessToken, spaceId, nodeToken, opts) {
+  const path = '/wiki/v2/spaces/' + encodeURIComponent(spaceId) + '/nodes/' + encodeURIComponent(nodeToken) + '/copy';
+  const body = {};
+  if (opts && opts.targetParentToken) body.target_parent_token = opts.targetParentToken;
+  if (opts && opts.targetSpaceId) body.target_space_id = opts.targetSpaceId;
+  if (opts && opts.title) body.title = opts.title;
+  const data = await larkApiPost(accessToken, path, body);
+  return data.node;
+}
+
+function isBitableCopyingError(err) {
+  const msg = (err && err.message) || String(err || '');
+  return msg.indexOf('copying') >= 0 || msg.indexOf('1254036') >= 0;
+}
+
+async function ensureBitableReady(accessToken, appToken, maxRetries) {
+  const tries = maxRetries || 12;
+  for (let i = 0; i < tries; i++) {
+    try {
+      await listBitableTables(accessToken, appToken);
+      return;
+    } catch (err) {
+      if (isBitableCopyingError(err) && i < tries - 1) {
+        await new Promise(function(r) { setTimeout(r, 2000); });
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
+async function resolveBitableFromWikiNode(accessToken, node, baseUrl) {
+  if (!node) throw new Error('找不到知識庫節點');
+  let appToken = '';
+  if (node.obj_type === 'bitable' && node.obj_token) appToken = node.obj_token;
+  if (!appToken && node.obj_type === 'docx' && node.obj_token) {
+    appToken = await findBitableAppTokenInDocx(accessToken, node.obj_token);
+  }
+  if (!appToken) {
+    appToken = await findBitableAppTokenInWikiSubtree(accessToken, node.space_id, node.node_token);
+  }
+  if (!appToken) throw new Error('此知識庫頁面找不到多維表格');
+  await ensureBitableReady(accessToken, appToken);
+  const tableMap = await resolveArchiveTableMap(accessToken, appToken);
+  return {
+    appToken: appToken,
+    tableMap: tableMap,
+    wikiUrl: buildWikiNodeUrl(baseUrl, node.node_token)
+  };
+}
+
+async function copyArchiveTemplateToParent(accessToken, parentWikiUrl, projectName) {
+  if (!WIKI_ARCHIVE_TEMPLATE) {
+    throw new Error('尚未設定封存範本（LARK_WIKI_ARCHIVE_TEMPLATE）');
+  }
+  const templateToken = getWikiTokenFromUrl(WIKI_ARCHIVE_TEMPLATE);
+  const parentToken = getWikiTokenFromUrl(parentWikiUrl);
+  if (!templateToken) throw new Error('封存範本連結無效');
+  if (!parentToken) throw new Error('知識庫存放位置連結無效');
+
+  const templateNode = await getWikiNode(accessToken, templateToken);
+  const parentNode = await getWikiNode(accessToken, parentToken);
+  if (!templateNode) throw new Error('找不到封存範本');
+  if (!parentNode) throw new Error('找不到知識庫存放位置');
+
+  const copied = await copyWikiNode(accessToken, templateNode.space_id, templateNode.node_token, {
+    targetParentToken: parentNode.node_token,
+    title: projectName || '封存標案'
+  });
+  if (!copied) throw new Error('複製封存範本失敗');
+
+  return resolveBitableFromWikiNode(accessToken, copied, parentWikiUrl);
+}
+
+async function resolveOrCreateWikiBitableTarget(accessToken, wikiUrl, projectName) {
+  try {
+    const appToken = await resolveBitableAppTokenFromUrl(accessToken, wikiUrl);
+    await ensureBitableReady(accessToken, appToken);
+    const tableMap = await resolveArchiveTableMap(accessToken, appToken);
+    return {
+      appToken: appToken,
+      tableMap: tableMap,
+      wikiUrl: wikiUrl,
+      createdCopy: false
+    };
+  } catch (directErr) {
+    if (!WIKI_ARCHIVE_TEMPLATE) throw directErr;
+    const created = await copyArchiveTemplateToParent(accessToken, wikiUrl, projectName);
+    return {
+      appToken: created.appToken,
+      tableMap: created.tableMap,
+      wikiUrl: created.wikiUrl,
+      createdCopy: true
+    };
+  }
 }
 
 function extractLarkUrlToken(url) {
@@ -270,16 +396,26 @@ async function resolveArchiveTableMap(accessToken, appToken) {
   return map;
 }
 
-async function inspectWikiBitableTarget(accessToken, wikiUrl) {
-  const appToken = await resolveBitableAppTokenFromUrl(accessToken, wikiUrl);
-  const tables = await listBitableTables(accessToken, appToken);
-  const tableMap = await resolveArchiveTableMap(accessToken, appToken);
-  const tableNames = {};
-  Object.keys(tableMap).forEach(function(key) {
-    const found = tables.find(function(t) { return t.table_id === tableMap[key]; });
-    tableNames[key] = found ? found.name : tableMap[key];
-  });
-  return { appToken: appToken, tableNames: tableNames };
+async function inspectWikiBitableTarget(accessToken, wikiUrl, projectName) {
+  try {
+    const appToken = await resolveBitableAppTokenFromUrl(accessToken, wikiUrl);
+    await ensureBitableReady(accessToken, appToken);
+    const tables = await listBitableTables(accessToken, appToken);
+    const tableMap = await resolveArchiveTableMap(accessToken, appToken);
+    const tableNames = {};
+    Object.keys(tableMap).forEach(function(key) {
+      const found = tables.find(function(t) { return t.table_id === tableMap[key]; });
+      tableNames[key] = found ? found.name : tableMap[key];
+    });
+    return { mode: 'direct', appToken: appToken, tableNames: tableNames };
+  } catch (err) {
+    if (!WIKI_ARCHIVE_TEMPLATE) throw err;
+    return {
+      mode: 'template_copy',
+      templateConfigured: true,
+      note: '此位置尚無多維表格，封存時將自動從範本複製新頁面（標題：' + (projectName || '封存標案') + '）並寫入資料'
+    };
+  }
 }
 
 function getLinkIds(linkField) {
@@ -425,13 +561,16 @@ async function batchCreateRecords(token, appToken, tableId, fieldsList) {
 }
 
 async function copyProjectBundleToWikiBase(token, bundle, wikiUrl) {
-  const targetApp = await resolveBitableAppTokenFromUrl(token, wikiUrl);
-  const tableMap = await resolveArchiveTableMap(token, targetApp);
+  const projectName = bundle.project.fields['標案名稱'] || '封存標案';
+  const target = await resolveOrCreateWikiBitableTarget(token, wikiUrl, projectName);
+  const targetApp = target.appToken;
+  const tableMap = target.tableMap;
+  const finalWikiUrl = target.wikiUrl || wikiUrl;
   const projFields = cloneFields(bundle.project.fields);
   projFields['狀態'] = '封存';
-  if (wikiUrl) {
-    projFields['知識庫連結'] = makeWikiLink(wikiUrl);
-    projFields['封存連結'] = wikiUrl;
+  if (finalWikiUrl) {
+    projFields['知識庫連結'] = makeWikiLink(finalWikiUrl);
+    projFields['封存連結'] = finalWikiUrl;
   }
   const projCreated = await batchCreateRecords(token, targetApp, tableMap.projects, [projFields]);
   const newProjId = projCreated[0] && projCreated[0].record_id;
@@ -473,7 +612,7 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl) {
   });
   await batchCreateRecords(token, targetApp, tableMap.designs, desFieldsList);
 
-  return { copied: true, newProjectId: newProjId, targetAppToken: targetApp };
+  return { copied: true, newProjectId: newProjId, targetAppToken: targetApp, wikiUrl: finalWikiUrl, createdCopy: !!target.createdCopy };
 }
 
 async function archiveProject(token, projectId, wikiUrl) {
@@ -483,9 +622,13 @@ async function archiveProject(token, projectId, wikiUrl) {
 
   let copiedToWikiBase = false;
   let copyError = '';
+  let finalWikiUrl = wikiUrl;
+  let createdCopy = false;
   try {
-    await copyProjectBundleToWikiBase(token, bundle, wikiUrl);
+    const copyResult = await copyProjectBundleToWikiBase(token, bundle, wikiUrl);
     copiedToWikiBase = true;
+    if (copyResult.wikiUrl) finalWikiUrl = copyResult.wikiUrl;
+    createdCopy = !!copyResult.createdCopy;
   } catch (err) {
     copyError = err.message || String(err);
   }
@@ -494,9 +637,9 @@ async function archiveProject(token, projectId, wikiUrl) {
     '狀態': '封存',
     '封存摘要': summary
   };
-  if (wikiUrl) {
-    updateFields['知識庫連結'] = makeWikiLink(wikiUrl);
-    updateFields['封存連結'] = wikiUrl;
+  if (finalWikiUrl) {
+    updateFields['知識庫連結'] = makeWikiLink(finalWikiUrl);
+    updateFields['封存連結'] = finalWikiUrl;
   }
   await updateRecord(token, TABLES.projects, projectId, updateFields);
 
@@ -511,9 +654,13 @@ async function archiveProject(token, projectId, wikiUrl) {
       designs: bundle.designs.length
     },
     copiedToWikiBase: copiedToWikiBase,
+    createdCopy: createdCopy,
+    wikiUrl: finalWikiUrl,
     copyError: copyError,
     wikiNote: copiedToWikiBase
-      ? '已將此標案相關資料複製至您貼上的知識庫多維表格（結構與後台相同）'
+      ? (createdCopy
+        ? '已從範本複製新知識庫頁面，並寫入此標案相關資料'
+        : '已將此標案相關資料複製至您貼上的知識庫多維表格（結構與後台相同）')
       : (copyError
         ? '標案已封存，但複製至多維表格失敗：' + copyError
         : '標案已封存')
@@ -664,7 +811,7 @@ export default async function handler(req, res) {
       let wikiTargetError = '';
       if (wikiUrl) {
         try {
-          wikiTarget = await inspectWikiBitableTarget(token, wikiUrl);
+          wikiTarget = await inspectWikiBitableTarget(token, wikiUrl, bundle.project.fields['標案名稱'] || '');
         } catch (err) {
           wikiTargetError = err.message || String(err);
         }
@@ -678,7 +825,8 @@ export default async function handler(req, res) {
           designs: bundle.designs.length
         },
         wikiTarget: wikiTarget,
-        wikiTargetError: wikiTargetError
+        wikiTargetError: wikiTargetError,
+        archiveTemplateConfigured: !!WIKI_ARCHIVE_TEMPLATE
       });
     }
 
