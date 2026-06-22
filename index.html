@@ -110,19 +110,25 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .page{display:none}
 .page.active{display:block}
 
-/* E区 - 右側團隊任務 */
-.eh{height:auto;min-height:var(--th);padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;gap:6px}
-.eh h3{font-size:12px;font-weight:700}
+/* E区 - 右側待辦提醒 */
+.eh{height:auto;min-height:var(--th);padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.eh h3{font-size:13px;font-weight:700}
 .eh-sub{font-size:10px;color:var(--t3);line-height:1.4}
-.rp-filters{display:flex;gap:3px;overflow-x:auto;padding:0 8px 6px;flex-shrink:0;scrollbar-width:thin}
-.rt-group{margin-bottom:8px}
-.rt-hdr{display:flex;align-items:center;gap:6px;padding:6px 8px 4px;font-weight:700;font-size:12px}
-.rt-hdr .tc{margin-left:auto}
-.rt-task{padding:6px 8px;border-radius:var(--rs);background:var(--sf2);margin:0 6px 4px;cursor:pointer;border:1px solid var(--border);transition:border-color .1s}
-.rt-task:hover{border-color:var(--t3);background:#fff}
-.rt-name{font-size:11px;font-weight:600}
-.rt-meta{font-size:9px;color:var(--t3);margin-top:2px}
-.rt-due{font-size:9px;color:var(--warn);font-weight:600;margin-top:2px}
+.todo-scope-toggle{display:flex;gap:2px;padding:2px;border:1px solid var(--border);border-radius:20px;background:var(--sf2);flex-shrink:0}
+.todo-scope-btn{padding:4px 11px;border:none;border-radius:18px;background:transparent;font-size:11px;font-weight:600;color:var(--t2);cursor:pointer;line-height:1.2;transition:background .15s,color .15s}
+.todo-scope-btn.active{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.todo-section{margin-bottom:14px}
+.todo-sec-hdr{display:flex;align-items:center;gap:6px;padding:4px 2px 8px;font-size:12px;font-weight:700;color:var(--text)}
+.todo-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.todo-dot.overdue{background:#c0392b}
+.todo-dot.today{background:#d4a017}
+.todo-dot.soon{background:#1a4a7a}
+.todo-sec-count{font-size:11px;color:var(--t3);font-weight:600;margin-left:2px}
+.todo-card{padding:10px 11px;border-radius:10px;background:#fff;border:1px solid var(--border);margin-bottom:6px;cursor:pointer;transition:border-color .12s,box-shadow .12s}
+.todo-card:hover{border-color:var(--t3);box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.todo-card-title{font-size:12px;font-weight:700;color:var(--text);line-height:1.35}
+.todo-card-meta{font-size:10px;color:var(--t3);margin-top:4px;line-height:1.4}
+.todo-empty{font-size:11px;color:var(--t3);padding:2px 0 4px}
 
 /* journal page */
 .jpage-single{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);display:flex;flex-direction:column;overflow:hidden;min-height:calc(100vh - var(--th) - 36px)}
@@ -592,13 +598,15 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
   </div>
 </div>
 
-<!-- ══ 右側：團隊任務 ══ -->
+<!-- ══ 右側：待辦提醒 ══ -->
 <div id="rp">
   <div class="eh">
-    <h3>今日任務</h3>
-    <span class="eh-sub">只顯示今天到期 · 其他日期請至墨日誌</span>
+    <h3>待辦提醒</h3>
+    <div class="todo-scope-toggle" id="todo-scope-toggle">
+      <button type="button" class="todo-scope-btn active" data-scope="mine" onclick="setTodoScope('mine')">我的</button>
+      <button type="button" class="todo-scope-btn" data-scope="all" onclick="setTodoScope('all')">全部</button>
+    </div>
   </div>
-  <div class="rp-filters" id="team-filters"></div>
   <div class="tl2" id="team-task-list">
     <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
   </div>
@@ -2065,6 +2073,31 @@ function daysRemaining(val) {
   if (diff === 0) return '今天';
   return diff + 'Ds';
 }
+function getDueDayDiff(val) {
+  var due = parseTs(val);
+  if (!due) return null;
+  due.setHours(0, 0, 0, 0);
+  return Math.ceil((due - TODAY) / 86400000);
+}
+function formatTodoDueLabel(val) {
+  var diff = getDueDayDiff(val);
+  if (diff === null) return '';
+  if (diff < 0) return '逾期 ' + Math.abs(diff) + ' 天';
+  if (diff === 0) return '今日到期';
+  return diff + ' 天後';
+}
+function getMyPersonName() {
+  try {
+    var stored = localStorage.getItem('ximo-my-person');
+    if (stored) return stored;
+  } catch (e) {}
+  var names = getMemberNames();
+  return names[0] || '';
+}
+function setMyPersonName(name) {
+  if (!name) return;
+  try { localStorage.setItem('ximo-my-person', name); } catch (e) {}
+}
 function tsToDateInput(ts) {
   var d = parseTs(ts);
   if (!d) return '';
@@ -2594,21 +2627,18 @@ function renderTasks() {
   renderTeamPanel();
 }
 
-// ── 右側：今日任務 ──
-var teamFilterPerson = '';
+// ── 右側：待辦提醒 ──
+var todoReminderScope = 'mine';
 
-function isTodayTeamTask(dueTs, progress) {
-  if (progress >= 100) return false;
-  if (!dueTs) return false;
-  var due = new Date(dueTs);
-  due.setHours(0, 0, 0, 0);
-  return due.getTime() <= TODAY.getTime();
+function setTodoScope(scope) {
+  todoReminderScope = scope === 'all' ? 'all' : 'mine';
+  document.querySelectorAll('.todo-scope-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.scope === todoReminderScope);
+  });
+  renderTeamPanel();
 }
 
-function renderTeamPanel() {
-  var area = document.getElementById('team-task-list');
-  if (!area) return;
-
+function buildTodoTaskItems(scope) {
   var wiMap = {};
   workitemsData.forEach(function(wi) {
     wiMap[wi.record_id] = {
@@ -2616,81 +2646,73 @@ function renderTeamPanel() {
       project: getProjectNameFromWi(wi)
     };
   });
+  var buckets = { overdue: [], today: [], soon: [] };
+  var myName = getMyPersonName();
 
-  var projColors = {};
-  projectsData.forEach(function(rec, i) {
-    projColors[rec.fields['標案名稱'] || ''] = PROJECT_COLORS[i % PROJECT_COLORS.length];
-  });
-
-  var byPerson = {};
   tasksData.forEach(function(rec) {
     var f = rec.fields;
+    var progress = parseProgressVal(f['進度狀態'], f['進度數值']);
+    if (progress >= 100) return;
+    var dueTs = f['預計完成日'];
+    if (!dueTs) return;
+    var diff = getDueDayDiff(dueTs);
+    if (diff === null) return;
+    if (diff > 3) return;
+
     var assignee = personName(f['負責人']) || '未指定';
+    if (scope === 'mine' && myName && assignee !== myName) return;
+
     var wiIds = getLinkIds(f['所屬工作項目']);
     var wi = wiIds[0] ? wiMap[wiIds[0]] : null;
     var projName = wi ? (wi.project || '其他') : '其他';
-    var progress = parseProgressVal(f['進度狀態'], f['進度數值']);
-    if (!isTodayTeamTask(f['預計完成日'], progress)) return;
-    if (!byPerson[assignee]) byPerson[assignee] = [];
-    byPerson[assignee].push({
+    var item = {
       id: rec.record_id,
       name: f['任務名稱'] || '未命名',
       projName: projName,
-      wiName: wi ? wi.name : '',
-      dueTs: f['預計完成日'] || 0,
-      dueFull: f['預計完成日'] ? fmtDate(f['預計完成日']) : '—',
-      remain: daysRemaining(f['預計完成日']),
-      progress: progress,
-      color: projColors[projName] || '#888'
-    });
+      assignee: assignee,
+      dueTs: dueTs,
+      dueLabel: formatTodoDueLabel(dueTs)
+    };
+
+    if (diff < 0) buckets.overdue.push(item);
+    else if (diff === 0) buckets.today.push(item);
+    else buckets.soon.push(item);
   });
 
-  var persons = Object.keys(byPerson).sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
-  updateTeamFilters(persons);
-
-  if (!persons.length) {
-    area.innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px;line-height:1.6">今日無待辦任務<br><span style="font-size:10px">歷史與其他日期請至頂部「墨日誌」</span></div>';
-    return;
-  }
-
-  var html = '';
-  persons.forEach(function(person) {
-    if (teamFilterPerson && person !== teamFilterPerson) return;
-    var tasks = byPerson[person].sort(function(a, b) { return (a.dueTs || 0) - (b.dueTs || 0); });
-    html += '<div class="rt-group" data-person="' + escAttr(person) + '">';
-    html += '<div class="rt-hdr"><span class="av ' + avatarClass(person) + '">' + personInitial(person) + '</span>'
-      + escHtml(person) + '<span class="tc">' + tasks.length + '</span></div>';
-    tasks.forEach(function(task) {
-      html += '<div class="rt-task" onclick="openTaskDetail(\'' + task.id + '\')">';
-      html += '<div class="rt-name">' + escHtml(task.name) + '</div>';
-      html += '<div class="rt-meta"><span class="jpt" style="background:' + task.color + ';font-size:8px;padding:1px 5px">' + escHtml(task.projName) + '</span></div>';
-      html += '<div class="rt-due">' + task.dueFull + (task.remain ? ' · ' + task.remain : '') + '</div>';
-      html += '</div>';
-    });
-    html += '</div>';
-  });
-
-  area.innerHTML = html || '<div style="padding:12px;color:var(--t3);font-size:11px">尚無符合的任務</div>';
+  buckets.overdue.sort(function(a, b) { return (a.dueTs || 0) - (b.dueTs || 0); });
+  buckets.today.sort(function(a, b) { return (a.dueTs || 0) - (b.dueTs || 0); });
+  buckets.soon.sort(function(a, b) { return (a.dueTs || 0) - (b.dueTs || 0); });
+  return buckets;
 }
 
-function updateTeamFilters(persons) {
-  var ft = document.getElementById('team-filters');
-  if (!ft) return;
-  var html = '<span class="ftag" data-person=""' + (!teamFilterPerson ? ' style="background:var(--accent);color:#fff"' : '') + '>全部</span>';
-  persons.forEach(function(name) {
-    var active = teamFilterPerson === name ? ' style="background:var(--accent);color:#fff"' : '';
-    html += '<span class="ftag" data-person="' + escAttr(name) + '"' + active + '>' + escHtml(name) + '</span>';
-  });
-  ft.innerHTML = html;
-  if (!ft._bound) {
-    ft._bound = true;
-    ft.addEventListener('click', function(e) {
-      var tag = e.target.closest('.ftag');
-      if (!tag) return;
-      teamFilterPerson = tag.dataset.person || '';
-      renderTeamPanel();
+function renderTodoSection(title, dotClass, items, emptyText) {
+  var html = '<div class="todo-section">';
+  html += '<div class="todo-sec-hdr"><span class="todo-dot ' + dotClass + '"></span>' + title
+    + '<span class="todo-sec-count">' + items.length + '</span></div>';
+  if (!items.length) {
+    html += '<div class="todo-empty">' + emptyText + '</div>';
+  } else {
+    items.forEach(function(task) {
+      html += '<div class="todo-card" onclick="openTaskDetail(\'' + task.id + '\')">';
+      html += '<div class="todo-card-title">' + escHtml(task.name) + '</div>';
+      html += '<div class="todo-card-meta">' + escHtml(task.projName) + ' · ' + escHtml(task.assignee) + ' · ' + escHtml(task.dueLabel) + '</div>';
+      html += '</div>';
     });
   }
+  html += '</div>';
+  return html;
+}
+
+function renderTeamPanel() {
+  var area = document.getElementById('team-task-list');
+  if (!area) return;
+
+  var buckets = buildTodoTaskItems(todoReminderScope);
+  var html = '';
+  html += renderTodoSection('已逾期', 'overdue', buckets.overdue, '無逾期任務');
+  html += renderTodoSection('今日到期', 'today', buckets.today, '今日無到期任務');
+  html += renderTodoSection('三天內到期', 'soon', buckets.soon, '三天內無到期任務');
+  area.innerHTML = html;
 }
 
 // ── 更新篩選標籤 ──
@@ -3329,6 +3351,7 @@ function onDailyLogCatChange(sel) {
 
 function onDailyLogAuthorChange() {
   var author = document.getElementById('dl-author').value || '';
+  if (author) setMyPersonName(author);
   var existing = findDailyJournalRecord(dailyLogDate.getTime(), author);
   var contentEl = document.getElementById('dl-content');
   if (contentEl) {
