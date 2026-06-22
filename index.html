@@ -142,23 +142,31 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .jc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .jc.has-block{border-color:#e8c4c4;background:#fffcfc}
 .jc-hdr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)}
-.jn{font-size:12px;font-weight:700}
-.jpt{font-size:9px;padding:2px 8px;border-radius:10px;color:#fff;font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.jblk{font-size:9px;padding:2px 7px;border-radius:10px;background:#fde8e8;color:var(--danger);font-weight:700}
-.jc-date{font-size:10px;color:var(--t3);margin-left:auto;font-weight:500;white-space:nowrap}
-.jc-rows{display:flex;flex-direction:column;gap:7px}
-.jc-row{display:flex;gap:8px;align-items:flex-start;font-size:11px;line-height:1.45}
-.jc-lbl{flex-shrink:0;min-width:54px;padding:3px 7px;border-radius:8px;font-weight:600;text-align:center;font-size:9px;line-height:1.3}
+.jn{font-size:13px;font-weight:700}
+.jpt{font-size:10px;padding:3px 9px;border-radius:10px;color:#fff;font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jblk{font-size:10px;padding:3px 8px;border-radius:10px;background:#fde8e8;color:var(--danger);font-weight:700}
+.jc-date{font-size:11px;color:var(--t3);margin-left:auto;font-weight:500;white-space:nowrap}
+.jc-rows{display:flex;flex-direction:column;gap:8px}
+.jc-row{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.5}
+.jc-lbl{flex-shrink:0;min-width:58px;padding:4px 8px;border-radius:8px;font-weight:600;text-align:center;font-size:10px;line-height:1.35}
 .jc-lbl.doing{background:#e6f4ee;color:#1a7a45}
 .jc-lbl.done{background:#e8f0fa;color:#1a4a7a}
 .jc-lbl.block{background:#fde8e8;color:var(--danger)}
 .jc-lbl.tomorrow{background:#f3f0e8;color:#6b5a1a}
-.jc-val{flex:1;display:flex;flex-wrap:wrap;gap:5px;align-items:center;min-width:0}
-.jc-task{display:inline-block;padding:3px 9px;background:var(--sf2);border-radius:6px;font-size:10px;color:var(--text);line-height:1.35;word-break:break-word}
+.jc-val{flex:1;display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;min-width:0;flex-direction:column}
+.jc-task{display:inline-block;padding:4px 10px;background:var(--sf2);border-radius:6px;font-size:12px;color:var(--text);line-height:1.4;word-break:break-word}
 .jc-row.block .jc-task{background:#fff0f0;color:var(--danger)}
-.jc-reason{margin-top:8px;padding:8px 10px;background:#fff8f8;border-radius:6px;border-left:3px solid #e8a0a0;font-size:10px;color:var(--danger);line-height:1.55}
+.jc-task-reason{font-size:12px;color:var(--danger);line-height:1.5;padding:2px 0}
+.jc-reason{margin-top:8px;padding:9px 11px;background:#fff8f8;border-radius:6px;border-left:3px solid #e8a0a0;font-size:12px;color:var(--danger);line-height:1.55}
 .jc-reason b{font-weight:700;margin-right:4px}
-.jc-note{margin-top:8px;padding:8px 10px;background:var(--sf2);border-radius:6px;font-size:10px;color:var(--t2);line-height:1.55}
+.jc-note{margin-top:8px;padding:9px 11px;background:var(--sf2);border-radius:6px;font-size:12px;color:var(--t2);line-height:1.55}
+.jc-block-meta{font-size:12px;color:var(--t2);margin-bottom:8px}
+.jc-block-actions{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.jc-block-status{padding:5px 8px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;background:#fff;flex:1}
+.jc-block-btn{padding:5px 12px;border-radius:var(--rs);border:none;background:var(--report);color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.jc-block-btn:hover{background:var(--report-hover)}
+.jfeed-proj-hdr{font-size:13px;font-weight:700;padding:9px 12px;border-radius:var(--rs);margin-bottom:10px;display:flex;align-items:center;gap:8px;color:#fff}
+.jfeed-proj-count{font-size:11px;opacity:.85;font-weight:600}
 .jday-hdr{font-size:13px;font-weight:700;color:var(--text);padding:10px 4px 8px;border-bottom:2px solid var(--border);margin-bottom:10px}
 .jvbtns{display:flex;gap:3px}
 .jvbtn{padding:3px 8px;border-radius:12px;border:1px solid var(--border);background:var(--sf2);font-size:10px;cursor:pointer;color:var(--t2);white-space:nowrap}
@@ -166,7 +174,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .bjlog{padding:3px 8px;border-radius:var(--rs);border:none;background:var(--report);color:#fff;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap}
 .bjlog:hover{background:var(--report-hover)}
 .pph-report{background:var(--report) !important}
-.pph-report h3{color:#fff !important}
+.pph-report h3{color:#fff !important;flex:1;min-width:0}
 .btn-report{background:var(--report) !important}
 .btn-report:hover{background:var(--report-hover) !important}
 .td-hdr-actions{display:flex;align-items:center;gap:8px}
@@ -180,18 +188,23 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .dl-proj-filter{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
 .dl-ptag{padding:3px 9px;border-radius:14px;font-size:10px;cursor:pointer;border:1px solid var(--border);background:var(--sf2);color:var(--t2)}
 .dl-ptag.active{color:#fff;border-color:transparent}
-.dl-task-list{max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:12px}
-.dl-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer}
+.dl-task-list{max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:12px}
+.dl-proj-group{border:1px solid var(--border);border-radius:var(--rs);margin-bottom:10px;overflow:hidden}
+.dl-proj-group:last-child{margin-bottom:0}
+.dl-proj-hdr{padding:7px 10px;font-size:12px;font-weight:700;color:#fff}
+.dl-row{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:8px 10px;border-bottom:1px solid var(--border)}
 .dl-row:last-child{border-bottom:none}
 .dl-row:hover{background:var(--sf2)}
+.dl-row-top{display:flex;align-items:center;gap:8px}
 .dl-row input[type=checkbox]{width:15px;height:15px;flex-shrink:0;cursor:pointer}
-.dl-proj-tag{font-size:9px;padding:1px 6px;border-radius:8px;color:#fff;font-weight:600;flex-shrink:0;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl-proj-tag{font-size:10px;padding:2px 7px;border-radius:8px;color:#fff;font-weight:600;flex-shrink:0;max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dl-task-main{flex:1;min-width:0}
-.dl-task-name{font-size:12px;font-weight:600;display:block}
-.dl-task-meta{font-size:10px;color:var(--t3);margin-top:1px}
-.dl-progress{font-size:10px;font-weight:700;color:var(--report);flex-shrink:0;min-width:32px;text-align:right}
-.dl-note{width:100%;margin-top:5px;padding:4px 7px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:#fff}
-.dl-cat{padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-size:10px;background:#fff;flex-shrink:0;max-width:78px}
+.dl-task-name{font-size:13px;font-weight:600;display:block}
+.dl-task-meta{font-size:11px;color:var(--t3);margin-top:2px}
+.dl-progress{font-size:11px;font-weight:700;color:var(--report);flex-shrink:0;min-width:36px;text-align:right}
+.dl-note{width:100%;margin-top:6px;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:#fff}
+.dl-block-reason{width:100%;margin-top:6px;padding:6px 9px;border:1px solid #e8a0a0;border-radius:4px;font-size:12px;background:#fff8f8;font-family:inherit}
+.dl-cat{padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:#fff;flex-shrink:0;max-width:88px}
 .dl-cat-block{border-color:#e8a0a0;background:#fff8f8}
 .dl-block-box{margin-bottom:10px}
 .dl-block-box textarea{width:100%;padding:6px 9px;border:1px solid #e8a0a0;border-radius:var(--rs);font-size:12px;background:#fff8f8;font-family:inherit}
@@ -614,8 +627,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 <div class="po" id="pp-daily-log"><div class="pp pp-daily"><div class="pph pph-report"><h3>每日工作回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-daily-log')">✕</button></div><div class="ppb">
   <div class="dl-date" id="dl-date-display"></div>
   <div class="fg"><label>回報人</label><select id="dl-author" data-members onchange="onDailyLogAuthorChange()"></select></div>
-  <div class="fg"><label>任務分類（每項選一種狀態）</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">進行中／今日完成／卡關／明日預計。有卡關請填原因。</div></div>
-  <div class="fg dl-block-box" id="dl-block-wrap" style="display:none"><label>卡關原因</label><textarea id="dl-block-reason" rows="2" placeholder="說明卡在哪、需要誰協助…"></textarea></div>
+  <div class="fg"><label>任務分類（每項選一種狀態）</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">進行中／今日完成／卡關／明日預計。卡關請在該任務下方填寫原因。</div></div>
   <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="選擇任務後自動產生…"></textarea></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
@@ -2869,26 +2881,29 @@ function confirmTaskReport() {
   today.setHours(0, 0, 0, 0);
   var todayStart = today.getTime();
   var existingJournal = findDailyJournalRecord(todayStart, author);
-  var existingBlockReason = existingJournal ? (journalField(existingJournal, ['卡關原因']) || '') : '';
+  var existingReasonMap = parseBlockReasons(existingJournal);
+  var reasonById = {};
+  Object.keys(existingReasonMap.byId).forEach(function(k) { reasonById[k] = existingReasonMap.byId[k]; });
 
-  if (category === 'block' && !blockReason && !existingBlockReason) {
+  if (category === 'block' && !blockReason && !existingReasonMap.byId[currentTaskId] && !existingReasonMap.legacy) {
     alert('分類為卡關時，請填寫卡關原因');
     return;
   }
 
   var merged = mergeTaskIntoJournalCategories(existingJournal, currentTaskId, category);
+  if (category === 'block' && blockReason) reasonById[currentTaskId] = blockReason;
+  else if (category !== 'block') delete reasonById[currentTaskId];
   var journalFields = {
     '日期': todayStart,
     '進行中任務': merged.doing,
     '已完成今日任務': merged.done,
     '卡關任務': merged.block,
-    '明日預計任務': merged.tomorrow
+    '明日預計任務': merged.tomorrow,
+    '卡關原因': encodeBlockReasons(reasonById)
   };
   if (existingJournal && journalField(existingJournal, ['備註', '日誌內容', '內容'])) {
     journalFields['備註'] = journalField(existingJournal, ['備註', '日誌內容', '內容']);
   }
-  if (blockReason) journalFields['卡關原因'] = blockReason;
-  else if (existingBlockReason) journalFields['卡關原因'] = existingBlockReason;
 
   var pid = getProjectRecordId(ctx.projName);
   if (pid) {
@@ -3011,7 +3026,7 @@ function openTaskDetail(taskId) {
   today.setHours(0, 0, 0, 0);
   var existingJournal = findDailyJournalRecord(today.getTime(), ctx.assignee);
   var blockEl = document.getElementById('td-block-reason');
-  if (blockEl) blockEl.value = existingJournal ? (journalField(existingJournal, ['卡關原因']) || '') : '';
+  if (blockEl) blockEl.value = getBlockReasonForTask(existingJournal, taskId);
   op('pp-td');
 }
 
@@ -3128,6 +3143,45 @@ function getProjectRecordId(projName) {
   return rec ? rec.record_id : null;
 }
 
+function parseBlockReasons(rec) {
+  var result = { byId: {}, legacy: '' };
+  if (!rec) return result;
+  var raw = journalField(rec, ['卡關原因']) || '';
+  if (!raw) return result;
+  var lines = String(raw).split('\n');
+  var structured = false;
+  lines.forEach(function(line) {
+    var trimmed = line.trim();
+    if (!trimmed) return;
+    var idx = trimmed.indexOf('|');
+    if (idx > 0) {
+      var id = trimmed.slice(0, idx).trim();
+      var reason = trimmed.slice(idx + 1).trim();
+      if (id) {
+        result.byId[id] = reason;
+        structured = true;
+      }
+    }
+  });
+  if (!structured) result.legacy = raw;
+  return result;
+}
+
+function encodeBlockReasons(byId) {
+  var lines = [];
+  Object.keys(byId || {}).forEach(function(id) {
+    var reason = (byId[id] || '').trim();
+    if (reason) lines.push(id + '|' + reason);
+  });
+  return lines.join('\n');
+}
+
+function getBlockReasonForTask(rec, taskId) {
+  var map = parseBlockReasons(rec);
+  if (map.byId[taskId]) return map.byId[taskId];
+  return map.legacy || '';
+}
+
 function formatDailyReportSummary(groups) {
   var lines = [];
   function section(title, rows) {
@@ -3135,7 +3189,8 @@ function formatDailyReportSummary(groups) {
     lines.push('【' + title + '】');
     rows.forEach(function(row) {
       var line = '/ ' + row.projName + ' · ' + row.taskName;
-      if (row.note) line += '：' + row.note;
+      if (row.blockReason) line += '（卡關：' + row.blockReason + '）';
+      else if (row.note) line += '：' + row.note;
       lines.push(line);
     });
     lines.push('');
@@ -3157,25 +3212,18 @@ function buildDailyCatSelect(value, isBlock) {
 
 function onDailyLogCatChange(sel) {
   sel.classList.toggle('dl-cat-block', sel.value === 'block');
-  toggleDailyBlockReason();
+  var row = sel.closest('.dl-row');
+  if (row) {
+    var blockInput = row.querySelector('.dl-block-reason');
+    if (blockInput) blockInput.style.display = sel.value === 'block' ? 'block' : 'none';
+  }
   refreshDailyLogContent();
-}
-
-function toggleDailyBlockReason() {
-  var hasBlock = false;
-  document.querySelectorAll('#dl-task-list .dl-cat').forEach(function(sel) {
-    if (sel.value === 'block') hasBlock = true;
-  });
-  var wrap = document.getElementById('dl-block-wrap');
-  if (wrap) wrap.style.display = hasBlock ? 'block' : 'none';
 }
 
 function onDailyLogAuthorChange() {
   var author = document.getElementById('dl-author').value || '';
   var existing = findDailyJournalRecord(dailyLogDate.getTime(), author);
-  var blockEl = document.getElementById('dl-block-reason');
   var contentEl = document.getElementById('dl-content');
-  if (blockEl) blockEl.value = existing ? (journalField(existing, ['卡關原因']) || '') : '';
   if (contentEl) {
     contentEl.value = existing ? (journalField(existing, ['備註', '日誌內容', '內容']) || '') : '';
     dailyLogContentEdited = !!contentEl.value;
@@ -3224,34 +3272,49 @@ function renderDailyLogTasks(preselectId) {
   var items = getDailyLogTaskItems();
   if (dailyLogProjFilter) items = items.filter(function(it) { return it.projName === dailyLogProjFilter; });
   if (!items.length) {
-    area.innerHTML = '<div style="padding:14px;color:var(--t3);font-size:11px;text-align:center">尚無任務可選</div>';
+    area.innerHTML = '<div style="padding:14px;color:var(--t3);font-size:12px;text-align:center">尚無任務可選</div>';
     return;
   }
   var author = document.getElementById('dl-author') ? document.getElementById('dl-author').value : '';
   var existing = findDailyJournalRecord(dailyLogDate.getTime(), author);
   var catMap = getExistingTaskCategories(existing);
+  var reasonMap = parseBlockReasons(existing);
   if (preselectId) {
     var extraCat = dailyLogTaskExtras[preselectId] && dailyLogTaskExtras[preselectId].category;
     catMap[preselectId] = extraCat || catMap[preselectId] || 'doing';
   }
-  var html = '';
+  var byProj = {};
   items.forEach(function(it) {
-    var cat = catMap[it.id] || '';
-    var extra = dailyLogTaskExtras[it.id] || {};
-    var noteVal = extra.note !== undefined ? extra.note : it.note;
-    html += '<div class="dl-row" data-task-id="' + it.id + '">';
-    html += buildDailyCatSelect(cat, cat === 'block');
-    html += '<span class="dl-proj-tag" style="background:' + it.color + '">' + it.projName + '</span>';
-    html += '<div class="dl-task-main"><span class="dl-task-name">' + escHtml(it.taskName) + '</span>';
-    html += '<span class="dl-task-meta">' + escHtml(it.wiName) + ' · ' + escHtml(it.assignee) + '</span>';
-    html += '<input type="text" class="dl-note" placeholder="補充說明（選填）" value="' + escAttr(noteVal) + '" onclick="event.stopPropagation()">';
-    html += '</div><span class="dl-progress">' + it.progress + '%</span></div>';
+    if (!byProj[it.projName]) byProj[it.projName] = [];
+    byProj[it.projName].push(it);
+  });
+  var projs = Object.keys(byProj).sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
+  var html = '';
+  projs.forEach(function(proj) {
+    var color = projColorByName(proj);
+    html += '<div class="dl-proj-group"><div class="dl-proj-hdr" style="background:' + color + '">' + escHtml(proj) + '</div>';
+    byProj[proj].forEach(function(it) {
+      var cat = catMap[it.id] || '';
+      var extra = dailyLogTaskExtras[it.id] || {};
+      var noteVal = extra.note !== undefined ? extra.note : it.note;
+      var blockVal = extra.blockReason !== undefined ? extra.blockReason : getBlockReasonForTask(existing, it.id);
+      var isBlock = cat === 'block';
+      html += '<div class="dl-row" data-task-id="' + it.id + '">';
+      html += '<div class="dl-row-top">';
+      html += buildDailyCatSelect(cat, isBlock);
+      html += '<div class="dl-task-main"><span class="dl-task-name">' + escHtml(it.taskName) + '</span>';
+      html += '<span class="dl-task-meta">' + escHtml(it.wiName) + ' · ' + escHtml(it.assignee) + '</span>';
+      html += '<input type="text" class="dl-note" placeholder="補充說明（選填）" value="' + escAttr(noteVal) + '" onclick="event.stopPropagation()">';
+      html += '</div><span class="dl-progress">' + it.progress + '%</span></div>';
+      html += '<textarea class="dl-block-reason" rows="2" placeholder="此任務的卡關原因（必填）" style="display:' + (isBlock ? 'block' : 'none') + '" onclick="event.stopPropagation()">' + String(blockVal).replace(/</g, '&lt;') + '</textarea>';
+      html += '</div>';
+    });
+    html += '</div>';
   });
   area.innerHTML = html;
   area.querySelectorAll('.dl-note').forEach(function(el) {
     el.addEventListener('input', refreshDailyLogContent);
   });
-  toggleDailyBlockReason();
   if (!dailyLogContentEdited) refreshDailyLogContent();
 }
 
@@ -3266,11 +3329,13 @@ function collectDailyLogCategories() {
     var ctx = getTaskContext(id);
     if (!ctx) return;
     var noteInput = row.querySelector('.dl-note');
+    var blockInput = row.querySelector('.dl-block-reason');
     var item = {
       id: id,
       projName: ctx.projName || '其他',
       taskName: ctx.f['任務名稱'] || '未命名',
       note: noteInput ? noteInput.value.trim() : '',
+      blockReason: blockInput ? blockInput.value.trim() : '',
       status: (dailyLogTaskExtras[id] && dailyLogTaskExtras[id].status) || ctx.f['進度狀態'] || '未開始'
     };
     groups[cat].push(item);
@@ -3335,10 +3400,7 @@ function openDailyLog(preselectTaskId) {
 
   var author = authorSel ? authorSel.value : '';
   var existing = findDailyJournalRecord(d.getTime(), author);
-  var blockEl = document.getElementById('dl-block-reason');
   var contentEl = document.getElementById('dl-content');
-  var extraBlock = preselectTaskId && dailyLogTaskExtras[preselectTaskId] && dailyLogTaskExtras[preselectTaskId].blockReason;
-  if (blockEl) blockEl.value = extraBlock || (existing ? (journalField(existing, ['卡關原因']) || '') : '');
   if (contentEl) {
     contentEl.value = existing ? (journalField(existing, ['備註', '日誌內容', '內容']) || '') : '';
     dailyLogContentEdited = !!contentEl.value;
@@ -3369,7 +3431,6 @@ function findDailyJournalRecord(dayStart, authorName) {
 function saveDailyJournal() {
   var data = collectDailyLogCategories();
   var author = document.getElementById('dl-author').value || '';
-  var blockReason = (document.getElementById('dl-block-reason').value || '').trim();
   var content = (document.getElementById('dl-content').value || '').trim();
   var totalCount = data.groups.doing.length + data.groups.done.length + data.groups.block.length + data.groups.tomorrow.length;
 
@@ -3377,8 +3438,9 @@ function saveDailyJournal() {
     alert('請至少分類一個任務，或填寫備註');
     return;
   }
-  if (data.ids.block.length && !blockReason) {
-    alert('有卡關任務時，請填寫卡關原因');
+  var missingBlock = data.groups.block.filter(function(row) { return !row.blockReason; });
+  if (missingBlock.length) {
+    alert('卡關任務請在該任務下方填寫卡關原因：' + missingBlock.map(function(r) { return r.taskName; }).join('、'));
     return;
   }
   if (!content && totalCount) content = formatDailyReportSummary(data.groups);
@@ -3391,15 +3453,20 @@ function saveDailyJournal() {
     if (pid && projIds.indexOf(pid) < 0) projIds.push(pid);
   });
 
+  var reasonById = {};
+  data.groups.block.forEach(function(row) {
+    if (row.blockReason) reasonById[row.id] = row.blockReason;
+  });
+
   var journalFields = {
     '日期': todayTs,
-    '備註': content
+    '備註': content,
+    '進行中任務': data.ids.doing,
+    '已完成今日任務': data.ids.done,
+    '卡關任務': data.ids.block,
+    '明日預計任務': data.ids.tomorrow,
+    '卡關原因': encodeBlockReasons(reasonById)
   };
-  if (data.ids.doing.length) journalFields['進行中任務'] = data.ids.doing;
-  if (data.ids.done.length) journalFields['已完成今日任務'] = data.ids.done;
-  if (data.ids.block.length) journalFields['卡關任務'] = data.ids.block;
-  if (data.ids.tomorrow.length) journalFields['明日預計任務'] = data.ids.tomorrow;
-  if (blockReason) journalFields['卡關原因'] = blockReason;
   if (projIds.length) journalFields['所屬專案'] = projIds;
 
   var reporter = larkPerson(author);
@@ -3583,6 +3650,156 @@ function journalCardRow(label, val, type) {
     '<div class="jc-val">' + tasksHtml + '</div></div>';
 }
 
+function journalCardBlockedTasks(rec) {
+  var f = rec.fields || {};
+  var blockIds = getLinkIds(f['卡關任務']);
+  if (!blockIds.length) return '';
+  var reasonMap = parseBlockReasons(rec);
+  var html = '';
+  blockIds.forEach(function(taskId) {
+    var ctx = getTaskContext(taskId);
+    var name = ctx ? (ctx.f['任務名稱'] || '任務') : '任務';
+    var reason = reasonMap.byId[taskId] || reasonMap.legacy || '';
+    html += '<div class="jc-row block">';
+    html += '<span class="jc-lbl block">卡關</span>';
+    html += '<div class="jc-val"><span class="jc-task">' + escHtml(name) + '</span>';
+    if (reason) html += '<div class="jc-task-reason">' + escHtml(reason) + '</div>';
+    html += '</div></div>';
+  });
+  return html;
+}
+
+function getActiveBlockedTaskItems() {
+  var items = getJournalItemsInRange(90);
+  var byTask = {};
+  items.forEach(function(rec) {
+    var ts = journalTs(rec) || 0;
+    var blockIds = getLinkIds(rec.fields['卡關任務']);
+    if (!blockIds.length) return;
+    var reasonMap = parseBlockReasons(rec);
+    var author = journalPersonName(rec);
+    blockIds.forEach(function(taskId) {
+      var ctx = getTaskContext(taskId);
+      if (!ctx) return;
+      var reason = reasonMap.byId[taskId] || reasonMap.legacy || '';
+      if (!byTask[taskId] || ts >= byTask[taskId].ts) {
+        byTask[taskId] = {
+          taskId: taskId,
+          journalRecId: rec.record_id,
+          ts: ts,
+          dateStr: ts ? fmtDate(ts) : '',
+          author: author,
+          projName: ctx.projName || '其他',
+          color: ctx.color,
+          taskName: ctx.f['任務名稱'] || '未命名',
+          wiName: ctx.wiName,
+          assignee: ctx.assignee,
+          blockReason: reason
+        };
+      }
+    });
+  });
+  return Object.values(byTask).sort(function(a, b) { return b.ts - a.ts; });
+}
+
+function renderBlockTaskCard(item) {
+  var html = '<div class="ji"><div class="jc has-block jc-block-item">';
+  html += '<div class="jc-hdr"><span class="jn">' + escHtml(item.taskName) + '</span>';
+  html += '<span class="jc-date">' + item.dateStr + ' · ' + escHtml(item.author) + '</span></div>';
+  html += '<div class="jc-block-meta">' + escHtml(item.wiName) + ' · ' + escHtml(item.assignee) + '</div>';
+  if (item.blockReason) html += '<div class="jc-reason"><b>卡關原因</b>' + escHtml(item.blockReason) + '</div>';
+  html += '<div class="jc-block-actions">';
+  html += '<select class="jc-block-status">';
+  html += '<option value="">調整狀態…</option>';
+  html += '<option value="doing">改為進行中</option>';
+  html += '<option value="done">改為完成</option>';
+  html += '</select>';
+  html += '<button type="button" class="jc-block-btn" data-task-id="' + escAttr(item.taskId) + '" data-journal-id="' + escAttr(item.journalRecId) + '" onclick="applyBlockStatusChange(this)">確認</button>';
+  html += '</div></div></div>';
+  return html;
+}
+
+function applyBlockStatusChange(btn) {
+  var card = btn.closest('.jc-block-item');
+  var sel = card ? card.querySelector('.jc-block-status') : null;
+  var newCat = sel ? sel.value : '';
+  if (!newCat) { alert('請選擇要調整的狀態'); return; }
+  resolveBlockedTask(btn.dataset.taskId, btn.dataset.journalId, newCat, btn);
+}
+
+function resolveBlockedTask(taskId, journalRecId, newCat, btn) {
+  var journalRec = journalData.find(function(r) { return r.record_id === journalRecId; });
+  if (!journalRec) { alert('找不到對應日誌'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = '更新中…'; }
+  var merged = mergeTaskIntoJournalCategories(journalRec, taskId, newCat);
+  var reasonMap = parseBlockReasons(journalRec);
+  delete reasonMap.byId[taskId];
+  var journalFields = {
+    '進行中任務': merged.doing,
+    '已完成今日任務': merged.done,
+    '卡關任務': merged.block,
+    '明日預計任務': merged.tomorrow,
+    '卡關原因': encodeBlockReasons(reasonMap.byId)
+  };
+  if (!merged.block.length) journalFields['卡關原因'] = '';
+
+  var taskUpdate = Promise.resolve({ code: 0 });
+  if (newCat === 'done') {
+    var ctx = getTaskContext(taskId);
+    if (ctx) {
+      var status = ctx.f['進度狀態'] || '';
+      if (String(status).indexOf('100') < 0) {
+        taskUpdate = apiPut('tasks', taskId, { '進度狀態': '進行中100%', '進度數值': 100 });
+      }
+    }
+  }
+
+  Promise.all([apiPut('journal', journalRecId, journalFields), taskUpdate])
+    .then(function() { return reloadJournal(); })
+    .then(function() { return fetch(API + '?table=tasks').then(function(r) { return r.json(); }); })
+    .then(function(data) {
+      if (data && data.records) {
+        tasksData = data.records;
+        renderTasks();
+        renderTeamPanel();
+        renderGanttFromData();
+      }
+      renderJournalPage();
+      alert('已更新，此項目不會再出現在卡關列表');
+    })
+    .catch(function(err) {
+      alert('更新失敗：' + (err.message || '請稍後再試'));
+    })
+    .finally(function() {
+      if (btn) { btn.disabled = false; btn.textContent = '確認'; }
+    });
+}
+
+function renderJournalBlockView(area) {
+  var blocked = getActiveBlockedTaskItems();
+  if (!blocked.length) {
+    area.innerHTML = '<div style="padding:12px;color:var(--t3);font-size:12px">目前無卡關項目</div>';
+    return;
+  }
+  var byProj = {};
+  blocked.forEach(function(item) {
+    if (!byProj[item.projName]) byProj[item.projName] = [];
+    byProj[item.projName].push(item);
+  });
+  var projs = Object.keys(byProj).sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
+  var html = '';
+  projs.forEach(function(proj) {
+    var items = byProj[proj];
+    var color = projColorByName(proj);
+    html += '<div class="jfeed-group">';
+    html += '<div class="jfeed-proj-hdr" style="background:' + color + '">' + escHtml(proj) + '<span class="jfeed-proj-count">' + items.length + ' 項卡關</span></div>';
+    html += '<div class="jfeed-stack">';
+    items.forEach(function(item) { html += renderBlockTaskCard(item); });
+    html += '</div></div>';
+  });
+  area.innerHTML = html;
+}
+
 function renderJournalFeedEntry(rec, opts) {
   opts = opts || {};
   var c = collectJournalContent(rec);
@@ -3605,10 +3822,13 @@ function renderJournalFeedEntry(rec, opts) {
   html += '</div><div class="jc-rows">';
   html += journalCardRow('進行中', c.doing, 'doing');
   html += journalCardRow('完成', c.done, 'done');
-  html += journalCardRow('卡關', c.blocked, 'block');
+  html += journalCardBlockedTasks(rec);
   html += journalCardRow('明日', c.tomorrow, 'tomorrow');
   html += '</div>';
-  if (c.blockReason) html += '<div class="jc-reason"><b>卡關原因</b>' + escHtml(c.blockReason) + '</div>';
+  var reasonMap = parseBlockReasons(rec);
+  if (reasonMap.legacy && getLinkIds(rec.fields['卡關任務']).length && !Object.keys(reasonMap.byId).length) {
+    html += '<div class="jc-reason"><b>卡關原因</b>' + escHtml(reasonMap.legacy) + '</div>';
+  }
   if (c.note && !(c.doing || c.done || c.blocked || c.tomorrow)) {
     html += '<div class="jc-note">' + formatJournalHtml(c.note) + '</div>';
   }
@@ -3628,10 +3848,13 @@ function renderJournalFeedList(recs, opts, layout) {
 
 function renderJournalHtml(mode, area) {
   if (!area) return;
+  if (mode === 'block') {
+    renderJournalBlockView(area);
+    return;
+  }
   var items = getJournalItemsInRange(90);
-  if (mode === 'block') items = items.filter(journalIsBlockedActive);
   if (!items.length) {
-    area.innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">' + (mode === 'block' ? '目前無卡關項目' : '近 90 天尚無日誌') + '</div>';
+    area.innerHTML = '<div style="padding:12px;color:var(--t3);font-size:12px">近 90 天尚無日誌</div>';
     return;
   }
 
@@ -3652,12 +3875,6 @@ function renderJournalHtml(mode, area) {
       html += '</div>';
     });
     area.innerHTML = html;
-    return;
-  }
-
-  if (mode === 'block') {
-    items.sort(function(a, b) { return (journalTs(b) || 0) - (journalTs(a) || 0); });
-    area.innerHTML = '<div class="jfeed-group">' + renderJournalFeedList(items, { showAuthor: true, showDate: true }, 'stack') + '</div>';
     return;
   }
 
