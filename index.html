@@ -1770,8 +1770,9 @@ function paintGantt(key,proj,vs,ve,total,cw){
       if(bx+bw<0||bx>tw)return;
       var ax=Math.max(0,bx),aw=Math.min(bw,tw-ax);
       var top = 4 + bi * 20;
+      var barColor = bar.c || proj.color;
       var clickAttr = bar.id ? ' onclick="openTaskDetail(\'' + bar.id + '\')"' : '';
-      bH+='<div class="gbar" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:16px;background:'+proj.color+';opacity:'+bar.o+'"'+clickAttr+' title="'+escAttr(bar.l)+'">'+bar.l+'</div>';
+      bH+='<div class="gbar" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:16px;background:'+barColor+';opacity:'+bar.o+'"'+clickAttr+' title="'+escAttr(bar.l)+'">'+bar.l+'</div>';
     });
     tmH+='<div class="gtr" style="width:'+tw+'px;height:'+rowH+'px">'+bH+'</div>';
   });
@@ -2168,6 +2169,7 @@ function loadExtraData() {
     renderDesigns();
     renderJournalPage();
     renderTeamPanel();
+    renderGanttFromData();
     buildMembersMap();
     fillMemberSelects();
   });
@@ -2638,8 +2640,28 @@ function filterTasks(el, proj) {
   });
 }
 
-// ── 渲染甘特圖（使用真實資料）──
-function renderGanttFromData() {
+var DESIGN_GANTT_COLOR = '#d4a017';
+
+function getDesignBarRange(f) {
+  var draft = parseTs(f['初稿交付日']);
+  var final = parseTs(f['完稿交付日']);
+  var deliver = parseTs(f['成品交付日']);
+  var start = draft || final || deliver;
+  var end = deliver || final || draft;
+  if (start && end && end < start) {
+    end = final && final >= start ? final : (deliver && deliver >= start ? deliver : start);
+  }
+  if (!start && end) start = new Date(end.getTime() - 7 * 86400000);
+  if (start && !end) end = new Date(start.getTime() + 7 * 86400000);
+  return { start: start, end: end };
+}
+
+function designBarOpacity(status) {
+  if (!status) return 0.65;
+  if (status.indexOf('完成') >= 0) return 1;
+  if (status.indexOf('進行') >= 0) return 0.9;
+  return 0.65;
+}
   var ganttArea = document.getElementById('gantt-area');
   if (!ganttArea) return;
   ganttArea.innerHTML = '';
@@ -2649,6 +2671,14 @@ function renderGanttFromData() {
     getLinkIds(t.fields['所屬工作項目']).forEach(function(wiId) {
       if (!tasksByWi[wiId]) tasksByWi[wiId] = [];
       tasksByWi[wiId].push(t);
+    });
+  });
+
+  var designsByWi = {};
+  designsData.forEach(function(d) {
+    getLinkIds(d.fields['所屬工作項目']).forEach(function(wiId) {
+      if (!designsByWi[wiId]) designsByWi[wiId] = [];
+      designsByWi[wiId].push(d);
     });
   });
 
@@ -2698,6 +2728,21 @@ function renderGanttFromData() {
           l: tName,
           o: tProg >= 100 ? 1 : (tProg > 0 ? 0.9 : 0.55),
           id: t.record_id
+        });
+      });
+
+      var relDesigns = designsByWi[wiId] || [];
+      relDesigns.forEach(function(d) {
+        var df = d.fields;
+        var dName = df['設計項目名稱'] || '設計';
+        var range = getDesignBarRange(df);
+        if (!range.start || !range.end) return;
+        bars.push({
+          s: toDateStr(range.start),
+          e: toDateStr(range.end),
+          l: dName,
+          o: designBarOpacity(df['狀態']),
+          c: DESIGN_GANTT_COLOR
         });
       });
 
