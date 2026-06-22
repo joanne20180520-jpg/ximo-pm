@@ -787,52 +787,27 @@ async function getAppAccessToken() {
 }
 
 async function loginWithOAuthCode(code, redirectUri) {
-  const baseBody = {
-    grant_type: 'authorization_code',
-    client_id: APP_ID,
-    client_secret: APP_SECRET,
-    code: code
-  };
-  const bodies = [];
-  if (redirectUri) bodies.push(Object.assign({}, baseBody, { redirect_uri: redirectUri }));
-  bodies.push(baseBody);
-
   let accessToken = null;
   let lastErr = '';
-  for (let i = 0; i < bodies.length; i++) {
-    const v2Res = await fetch(BASE_URL + '/authen/v2/oauth/token', {
+
+  try {
+    const appToken = await getAppAccessToken();
+    const v1Res = await fetch(BASE_URL + '/authen/v1/access_token', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
-      body: JSON.stringify(bodies[i])
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + appToken
+      },
+      body: JSON.stringify({ grant_type: 'authorization_code', code: code })
     });
-    const tokenData = await v2Res.json();
+    const tokenData = await v1Res.json();
     if (tokenData.code === 0 && tokenData.data && tokenData.data.access_token) {
       accessToken = tokenData.data.access_token;
-      break;
+    } else {
+      lastErr = tokenData.msg || tokenData.message || JSON.stringify(tokenData);
     }
-    lastErr = tokenData.msg || tokenData.message || JSON.stringify(tokenData);
-  }
-
-  if (!accessToken) {
-    try {
-      const appToken = await getAppAccessToken();
-      const v1Res = await fetch(BASE_URL + '/authen/v1/access_token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + appToken
-        },
-        body: JSON.stringify({ grant_type: 'authorization_code', code: code })
-      });
-      const tokenData = await v1Res.json();
-      if (tokenData.code === 0 && tokenData.data && tokenData.data.access_token) {
-        accessToken = tokenData.data.access_token;
-      } else {
-        lastErr = tokenData.msg || tokenData.message || lastErr;
-      }
-    } catch (e) {
-      lastErr = e.message || lastErr;
-    }
+  } catch (e) {
+    lastErr = e.message || lastErr;
   }
 
   if (!accessToken) {

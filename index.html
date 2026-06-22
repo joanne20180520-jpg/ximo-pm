@@ -2085,7 +2085,18 @@ var currentLoginUser = null;
 var loginUserReady = false;
 var loginResolving = null;
 var larkAppConfig = { appId: '', redirectUri: '' };
+var oauthCodeConsumed = false;
 
+function takeOAuthCodeFromUrl() {
+  if (oauthCodeConsumed) return null;
+  var params = new URLSearchParams(window.location.search);
+  var code = params.get('code');
+  if (!code) return null;
+  oauthCodeConsumed = true;
+  var redirect = getLoginRedirectUri();
+  if (window.history.replaceState) window.history.replaceState({}, '', redirect);
+  return code;
+}
 function loadLarkAppConfig() {
   return fetch(API + '?action=appid').then(function(r) { return r.json(); }).then(function(cfg) {
     if (cfg.appId) larkAppConfig.appId = cfg.appId;
@@ -2333,9 +2344,7 @@ function exchangeLarkAuthCode(appId, tt) {
     var redirect = getLoginRedirectUri();
     function onCode(code) {
       if (!code) { resolve(null); return; }
-      loginWithCode(code, redirect).then(resolve).catch(function() {
-        loginWithCode(code, '').then(resolve).catch(function() { resolve(null); });
-      });
+      loginWithCode(code, redirect).then(resolve).catch(function() { resolve(null); });
     }
     function callRequestAuthCode() {
       if (!tt.requestAuthCode) { resolve(null); return; }
@@ -2431,20 +2440,17 @@ function resolveLoginUser() {
   if (loginResolving) return loginResolving;
 
   loginResolving = (function() {
-    var params = new URLSearchParams(window.location.search);
-    var code = params.get('code');
+    var code = takeOAuthCodeFromUrl();
     if (code) {
       return loadLarkAppConfig().then(function() {
         var redirect = getLoginRedirectUri();
         return loginWithCode(code, redirect).then(function(user) {
-          if (window.history.replaceState) window.history.replaceState({}, '', redirect);
           loginUserReady = true;
           return user;
         }).catch(function(err) {
           console.warn('Lark login', err);
-          if (window.history.replaceState) window.history.replaceState({}, '', redirect);
           showLoginError('Lark 登入失敗：' + (err.message || '授權碼無效或已過期，請再點一次 Lark 登入'));
-          loginUserReady = false;
+          loginUserReady = true;
           return null;
         });
       });
@@ -2715,26 +2721,15 @@ function loadExtraData() {
       enrichLoginUserFromMembers(cachedUser);
       storeLoginUser(cachedUser);
     }
-    resolveLoginUser().then(function(user) {
-      if (user) {
-        enrichLoginUserFromMembers(user);
-        storeLoginUser(user);
-      }
-      updateTodoLoginLabel();
-      applyLoginUserToForms();
-      renderTeamPanel();
-    });
+    updateTodoLoginLabel();
+    applyLoginUserToForms();
+    renderTeamPanel();
   });
 }
 
 function loadData() {
   document.getElementById('pl-projects').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
   document.getElementById('task-list-body').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
-
-  resolveLoginUser().then(function(user) {
-    updateTodoLoginLabel();
-    if (user) renderTeamPanel();
-  });
 
   Promise.all([
     fetch(API + '?table=projects').then(function(r){return r.json();}),
@@ -5848,9 +5843,10 @@ function collectPaymentFields() {
 }
 
 // ── 初始化 ──
-resolveLoginUser().then(function() {
+resolveLoginUser().then(function(user) {
   updateTodoLoginLabel();
   applyLoginUserToForms();
+  if (user) renderTeamPanel();
 });
 loadData();
 (function initPayForm() {
