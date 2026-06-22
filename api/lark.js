@@ -81,7 +81,7 @@ async function updateRecord(token, tableId, recordId, fields) {
 }
 
 async function updateBitableRecord(token, appToken, tableId, recordId, fields) {
-  const url = BASE_URL + '/bitable/v1/apps/' + appToken + '/tables/' + tableId + '/records/' + recordId;
+  const url = BASE_URL + '/bitable/v1/apps/' + appToken + '/tables/' + tableId + '/records/' + recordId + '?user_id_type=open_id';
   const res = await fetch(url, {
     method: 'PUT',
     headers: {
@@ -153,6 +153,9 @@ function formatArchiveCopyError(msg) {
   }
   if (/Duplex Link/i.test(s)) {
     return '雙向關聯欄位格式錯誤（已修正程式，請重新封存）。若仍失敗，請確認範本與後台結構一致。';
+  }
+  if (/UserFieldConvFail/i.test(s)) {
+    return '人員欄位格式錯誤（已修正程式，請重新封存）。';
   }
   return s;
 }
@@ -568,6 +571,20 @@ function normalizeLinkFieldValue(val) {
   return getLinkIds(val).map(function(id) { return String(id); });
 }
 
+function normalizePersonFieldValue(val) {
+  if (!val) return null;
+  const items = Array.isArray(val) ? val : [val];
+  const out = [];
+  items.forEach(function(x) {
+    if (!x) return;
+    if (typeof x === 'string' && x) out.push({ id: String(x) });
+    else if (x && x.id) out.push({ id: String(x.id) });
+    else if (x && x.open_id) out.push({ id: String(x.open_id) });
+    else if (x && x.user_id) out.push({ id: String(x.user_id) });
+  });
+  return out.length ? out : null;
+}
+
 function buildArchiveRecordFields(rawFields, allowedSet, fieldMeta, overrides) {
   overrides = overrides || {};
   const remapped = remapFieldsForTarget(rawFields, allowedSet);
@@ -579,16 +596,8 @@ function buildArchiveRecordFields(rawFields, allowedSet, fieldMeta, overrides) {
     if (BITABLE_SKIP_FIELD_TYPES[meta.type]) return;
     if (BITABLE_LINK_FIELD_TYPES[meta.type]) return;
     if (meta.type === 11) {
-      const val = remapped[name];
-      if (Array.isArray(val)) {
-        const ids = val.map(function(x) {
-          if (typeof x === 'string') return x;
-          if (x && x.id) return x.id;
-          if (x && x.user_id) return x.user_id;
-          return '';
-        }).filter(Boolean);
-        if (ids.length) out[name] = ids;
-      }
+      const normalized = normalizePersonFieldValue(remapped[name]);
+      if (normalized) out[name] = normalized;
       return;
     }
     if (meta.type === 15) {
@@ -605,6 +614,11 @@ function buildArchiveRecordFields(rawFields, allowedSet, fieldMeta, overrides) {
     const val = overrides[name];
     if (meta && BITABLE_LINK_FIELD_TYPES[meta.type]) {
       out[name] = normalizeLinkFieldValue(val);
+      return;
+    }
+    if (meta && meta.type === 11) {
+      const normalized = normalizePersonFieldValue(val);
+      if (normalized) out[name] = normalized;
       return;
     }
     out[name] = val;
@@ -822,7 +836,7 @@ async function batchCreateRecords(token, appToken, tableId, fieldsList) {
   const chunkSize = 100;
   for (let i = 0; i < fieldsList.length; i += chunkSize) {
     const chunk = fieldsList.slice(i, i + chunkSize);
-    const url = BASE_URL + '/bitable/v1/apps/' + appToken + '/tables/' + tableId + '/records/batch_create';
+    const url = BASE_URL + '/bitable/v1/apps/' + appToken + '/tables/' + tableId + '/records/batch_create?user_id_type=open_id';
     const res = await fetch(url, {
       method: 'POST',
       headers: {

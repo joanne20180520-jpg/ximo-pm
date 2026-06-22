@@ -5107,6 +5107,8 @@ function confirmArchiveProject() {
               ? '\n\n【常見原因】範本多維表格欄位與後台不一致。請從現行後台複製一份最新範本，更新 Vercel 的 LARK_ARCHIVE_TEMPLATE。'
               : (/Duplex Link/i.test(errMsg)
               ? '\n\n【已修復】雙向關聯欄位格式問題，請重新封存即可。'
+              : (/UserFieldConvFail/i.test(errMsg)
+              ? '\n\n【已修復】人員欄位格式問題，請重新封存即可。'
               : (/not found/i.test(errMsg)
               ? '\n\n【常見原因】\n1. Wiki 封存位置連結不是知識庫頁面完整網址\n2. LARK_ARCHIVE_TEMPLATE 範本連結錯誤或已刪除\n3. 範本與標案不在同一 Lark 租戶'
               : '')));
