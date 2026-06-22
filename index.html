@@ -199,25 +199,34 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .j-kpi-doing .j-kpi-val{color:#1a4a7a}
 .j-kpi-block .j-kpi-val{color:var(--danger)}
 .j-kpi-tomorrow .j-kpi-val{color:var(--warn)}
-.j-person-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
-.j-person-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
-.j-person-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px}
-.j-person-name{font-size:16px;font-weight:700;margin:0 0 2px}
-.j-person-sub{font-size:12px;color:var(--t3)}
+.j-person-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px}
+.j-person-section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.j-person-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+.j-person-name{font-size:18px;font-weight:700;margin:0}
 .j-person-badge{font-size:12px;padding:6px 10px;border-radius:20px;background:#e6f4ee;color:#1a7a45;font-weight:600;white-space:nowrap}
-.j-progress{height:10px;background:var(--sf2);border-radius:20px;margin-bottom:16px;overflow:hidden}
+.j-progress{height:8px;background:var(--sf2);border-radius:20px;margin-bottom:16px;overflow:hidden}
 .j-progress-bar{height:100%;background:#1a7a45;border-radius:20px;min-width:0;transition:width .3s}
-.j-section-title{font-size:13px;font-weight:700;margin-bottom:8px}
-.j-section-title.done{color:#1a7a45}
-.j-section-title.doing{color:#1a4a7a}
-.j-task-list{list-style:none;padding:0;margin:0 0 14px}
-.j-task-list li{padding:6px 0;font-size:13px;color:var(--text)}
-.j-block-alert{background:#fff8f8;border-radius:12px;padding:12px;margin-bottom:12px;color:var(--danger);border:1px solid #fde8e8}
-.j-block-title{font-weight:700;margin-bottom:6px;font-size:13px}
-.j-block-task{font-weight:600;margin-bottom:4px;font-size:13px}
-.j-block-reason{font-size:12px;color:var(--danger);opacity:.9;margin-bottom:8px}
-.j-tomorrow-box{background:var(--sf2);border-radius:12px;padding:12px}
-.j-tomorrow-title{font-weight:700;margin-bottom:8px;font-size:13px;color:var(--text)}
+.j-proj-stack{display:flex;flex-direction:column;gap:14px}
+.j-proj-card{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff}
+.j-proj-card-hdr{padding:10px 14px;font-size:14px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border);background:var(--sf2)}
+.j-proj-card-body{padding:10px 12px;display:flex;flex-direction:column;gap:10px}
+.j-proj-section{border-radius:8px;padding:10px 12px;border-left:3px solid transparent}
+.j-proj-section-done{background:#F4F8F5;border-left-color:#2d6a4f}
+.j-proj-section-doing{background:#F7F8FA;border-left-color:#6b7c8f}
+.j-proj-section-block{background:#FCF5F3;border-left-color:#c45c3e}
+.j-proj-section-tomorrow{background:#F8F6F1;border-left-color:#9a846c}
+.j-proj-section-title{font-size:12px;font-weight:700;margin-bottom:8px;color:var(--t2)}
+.j-proj-section-done .j-proj-section-title{color:#2d6a4f}
+.j-proj-section-doing .j-proj-section-title{color:#5a6a7a}
+.j-proj-section-block .j-proj-section-title{color:#b45309}
+.j-proj-section-tomorrow .j-proj-section-title{color:#8a7355}
+.j-proj-task-list{list-style:none;padding:0;margin:0}
+.j-proj-task-list li{font-size:13px;color:var(--text);padding:4px 0;line-height:1.45}
+.j-proj-task-list li+li{border-top:1px solid rgba(0,0,0,.04)}
+.j-proj-task-reason{font-size:12px;color:#b45309;margin-top:4px;line-height:1.4}
+.j-proj-block-actions{display:flex;align-items:center;gap:8px;margin-top:8px}
+.j-person-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.j-person-sub{font-size:12px;color:var(--t3)}
 @media (max-width:720px){
   .j-dash-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
@@ -4318,7 +4327,7 @@ function renderBlockTaskCard(item) {
 }
 
 function applyBlockStatusChange(btn) {
-  var card = btn.closest('.jc-block-item') || btn.closest('.j-block-alert');
+  var card = btn.closest('.jc-block-item') || btn.closest('.j-block-alert') || btn.closest('.j-proj-section-block');
   var sel = card ? card.querySelector('.jc-block-status') : null;
   if (!sel) {
     var actions = btn.closest('.jc-block-actions');
@@ -4552,13 +4561,47 @@ function mergePersonJournalRecords(recs) {
   return { record_id: base.record_id, fields: fields };
 }
 
+function groupJournalTasksByProject(done, doing, blocks, tomorrow) {
+  var map = {};
+  function ensure(projName) {
+    var key = (projName || '').trim() || '其他';
+    if (!map[key]) {
+      map[key] = {
+        name: key,
+        color: projColorByName(key),
+        done: [],
+        doing: [],
+        blocks: [],
+        tomorrow: []
+      };
+    }
+    return map[key];
+  }
+  done.forEach(function(t) {
+    var ctx = getTaskContext(t.id);
+    ensure(ctx ? ctx.projName : '').done.push(t);
+  });
+  doing.forEach(function(t) {
+    var ctx = getTaskContext(t.id);
+    ensure(ctx ? ctx.projName : '').doing.push(t);
+  });
+  blocks.forEach(function(b) {
+    var ctx = getTaskContext(b.id);
+    ensure(ctx ? ctx.projName : '').blocks.push(b);
+  });
+  tomorrow.forEach(function(t) {
+    var ctx = getTaskContext(t.id);
+    ensure(ctx ? ctx.projName : '').tomorrow.push(t);
+  });
+  return Object.keys(map).sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); }).map(function(k) { return map[k]; });
+}
+
 function collectJournalPersonData(rec, personName, opts) {
   opts = opts || {};
   if (!rec) {
     return {
       name: personName,
-      proj: '',
-      done: [], doing: [], blocks: [], tomorrow: [],
+      projects: [],
       doneCount: 0, total: 0, pct: 0,
       journalRecId: null,
       empty: true,
@@ -4586,14 +4629,10 @@ function collectJournalPersonData(rec, personName, opts) {
   });
   var total = done.length + doing.length + blocks.length + tomorrow.length;
   var pct = total ? Math.round(done.length / total * 100) : 0;
-  var proj = journalLinkText(rec, ['所屬專案', '標案名稱', '所屬標案']) || '';
+  var projects = groupJournalTasksByProject(done, doing, blocks, tomorrow);
   return {
     name: personName,
-    proj: proj,
-    done: done,
-    doing: doing,
-    blocks: blocks,
-    tomorrow: tomorrow,
+    projects: projects,
     doneCount: done.length,
     total: total,
     pct: pct,
@@ -4602,45 +4641,52 @@ function collectJournalPersonData(rec, personName, opts) {
   };
 }
 
+function renderJournalProjSection(cat, title, items) {
+  if (!items || !items.length) return '';
+  var html = '<div class="j-proj-section j-proj-section-' + cat + '">';
+  html += '<div class="j-proj-section-title">' + title + '</div>';
+  html += '<ul class="j-proj-task-list">';
+  items.forEach(function(item) {
+    html += '<li>';
+    html += escHtml(item.name);
+    if (item.reason) html += '<div class="j-proj-task-reason">' + escHtml(item.reason) + '</div>';
+    if (cat === 'block' && item.id) {
+      html += '<div class="j-proj-block-actions">';
+      html += '<select class="jc-block-status"><option value="">調整狀態…</option>';
+      html += '<option value="doing">改為進行中</option><option value="done">改為完成</option></select>';
+      html += '<button type="button" class="jc-block-btn" data-task-id="' + escAttr(item.id) + '" data-journal-id="' + escAttr(item.journalRecId) + '" onclick="applyBlockStatusChange(this)">確認</button>';
+      html += '</div>';
+    }
+    html += '</li>';
+  });
+  html += '</ul></div>';
+  return html;
+}
+
+function renderJournalProjCard(proj) {
+  var html = '<div class="j-proj-card">';
+  html += '<div class="j-proj-card-hdr">' + escHtml(proj.name) + '</div>';
+  html += '<div class="j-proj-card-body">';
+  html += renderJournalProjSection('done', '已完成', proj.done);
+  html += renderJournalProjSection('doing', '進行中', proj.doing);
+  html += renderJournalProjSection('block', '需要處理', proj.blocks);
+  html += renderJournalProjSection('tomorrow', '下一步', proj.tomorrow);
+  html += '</div></div>';
+  return html;
+}
+
 function renderJournalPersonCard(p) {
-  var html = '<div class="j-person-card">';
+  var html = '<div class="j-person-section">';
   html += '<div class="j-person-hdr">';
-  html += '<div><div class="j-person-name">' + escHtml(p.name) + '</div>';
-  if (p.proj) html += '<div class="j-person-sub">' + escHtml(p.proj) + '</div>';
-  else if (p.empty) html += '<div class="j-person-sub">此日尚未填寫日誌</div>';
-  html += '</div>';
+  html += '<div class="j-person-name">' + escHtml(p.name) + '</div>';
   html += '<span class="j-person-badge">完成率 ' + p.pct + '%</span></div>';
   html += '<div class="j-progress"><div class="j-progress-bar" style="width:' + p.pct + '%"></div></div>';
 
-  if (p.done.length) {
-    html += '<div class="j-section-title done">✓ 已完成</div><ul class="j-task-list">';
-    p.done.forEach(function(t) { html += '<li>' + escHtml(t.name) + '</li>'; });
-    html += '</ul>';
-  }
-  if (p.doing.length) {
-    html += '<div class="j-section-title doing">🔄 進行中</div><ul class="j-task-list">';
-    p.doing.forEach(function(t) { html += '<li>' + escHtml(t.name) + '</li>'; });
-    html += '</ul>';
-  }
-  if (p.blocks.length) {
-    p.blocks.forEach(function(b) {
-      html += '<div class="j-block-alert">';
-      html += '<div class="j-block-title">🚨 卡關事項</div>';
-      html += '<div class="j-block-task">' + escHtml(b.name) + '</div>';
-      if (b.reason) html += '<div class="j-block-reason">' + escHtml(b.reason) + '</div>';
-      html += '<div class="jc-block-actions" style="margin-top:0;padding-top:0;border-top:none">';
-      html += '<select class="jc-block-status"><option value="">調整狀態…</option>';
-      html += '<option value="doing">改為進行中</option><option value="done">改為完成</option></select>';
-      html += '<button type="button" class="jc-block-btn" data-task-id="' + escAttr(b.id) + '" data-journal-id="' + escAttr(b.journalRecId) + '" onclick="applyBlockStatusChange(this)">確認</button>';
-      html += '</div></div>';
-    });
-  }
-  if (p.tomorrow.length) {
-    html += '<div class="j-tomorrow-box"><div class="j-tomorrow-title">📅 明日計畫</div><ul class="j-task-list" style="margin-bottom:0">';
-    p.tomorrow.forEach(function(t) { html += '<li>' + escHtml(t.name) + '</li>'; });
-    html += '</ul></div>';
-  }
-  if (p.empty && !p.blocks.length && !p.tomorrow.length && !p.doing.length && !p.done.length) {
+  if (p.projects && p.projects.length) {
+    html += '<div class="j-proj-stack">';
+    p.projects.forEach(function(proj) { html += renderJournalProjCard(proj); });
+    html += '</div>';
+  } else if (p.empty) {
     if (p.noDataAtAll) {
       html += '<div class="j-empty-note">尚無日誌資料，請點「填寫今日日誌」開始回報</div>';
     } else {
@@ -4698,8 +4744,8 @@ function renderJournalDashboard(area) {
   html += '<div class="j-dash-kpi">';
   html += '<div class="j-kpi-card j-kpi-done"><div class="j-kpi-label">完成</div><div class="j-kpi-val">' + kpi.done + '</div></div>';
   html += '<div class="j-kpi-card j-kpi-doing"><div class="j-kpi-label">進行中</div><div class="j-kpi-val">' + kpi.doing + '</div></div>';
-  html += '<div class="j-kpi-card j-kpi-block"><div class="j-kpi-label">卡關</div><div class="j-kpi-val">' + kpi.block + '</div></div>';
-  html += '<div class="j-kpi-card j-kpi-tomorrow"><div class="j-kpi-label">明日待辦</div><div class="j-kpi-val">' + kpi.tomorrow + '</div></div>';
+  html += '<div class="j-kpi-card j-kpi-block"><div class="j-kpi-label">需要處理</div><div class="j-kpi-val">' + kpi.block + '</div></div>';
+  html += '<div class="j-kpi-card j-kpi-tomorrow"><div class="j-kpi-label">下一步</div><div class="j-kpi-val">' + kpi.tomorrow + '</div></div>';
   html += '</div>';
 
   html += '<div class="j-person-grid">';
