@@ -151,7 +151,7 @@ function formatArchiveCopyError(msg) {
   const s = String(msg || '').trim();
   if (!s) return s;
   if (/wiki space permission denied|tenant needs read permission/i.test(s)) {
-    return '【失敗步驟】將複製的多維表格「掛入知識庫」（API: POST /wiki/v2/spaces/…/nodes 或 move_docs）。'
+    return '【失敗步驟】將複製的多維表格「直接掛入知識庫」（API: create node / move_docs_to_wiki）。'
       + ' 此步驟尚未寫入標案／任務資料。'
       + ' 原因：目前使用的 Lark 身分無法讀取您指定的知識庫空間。'
       + ' 請依序確認：① Lark 開發者後台已開通並「發布」wiki:wiki、wiki:node:read、bitable:app；'
@@ -318,6 +318,16 @@ async function copyBitableAppPreferUser(tenantToken, userToken, appToken, name) 
   return await copyBitableApp(tenantToken, appToken, name);
 }
 
+async function copyBitableAppRequireUser(userToken, appToken, name) {
+  const userTok = requireWikiUserToken(userToken);
+  try {
+    return await copyBitableApp(userTok, appToken, name);
+  } catch (e) {
+    const detail = e && e.message ? (' ' + e.message) : '';
+    throw new Error('無法以您的 Lark 身分複製封存範本（需 bitable:app）。請重新 Lark 登入後再封存。' + detail);
+  }
+}
+
 async function grantUserBitableAccess(tenantToken, appToken, userOpenId) {
   const oid = String(userOpenId || '').trim();
   const tok = String(appToken || '').trim();
@@ -376,41 +386,81 @@ async function getWikiSpaceHomeNodeToken(accessToken, spaceId) {
   return '';
 }
 
-async function moveBitableToWikiSpace(accessToken, spaceId, parentNodeToken, appToken) {
+async function pollWikiMoveTask(accessToken, taskId, maxAttempts) {
+  const tries = maxAttempts || 30;
+  for (let i = 0; i < tries; i++) {
+    const data = await larkApiGet(accessToken, '/wiki/v2/tasks/' + encodeURIComponent(taskId) + '?task_type=move');
+    const task = data.task || data;
+    const results = (task && task.move_result) || (task && task.move_results) || [];
+    const first = results[0] || {};
+    const status = first.status;
+    const statusMsg = String(first.status_msg || '').trim();
+    if (status === 0 || statusMsg === 'success') {
+      const node = first.node || {};
+      return {
+        node_token: node.node_token || data.wiki_token || first.wiki_token || ''
+      };
+    }
+    if (status === -1 || (statusMsg && statusMsg !== 'processing')) {
+      throw new Error(statusMsg || 'move task failed');
+    }
+    await new Promise(function(r) { setTimeout(r, 2000); });
+  }
+  throw new Error('移入知識庫逾時，請稍後再試');
+}
+
+async function moveBitableDocsToWiki(accessToken, spaceId, parentWikiToken, appToken) {
   const body = {
     obj_type: 'bitable',
     obj_token: appToken
   };
-  const parent = String(parentNodeToken || '').trim();
-  if (parent) body.parent_node_token = parent;
-  const data = await larkApiPost(accessToken, '/wiki/v2/spaces/' + encodeURIComponent(spaceId) + '/nodes/move_docs', body);
-  if (data && data.node) return data.node;
-  if (data && data.node_token) return { node_token: data.node_token };
-  return null;
+  const parent = String(parentWikiToken || '').trim();
+  if (parent) body.parent_wiki_token = parent;
+  const data = await larkApiPost(
+    accessToken,
+    '/wiki/v2/spaces/' + encodeURIComponent(spaceId) + '/nodes/move_docs_to_wiki',
+    body
+  );
+  if (data && data.wiki_token) return { node_token: data.wiki_token };
+  if (data && data.task_id) {
+    const polled = await pollWikiMoveTask(accessToken, data.task_id);
+    if (polled && polled.node_token) return polled;
+  }
+  throw new Error('move_docs_to_wiki 未回傳 wiki_token');
 }
 
 async function placeCopiedBitableInWiki(accessToken, parent, appToken, title) {
+  const wikiTok = requireWikiUserToken(accessToken);
   const parentCandidates = [];
   if (parent.node_token) parentCandidates.push(parent.node_token);
   try {
-    const homeToken = await getWikiSpaceHomeNodeToken(accessToken, parent.space_id);
+    const homeToken = await getWikiSpaceHomeNodeToken(wikiTok, parent.space_id);
     if (homeToken && parentCandidates.indexOf(homeToken) < 0) parentCandidates.push(homeToken);
   } catch (e) { /* 無讀取權限時仍嘗試建立節點 */ }
   parentCandidates.push('');
 
-  let lastErr = null;
+  const errors = [];
   for (let i = 0; i < parentCandidates.length; i++) {
     try {
-      const node = await createWikiBitableNode(accessToken, parent.space_id, parentCandidates[i], appToken, title);
+      const node = await createWikiBitableNode(wikiTok, parent.space_id, parentCandidates[i], appToken, title);
       if (node && node.node_token) {
         return buildWikiNodeUrl(parent.wikiUrl, node.node_token);
       }
     } catch (e) {
-      lastErr = new Error('createWikiNode: ' + (e.message || String(e)));
+      errors.push('createNode:' + (e.message || String(e)));
     }
   }
-  if (lastErr) throw lastErr;
-  return null;
+  for (let j = 0; j < parentCandidates.length; j++) {
+    try {
+      const moved = await moveBitableDocsToWiki(wikiTok, parent.space_id, parentCandidates[j], appToken);
+      if (moved && moved.node_token) {
+        return buildWikiNodeUrl(parent.wikiUrl, moved.node_token);
+      }
+    } catch (e) {
+      errors.push('move_docs_to_wiki:' + (e.message || String(e)));
+    }
+  }
+  throw new Error('無法將封存表直接掛入知識庫（已嘗試建立節點與官方移入 API）。' + (errors.length ? ' ' + errors.join(' | ') : ''));
 }
 
 function resolveWikiParentTargetFromUrl(wikiUrl) {
@@ -474,43 +524,26 @@ async function copyArchiveTemplateToParent(tenantToken, parentWikiUrl, projectNa
   const title = projectName || '封存標案';
 
   if (templateParsed && templateParsed.kind === 'base') {
-    const newAppToken = await copyBitableAppPreferUser(tenantToken, wikiTok, templateParsed.token, title);
-    const grantResult = await grantUserBitableAccess(tenantToken, newAppToken, userOpenId);
+    if (!wikiTok) throw new Error('封存至知識庫必須先 Lark 登入（使用您個人 wiki 編輯權限，無需事後申請移動）');
+    const newAppToken = await copyBitableAppRequireUser(wikiTok, templateParsed.token, title);
+    await grantUserBitableAccess(tenantToken, newAppToken, userOpenId);
     const tableMap = await resolveArchiveTableMap(tenantToken, newAppToken);
     const baseAppUrl = buildBaseAppUrl(templateUrl, newAppToken);
-    let wikiUrlOut = baseAppUrl;
-    let wikiPlaced = false;
-    let wikiPlaceError = '';
-    if (wikiTok) {
-      try {
-        const placed = await placeCopiedBitableInWiki(wikiTok, parent, newAppToken, title);
-        if (placed) {
-          wikiUrlOut = placed;
-          wikiPlaced = true;
-        } else {
-          wikiPlaceError = '無法掛入知識庫（未取得節點）';
-        }
-      } catch (placeErr) {
-        wikiPlaceError = placeErr.message || String(placeErr);
-      }
-    } else {
-      wikiPlaceError = '未提供 Wiki 使用者授權，資料將寫入雲端多維表格，請手動移入知識庫';
-    }
+    const wikiUrlOut = await placeCopiedBitableInWiki(wikiTok, parent, newAppToken, title);
     return {
       appToken: newAppToken,
       tableMap: tableMap,
       wikiUrl: wikiUrlOut,
-      wikiPlaced: wikiPlaced,
-      wikiPlaceError: wikiPlaceError,
+      wikiPlaced: true,
+      wikiPlaceError: '',
       baseAppUrl: baseAppUrl,
-      wikiFolderUrl: parentWikiUrl,
-      accessGranted: grantResult.ok,
-      accessGrantError: grantResult.ok ? '' : (grantResult.error || '')
+      wikiFolderUrl: parentWikiUrl
     };
   }
 
   const templateToken = templateParsed ? templateParsed.token : '';
   if (!templateToken) throw new Error('封存範本連結無效');
+  if (!wikiTok) throw new Error('封存至知識庫必須先 Lark 登入');
   const templateNode = await getWikiNode(wikiTok, templateToken, '封存範本');
   if (!templateNode) throw new Error('找不到封存範本');
 
@@ -532,9 +565,9 @@ async function copyArchiveTemplateToParent(tenantToken, parentWikiUrl, projectNa
 }
 
 async function resolveOrCreateWikiBitableTarget(tenantToken, wikiUrl, projectName, wikiToken, userOpenId) {
-  const wikiTok = String(wikiToken || '').trim();
+  const wikiTok = requireWikiUserToken(wikiToken);
   const spaceParent = resolveWikiParentTargetFromUrl(wikiUrl);
-  if (wikiTok && !spaceParent) {
+  if (!spaceParent) {
     try {
       const appToken = await resolveBitableAppTokenFromUrl(wikiTok, wikiUrl);
       await ensureBitableReady(tenantToken, appToken);
@@ -552,11 +585,9 @@ async function resolveOrCreateWikiBitableTarget(tenantToken, wikiUrl, projectNam
     } catch (directErr) {
       if (!WIKI_ARCHIVE_TEMPLATE) throw directErr;
     }
-  } else if (!spaceParent && !wikiTok) {
-    throw new Error('請先 Lark 登入，或貼上 wiki/space/… 知識庫空間連結');
   }
   if (!WIKI_ARCHIVE_TEMPLATE) throw new Error('尚未設定封存範本（LARK_ARCHIVE_TEMPLATE）');
-  const created = await copyArchiveTemplateToParent(tenantToken, wikiUrl, projectName, wikiToken, userOpenId);
+  const created = await copyArchiveTemplateToParent(tenantToken, wikiUrl, projectName, wikiTok, userOpenId);
   return {
     appToken: created.appToken,
     tableMap: created.tableMap,
@@ -1291,8 +1322,7 @@ async function archiveProject(token, projectId, wikiUrl, userAccessToken, userOp
   let wikiPlaceError = '';
   let baseAppUrl = '';
   const usedUserToken = !!String(userAccessToken || '').trim();
-  const wikiSpaceOnly = !!resolveWikiParentTargetFromUrl(wikiUrl);
-  if (!usedUserToken && !wikiSpaceOnly) {
+  if (!usedUserToken) {
     return {
       ok: false,
       projectName: name,
@@ -1306,7 +1336,7 @@ async function archiveProject(token, projectId, wikiUrl, userAccessToken, userOp
       copiedToWikiBase: false,
       createdCopy: false,
       wikiUrl: wikiUrl,
-      copyError: '請先 Lark 登入以取得知識庫授權。您目前可能只完成了身分辨識，尚未授權 wiki 權限。',
+      copyError: '封存至知識庫必須先 Lark 登入（wiki + 多維表格授權）。僅身分辨識無法自動掛入知識庫，也不會產生需申請移動的雲端表格。',
       copyErrorStep: 'needs_user_login',
       usedUserToken: false,
       needsUserLogin: true,
@@ -1324,7 +1354,7 @@ async function archiveProject(token, projectId, wikiUrl, userAccessToken, userOp
   } catch (err) {
     const raw = err.message || String(err);
     copyError = formatArchiveCopyError(raw);
-    if (/掛入知識庫|createWikiNode|move_docs/i.test(raw)) copyErrorStep = 'place_wiki_node';
+    if (/掛入知識庫|createWikiNode|move_docs_to_wiki/i.test(raw)) copyErrorStep = 'place_wiki_node';
     else if (/複製|copy|範本/i.test(raw)) copyErrorStep = 'copy_template';
     else if (/batch_create|標案|任務|支出|設計/i.test(raw)) copyErrorStep = 'write_records';
     else copyErrorStep = 'unknown';
@@ -1372,7 +1402,7 @@ async function archiveProject(token, projectId, wikiUrl, userAccessToken, userOp
           ? '已從範本複製並寫入知識庫頁面'
           : '已將資料寫入您指定的知識庫多維表格')
         : (createdCopy
-          ? '資料已寫入複製的多維表格（' + (baseAppUrl || finalWikiUrl) + '），但無法自動掛入知識庫：' + (wikiPlaceError || '權限不足') + '。請在 Lark 將該表格移至目標知識庫，或重新授權 wiki 後再封存。'
+          ? '無法自動掛入知識庫：' + (wikiPlaceError || '權限不足') + '。標案未封存，請重新 Lark 登入後再試。'
           : '資料已寫入，但知識庫掛載失敗'))
       : (copyError
         ? '標案已封存，但複製至多維表格失敗：' + copyError

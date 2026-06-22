@@ -773,18 +773,11 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
 <!-- 標案封存至知識庫 -->
 <div class="po" id="pp-archive-proj"><div class="pp"><div class="pph"><h3>封存標案至知識庫</h3><button class="ppc" onclick="cancelArchiveProject()">✕</button></div><div class="ppb">
-  <p style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:12px">若已在標案設定「Wiki 封存位置」，會自動帶入。亦可手動修改。系統會從範本複製多維表格並寫入此標案資料，封存後標案將從前台隱藏。<br><span style="font-size:11px;color:var(--t3)">請先完成「Lark 登入」；知識庫成員設定無法加入自建應用，封存會使用您個人的知識庫編輯權限。</span></p>
+  <p style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:12px">若已在標案設定「Wiki 封存位置」，會自動帶入。封存時系統會<strong>直接在知識庫建立新頁面</strong>並寫入資料，封存後標案將從前台隱藏。<br><span style="font-size:11px;color:var(--t3)">請先完成「Lark 登入」（需 wiki + 多維表格授權）。成功後不會產生需申請移動的雲端表格。</span></p>
   <div id="ap-export-preview" class="ap-export-preview">載入中…</div>
   <div class="fg"><label>知識庫存放位置連結</label><input type="url" id="ap-wiki-url" placeholder="https://ajpfe1xdus5o.jp.larksuite.com/wiki/space/7650032628065668632" oninput="refreshArchivePreview()">
     <div style="font-size:10px;color:var(--t3);margin-top:4px;line-height:1.5">須為 wiki/space/… 或 wiki/節點ID，不能是 /base/ 多維表格連結</div></div>
   <div id="ap-proj-name" style="font-size:11px;color:var(--t3)"></div>
-  <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-    <div style="font-size:11px;font-weight:600;margin-bottom:6px">封存表無法移動／無分享權限？</div>
-    <div class="fg" style="margin-bottom:8px"><label>貼封存表的 /base/ 連結</label>
-      <input type="url" id="ap-grant-base-url" placeholder="https://.../base/Sz7FbHVD3a..."></div>
-    <button type="button" class="bsm" onclick="grantArchiveBitableAccess()">用系統 API 授予我「可管理」</button>
-    <div id="ap-grant-status" style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.5"></div>
-  </div>
 </div><div class="ppf"><button class="bcan" onclick="cancelArchiveProject()">取消</button><button class="bpri" onclick="confirmArchiveProject()">確認封存</button></div></div></div>
 
 <!-- 修改支出明細 -->
@@ -2058,7 +2051,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615j';
+var APP_BUILD = '20260615k';
 var API = '/api/lark';
 
 function apiUrl(pathAndQuery) {
@@ -5208,12 +5201,12 @@ function archiveErrorHint(errMsg) {
     return '\n\n【原因】Lark 只辨識了您的姓名，未取得 wiki API 授權碼。'
       + '\n【做法】點「Lark 登入」→ 同意授權 → 再封存。';
   }
-  if (/掛入知識庫|wiki space permission|tenant needs read permission/i.test(s)) {
-    return '\n\n【失敗位置】不是寫入標案／任務資料，而是「把複製好的多維表格掛進知識庫」。'
+  if (/掛入知識庫|wiki space permission|tenant needs read permission|move_docs_to_wiki/i.test(s)) {
+    return '\n\n【失敗位置】無法「直接在知識庫建立封存頁面」（不是寫入標案資料失敗）。'
       + '\n【請依序檢查】'
-      + '\n1. Lark 開發者後台 → 權限管理：wiki:wiki、wiki:node:read、bitable:app 已開通並「發布」'
-      + '\n2. 在系統內點「Lark 登入」重新授權（用您個人權限，知識庫成員設定找不到應用是正常的）'
-      + '\n3. 若仍失敗：在目標知識庫手動建立範本多維表格，封存時貼該頁面的 wiki 連結（非 space 連結）';
+      + '\n1. 先點「Lark 登入」並同意 wiki + 多維表格授權'
+      + '\n2. Lark 開發者後台 → 權限管理：wiki:wiki、wiki:node:read、bitable:app 已開通並「發布」'
+      + '\n3. 確認您對目標知識庫有編輯權限';
   }
   if (/Wiki 封存位置須為|不是 \/base\/|知識庫存放位置連結無效/i.test(s)) {
     return '\n\n【連結格式】請貼 wiki/space/… 或 wiki/節點ID，例如：\nhttps://ajpfe1xdus5o.jp.larksuite.com/wiki/space/7650032628065668632';
@@ -5305,32 +5298,6 @@ function openArchiveProjectPopup(projId, sel) {
   op('pp-archive-proj');
 }
 
-function grantArchiveBitableAccess() {
-  var u = getCurrentLoginUser();
-  if (!u || !u.openId) {
-    alert('請先 Lark 登入（需要 openId 才能授權）');
-    startBrowserLarkLogin();
-    return;
-  }
-  var baseUrl = (document.getElementById('ap-grant-base-url') && document.getElementById('ap-grant-base-url').value || '').trim();
-  if (!baseUrl) { alert('請貼上封存多維表格的 /base/ 連結'); return; }
-  var statusEl = document.getElementById('ap-grant-status');
-  if (statusEl) statusEl.textContent = '授權中…';
-  fetch(API + '?action=grant-bitable-access', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ baseUrl: baseUrl, userOpenId: u.openId })
-  }).then(function(r) { return r.json(); }).then(function(res) {
-    if (res.ok) {
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--report)">已授予「可管理」權限（' + (res.perm || 'full_access') + '）。請關閉表格重新開啟，再試「移至知識庫」。</span>';
-    } else {
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger)">授權失敗：' + escHtml(res.error || '未知錯誤') + '</span><br>請在 Lark 開發者後台為應用開通 drive 相關權限並發布。';
-    }
-  }).catch(function(err) {
-    if (statusEl) statusEl.textContent = '授權失敗：' + err.message;
-  });
-}
-
 function cancelArchiveProject() {
   archivingProjId = null;
   archivingProjStatusSel = null;
@@ -5339,8 +5306,8 @@ function cancelArchiveProject() {
 
 function confirmArchiveProject() {
   if (!archivingProjId) return;
-  if (!getUserAccessToken() && !isWikiArchiveUrl(url)) {
-    alert('封存至知識庫需要 Lark wiki 授權，或請貼 wiki/space/… 空間連結。\n\n請點「確定」後完成 Lark 登入授權，再重新封存。');
+  if (!getUserAccessToken()) {
+    alert('封存至知識庫必須先 Lark 登入（wiki + 多維表格授權）。\n\n請點「確定」完成登入後再封存。');
     startBrowserLarkLogin();
     return;
   }
@@ -5392,13 +5359,8 @@ function confirmArchiveProject() {
         if (oldFields) undoStack.push({ type: 'update', table: 'projects', recordId: savedProjId, data: oldFields });
         loadData();
         var msg = res.wikiNote || res.summary || '封存完成';
-        if (!res.wikiPlaced && res.baseAppUrl) {
-          msg += '\n\n資料位置：' + res.baseAppUrl;
-          var grantEl = document.getElementById('ap-grant-base-url');
-          if (grantEl) grantEl.value = res.baseAppUrl;
-        }
-        showUndoToast(res.wikiPlaced ? '標案已封存至知識庫' : '標案已封存（資料在雲端表格，請手動移入知識庫）');
-        var openUrl = res.wikiPlaced ? (res.wikiUrl || url) : (res.baseAppUrl || res.wikiUrl || url);
+        showUndoToast('標案已封存至知識庫');
+        var openUrl = res.wikiUrl || url;
         if (confirm(msg + '\n\n是否開啟資料頁面？')) {
           window.open(openUrl, '_blank', 'noopener');
         }
