@@ -131,32 +131,6 @@ function buildTables() {
 const TABLES = buildTables();
 const ARCHIVE_OAUTH_SCOPES = 'wiki:wiki wiki:node:read bitable:app';
 
-function resolveArchiveTemplateUrls() {
-  const wikiEnv = normalizeWikiInputUrl(process.env.LARK_WIKI_ARCHIVE_TEMPLATE || '');
-  const mainEnv = normalizeWikiInputUrl(process.env.LARK_ARCHIVE_TEMPLATE || '');
-  let wikiUrl = '';
-  let baseUrl = '';
-  if (wikiEnv) {
-    const p = extractLarkUrlToken(wikiEnv);
-    if (p && p.kind === 'base') baseUrl = wikiEnv;
-    else if (p) wikiUrl = wikiEnv;
-  }
-  if (mainEnv) {
-    const p = extractLarkUrlToken(mainEnv);
-    if (p && p.kind === 'base') {
-      if (!baseUrl) baseUrl = mainEnv;
-    } else if (p) {
-      if (!wikiUrl) wikiUrl = mainEnv;
-    }
-  }
-  return { wikiUrl, baseUrl };
-}
-
-function isArchiveTemplateConfigured() {
-  const u = resolveArchiveTemplateUrls();
-  return !!(u.wikiUrl || u.baseUrl);
-}
-
 const ARCHIVE_TABLE_KEYWORDS = {
   projects: ['標案', '專案', 'project'],
   workitems: ['工作項目', 'workitem'],
@@ -176,31 +150,18 @@ function requireWikiUserToken(userAccessToken) {
 function formatArchiveCopyError(msg) {
   const s = String(msg || '').trim();
   if (!s) return s;
-  if (/wiki space permission denied|tenant needs read permission/i.test(s)) {
-    return '【失敗步驟】將複製的多維表格「直接掛入知識庫」（API: create node / move_docs_to_wiki）。'
-      + ' 此步驟尚未寫入標案／任務資料。'
-      + ' 原因：目前使用的 Lark 身分無法讀取您指定的知識庫空間。'
-      + ' 請依序確認：① Lark 開發者後台已開通並「發布」wiki:wiki、wiki:node:read、bitable:app；'
-      + ' ② 在系統內重新「Lark 登入」後再封存（使用您個人對知識庫的編輯權限，無須在知識庫加入應用）；'
-      + ' 原始錯誤：' + s;
-  }
-  if (/wiki:wiki|wiki:node:read|wiki:node:create|wiki:node:move|wiki:wiki:readonly/i.test(s)) {
-    return s + '。請至 Lark 開發者後台 → 權限管理，開通 wiki:wiki、wiki:node:create、wiki:node:move、bitable:app 並發布後，重新 Lark 登入再封存。';
+  if (/LARK_WIKI_ARCHIVE_TEMPLATE|知識庫內範本/i.test(s)) return s;
+  if (/wiki:wiki|wiki:node|Access denied/i.test(s)) {
+    return s + '。請確認：① 開發者後台已發布 wiki:wiki、bitable:app；② 已設定 LARK_WIKI_ARCHIVE_TEMPLATE（wiki 範本連結）；③ 重新 Lark 登入。';
   }
   if (/not found/i.test(s)) {
-    return '找不到指定的知識庫頁面或多維表格範本。請確認：① Wiki 封存位置為知識庫首頁/目錄頁完整連結；② Vercel 的 LARK_ARCHIVE_TEMPLATE 為同一租戶內可開啟的 /base/ 範本連結。';
+    return '找不到知識庫頁面或範本。請確認封存位置與 LARK_WIKI_ARCHIVE_TEMPLATE 連結正確。';
   }
   if (/FieldNameNotFound/i.test(s)) {
-    return '知識庫範本多維表格欄位與後台不一致（已自動略過不存在的欄位仍失敗）。請確認 LARK_ARCHIVE_TEMPLATE 是從同一套後台多維表格複製的完整範本，或重新複製最新版範本後更新環境變數。';
+    return '範本欄位與後台不一致。請從現行後台複製最新範本並更新環境變數。';
   }
-  if (/Duplex Link/i.test(s)) {
-    return '雙向關聯欄位格式錯誤（已修正程式，請重新封存）。若仍失敗，請確認範本與後台結構一致。';
-  }
-  if (/UserFieldConvFail/i.test(s)) {
-    return '人員欄位格式錯誤（已修正程式，請重新封存）。';
-  }
-  if (/WrongRequestBody|Field types do not match|ConvFail/i.test(s)) {
-    return '寫入知識庫時欄位資料格式不符（已自動轉換常見欄位，請再試一次）。';
+  if (/Duplex Link|UserFieldConvFail|WrongRequestBody|Field types do not match|ConvFail/i.test(s)) {
+    return s + '（欄位格式問題，請確認範本與後台結構一致後再封存）';
   }
   return s;
 }
@@ -247,11 +208,6 @@ function buildWikiNodeUrl(baseUrl, nodeToken) {
   } catch (e) {
     return 'https://www.larksuite.com/wiki/' + nodeToken;
   }
-}
-
-function getWikiTokenFromUrl(url) {
-  const parsed = extractLarkUrlToken(url);
-  return parsed && parsed.token ? parsed.token : '';
 }
 
 async function copyWikiNode(accessToken, spaceId, nodeToken, opts) {
@@ -305,175 +261,6 @@ async function resolveBitableFromWikiNode(accessToken, node, baseUrl) {
   };
 }
 
-function buildBaseAppUrl(templateUrl, appToken) {
-  try {
-    const u = new URL(String(templateUrl || '').trim());
-    return u.origin + '/base/' + appToken;
-  } catch (e) {
-    return 'https://www.larksuite.com/base/' + appToken;
-  }
-}
-
-async function copyBitableApp(accessToken, appToken, name) {
-  const token = String(appToken || '').trim();
-  if (!token) throw new Error('封存範本 app_token 無效');
-  try {
-    const data = await larkApiPost(accessToken, '/bitable/v1/apps/' + encodeURIComponent(token) + '/copy', {
-      name: name || '封存標案'
-    });
-    const newToken = data && data.app && data.app.app_token;
-    if (!newToken) throw new Error('複製雲端多維表格失敗');
-    await ensureBitableReady(accessToken, newToken);
-    return newToken;
-  } catch (err) {
-    const msg = err.message || '';
-    if (/not found/i.test(msg)) {
-      throw new Error('找不到封存範本多維表格（app: ' + token + '）。請確認 Vercel 環境變數 LARK_ARCHIVE_TEMPLATE 的 /base/ 連結正確，且範本仍存在於同一 Lark 租戶。');
-    }
-    throw err;
-  }
-}
-
-async function copyBitableAppPreferUser(tenantToken, userToken, appToken, name) {
-  const userTok = String(userToken || '').trim();
-  if (userTok) {
-    try {
-      return await copyBitableApp(userTok, appToken, name);
-    } catch (e) { /* 改由應用身分複製 */ }
-  }
-  return await copyBitableApp(tenantToken, appToken, name);
-}
-
-async function copyBitableAppRequireUser(userToken, appToken, name) {
-  const userTok = requireWikiUserToken(userToken);
-  try {
-    return await copyBitableApp(userTok, appToken, name);
-  } catch (e) {
-    const detail = e && e.message ? (' ' + e.message) : '';
-    throw new Error('無法以您的 Lark 身分複製封存範本（需 bitable:app 或 base:app:copy）。請重新 Lark 登入後再封存。' + detail);
-  }
-}
-
-function isBitableCopyScopeError(err) {
-  const msg = (err && err.message) || String(err || '');
-  return /scope|Access denied|bitable:app|base:app:copy/i.test(msg);
-}
-
-async function copyArchiveTemplateBitable(tenantToken, userToken, appToken, name) {
-  const userTok = String(userToken || '').trim();
-  if (userTok) {
-    try {
-      const copied = await copyBitableApp(userTok, appToken, name);
-      return { appToken: copied, copiedBy: 'user' };
-    } catch (e) {
-      if (!isBitableCopyScopeError(e)) throw e;
-    }
-  }
-  const copied = await copyBitableApp(tenantToken, appToken, name);
-  return { appToken: copied, copiedBy: 'tenant' };
-}
-
-async function grantUserBitableAccess(tenantToken, appToken, userOpenId) {
-  const oid = String(userOpenId || '').trim();
-  const tok = String(appToken || '').trim();
-  if (!oid) return { ok: false, error: '缺少 Lark openId，請先 Lark 登入' };
-  if (!tok) return { ok: false, error: '缺少多維表格 app_token' };
-  const perms = ['full_access', 'edit'];
-  let lastErr = '';
-  for (let i = 0; i < perms.length; i++) {
-    try {
-      await larkApiPost(tenantToken, '/drive/v1/permissions/' + encodeURIComponent(tok) + '/members?type=bitable', {
-        member_type: 'openid',
-        member_id: oid,
-        perm: perms[i]
-      });
-      return { ok: true, perm: perms[i] };
-    } catch (e) {
-      lastErr = e.message || String(e);
-    }
-  }
-  return { ok: false, error: lastErr || '授權失敗' };
-}
-
-function parseBitableAppTokenFromInput(raw) {
-  const s = String(raw || '').trim();
-  if (!s) return '';
-  const parsed = extractLarkUrlToken(s);
-  if (parsed && parsed.kind === 'base' && parsed.token) return parsed.token;
-  if (/^[A-Za-z0-9]+$/.test(s) && s.length > 10) return s;
-  return '';
-}
-
-async function createWikiBitableNode(accessToken, spaceId, parentNodeToken, appToken, title) {
-  const body = {
-    obj_type: 'bitable',
-    obj_token: appToken,
-    node_type: 'origin',
-    title: title || '封存標案'
-  };
-  const parent = String(parentNodeToken || '').trim();
-  if (parent) body.parent_node_token = parent;
-  const data = await larkApiPost(accessToken, '/wiki/v2/spaces/' + encodeURIComponent(spaceId) + '/nodes', body);
-  return data.node;
-}
-
-async function getWikiSpaceHomeNodeToken(accessToken, spaceId) {
-  try {
-    const data = await larkApiGet(accessToken, '/wiki/v2/spaces/' + encodeURIComponent(spaceId));
-    const space = data.space || data;
-    if (space && space.home_page_id) {
-      const node = await getWikiNode(accessToken, space.home_page_id, '知識庫首頁');
-      if (node && node.node_token) return node.node_token;
-    }
-  } catch (e) { /* ignore */ }
-  const roots = await listWikiChildNodes(accessToken, spaceId, '');
-  if (roots.length && roots[0].node_token) return roots[0].node_token;
-  return '';
-}
-
-async function pollWikiMoveTask(accessToken, taskId, maxAttempts) {
-  const tries = maxAttempts || 30;
-  for (let i = 0; i < tries; i++) {
-    const data = await larkApiGet(accessToken, '/wiki/v2/tasks/' + encodeURIComponent(taskId) + '?task_type=move');
-    const task = data.task || data;
-    const results = (task && task.move_result) || (task && task.move_results) || [];
-    const first = results[0] || {};
-    const status = first.status;
-    const statusMsg = String(first.status_msg || '').trim();
-    if (status === 0 || statusMsg === 'success') {
-      const node = first.node || {};
-      return {
-        node_token: node.node_token || data.wiki_token || first.wiki_token || ''
-      };
-    }
-    if (status === -1 || (statusMsg && statusMsg !== 'processing')) {
-      throw new Error(statusMsg || 'move task failed');
-    }
-    await new Promise(function(r) { setTimeout(r, 2000); });
-  }
-  throw new Error('移入知識庫逾時，請稍後再試');
-}
-
-async function moveBitableDocsToWiki(accessToken, spaceId, parentWikiToken, appToken) {
-  const body = {
-    obj_type: 'bitable',
-    obj_token: appToken
-  };
-  const parent = String(parentWikiToken || '').trim();
-  if (parent) body.parent_wiki_token = parent;
-  const data = await larkApiPost(
-    accessToken,
-    '/wiki/v2/spaces/' + encodeURIComponent(spaceId) + '/nodes/move_docs_to_wiki',
-    body
-  );
-  if (data && data.wiki_token) return { node_token: data.wiki_token };
-  if (data && data.task_id) {
-    const polled = await pollWikiMoveTask(accessToken, data.task_id);
-    if (polled && polled.node_token) return polled;
-  }
-  throw new Error('move_docs_to_wiki 未回傳 wiki_token');
-}
-
 function buildWikiAccessTokens(userToken, tenantToken) {
   const tokens = [];
   const userTok = String(userToken || '').trim();
@@ -481,48 +268,6 @@ function buildWikiAccessTokens(userToken, tenantToken) {
   if (userTok) tokens.push(userTok);
   if (tenantTok && tenantTok !== userTok) tokens.push(tenantTok);
   return tokens;
-}
-
-async function placeCopiedBitableInWiki(userToken, tenantToken, parent, appToken, title) {
-  const wikiTokens = buildWikiAccessTokens(userToken, tenantToken);
-  if (!wikiTokens.length) throw new Error('請先 Lark 登入以取得知識庫授權');
-
-  const parentCandidates = [];
-  if (parent.node_token) parentCandidates.push(parent.node_token);
-  for (let t = 0; t < wikiTokens.length; t++) {
-    try {
-      const homeToken = await getWikiSpaceHomeNodeToken(wikiTokens[t], parent.space_id);
-      if (homeToken && parentCandidates.indexOf(homeToken) < 0) parentCandidates.push(homeToken);
-      break;
-    } catch (e) { /* try next token */ }
-  }
-  parentCandidates.push('');
-
-  const errors = [];
-  for (let tokIdx = 0; tokIdx < wikiTokens.length; tokIdx++) {
-    const wikiTok = wikiTokens[tokIdx];
-    for (let i = 0; i < parentCandidates.length; i++) {
-      try {
-        const node = await createWikiBitableNode(wikiTok, parent.space_id, parentCandidates[i], appToken, title);
-        if (node && node.node_token) {
-          return buildWikiNodeUrl(parent.wikiUrl, node.node_token);
-        }
-      } catch (e) {
-        errors.push('createNode:' + (e.message || String(e)));
-      }
-    }
-    for (let j = 0; j < parentCandidates.length; j++) {
-      try {
-        const moved = await moveBitableDocsToWiki(wikiTok, parent.space_id, parentCandidates[j], appToken);
-        if (moved && moved.node_token) {
-          return buildWikiNodeUrl(parent.wikiUrl, moved.node_token);
-        }
-      } catch (e) {
-        errors.push('move_docs_to_wiki:' + (e.message || String(e)));
-      }
-    }
-  }
-  throw new Error('無法將封存表直接掛入知識庫（已嘗試應用與個人身分、建立節點與官方移入 API）。' + (errors.length ? ' ' + errors.join(' | ') : ''));
 }
 
 function resolveWikiParentTargetFromUrl(wikiUrl) {
@@ -631,61 +376,30 @@ async function copyArchiveViaWikiTemplate(tenantToken, parent, title, wikiTempla
     appToken: appToken,
     tableMap: tableMap,
     wikiUrl: wikiUrlOut,
-    wikiPlaced: true,
-    wikiPlaceError: '',
-    baseAppUrl: '',
     wikiFolderUrl: parentWikiUrl
   };
 }
 
-async function copyArchiveViaBaseTemplate(tenantToken, parent, title, baseTemplateUrl, wikiTok, userOpenId, parentWikiUrl) {
-  const templateParsed = extractLarkUrlToken(baseTemplateUrl);
-  if (!templateParsed || !templateParsed.token) throw new Error('雲端封存範本連結無效');
-
-  const copied = await copyArchiveTemplateBitable(tenantToken, wikiTok, templateParsed.token, title);
-  const newAppToken = copied.appToken;
-  if (copied.copiedBy === 'tenant') {
-    await grantUserBitableAccess(tenantToken, newAppToken, userOpenId);
-  }
-  const tableMap = await resolveArchiveTableMap(tenantToken, newAppToken);
-  const baseAppUrl = buildBaseAppUrl(baseTemplateUrl, newAppToken);
-  const wikiUrlOut = await placeCopiedBitableInWiki(wikiTok, tenantToken, parent, newAppToken, title);
-  return {
-    appToken: newAppToken,
-    tableMap: tableMap,
-    wikiUrl: wikiUrlOut,
-    wikiPlaced: true,
-    wikiPlaceError: '',
-    baseAppUrl: baseAppUrl,
-    wikiFolderUrl: parentWikiUrl
-  };
-}
-
-async function copyArchiveTemplateToParent(tenantToken, parentWikiUrl, projectName, wikiToken, userOpenId) {
-  const templates = resolveArchiveTemplateUrls();
-  if (!templates.wikiUrl && !templates.baseUrl) {
-    throw new Error('尚未設定封存範本（LARK_ARCHIVE_TEMPLATE 或 LARK_WIKI_ARCHIVE_TEMPLATE）');
+async function copyArchiveTemplateToParent(tenantToken, parentWikiUrl, projectName, wikiToken) {
+  const wikiTemplateUrl = resolveWikiArchiveTemplateUrl();
+  if (!wikiTemplateUrl) {
+    throw new Error('請在 Vercel 設定 LARK_WIKI_ARCHIVE_TEMPLATE（已遷入知識庫的範本 wiki 連結）。/base/ 範本無法自動封存。');
   }
 
   const normalizedFolder = normalizeWikiInputUrl(parentWikiUrl);
   let parent = resolveWikiParentTargetFromUrl(normalizedFolder);
   const wikiTok = String(wikiToken || '').trim();
   if (!parent) {
-    if (!wikiTok) throw new Error('請先 Lark 登入以取得知識庫授權（或貼 wiki/space/… 連結）');
+    if (!wikiTok) throw new Error('請先 Lark 登入（或貼 wiki/space/… 連結）');
     parent = await resolveWikiParentTarget(wikiTok, parentWikiUrl);
   }
-
-  const title = projectName || '封存標案';
   if (!wikiTok) throw new Error('封存至知識庫必須先 Lark 登入');
 
-  if (templates.wikiUrl) {
-    return await copyArchiveViaWikiTemplate(tenantToken, parent, title, templates.wikiUrl, wikiTok, parentWikiUrl);
-  }
-
-  return await copyArchiveViaBaseTemplate(tenantToken, parent, title, templates.baseUrl, wikiTok, userOpenId, parentWikiUrl);
+  const title = projectName || '封存標案';
+  return await copyArchiveViaWikiTemplate(tenantToken, parent, title, wikiTemplateUrl, wikiTok, parentWikiUrl);
 }
 
-async function resolveOrCreateWikiBitableTarget(tenantToken, wikiUrl, projectName, wikiToken, userOpenId) {
+async function resolveOrCreateWikiBitableTarget(tenantToken, wikiUrl, projectName, wikiToken) {
   const wikiTok = requireWikiUserToken(wikiToken);
   const spaceParent = resolveWikiParentTargetFromUrl(wikiUrl);
   if (!spaceParent) {
@@ -693,32 +407,15 @@ async function resolveOrCreateWikiBitableTarget(tenantToken, wikiUrl, projectNam
       const appToken = await resolveBitableAppTokenFromUrl(wikiTok, wikiUrl);
       await ensureBitableReady(tenantToken, appToken);
       const tableMap = await resolveArchiveTableMap(tenantToken, appToken);
-      return {
-        appToken: appToken,
-        tableMap: tableMap,
-        wikiUrl: wikiUrl,
-        createdCopy: false,
-        wikiPlaced: true,
-        wikiPlaceError: '',
-        baseAppUrl: '',
-        wikiFolderUrl: wikiUrl
-      };
+      return { appToken: appToken, tableMap: tableMap, wikiUrl: wikiUrl, wikiFolderUrl: wikiUrl };
     } catch (directErr) {
       if (!isArchiveTemplateConfigured()) throw directErr;
     }
   }
-  if (!isArchiveTemplateConfigured()) throw new Error('尚未設定封存範本（LARK_ARCHIVE_TEMPLATE）');
-  const created = await copyArchiveTemplateToParent(tenantToken, wikiUrl, projectName, wikiTok, userOpenId);
-  return {
-    appToken: created.appToken,
-    tableMap: created.tableMap,
-    wikiUrl: created.wikiUrl,
-    createdCopy: true,
-    wikiPlaced: created.wikiPlaced,
-    wikiPlaceError: created.wikiPlaceError || '',
-    baseAppUrl: created.baseAppUrl || '',
-    wikiFolderUrl: created.wikiFolderUrl || wikiUrl
-  };
+  if (!isArchiveTemplateConfigured()) {
+    throw new Error('尚未設定 LARK_WIKI_ARCHIVE_TEMPLATE');
+  }
+  return await copyArchiveTemplateToParent(tenantToken, wikiUrl, projectName, wikiTok);
 }
 
 function normalizeWikiInputUrl(raw) {
@@ -765,6 +462,24 @@ function extractLarkUrlToken(url) {
     if (last && last.length >= 8) return { kind: 'unknown', token: last };
   } catch (e) { /* ignore */ }
   return null;
+}
+
+function resolveWikiArchiveTemplateUrl() {
+  const wikiEnv = normalizeWikiInputUrl(process.env.LARK_WIKI_ARCHIVE_TEMPLATE || '');
+  const mainEnv = normalizeWikiInputUrl(process.env.LARK_ARCHIVE_TEMPLATE || '');
+  if (wikiEnv) {
+    const p = extractLarkUrlToken(wikiEnv);
+    if (p && p.kind !== 'base') return wikiEnv;
+  }
+  if (mainEnv) {
+    const p = extractLarkUrlToken(mainEnv);
+    if (p && p.kind !== 'base') return mainEnv;
+  }
+  return '';
+}
+
+function isArchiveTemplateConfigured() {
+  return !!resolveWikiArchiveTemplateUrl();
 }
 
 function parseBitableAppTokenFromBlockToken(blockToken) {
@@ -940,11 +655,6 @@ async function getTableFieldSchemas(accessToken, appToken, tableId, cache) {
   cache[setKey] = set;
   cache[metaKey] = meta;
   return { allowedSet: set, fieldMeta: meta };
-}
-
-async function getTableFieldNameSet(accessToken, appToken, tableId, cache) {
-  const schemas = await getTableFieldSchemas(accessToken, appToken, tableId, cache);
-  return schemas.allowedSet;
 }
 
 function normalizeLinkFieldValue(val) {
@@ -1126,19 +836,6 @@ function pickProjectLinkFieldName(allowedSet) {
   return '';
 }
 
-function pickWikiUrlFieldNames(allowedSet) {
-  const names = [];
-  ['知識庫連結', '封存連結', 'Wiki存放位置', 'Wiki連結'].forEach(function(name) {
-    if (allowedSet[name]) names.push(name);
-  });
-  return names;
-}
-
-async function filterFieldsForArchiveTable(accessToken, appToken, tableId, fields, cache) {
-  const allowedSet = await getTableFieldNameSet(accessToken, appToken, tableId, cache);
-  return remapFieldsForTarget(fields, allowedSet);
-}
-
 function matchArchiveTableByKeywords(tables, keywords) {
   return tables.find(function(t) {
     const name = (t.name || '').toLowerCase();
@@ -1198,14 +895,10 @@ async function inspectWikiBitableTarget(accessToken, wikiUrl, projectName) {
     return { mode: 'direct', appToken: appToken, tableNames: tableNames };
   } catch (err) {
     if (!isArchiveTemplateConfigured()) throw err;
-    const templates = resolveArchiveTemplateUrls();
     return {
       mode: 'template_copy',
       templateConfigured: true,
-      templateMode: templates.wikiUrl ? 'wiki' : 'base',
-      note: templates.wikiUrl
-        ? '封存時將在知識庫內複製範本頁面（直接出現在知識庫，無需事後移入）'
-        : '此位置尚無表格。建議：將封存範本「遷入知識庫」一次，並在 Vercel 設定 LARK_WIKI_ARCHIVE_TEMPLATE 為該 wiki 連結'
+      note: '封存時將在知識庫內複製範本頁面並寫入資料'
     };
   }
 }
@@ -1353,9 +1046,9 @@ async function batchCreateRecords(token, appToken, tableId, fieldsList, tableLab
   return created;
 }
 
-async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken, userOpenId) {
+async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
   const projectName = bundle.project.fields['標案名稱'] || '封存標案';
-  const target = await resolveOrCreateWikiBitableTarget(token, wikiUrl, projectName, wikiToken, userOpenId);
+  const target = await resolveOrCreateWikiBitableTarget(token, wikiUrl, projectName, wikiToken);
   const targetApp = target.appToken;
   const tableMap = target.tableMap;
   const finalWikiUrl = target.wikiUrl || wikiUrl;
@@ -1430,24 +1123,15 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken, us
   });
   await batchCreateRecords(token, targetApp, tableMap.designs, desFieldsList, '設計');
 
-  return { copied: true, newProjectId: newProjId, targetAppToken: targetApp, wikiUrl: finalWikiUrl, createdCopy: !!target.createdCopy, wikiPlaced: !!target.wikiPlaced, wikiPlaceError: target.wikiPlaceError || '', baseAppUrl: target.baseAppUrl || '', wikiFolderUrl: target.wikiFolderUrl || wikiUrl };
+  return { copied: true, newProjectId: newProjId, targetAppToken: targetApp, wikiUrl: finalWikiUrl, wikiFolderUrl: target.wikiFolderUrl || wikiUrl };
 }
 
-async function archiveProject(token, projectId, wikiUrl, userAccessToken, userOpenId) {
+async function archiveProject(token, projectId, wikiUrl, userAccessToken) {
   const bundle = await gatherProjectRelated(token, projectId);
   const name = bundle.project.fields['標案名稱'] || '';
   const summary = '工作項目 ' + bundle.workitems.length + ' 筆、任務 ' + bundle.tasks.length + ' 筆、支出 ' + bundle.expenses.length + ' 筆、設計 ' + bundle.designs.length + ' 筆';
 
-  let copiedToWikiBase = false;
-  let copyError = '';
-  let copyErrorStep = '';
-  let finalWikiUrl = wikiUrl;
-  let createdCopy = false;
-  let wikiPlaced = false;
-  let wikiPlaceError = '';
-  let baseAppUrl = '';
-  const usedUserToken = !!String(userAccessToken || '').trim();
-  if (!usedUserToken) {
+  if (!String(userAccessToken || '').trim()) {
     return {
       ok: false,
       projectName: name,
@@ -1459,51 +1143,52 @@ async function archiveProject(token, projectId, wikiUrl, userAccessToken, userOp
         designs: bundle.designs.length
       },
       copiedToWikiBase: false,
-      createdCopy: false,
       wikiUrl: wikiUrl,
-      copyError: '封存至知識庫必須先 Lark 登入（wiki + 多維表格授權）。僅身分辨識無法自動掛入知識庫，也不會產生需申請移動的雲端表格。',
-      copyErrorStep: 'needs_user_login',
-      usedUserToken: false,
-      needsUserLogin: true,
-      wikiNote: '標案仍保留於前台'
+      copyError: '封存至知識庫必須先 Lark 登入（wiki + 多維表格授權）。',
+      needsUserLogin: true
     };
   }
-  try {
-    const copyResult = await copyProjectBundleToWikiBase(token, bundle, wikiUrl, userAccessToken, userOpenId);
-    copiedToWikiBase = true;
-    if (copyResult.wikiUrl) finalWikiUrl = copyResult.wikiUrl;
-    createdCopy = !!copyResult.createdCopy;
-    wikiPlaced = !!copyResult.wikiPlaced;
-    wikiPlaceError = copyResult.wikiPlaceError || '';
-    baseAppUrl = copyResult.baseAppUrl || '';
-  } catch (err) {
-    const raw = err.message || String(err);
-    copyError = formatArchiveCopyError(raw);
-    if (/掛入知識庫|createWikiNode|move_docs_to_wiki/i.test(raw)) copyErrorStep = 'place_wiki_node';
-    else if (/複製|copy|範本/i.test(raw)) copyErrorStep = 'copy_template';
-    else if (/batch_create|標案|任務|支出|設計/i.test(raw)) copyErrorStep = 'write_records';
-    else copyErrorStep = 'unknown';
-  }
 
-  if (copiedToWikiBase) {
+  let finalWikiUrl = wikiUrl;
+  let copyError = '';
+  try {
+    const copyResult = await copyProjectBundleToWikiBase(token, bundle, wikiUrl, userAccessToken);
+    finalWikiUrl = copyResult.wikiUrl || wikiUrl;
+
     const srcFieldCache = {};
     const srcSchemas = await getTableFieldSchemas(token, APP_TOKEN, TABLES.projects, srcFieldCache);
     const srcAllowed = srcSchemas.allowedSet;
     const srcMeta = srcSchemas.fieldMeta;
     const safeUpdate = { '狀態': '封存', '封存摘要': summary };
-    const linkForFields = wikiPlaced ? finalWikiUrl : (baseAppUrl || finalWikiUrl);
-    if (linkForFields) {
-      applyWikiUrlOverrides(safeUpdate, srcAllowed, srcMeta, linkForFields, ['知識庫連結', '封存連結', 'Wiki連結']);
+    if (finalWikiUrl) {
+      applyWikiUrlOverrides(safeUpdate, srcAllowed, srcMeta, finalWikiUrl, ['知識庫連結', '封存連結', 'Wiki連結']);
     }
     if (wikiUrl) {
       applyWikiUrlOverrides(safeUpdate, srcAllowed, srcMeta, normalizeWikiInputUrl(wikiUrl), ['Wiki存放位置']);
     }
     const normalizedUpdate = await normalizeWriteFields(token, TABLES.projects, safeUpdate);
     await updateRecord(token, TABLES.projects, projectId, normalizedUpdate);
+
+    return {
+      ok: true,
+      projectName: name,
+      summary: summary,
+      counts: {
+        workitems: bundle.workitems.length,
+        tasks: bundle.tasks.length,
+        expenses: bundle.expenses.length,
+        designs: bundle.designs.length
+      },
+      copiedToWikiBase: true,
+      wikiUrl: finalWikiUrl,
+      wikiNote: '已封存至知識庫'
+    };
+  } catch (err) {
+    copyError = formatArchiveCopyError(err.message || String(err));
   }
 
   return {
-    ok: copiedToWikiBase,
+    ok: false,
     projectName: name,
     summary: summary,
     counts: {
@@ -1512,26 +1197,9 @@ async function archiveProject(token, projectId, wikiUrl, userAccessToken, userOp
       expenses: bundle.expenses.length,
       designs: bundle.designs.length
     },
-    copiedToWikiBase: copiedToWikiBase,
-    createdCopy: createdCopy,
-    wikiUrl: finalWikiUrl,
-    wikiPlaced: wikiPlaced,
-    wikiPlaceError: wikiPlaceError,
-    baseAppUrl: baseAppUrl,
-    copyError: copyError,
-    copyErrorStep: copyErrorStep,
-    usedUserToken: usedUserToken,
-    wikiNote: copiedToWikiBase
-      ? (wikiPlaced
-        ? (createdCopy
-          ? '已從範本複製並寫入知識庫頁面'
-          : '已將資料寫入您指定的知識庫多維表格')
-        : (createdCopy
-          ? '無法自動掛入知識庫：' + (wikiPlaceError || '權限不足') + '。標案未封存，請重新 Lark 登入後再試。'
-          : '資料已寫入，但知識庫掛載失敗'))
-      : (copyError
-        ? '標案已封存，但複製至多維表格失敗：' + copyError
-        : '標案已封存')
+    copiedToWikiBase: false,
+    wikiUrl: wikiUrl,
+    copyError: copyError
   };
 }
  
@@ -1744,62 +1412,18 @@ export default async function handler(req, res) {
         },
         wikiTarget: wikiTarget,
         wikiTargetError: wikiTargetError,
-        archiveTemplateConfigured: isArchiveTemplateConfigured(),
-        archiveTemplateMode: resolveArchiveTemplateUrls().wikiUrl ? 'wiki' : 'base'
+        archiveTemplateConfigured: isArchiveTemplateConfigured()
       });
-    }
-
-    if (action === 'resolve-wiki-bitable' && req.method === 'GET') {
-      const wikiUrl = (req.query.url || '').trim();
-      if (!wikiUrl) return res.status(400).json({ error: 'missing url' });
-      const token = await getToken();
-      const wikiTarget = await inspectWikiBitableTarget(token, wikiUrl);
-      return res.status(200).json({ ok: true, wikiTarget: wikiTarget });
-    }
-
-    if (action === 'probe-wiki-auth' && req.method === 'GET') {
-      const wikiUrl = (req.query.wikiUrl || '').trim();
-      const userAccessToken = (req.query.userAccessToken || '').trim();
-      if (!wikiUrl) return res.status(400).json({ error: 'missing wikiUrl' });
-      if (!userAccessToken) return res.status(200).json({ ok: false, reason: 'no_user_token' });
-      const wikiTok = userAccessToken;
-      const parsed = extractLarkUrlToken(wikiUrl);
-      let spaceId = parsed && parsed.kind === 'wiki_space' ? parsed.token : '';
-      if (!spaceId && parsed && parsed.token) {
-        try {
-          const node = await getWikiNode(wikiTok, parsed.token, 'probe');
-          if (node) spaceId = node.space_id;
-        } catch (e) { /* ignore */ }
-      }
-      if (!spaceId) return res.status(200).json({ ok: false, reason: 'invalid_wiki_url' });
-      try {
-        await larkApiGet(wikiTok, '/wiki/v2/spaces/' + encodeURIComponent(spaceId));
-        return res.status(200).json({ ok: true, spaceId: spaceId, usedUserToken: true });
-      } catch (e) {
-        return res.status(200).json({ ok: false, spaceId: spaceId, usedUserToken: true, error: e.message || String(e) });
-      }
-    }
-
-    if (action === 'grant-bitable-access' && req.method === 'POST') {
-      const body = req.body || {};
-      const appToken = parseBitableAppTokenFromInput(body.baseUrl || body.appToken || '');
-      const userOpenId = (body.userOpenId || '').trim();
-      if (!appToken) return res.status(400).json({ ok: false, error: '請提供 /base/ 連結或 app_token' });
-      if (!userOpenId) return res.status(400).json({ ok: false, error: '請先 Lark 登入（缺少 openId）' });
-      const token = await getToken();
-      const result = await grantUserBitableAccess(token, appToken, userOpenId);
-      return res.status(200).json(result);
     }
 
     if (action === 'archive-project' && req.method === 'POST') {
       const projectId = req.body && req.body.projectId;
       const wikiUrl = (req.body && req.body.wikiUrl || '').trim();
       const userAccessToken = (req.body && req.body.userAccessToken || '').trim();
-      const userOpenId = (req.body && req.body.userOpenId || '').trim();
       if (!projectId) return res.status(400).json({ error: 'missing projectId' });
       if (!wikiUrl) return res.status(400).json({ error: 'missing wikiUrl' });
       const token = await getToken();
-      const result = await archiveProject(token, projectId, wikiUrl, userAccessToken, userOpenId);
+      const result = await archiveProject(token, projectId, wikiUrl, userAccessToken);
       return res.status(200).json(result);
     }
 

@@ -773,7 +773,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
 <!-- 標案封存至知識庫 -->
 <div class="po" id="pp-archive-proj"><div class="pp"><div class="pph"><h3>封存標案至知識庫</h3><button class="ppc" onclick="cancelArchiveProject()">✕</button></div><div class="ppb">
-  <p style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:12px">若已在標案設定「Wiki 封存位置」，會自動帶入。封存時會<strong>在知識庫內複製範本頁面</strong>並寫入資料。<br><span style="font-size:11px;color:var(--t3)">請先 Lark 登入。請在 Vercel 設定 <code>LARK_WIKI_ARCHIVE_TEMPLATE</code> 為「已遷入知識庫」的範本 wiki 連結（比 /base/ 範本穩定）。</span></p>
+  <p style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:12px">封存時在知識庫內複製範本並寫入資料。請先 Lark 登入，並設定 Vercel 環境變數 <code>LARK_WIKI_ARCHIVE_TEMPLATE</code>。</p>
   <div id="ap-export-preview" class="ap-export-preview">載入中…</div>
   <div class="fg"><label>知識庫存放位置連結</label><input type="url" id="ap-wiki-url" placeholder="https://ajpfe1xdus5o.jp.larksuite.com/wiki/space/7650032628065668632" oninput="refreshArchivePreview()">
     <div style="font-size:10px;color:var(--t3);margin-top:4px;line-height:1.5">須為 wiki/space/… 或 wiki/節點ID，不能是 /base/ 多維表格連結</div></div>
@@ -2051,7 +2051,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260622d';
+var APP_BUILD = '20260622e';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -5196,54 +5196,6 @@ function onGanttProjStatusChange(projId, sel) {
   }).catch(function(err) { alert('狀態更新失敗：' + err.message); sel.value = prev; });
 }
 
-function archiveErrorHint(errMsg) {
-  var s = String(errMsg || '');
-  if (/尚未授權 wiki|needs_user_login|知識庫授權/i.test(s)) {
-    return '\n\n【原因】Lark 只辨識了您的姓名，未取得 wiki API 授權碼。'
-      + '\n【做法】點「Lark 登入」→ 同意授權 → 再封存。';
-  }
-  if (/wiki:node:create|wiki:node:move/i.test(s)) {
-    return '\n\n【原因】Lark 登入授權缺少知識庫「建立／移入節點」權限。'
-      + '\n【做法】'
-      + '\n1. 開發者後台 → 權限管理 → 搜尋並開通 wiki:node:create、wiki:node:move（與 wiki:wiki 一併發布）'
-      + '\n2. 重新 Lark 登入後再封存';
-  }
-  if (/bitable:app|base:app:copy|Access denied/i.test(s)) {
-    return '\n\n【原因】複製封存範本時權限不足。'
-      + '\n【做法】請先重新 Lark 登入；系統會改由應用複製範本並自動掛入知識庫。'
-      + '\n若仍失敗，請確認開發者後台已發布 wiki:wiki、wiki:node:read、bitable:app。';
-  }
-  if (/掛入知識庫|wiki space permission|tenant needs read permission|move_docs_to_wiki/i.test(s)) {
-    return '\n\n【失敗位置】無法「直接在知識庫建立封存頁面」（不是寫入標案資料失敗）。'
-      + '\n【請依序檢查】'
-      + '\n1. 先點「Lark 登入」並同意 wiki + 多維表格授權'
-      + '\n2. Lark 開發者後台 → 權限管理：wiki:wiki、wiki:node:create、wiki:node:move、bitable:app 已開通並「發布」'
-      + '\n3. 確認您對目標知識庫有編輯權限';
-  }
-  if (/Wiki 封存位置須為|不是 \/base\/|知識庫存放位置連結無效/i.test(s)) {
-    return '\n\n【連結格式】請貼 wiki/space/… 或 wiki/節點ID，例如：\nhttps://ajpfe1xdus5o.jp.larksuite.com/wiki/space/7650032628065668632';
-  }
-  if (/wiki:/i.test(s)) {
-    return '\n\n【請在 Lark 開發者後台開通並發布】\n· wiki:wiki\n· wiki:node:create\n· wiki:node:move\n· bitable:app\n路徑：應用 → 權限管理 → 搜尋 wiki';
-  }
-  if (/FieldNameNotFound/i.test(s)) {
-    return '\n\n【常見原因】範本多維表格欄位與後台不一致。請從現行後台複製一份最新範本，更新 Vercel 的 LARK_ARCHIVE_TEMPLATE。';
-  }
-  if (/Duplex Link/i.test(s)) {
-    return '\n\n【已修復】雙向關聯欄位格式問題，請重新封存即可。';
-  }
-  if (/UserFieldConvFail/i.test(s)) {
-    return '\n\n【已修復】人員欄位格式問題，請重新封存即可。';
-  }
-  if (/WrongRequestBody|Field types do not match/i.test(s)) {
-    return '\n\n【已修復】欄位格式問題，請重新封存即可。';
-  }
-  if (/not found/i.test(s)) {
-    return '\n\n【常見原因】\n1. Wiki 封存位置連結不是知識庫頁面完整網址\n2. LARK_ARCHIVE_TEMPLATE 範本連結錯誤或已刪除\n3. 範本與標案不在同一 Lark 租戶';
-  }
-  return '';
-}
-
 function renderArchivePreview(projId) {
   var el = document.getElementById('ap-export-preview');
   if (!el) return;
@@ -5263,27 +5215,20 @@ function renderArchivePreview(projId) {
         + '<li>支出 ' + (res.counts.expenses || 0) + ' 筆</li>'
         + '<li>設計 ' + (res.counts.designs || 0) + ' 筆</li>'
         + '</ul>';
-      if (wikiUrl) {
-        if (res.wikiTarget && res.wikiTarget.mode === 'template_copy') {
-          html += '<div class="ap-export-title" style="margin-top:8px">將自動從範本建立</div>'
-            + '<div style="font-size:11px;color:var(--t2);line-height:1.6">' + escHtml(res.wikiTarget.note || '封存時會複製範本並寫入資料') + '</div>';
-        } else if (res.wikiTarget && res.wikiTarget.tableNames) {
-          html += '<div class="ap-export-title" style="margin-top:8px">目標多維表格已辨識</div>'
-            + '<ul class="ap-export-list">'
-            + '<li>標案表：' + (res.wikiTarget.tableNames.projects || '') + '</li>'
-            + '<li>工作項目表：' + (res.wikiTarget.tableNames.workitems || '') + '</li>'
-            + '<li>任務表：' + (res.wikiTarget.tableNames.tasks || '') + '</li>'
-            + '<li>支出表：' + (res.wikiTarget.tableNames.expenses || '') + '</li>'
-            + '<li>設計表：' + (res.wikiTarget.tableNames.designs || '') + '</li>'
-            + '</ul>';
-        } else if (res.wikiTargetError) {
-          var errMsg = res.wikiTargetError;
-          if (res.archiveTemplateConfigured) {
-            html += '<div style="margin-top:8px;font-size:11px;color:var(--t2)">此位置尚無表格，封存時將嘗試從範本自動複製。</div>';
-          } else {
-            html += '<div style="margin-top:8px;font-size:11px;color:var(--danger)">無法辨識目標表格：' + errMsg + '</div>';
-          }
-        }
+      if (wikiUrl && res.wikiTarget && res.wikiTarget.mode === 'template_copy') {
+        html += '<div class="ap-export-title" style="margin-top:8px">將從範本建立</div>'
+          + '<div style="font-size:11px;color:var(--t2);line-height:1.6">' + escHtml(res.wikiTarget.note || '') + '</div>';
+      } else if (wikiUrl && res.wikiTarget && res.wikiTarget.tableNames) {
+        html += '<div class="ap-export-title" style="margin-top:8px">目標表格已辨識</div>'
+          + '<ul class="ap-export-list">'
+          + '<li>標案表：' + (res.wikiTarget.tableNames.projects || '') + '</li>'
+          + '<li>工作項目：' + (res.wikiTarget.tableNames.workitems || '') + '</li>'
+          + '<li>任務：' + (res.wikiTarget.tableNames.tasks || '') + '</li>'
+          + '<li>支出：' + (res.wikiTarget.tableNames.expenses || '') + '</li>'
+          + '<li>設計：' + (res.wikiTarget.tableNames.designs || '') + '</li>'
+          + '</ul>';
+      } else if (wikiUrl && !res.archiveTemplateConfigured) {
+        html += '<div style="margin-top:8px;font-size:11px;color:var(--danger)">尚未設定 LARK_WIKI_ARCHIVE_TEMPLATE</div>';
       }
       el.innerHTML = html;
     }).catch(function() {
@@ -5346,17 +5291,13 @@ function confirmArchiveProject() {
         body: JSON.stringify({
           projectId: archivingProjId,
           wikiUrl: url,
-          userAccessToken: getUserAccessToken(),
-          userOpenId: (getCurrentLoginUser() && getCurrentLoginUser().openId) || ''
+          userAccessToken: getUserAccessToken()
         })
       }).then(function(r) { return r.json(); }).then(function(res) {
         if (!res.ok || !res.copiedToWikiBase) {
           var errMsg = res.copyError || res.error || res.msg || '資料未寫入知識庫';
-          var hint = archiveErrorHint(errMsg);
-          if (res.needsUserLogin || !getUserAccessToken()) {
-            hint += '\n\n【請先 Lark 登入】需授權 wiki:wiki、wiki:node:read，不能只靠 getUserInfo 身分辨識。';
-          }
-          alert('封存未完成，標案仍保留於前台。\n\n' + errMsg + hint);
+          if (res.needsUserLogin) errMsg += '\n\n請先 Lark 登入後再封存。';
+          alert('封存未完成，標案仍保留於前台。\n\n' + errMsg);
           return;
         }
         var savedProjId = archivingProjId;
