@@ -5038,6 +5038,26 @@ function onGanttProjStatusChange(projId, sel) {
   }).catch(function(err) { alert('狀態更新失敗：' + err.message); sel.value = prev; });
 }
 
+function archiveErrorHint(errMsg) {
+  var s = String(errMsg || '');
+  if (/wiki:/i.test(s)) {
+    return '\n\n【請在 Lark 開發者後台開通並發布】\n· wiki:wiki\n· wiki:node:read\n· bitable:app\n路徑：應用 → 權限管理 → 搜尋 wiki / bitable';
+  }
+  if (/FieldNameNotFound/i.test(s)) {
+    return '\n\n【常見原因】範本多維表格欄位與後台不一致。請從現行後台複製一份最新範本，更新 Vercel 的 LARK_ARCHIVE_TEMPLATE。';
+  }
+  if (/Duplex Link/i.test(s)) {
+    return '\n\n【已修復】雙向關聯欄位格式問題，請重新封存即可。';
+  }
+  if (/UserFieldConvFail/i.test(s)) {
+    return '\n\n【已修復】人員欄位格式問題，請重新封存即可。';
+  }
+  if (/not found/i.test(s)) {
+    return '\n\n【常見原因】\n1. Wiki 封存位置連結不是知識庫頁面完整網址\n2. LARK_ARCHIVE_TEMPLATE 範本連結錯誤或已刪除\n3. 範本與標案不在同一 Lark 租戶';
+  }
+  return '';
+}
+
 function renderArchivePreview(projId) {
   var el = document.getElementById('ap-export-preview');
   if (!el) return;
@@ -5132,17 +5152,7 @@ function confirmArchiveProject() {
       }).then(function(r) { return r.json(); }).then(function(res) {
         if (!res.ok || !res.copiedToWikiBase) {
           var errMsg = res.copyError || res.error || res.msg || '資料未寫入知識庫';
-          var hint = /wiki:/i.test(errMsg)
-            ? '\n\n【請在 Lark 開發者後台開通並發布】\n· wiki:wiki\n· wiki:node:read\n· bitable:app\n路徑：應用 → 權限管理 → 搜尋 wiki / bitable'
-            : (/FieldNameNotFound/i.test(errMsg)
-              ? '\n\n【常見原因】範本多維表格欄位與後台不一致。請從現行後台複製一份最新範本，更新 Vercel 的 LARK_ARCHIVE_TEMPLATE。'
-              : (/Duplex Link/i.test(errMsg)
-              ? '\n\n【已修復】雙向關聯欄位格式問題，請重新封存即可。'
-              : (/UserFieldConvFail/i.test(errMsg)
-              ? '\n\n【已修復】人員欄位格式問題，請重新封存即可。'
-              : (/not found/i.test(errMsg)
-              ? '\n\n【常見原因】\n1. Wiki 封存位置連結不是知識庫頁面完整網址\n2. LARK_ARCHIVE_TEMPLATE 範本連結錯誤或已刪除\n3. 範本與標案不在同一 Lark 租戶'
-              : '')));
+          var hint = archiveErrorHint(errMsg);
           alert('封存未完成，標案仍保留於前台。\n\n' + errMsg + hint);
           return;
         }
