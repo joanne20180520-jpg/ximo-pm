@@ -5112,10 +5112,16 @@ function confirmArchiveProject() {
         loadData();
         showUndoToast('標案已封存');
         var openUrl = res.wikiUrl || url;
-        var msg = (res.wikiNote || res.summary || '');
-        if (res.copyError && !res.copiedToWikiBase) msg += '\n' + res.copyError;
-        if (confirm(msg + '\n\n是否開啟知識庫頁面？')) {
-          window.open(openUrl, '_blank', 'noopener');
+        if (res.copyError && !res.copiedToWikiBase) {
+          var hint = /wiki:/i.test(res.copyError)
+            ? '\n\n【請在 Lark 開發者後台開通並發布】\n· wiki:wiki\n· wiki:node:read\n· bitable:app\n路徑：應用 → 權限管理 → 搜尋 wiki / bitable'
+            : '';
+          alert('標案已在系統標記為封存，但資料尚未寫入知識庫。\n\n' + res.copyError + hint);
+        } else {
+          var msg = res.wikiNote || res.summary || '封存完成';
+          if (confirm(msg + '\n\n是否開啟知識庫頁面？')) {
+            window.open(openUrl, '_blank', 'noopener');
+          }
         }
       }).catch(function(err) {
         alert('封存失敗：' + err.message);

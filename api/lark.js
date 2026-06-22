@@ -124,6 +124,15 @@ const ARCHIVE_TABLE_KEYWORDS = {
   designs: ['設計', 'design']
 };
 
+function formatArchiveCopyError(msg) {
+  const s = String(msg || '').trim();
+  if (!s) return s;
+  if (/wiki:wiki|wiki:node:read|wiki:wiki:readonly/i.test(s)) {
+    return s + '。請至 Lark 開發者後台 → 權限管理，開通 wiki:wiki、wiki:node:read、bitable:app 並發布應用後再封存。';
+  }
+  return s;
+}
+
 async function larkApiGet(accessToken, apiPath) {
   const res = await fetch(BASE_URL + apiPath, {
     headers: { Authorization: 'Bearer ' + accessToken }
@@ -692,7 +701,7 @@ async function archiveProject(token, projectId, wikiUrl) {
     if (copyResult.wikiUrl) finalWikiUrl = copyResult.wikiUrl;
     createdCopy = !!copyResult.createdCopy;
   } catch (err) {
-    copyError = err.message || String(err);
+    copyError = formatArchiveCopyError(err.message || String(err));
   }
 
   const updateFields = {
