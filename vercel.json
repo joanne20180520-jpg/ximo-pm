@@ -5,6 +5,20 @@
       "memory": 1024
     }
   },
+  "headers": [
+    {
+      "source": "/",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    }
+  ],
   "rewrites": [
     { "source": "/api/parse-budget", "destination": "/api/parse-budget.js" },
     { "source": "/api/lark", "destination": "/api/lark.js" },

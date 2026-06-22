@@ -2,7 +2,10 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>璽墨 專案管理系統</title>
 <style>
 :root {
@@ -14,7 +17,7 @@
   --shadow:0 2px 14px rgba(0,0,0,0.09);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;font-size:13px}
+body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);color:var(--text);height:100vh;height:100dvh;overflow:hidden;font-size:13px}
 
 /* topbar */
 #topbar{position:fixed;top:0;left:0;right:0;height:var(--th);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:12px;z-index:100}
@@ -475,6 +478,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 </head>
 <body>
 
+<div id="boot-status" style="display:none;position:fixed;top:var(--th);left:0;right:0;z-index:300;background:#fff3e0;color:#92400e;padding:8px 12px;font-size:11px;text-align:center;border-bottom:1px solid #fcd34d"></div>
 <div id="topbar">
   <div class="logo">璽墨</div>
   <nav class="topnav">
@@ -802,11 +806,42 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
   <span id="undo-toast-msg">已刪除</span>
   <button class="undo-btn" onclick="undoLast()">↩ 復原</button>
 </div>
-<script defer src="https://sf1-lark-tos.larksuitecdn.com/obj/lark-static-sg/lark/h5sdk/h5-js-sdk-1.5.16.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</div>
+<script>
+// 動態載入外部腳本，避免 Lark 內建瀏覽器被 CDN 卡住整頁
+var optionalLibLoads = {};
+function loadScriptOnce(url, globalName) {
+  if (globalName && window[globalName]) return Promise.resolve();
+  if (optionalLibLoads[url]) return optionalLibLoads[url];
+  optionalLibLoads[url] = new Promise(function(resolve, reject) {
+    var s = document.createElement('script');
+    s.src = url;
+    s.async = true;
+    s.onload = function() { resolve(); };
+    s.onerror = function() { reject(new Error('無法載入腳本：' + url)); };
+    document.head.appendChild(s);
+  });
+  return optionalLibLoads[url];
+}
+function ensureH5Sdk() {
+  return loadScriptOnce(
+    'https://sf1-lark-tos.larksuitecdn.com/obj/lark-static-sg/lark/h5sdk/h5-js-sdk-1.5.16.js',
+    'h5sdk'
+  );
+}
+function ensurePdfJs() {
+  return loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', 'pdfjsLib');
+}
+function ensureMammoth() {
+  return loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js', 'mammoth');
+}
+function ensureJsZip() {
+  return loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', 'JSZip');
+}
+function ensureTesseract() {
+  return loadScriptOnce('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js', 'Tesseract');
+}
+</script>
 <script>
 // ── 基本互動 ──
 var lc=false, rc=false;
@@ -1137,8 +1172,9 @@ function findDocxBudgetImageBlobs(zip) {
 }
 
 function extractDocxBudgetData(file, onProgress) {
-  if (!window.JSZip) return Promise.resolve({ tableText: '', ocrText: '' });
-  return JSZip.loadAsync(file).then(function(zip) {
+  return ensureJsZip().then(function() {
+    if (!window.JSZip) return { tableText: '', ocrText: '' };
+    return JSZip.loadAsync(file).then(function(zip) {
     var docP = zip.file('word/document.xml');
     if (!docP) return { tableText: '', ocrText: '' };
     return docP.async('text').then(function(docXml) {
@@ -1165,6 +1201,7 @@ function extractDocxBudgetData(file, onProgress) {
         });
       });
     });
+    });
   }).catch(function(err) {
     console.warn('extractDocxBudgetData', err);
     return { tableText: '', ocrText: '' };
@@ -1178,9 +1215,10 @@ function findDocxBudgetImage(zip) {
 }
 
 function ocrImageToText(blob, onProgress) {
-  if (!window.Tesseract) return Promise.resolve('');
-  if (onProgress) onProgress('經費表為圖片格式，正在 OCR 辨識…');
-  return Tesseract.recognize(blob, 'chi_tra', {
+  return ensureTesseract().then(function() {
+    if (!window.Tesseract) return '';
+    if (onProgress) onProgress('經費表為圖片格式，正在 OCR 辨識…');
+    return Tesseract.recognize(blob, 'chi_tra', {
     workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js',
     corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core-lstm.wasm.js',
     langPath: 'https://tessdata.projectnaptha.com/4.0.0_best',
@@ -1190,6 +1228,7 @@ function ocrImageToText(blob, onProgress) {
   }).catch(function(err) {
     console.warn('client OCR failed', err);
     return '';
+  });
   });
 }
 
@@ -1240,8 +1279,10 @@ function extractProcurementText(file, onProgress) {
     return file.text();
   }
   if (name.endsWith('.pdf')) {
-    return file.arrayBuffer().then(function(buf) {
-      if (!window.pdfjsLib) throw new Error('PDF 元件載入中，請稍後再試');
+    return ensurePdfJs().then(function() {
+      return file.arrayBuffer();
+    }).then(function(buf) {
+      if (!window.pdfjsLib) throw new Error('PDF 元件載入失敗，請稍後再試');
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       return pdfjsLib.getDocument({ data: buf }).promise.then(function(pdf) {
         var chain = Promise.resolve('');
@@ -1261,8 +1302,10 @@ function extractProcurementText(file, onProgress) {
     });
   }
   if (name.endsWith('.docx') || name.endsWith('.doc')) {
-    return file.arrayBuffer().then(function(buf) {
-      if (!window.mammoth) throw new Error('Word 元件載入中，請稍後再試');
+    return ensureMammoth().then(function() {
+      return file.arrayBuffer();
+    }).then(function(buf) {
+      if (!window.mammoth) throw new Error('Word 元件載入失敗，請稍後再試');
       return mammoth.extractRawText({ arrayBuffer: buf }).then(function(r) {
         var text = r.value || '';
         return extractDocxBudgetData(file, onProgress).then(function(data) {
@@ -1987,7 +2030,29 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
+var APP_BUILD = '20260622b';
 var API = '/api/lark';
+
+function apiUrl(pathAndQuery) {
+  var s = String(pathAndQuery || '');
+  if (!s) return API + '?_b=' + APP_BUILD;
+  if (s.charAt(0) === '?') return API + s + '&_b=' + APP_BUILD;
+  return API + '?' + s + '&_b=' + APP_BUILD;
+}
+
+function setBootStatus(msg, isErr) {
+  var el = document.getElementById('boot-status');
+  if (!el) return;
+  if (!msg) {
+    el.style.display = 'none';
+    el.textContent = '';
+    return;
+  }
+  el.style.display = 'block';
+  el.style.background = isErr ? '#fde8e8' : '#fff3e0';
+  el.style.color = isErr ? '#b42318' : '#92400e';
+  el.textContent = msg;
+}
 
 // ── 復原堆疊 ──
 var undoStack = [];
@@ -2426,7 +2491,9 @@ function tryLarkGetUserInfo(tt) {
 function tryLarkClientAuth(appId) {
   if (!isLikelyLarkClient()) return Promise.resolve(null);
   var pageUrl = location.href.split('#')[0];
-  return waitForLarkBridge(3000).then(function(found) {
+  return ensureH5Sdk().catch(function() {}).then(function() {
+    return waitForLarkBridge(3000);
+  }).then(function(found) {
     if (!found) return null;
     return configH5Sdk(appId, pageUrl);
   }).then(function() {
@@ -2749,11 +2816,12 @@ function toDateStr(d) {
 
 function fetchJsonWithTimeout(url, ms) {
   var timeoutMs = ms || 25000;
+  var fullUrl = url.indexOf('/api/lark') === 0 ? url : apiUrl(url.replace(/^\?/, ''));
   return new Promise(function(resolve, reject) {
     var timer = setTimeout(function() {
-      reject(new Error('資料載入逾時（' + url + '）'));
+      reject(new Error('資料載入逾時'));
     }, timeoutMs);
-    fetch(url).then(function(r) {
+    fetch(fullUrl).then(function(r) {
       return r.json();
     }).then(function(data) {
       clearTimeout(timer);
@@ -2784,9 +2852,9 @@ function safeRenderAfterLoad() {
 
 function loadExtraData() {
   Promise.all([
-    fetchJsonWithTimeout(API + '?table=designs', 25000).catch(function() { return {}; }),
-    fetchJsonWithTimeout(API + '?table=journal', 25000).catch(function() { return {}; }),
-    fetchJsonWithTimeout(API + '?table=members', 25000).catch(function() { return {}; })
+    fetchJsonWithTimeout('?table=designs', 25000).catch(function() { return {}; }),
+    fetchJsonWithTimeout('?table=journal', 25000).catch(function() { return {}; }),
+    fetchJsonWithTimeout('?table=members', 25000).catch(function() { return {}; })
   ]).then(function(results) {
     designsData = results[0].records || [];
     journalData = results[1].records || [];
@@ -2816,12 +2884,15 @@ function loadExtraData() {
 function loadData() {
   document.getElementById('pl-projects').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
   document.getElementById('task-list-body').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
+  if (isLikelyLarkClient()) {
+    setBootStatus('正在載入資料（' + APP_BUILD + '）…');
+  }
 
   Promise.all([
-    fetchJsonWithTimeout(API + '?table=projects'),
-    fetchJsonWithTimeout(API + '?table=workitems'),
-    fetchJsonWithTimeout(API + '?table=tasks'),
-    fetchJsonWithTimeout(API + '?table=expenses')
+    fetchJsonWithTimeout('?table=projects'),
+    fetchJsonWithTimeout('?table=workitems'),
+    fetchJsonWithTimeout('?table=tasks'),
+    fetchJsonWithTimeout('?table=expenses')
   ]).then(function(results) {
     projectsData = results[0].records || [];
     workitemsData = results[1].records || [];
@@ -2833,6 +2904,7 @@ function loadData() {
       showDataHint(loadErr);
     }
     loadExtraData();
+    setBootStatus('');
   }).catch(function(err) {
     console.error('載入失敗', err);
     projectsData = [];
@@ -2841,6 +2913,7 @@ function loadData() {
     expensesData = [];
     safeRenderAfterLoad();
     showDataHint(err.message || '連線失敗');
+    setBootStatus('Lark 資料載入失敗：' + (err.message || '連線失敗') + '（build ' + APP_BUILD + '）', true);
   });
 }
 
@@ -5965,12 +6038,22 @@ function collectPaymentFields() {
 }
 
 // ── 初始化 ──
-resolveLoginUser().then(function(user) {
-  updateTodoLoginLabel();
-  applyLoginUserToForms();
-  renderTeamPanel();
-});
-loadData();
+function bootApp() {
+  loadData();
+  if (isLikelyLarkClient()) {
+    ensureH5Sdk().catch(function() {});
+  }
+  resolveLoginUser().then(function(user) {
+    updateTodoLoginLabel();
+    applyLoginUserToForms();
+    renderTeamPanel();
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootApp);
+} else {
+  bootApp();
+}
 (function initPayForm() {
   var d = new Date();
   var el = document.getElementById('p-date');
