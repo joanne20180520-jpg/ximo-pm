@@ -128,40 +128,37 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .jpage-single{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);display:flex;flex-direction:column;overflow:hidden;min-height:calc(100vh - var(--th) - 36px)}
 .jpage-toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .jpage-toolbar h3{font-size:14px;font-weight:700;flex:1}
-.jpage-feed{flex:1;overflow-y:auto;padding:10px 14px}
-.jfeed-group{margin-bottom:20px}
-.jfeed-hdr{font-size:13px;font-weight:700;color:var(--text);padding:4px 0 8px;border-bottom:1px solid var(--border);margin-bottom:6px;display:flex;align-items:center;gap:8px}
-.jfeed-entry{padding:8px 2px 10px;border-bottom:1px solid var(--border);margin-bottom:0}
-.jfeed-entry:last-child{border-bottom:none}
-.jfeed-entry.has-block .jfeed-line.block{font-weight:600}
-.jfeed-top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px}
-.jfeed-date{font-size:10px;color:var(--t3);margin-left:auto}
-.jfeed-lines{display:flex;flex-direction:column;gap:2px;padding-left:2px}
-.jfeed-line{font-size:11px;color:var(--t2);line-height:1.55}
-.jfeed-line b{font-weight:600;color:var(--text);display:inline-block;min-width:44px;font-size:10px}
-.jfeed-line.block{color:var(--danger)}
-.jfeed-line.block b{color:var(--danger)}
-.jfeed-reason{margin-top:4px;padding:4px 0 0 8px;border-left:2px solid #e8a0a0;font-size:10px;color:var(--danger);line-height:1.5}
+.jpage-feed{flex:1;overflow-y:auto;padding:12px 16px}
+.jfeed-group{margin-bottom:22px}
+.jfeed-hdr{font-size:12px;font-weight:700;color:var(--text);padding:8px 12px;background:var(--sf2);border-radius:var(--rs);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.jfeed-hdr .jfeed-count{font-size:10px;color:var(--t3);font-weight:600;margin-left:2px}
+.jfeed-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.jfeed-stack{display:flex;flex-direction:column;gap:10px}
 .dn{display:flex;align-items:center;gap:4px}
 .dn button{border:none;background:none;cursor:pointer;color:var(--t2);padding:2px 4px;border-radius:4px;font-size:12px}
 .dn button:hover{background:var(--sf2)}
 .jl{flex:1;overflow-y:auto;padding:6px}
-.ji{padding:0;margin-bottom:10px}
-.jc{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:10px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.ji{padding:0;margin:0}
+.jc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .jc.has-block{border-color:#e8c4c4;background:#fffcfc}
-.jc-hdr{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.jc-hdr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)}
 .jn{font-size:12px;font-weight:700}
-.jpt{font-size:9px;padding:2px 7px;border-radius:10px;color:#fff;font-weight:600}
+.jpt{font-size:9px;padding:2px 8px;border-radius:10px;color:#fff;font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .jblk{font-size:9px;padding:2px 7px;border-radius:10px;background:#fde8e8;color:var(--danger);font-weight:700}
-.jc-rows{display:flex;flex-direction:column;gap:5px}
-.jc-row{display:flex;gap:6px;align-items:flex-start;font-size:10px;line-height:1.45}
-.jc-lbl{flex-shrink:0;min-width:52px;padding:2px 6px;border-radius:8px;font-weight:600;text-align:center;font-size:9px}
+.jc-date{font-size:10px;color:var(--t3);margin-left:auto;font-weight:500;white-space:nowrap}
+.jc-rows{display:flex;flex-direction:column;gap:7px}
+.jc-row{display:flex;gap:8px;align-items:flex-start;font-size:11px;line-height:1.45}
+.jc-lbl{flex-shrink:0;min-width:54px;padding:3px 7px;border-radius:8px;font-weight:600;text-align:center;font-size:9px;line-height:1.3}
 .jc-lbl.doing{background:#e6f4ee;color:#1a7a45}
 .jc-lbl.done{background:#e8f0fa;color:#1a4a7a}
 .jc-lbl.block{background:#fde8e8;color:var(--danger)}
 .jc-lbl.tomorrow{background:#f3f0e8;color:#6b5a1a}
-.jc-val{flex:1;color:var(--t2);word-break:break-word}
-.jc-reason{margin-top:6px;padding:7px 9px;background:#fff8f8;border-radius:6px;border-left:3px solid #e8a0a0;font-size:10px;color:var(--danger);line-height:1.5}
+.jc-val{flex:1;display:flex;flex-wrap:wrap;gap:5px;align-items:center;min-width:0}
+.jc-task{display:inline-block;padding:3px 9px;background:var(--sf2);border-radius:6px;font-size:10px;color:var(--text);line-height:1.35;word-break:break-word}
+.jc-row.block .jc-task{background:#fff0f0;color:var(--danger)}
+.jc-reason{margin-top:8px;padding:8px 10px;background:#fff8f8;border-radius:6px;border-left:3px solid #e8a0a0;font-size:10px;color:var(--danger);line-height:1.55}
+.jc-reason b{font-weight:700;margin-right:4px}
+.jc-note{margin-top:8px;padding:8px 10px;background:var(--sf2);border-radius:6px;font-size:10px;color:var(--t2);line-height:1.55}
 .jday-hdr{font-size:13px;font-weight:700;color:var(--text);padding:10px 4px 8px;border-bottom:2px solid var(--border);margin-bottom:10px}
 .jvbtns{display:flex;gap:3px}
 .jvbtn{padding:3px 8px;border-radius:12px;border:1px solid var(--border);background:var(--sf2);font-size:10px;cursor:pointer;color:var(--t2);white-space:nowrap}
@@ -3436,9 +3433,15 @@ function journalIsBlockedActive(rec) {
   return status === '卡關';
 }
 
-function journalFeedLine(label, val, isBlock) {
+function journalCardRow(label, val, type) {
   if (!val) return '';
-  return '<div class="jfeed-line' + (isBlock ? ' block' : '') + '"><b>' + label + '</b>' + escHtml(val) + '</div>';
+  var tasks = val.split('、').filter(Boolean);
+  var tasksHtml = tasks.map(function(t) {
+    return '<span class="jc-task">' + escHtml(t) + '</span>';
+  }).join('');
+  return '<div class="jc-row' + (type === 'block' ? ' block' : '') + '">' +
+    '<span class="jc-lbl ' + type + '">' + label + '</span>' +
+    '<div class="jc-val">' + tasksHtml + '</div></div>';
 }
 
 function renderJournalFeedEntry(rec, opts) {
@@ -3451,35 +3454,37 @@ function renderJournalFeedEntry(rec, opts) {
   var hasContent = !!(c.doing || c.done || c.blocked || c.tomorrow || c.blockReason || c.note);
   if (!hasContent) return '';
 
-  var html = '<div class="jfeed-entry' + (c.hasBlock ? ' has-block' : '') + '">';
-  html += '<div class="jfeed-top">';
+  var html = '<div class="ji"><div class="jc' + (c.hasBlock ? ' has-block' : '') + '">';
+  html += '<div class="jc-hdr">';
   if (opts.showAuthor !== false) {
     html += '<span class="av ' + avatarClass(author) + '">' + personInitial(author) + '</span>';
     html += '<span class="jn">' + escHtml(author) + '</span>';
   }
   if (c.proj) html += '<span class="jpt" style="background:' + color + '">' + escHtml(c.proj) + '</span>';
   if (c.hasBlock) html += '<span class="jblk">卡關</span>';
-  if (opts.showDate && dateStr) html += '<span class="jfeed-date">' + dateStr + '</span>';
-  html += '</div><div class="jfeed-lines">';
-  html += journalFeedLine('進行中', c.doing, false);
-  html += journalFeedLine('完成', c.done, false);
-  html += journalFeedLine('卡關', c.blocked, true);
-  html += journalFeedLine('明日', c.tomorrow, false);
+  if (opts.showDate && dateStr) html += '<span class="jc-date">' + dateStr + '</span>';
+  html += '</div><div class="jc-rows">';
+  html += journalCardRow('進行中', c.doing, 'doing');
+  html += journalCardRow('完成', c.done, 'done');
+  html += journalCardRow('卡關', c.blocked, 'block');
+  html += journalCardRow('明日', c.tomorrow, 'tomorrow');
   html += '</div>';
-  if (c.blockReason) html += '<div class="jfeed-reason">' + escHtml(c.blockReason) + '</div>';
+  if (c.blockReason) html += '<div class="jc-reason"><b>卡關原因</b>' + escHtml(c.blockReason) + '</div>';
   if (c.note && !(c.doing || c.done || c.blocked || c.tomorrow)) {
-    html += '<div class="jfeed-reason" style="border-left-color:var(--border);color:var(--t2)">' + formatJournalHtml(c.note) + '</div>';
+    html += '<div class="jc-note">' + formatJournalHtml(c.note) + '</div>';
   }
-  html += '</div>';
+  html += '</div></div>';
   return html;
 }
 
-function renderJournalFeedList(recs, opts) {
+function renderJournalFeedList(recs, opts, layout) {
+  layout = layout || 'cards';
   var html = '';
   recs.forEach(function(rec) {
     html += renderJournalFeedEntry(rec, opts);
   });
-  return html || '<div style="padding:8px 2px;color:var(--t3);font-size:11px">（無內容）</div>';
+  if (!html) return '<div style="padding:8px 2px;color:var(--t3);font-size:11px">（無內容）</div>';
+  return '<div class="' + (layout === 'stack' ? 'jfeed-stack' : 'jfeed-cards') + '">' + html + '</div>';
 }
 
 function renderJournalHtml(mode, area) {
@@ -3503,8 +3508,8 @@ function renderJournalHtml(mode, area) {
     names.forEach(function(name) {
       var recs = byPerson[name].sort(function(a, b) { return (journalTs(b) || 0) - (journalTs(a) || 0); });
       html += '<div class="jfeed-group">';
-      html += '<div class="jfeed-hdr"><span class="av ' + avatarClass(name) + '">' + personInitial(name) + '</span>' + escHtml(name) + '<span style="font-size:10px;color:var(--t3);font-weight:600">' + recs.length + ' 筆</span></div>';
-      html += renderJournalFeedList(recs, { showAuthor: false, showDate: true });
+      html += '<div class="jfeed-hdr"><span class="av ' + avatarClass(name) + '">' + personInitial(name) + '</span>' + escHtml(name) + '<span class="jfeed-count">' + recs.length + ' 筆</span></div>';
+      html += renderJournalFeedList(recs, { showAuthor: false, showDate: true }, 'stack');
       html += '</div>';
     });
     area.innerHTML = html;
@@ -3513,7 +3518,7 @@ function renderJournalHtml(mode, area) {
 
   if (mode === 'block') {
     items.sort(function(a, b) { return (journalTs(b) || 0) - (journalTs(a) || 0); });
-    area.innerHTML = '<div class="jfeed-group">' + renderJournalFeedList(items, { showAuthor: true, showDate: true }) + '</div>';
+    area.innerHTML = '<div class="jfeed-group">' + renderJournalFeedList(items, { showAuthor: true, showDate: true }, 'stack') + '</div>';
     return;
   }
 
@@ -3534,8 +3539,8 @@ function renderJournalHtml(mode, area) {
       return (journalPersonName(a) || '').localeCompare(journalPersonName(b) || '', 'zh-Hant');
     });
     html2 += '<div class="jfeed-group">';
-    html2 += '<div class="jfeed-hdr">' + (d.getFullYear()) + '/' + (d.getMonth()+1) + '/' + d.getDate() + '（' + weekdayLabel(d) + '）<span style="font-size:10px;color:var(--t3);font-weight:600">' + recs.length + ' 筆</span></div>';
-    html2 += renderJournalFeedList(recs, { showAuthor: true, showDate: false });
+    html2 += '<div class="jfeed-hdr">' + (d.getFullYear()) + '/' + (d.getMonth()+1) + '/' + d.getDate() + '（' + weekdayLabel(d) + '）<span class="jfeed-count">' + recs.length + ' 筆</span></div>';
+    html2 += renderJournalFeedList(recs, { showAuthor: true, showDate: false }, 'cards');
     html2 += '</div>';
   });
   area.innerHTML = html2;
