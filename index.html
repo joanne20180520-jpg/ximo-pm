@@ -2898,18 +2898,25 @@ function confirmTaskReport() {
     '進行中任務': merged.doing,
     '已完成今日任務': merged.done,
     '卡關任務': merged.block,
-    '明日預計任務': merged.tomorrow,
-    '卡關原因': encodeBlockReasons(reasonById)
+    '明日預計任務': merged.tomorrow
   };
+  var encodedReasons = encodeBlockReasons(reasonById);
+  if (encodedReasons) journalFields['卡關原因'] = encodedReasons;
   if (existingJournal && journalField(existingJournal, ['備註', '日誌內容', '內容'])) {
     journalFields['備註'] = journalField(existingJournal, ['備註', '日誌內容', '內容']);
+  }
+  if (note) {
+    var catLabels = { doing: '進行中', done: '今日完成', block: '卡關', tomorrow: '明日預計' };
+    var noteLine = '/ ' + ctx.projName + ' · ' + (ctx.f['任務名稱'] || '') + (note ? '：' + note : '');
+    var baseNote = journalFields['備註'] || '';
+    journalFields['備註'] = baseNote ? (baseNote + '\n' + noteLine) : ('【' + (catLabels[category] || '進行中') + '】\n' + noteLine);
   }
 
   var pid = getProjectRecordId(ctx.projName);
   if (pid) {
-    var projIds = existingJournal ? getLinkIds(existingJournal.fields['所屬專案']).slice() : [];
+    var projIds = getJournalProjIds(existingJournal).slice();
     if (projIds.indexOf(pid) < 0) projIds.push(pid);
-    journalFields['所屬專案'] = projIds;
+    setJournalProjIds(journalFields, projIds);
   }
 
   var reporter = larkPerson(author);
@@ -2920,14 +2927,12 @@ function confirmTaskReport() {
     '進度狀態': status,
     '進度數值': parseProgressVal(status, null)
   };
-  if (note) taskFields['備註'] = note;
 
   var btn = document.getElementById('td-confirm-btn');
   if (btn) { btn.disabled = true; btn.textContent = '儲存中…'; }
 
   var oldRec = ctx.rec;
   var oldFields = {};
-  if (taskFields['備註'] !== undefined) oldFields['備註'] = oldRec.fields['備註'] || '';
   if (taskFields['進度狀態'] !== undefined) oldFields['進度狀態'] = oldRec.fields['進度狀態'] || '';
   if (taskFields['進度數值'] !== undefined) oldFields['進度數值'] = oldRec.fields['進度數值'] || 0;
   undoStack.push({ type: 'update', table: 'tasks', recordId: currentTaskId, data: oldFields });
@@ -3138,9 +3143,18 @@ function getExistingTaskCategories(rec) {
   return map;
 }
 
-function getProjectRecordId(projName) {
+function findProjectIdByName(projName) {
   var rec = projectsData.find(function(p) { return (p.fields['標案名稱'] || '') === projName; });
   return rec ? rec.record_id : null;
+}
+
+function getJournalProjIds(rec) {
+  if (!rec || !rec.fields) return [];
+  return getLinkIds(rec.fields['所屬標案'] || rec.fields['所屬專案']);
+}
+
+function setJournalProjIds(fields, projIds) {
+  if (projIds && projIds.length) fields['所屬標案'] = projIds;
 }
 
 function parseBlockReasons(rec) {
@@ -3467,7 +3481,7 @@ function saveDailyJournal() {
     '明日預計任務': data.ids.tomorrow,
     '卡關原因': encodeBlockReasons(reasonById)
   };
-  if (projIds.length) journalFields['所屬專案'] = projIds;
+  if (projIds.length) setJournalProjIds(journalFields, projIds);
 
   var reporter = larkPerson(author);
   if (reporter) journalFields['回報人'] = reporter;
@@ -3488,17 +3502,14 @@ function saveDailyJournal() {
 
   var taskUpdates = allItems.map(function(row) {
     var fields = {};
-    if (row.note) fields['備註'] = row.note;
     if (row.status) {
       fields['進度狀態'] = row.status;
       fields['進度數值'] = parseProgressVal(row.status, null);
     }
     if (!Object.keys(fields).length) return Promise.resolve({ code: 0 });
-    // 儲存舊資料供復原使用
     var oldRec = tasksData.find(function(r){ return r.record_id === row.id; });
     if (oldRec) {
       var oldFields = {};
-      if (fields['備註'] !== undefined) oldFields['備註'] = oldRec.fields['備註'] || '';
       if (fields['進度狀態'] !== undefined) oldFields['進度狀態'] = oldRec.fields['進度狀態'] || '';
       if (fields['進度數值'] !== undefined) oldFields['進度數值'] = oldRec.fields['進度數值'] || 0;
       undoStack.push({ type: 'update', table: 'tasks', recordId: row.id, data: oldFields });
