@@ -981,6 +981,7 @@ export default async function handler(req, res) {
       const text = [
         '【付款申請待處理】',
         '通知對象：' + notifyTo,
+        '申請人：' + (b.applicant || ''),
         '申請部門：' + (b.dept || ''),
         '支付對象：' + (b.payee || ''),
         '事由：' + (b.reason || ''),

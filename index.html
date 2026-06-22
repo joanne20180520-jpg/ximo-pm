@@ -545,9 +545,10 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
     <!-- 付款金費單 -->
     <div id="pg-p" class="page">
-      <div class="dc"><div class="dch"><h3>付款申請單</h3><span style="font-size:11px;color:var(--t3);margin-left:8px">填寫後確認資料列印</span></div>
+      <div class="dc"><div class="dch"><h3>付款申請單</h3><span style="font-size:11px;color:var(--t3);margin-left:8px">填寫後確認資料列印</span><span id="pay-user-label" style="font-size:11px;margin-left:auto;color:var(--t2)"></span></div>
         <div class="pfw">
           <div>
+            <div class="fg"><label>申請人</label><input type="text" id="p-applicant" readonly placeholder="Lark 登入後自動帶入" style="background:var(--sf2)"></div>
             <div class="fg"><label>申請部門</label><input type="text" id="p-dept" value="璽墨"></div>
             <div class="fg"><label>申請日期</label><input type="date" id="p-date"></div>
             <div class="fg"><label>支付對象</label><input type="text" id="p-payee" placeholder="OOO"></div>
@@ -1728,12 +1729,17 @@ function buildPayPrintUrl(opts) {
   if (total) params.set('total', total);
   if (nats.length) params.set('nature', nats.join(','));
   if (method) params.set('pay', method);
+  var applicant = (document.getElementById('p-applicant') && document.getElementById('p-applicant').value.trim()) || getLoginDisplayName();
+  if (applicant) params.set('applicant', applicant);
   if (opts.embed) params.set('embed', '1');
   if (opts.print) params.set('print', '1');
   return PAY_PRINT_BASE + '?' + params.toString();
 }
 
 function prevPay() {
+  if (!getLoginDisplayName()) {
+    alert('請先 Lark 登入，列印與存檔才會記錄申請人');
+  }
   if (!document.getElementById('p-total').value.replace(/[^0-9]/g, '')) {
     alert('請填寫付款總金額');
     return;
@@ -1747,6 +1753,10 @@ function doPrint() {
   var data = collectPaymentFields();
   if (!data.total) { alert('請填寫付款總金額'); return; }
   if (!data.payee) { alert('請填寫支付對象'); return; }
+  if (!data.applicant) {
+    alert('尚未辨識申請人，請先 Lark 登入後再列印存檔');
+    return;
+  }
 
   savePaymentRecord(data).then(function() {
     var iframe = document.getElementById('prev-iframe');
@@ -2153,11 +2163,43 @@ function getCurrentLoginUser() {
   } catch (e) {}
   return currentLoginUser;
 }
+function getLoginDisplayName() {
+  var u = getCurrentLoginUser();
+  if (!u) return '';
+  return (u.name || u.enName || '').trim();
+}
+function getLoginLarkPerson() {
+  var u = getCurrentLoginUser();
+  if (!u) return undefined;
+  if (u.openId) return [{ id: u.openId }];
+  var name = getLoginDisplayName();
+  if (name) return larkPerson(name);
+  return undefined;
+}
+function applyLoginUserToForms() {
+  var name = getLoginDisplayName();
+  var payApplicant = document.getElementById('p-applicant');
+  if (payApplicant && name) payApplicant.value = name;
+  var payLabel = document.getElementById('pay-user-label');
+  if (payLabel) {
+    if (name) payLabel.textContent = '申請人：' + name;
+    else payLabel.innerHTML = '<span style="color:var(--warn)">尚未登入</span>';
+  }
+  if (name) {
+    var authorSel = document.getElementById('dl-author');
+    if (authorSel && !authorSel.dataset.userPicked) {
+      for (var i = 0; i < authorSel.options.length; i++) {
+        if (authorSel.options[i].text === name) { authorSel.selectedIndex = i; break; }
+      }
+    }
+  }
+}
 function storeLoginUser(user) {
   if (!user) return;
   currentLoginUser = user;
   try { sessionStorage.setItem('ximo-login-user', JSON.stringify(user)); } catch (e) {}
   updateTodoLoginLabel();
+  applyLoginUserToForms();
   renderTeamPanel();
 }
 function namesMatch(a, b) {
@@ -2645,14 +2687,9 @@ function loadExtraData() {
       if (user) {
         enrichLoginUserFromMembers(user);
         storeLoginUser(user);
-        var authorSel = document.getElementById('dl-author');
-        if (authorSel && user.name) {
-          for (var i = 0; i < authorSel.options.length; i++) {
-            if (authorSel.options[i].text === user.name) { authorSel.selectedIndex = i; break; }
-          }
-        }
       }
       updateTodoLoginLabel();
+      applyLoginUserToForms();
       renderTeamPanel();
     });
   });
@@ -4620,6 +4657,9 @@ function savePaymentRecord(data) {
     '備註': data.remark,
     '付款總金額': parseFloat(data.total)
   };
+  var applicantPerson = getLoginLarkPerson();
+  if (applicantPerson) fields['申請人'] = applicantPerson;
+  else if (data.applicant) fields['申請人'] = data.applicant;
   return fetch(API + '?table=payments', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -4637,6 +4677,7 @@ function sendPaymentNotify(data, printPath) {
     body: JSON.stringify({
       dept: data.dept,
       payee: data.payee,
+      applicant: data.applicant,
       reason: data.reason,
       amount: data.amountDisplay,
       notifyTo: data.notifyTo || '會計',
@@ -5755,6 +5796,8 @@ function collectPaymentFields() {
   var nats = [];
   document.querySelectorAll('#p-nature .ntag.on').forEach(function(t) { nats.push(t.textContent); });
   var totalNum = document.getElementById('p-total').value.replace(/[^0-9]/g, '');
+  var applicantEl = document.getElementById('p-applicant');
+  var applicant = (applicantEl && applicantEl.value.trim()) || getLoginDisplayName();
   return {
     dept: document.getElementById('p-dept').value.trim(),
     date: document.getElementById('p-date').value,
@@ -5766,13 +5809,17 @@ function collectPaymentFields() {
     total: totalNum,
     nature: nats.join('、'),
     natureList: nats,
+    applicant: applicant,
     amountDisplay: totalNum ? 'NT$' + parseInt(totalNum,10).toLocaleString() : '',
     notifyTo: (document.getElementById('p-notify') && document.getElementById('p-notify').value) || '會計'
   };
 }
 
 // ── 初始化 ──
-resolveLoginUser().then(function() { updateTodoLoginLabel(); });
+resolveLoginUser().then(function() {
+  updateTodoLoginLabel();
+  applyLoginUserToForms();
+});
 loadData();
 (function initPayForm() {
   var d = new Date();
