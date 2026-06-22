@@ -5334,7 +5334,8 @@ function confirmArchiveProject() {
         body: JSON.stringify({
           projectId: archivingProjId,
           wikiUrl: url,
-          userAccessToken: getUserAccessToken()
+          userAccessToken: getUserAccessToken(),
+          userOpenId: (getCurrentLoginUser() && getCurrentLoginUser().openId) || ''
         })
       }).then(function(r) { return r.json(); }).then(function(res) {
         if (!res.ok || !res.copiedToWikiBase) {

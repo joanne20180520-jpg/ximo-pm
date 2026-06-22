@@ -308,6 +308,31 @@ async function copyBitableApp(accessToken, appToken, name) {
   }
 }
 
+async function copyBitableAppPreferUser(tenantToken, userToken, appToken, name) {
+  const userTok = String(userToken || '').trim();
+  if (userTok) {
+    try {
+      return await copyBitableApp(userTok, appToken, name);
+    } catch (e) { /* 改由應用身分複製 */ }
+  }
+  return await copyBitableApp(tenantToken, appToken, name);
+}
+
+async function grantUserBitableAccess(tenantToken, appToken, userOpenId) {
+  const oid = String(userOpenId || '').trim();
+  if (!oid || !appToken) return false;
+  try {
+    await larkApiPost(tenantToken, '/drive/v1/permissions/' + encodeURIComponent(appToken) + '/members?type=bitable', {
+      member_type: 'openid',
+      member_id: oid,
+      perm: 'full_access'
+    });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 async function createWikiBitableNode(accessToken, spaceId, parentNodeToken, appToken, title) {
   const body = {
     obj_type: 'bitable',
@@ -415,7 +440,7 @@ async function resolveWikiParentTarget(accessToken, wikiUrl) {
   throw new Error('Wiki 封存位置須為 wiki/space/… 或 wiki/節點ID 連結（不能是 /base/ 連結）');
 }
 
-async function copyArchiveTemplateToParent(tenantToken, parentWikiUrl, projectName, wikiToken) {
+async function copyArchiveTemplateToParent(tenantToken, parentWikiUrl, projectName, wikiToken, userOpenId) {
   const templateUrl = WIKI_ARCHIVE_TEMPLATE;
   if (!templateUrl) {
     throw new Error('尚未設定封存範本（LARK_ARCHIVE_TEMPLATE）');
@@ -433,7 +458,8 @@ async function copyArchiveTemplateToParent(tenantToken, parentWikiUrl, projectNa
   const title = projectName || '封存標案';
 
   if (templateParsed && templateParsed.kind === 'base') {
-    const newAppToken = await copyBitableApp(tenantToken, templateParsed.token, title);
+    const newAppToken = await copyBitableAppPreferUser(tenantToken, wikiTok, templateParsed.token, title);
+    await grantUserBitableAccess(tenantToken, newAppToken, userOpenId);
     const tableMap = await resolveArchiveTableMap(tenantToken, newAppToken);
     const baseAppUrl = buildBaseAppUrl(templateUrl, newAppToken);
     let wikiUrlOut = baseAppUrl;
@@ -487,7 +513,7 @@ async function copyArchiveTemplateToParent(tenantToken, parentWikiUrl, projectNa
   };
 }
 
-async function resolveOrCreateWikiBitableTarget(tenantToken, wikiUrl, projectName, wikiToken) {
+async function resolveOrCreateWikiBitableTarget(tenantToken, wikiUrl, projectName, wikiToken, userOpenId) {
   const wikiTok = String(wikiToken || '').trim();
   const spaceParent = resolveWikiParentTargetFromUrl(wikiUrl);
   if (wikiTok && !spaceParent) {
@@ -512,7 +538,7 @@ async function resolveOrCreateWikiBitableTarget(tenantToken, wikiUrl, projectNam
     throw new Error('請先 Lark 登入，或貼上 wiki/space/… 知識庫空間連結');
   }
   if (!WIKI_ARCHIVE_TEMPLATE) throw new Error('尚未設定封存範本（LARK_ARCHIVE_TEMPLATE）');
-  const created = await copyArchiveTemplateToParent(tenantToken, wikiUrl, projectName, wikiToken);
+  const created = await copyArchiveTemplateToParent(tenantToken, wikiUrl, projectName, wikiToken, userOpenId);
   return {
     appToken: created.appToken,
     tableMap: created.tableMap,
@@ -1153,9 +1179,9 @@ async function batchCreateRecords(token, appToken, tableId, fieldsList, tableLab
   return created;
 }
 
-async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
+async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken, userOpenId) {
   const projectName = bundle.project.fields['標案名稱'] || '封存標案';
-  const target = await resolveOrCreateWikiBitableTarget(token, wikiUrl, projectName, wikiToken);
+  const target = await resolveOrCreateWikiBitableTarget(token, wikiUrl, projectName, wikiToken, userOpenId);
   const targetApp = target.appToken;
   const tableMap = target.tableMap;
   const finalWikiUrl = target.wikiUrl || wikiUrl;
@@ -1233,7 +1259,7 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
   return { copied: true, newProjectId: newProjId, targetAppToken: targetApp, wikiUrl: finalWikiUrl, createdCopy: !!target.createdCopy, wikiPlaced: !!target.wikiPlaced, wikiPlaceError: target.wikiPlaceError || '', baseAppUrl: target.baseAppUrl || '', wikiFolderUrl: target.wikiFolderUrl || wikiUrl };
 }
 
-async function archiveProject(token, projectId, wikiUrl, userAccessToken) {
+async function archiveProject(token, projectId, wikiUrl, userAccessToken, userOpenId) {
   const bundle = await gatherProjectRelated(token, projectId);
   const name = bundle.project.fields['標案名稱'] || '';
   const summary = '工作項目 ' + bundle.workitems.length + ' 筆、任務 ' + bundle.tasks.length + ' 筆、支出 ' + bundle.expenses.length + ' 筆、設計 ' + bundle.designs.length + ' 筆';
@@ -1270,7 +1296,7 @@ async function archiveProject(token, projectId, wikiUrl, userAccessToken) {
     };
   }
   try {
-    const copyResult = await copyProjectBundleToWikiBase(token, bundle, wikiUrl, userAccessToken);
+    const copyResult = await copyProjectBundleToWikiBase(token, bundle, wikiUrl, userAccessToken, userOpenId);
     copiedToWikiBase = true;
     if (copyResult.wikiUrl) finalWikiUrl = copyResult.wikiUrl;
     createdCopy = !!copyResult.createdCopy;
@@ -1584,10 +1610,11 @@ export default async function handler(req, res) {
       const projectId = req.body && req.body.projectId;
       const wikiUrl = (req.body && req.body.wikiUrl || '').trim();
       const userAccessToken = (req.body && req.body.userAccessToken || '').trim();
+      const userOpenId = (req.body && req.body.userOpenId || '').trim();
       if (!projectId) return res.status(400).json({ error: 'missing projectId' });
       if (!wikiUrl) return res.status(400).json({ error: 'missing wikiUrl' });
       const token = await getToken();
-      const result = await archiveProject(token, projectId, wikiUrl, userAccessToken);
+      const result = await archiveProject(token, projectId, wikiUrl, userAccessToken, userOpenId);
       return res.status(200).json(result);
     }
 
