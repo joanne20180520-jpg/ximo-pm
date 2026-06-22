@@ -1,3 +1,5 @@
+import { createHash } from 'crypto';
+
 const APP_ID = (process.env.LARK_APP_ID || '').trim();
 const APP_SECRET = (process.env.LARK_APP_SECRET || '').trim();
 const APP_TOKEN = (process.env.LARK_APP_TOKEN || '').trim();
@@ -100,7 +102,7 @@ function buildTables() {
 }
 
 const TABLES = buildTables();
-const WIKI_ARCHIVE_TEMPLATE = (process.env.LARK_WIKI_ARCHIVE_TEMPLATE || '').trim();
+const WIKI_ARCHIVE_TEMPLATE = (process.env.LARK_ARCHIVE_TEMPLATE || process.env.LARK_WIKI_ARCHIVE_TEMPLATE || '').trim();
 
 const ARCHIVE_TABLE_KEYWORDS = {
   projects: ['標案', '專案', 'project'],
@@ -198,23 +200,71 @@ async function resolveBitableFromWikiNode(accessToken, node, baseUrl) {
   };
 }
 
-async function copyArchiveTemplateToParent(accessToken, parentWikiUrl, projectName) {
-  if (!WIKI_ARCHIVE_TEMPLATE) {
-    throw new Error('尚未設定封存範本（LARK_WIKI_ARCHIVE_TEMPLATE）');
+function buildBaseAppUrl(templateUrl, appToken) {
+  try {
+    const u = new URL(String(templateUrl || '').trim());
+    return u.origin + '/base/' + appToken;
+  } catch (e) {
+    return 'https://www.larksuite.com/base/' + appToken;
   }
-  const templateToken = getWikiTokenFromUrl(WIKI_ARCHIVE_TEMPLATE);
-  const parentToken = getWikiTokenFromUrl(parentWikiUrl);
-  if (!templateToken) throw new Error('封存範本連結無效');
-  if (!parentToken) throw new Error('知識庫存放位置連結無效');
+}
 
-  const templateNode = await getWikiNode(accessToken, templateToken);
+async function copyBitableApp(accessToken, appToken, name) {
+  const data = await larkApiPost(accessToken, '/bitable/v1/apps/' + encodeURIComponent(appToken) + '/copy', {
+    name: name || '封存標案'
+  });
+  const newToken = data && data.app && data.app.app_token;
+  if (!newToken) throw new Error('複製雲端多維表格失敗');
+  await ensureBitableReady(accessToken, newToken);
+  return newToken;
+}
+
+async function createWikiBitableNode(accessToken, spaceId, parentNodeToken, appToken, title) {
+  const data = await larkApiPost(accessToken, '/wiki/v2/spaces/' + encodeURIComponent(spaceId) + '/nodes', {
+    obj_type: 'bitable',
+    obj_token: appToken,
+    parent_node_token: parentNodeToken,
+    node_type: 'origin',
+    title: title || '封存標案'
+  });
+  return data.node;
+}
+
+async function copyArchiveTemplateToParent(accessToken, parentWikiUrl, projectName) {
+  const templateUrl = WIKI_ARCHIVE_TEMPLATE;
+  if (!templateUrl) {
+    throw new Error('尚未設定封存範本（LARK_ARCHIVE_TEMPLATE）');
+  }
+
+  const parentToken = getWikiTokenFromUrl(parentWikiUrl);
+  if (!parentToken) throw new Error('知識庫存放位置連結無效');
   const parentNode = await getWikiNode(accessToken, parentToken);
-  if (!templateNode) throw new Error('找不到封存範本');
   if (!parentNode) throw new Error('找不到知識庫存放位置');
+
+  const templateParsed = extractLarkUrlToken(templateUrl);
+  const title = projectName || '封存標案';
+
+  if (templateParsed && templateParsed.kind === 'base') {
+    const newAppToken = await copyBitableApp(accessToken, templateParsed.token, title);
+    const tableMap = await resolveArchiveTableMap(accessToken, newAppToken);
+    let wikiUrl = '';
+    try {
+      const node = await createWikiBitableNode(accessToken, parentNode.space_id, parentNode.node_token, newAppToken, title);
+      wikiUrl = buildWikiNodeUrl(parentWikiUrl, node.node_token);
+    } catch (e) {
+      wikiUrl = buildBaseAppUrl(templateUrl, newAppToken);
+    }
+    return { appToken: newAppToken, tableMap: tableMap, wikiUrl: wikiUrl };
+  }
+
+  const templateToken = templateParsed ? templateParsed.token : '';
+  if (!templateToken) throw new Error('封存範本連結無效');
+  const templateNode = await getWikiNode(accessToken, templateToken);
+  if (!templateNode) throw new Error('找不到封存範本');
 
   const copied = await copyWikiNode(accessToken, templateNode.space_id, templateNode.node_token, {
     targetParentToken: parentNode.node_token,
-    title: projectName || '封存標案'
+    title: title
   });
   if (!copied) throw new Error('複製封存範本失敗');
 
@@ -678,6 +728,40 @@ async function sendWebhook(text) {
   return await res.json();
 }
 
+let jsapiTicketCache = { ticket: '', expiresAt: 0 };
+
+async function getJsapiTicket(token) {
+  const now = Date.now();
+  if (jsapiTicketCache.ticket && jsapiTicketCache.expiresAt > now) {
+    return jsapiTicketCache.ticket;
+  }
+  const res = await fetch(BASE_URL + '/jssdk/ticket/get', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({})
+  });
+  const data = await res.json();
+  if (data.code !== 0 || !data.data || !data.data.ticket) {
+    throw new Error(data.msg || '無法取得 jsapi_ticket');
+  }
+  jsapiTicketCache.ticket = data.data.ticket;
+  jsapiTicketCache.expiresAt = now + ((data.data.expire_in || 7000) * 1000) - 60000;
+  return jsapiTicketCache.ticket;
+}
+
+async function buildJssdkConfig(token, pageUrl) {
+  const ticket = await getJsapiTicket(token);
+  const nonceStr = Math.random().toString(36).slice(2, 14);
+  const timestamp = Math.floor(Date.now() / 1000);
+  const url = String(pageUrl || '').split('#')[0];
+  const raw = 'jsapi_ticket=' + ticket + '&noncestr=' + nonceStr + '&timestamp=' + timestamp + '&url=' + url;
+  const signature = createHash('sha1').update(raw).digest('hex');
+  return { ok: true, appId: APP_ID, timestamp: timestamp, nonceStr: nonceStr, signature: signature };
+}
+
 async function loginWithOAuthCode(code, redirectUri) {
   const baseBody = {
     grant_type: 'authorization_code',
@@ -760,6 +844,14 @@ export default async function handler(req, res) {
   try {
     if (action === 'appid' && req.method === 'GET') {
       return res.status(200).json({ appId: APP_ID });
+    }
+
+    if (action === 'jssdk-config' && req.method === 'GET') {
+      const pageUrl = (req.query.url || '').trim();
+      if (!pageUrl) return res.status(400).json({ error: 'missing url' });
+      const token = await getToken();
+      const cfg = await buildJssdkConfig(token, pageUrl);
+      return res.status(200).json(cfg);
     }
 
     if (action === 'auth-url' && req.method === 'GET') {

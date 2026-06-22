@@ -478,9 +478,6 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
     <button class="tbar-tab" onclick="sw(this,'pg-d')">設計任務單</button>
     <button class="tbar-tab" onclick="sw(this,'pg-journal')">墨日誌</button>
   </nav>
-  <div class="topbar-actions">
-    <button class="bjlog" onclick="openDailyLog()">＋ 填寫今日日誌</button>
-  </div>
 </div>
 
 <!-- 收合按鈕 -->
@@ -530,7 +527,6 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
           <button class="vb active" onclick="setV('month',this)">月</button>
           <button class="vb" onclick="setV('quarter',this)">季</button>
         </div>
-        <button class="bjlog" onclick="openDailyLog()">填寫日誌</button>
       </div>
       <div id="gantt-area">
         <div style="padding:20px;color:var(--t3);font-size:12px;text-align:center">載入中...</div>
@@ -648,7 +644,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
         <div class="fg"><label>合約開始日</label><input type="date" id="np-start"></div>
         <div class="fg"><label>合約結束日</label><input type="date" id="np-end"></div>
         <div class="fg"><label>合約金額</label><input type="text" placeholder="NT$0" id="ca" oninput="calcP()"></div>
-        <div class="fg"><label>Wiki 封存位置（選填）</label><input type="url" id="np-wiki-folder" placeholder="https://.../wiki/...（知識庫資料夾）"></div>
+        <div class="fg"><label>Wiki 封存位置（選填）</label><input type="url" id="np-wiki-folder" placeholder="https://.../wiki/...（知識庫首頁連結）"></div>
       </div>
       <div>
         <div class="fbox">
@@ -753,8 +749,8 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
   <div class="fg"><label>合約開始日</label><input type="date" id="ep-start"></div>
   <div class="fg"><label>合約結束日</label><input type="date" id="ep-end"></div>
   <div class="fg"><label>合約金額</label><input type="text" id="ep-amount" placeholder="NT$0"></div>
-  <div class="fg"><label>Wiki 封存位置</label><input type="url" id="ep-wiki-folder" placeholder="https://.../wiki/...（此標案專用知識庫資料夾）">
-    <div class="fg-hint" style="font-size:10px;color:var(--t3);margin-top:4px">封存時自動帶入；每個標案可設不同 Wiki 資料夾</div>
+  <div class="fg"><label>Wiki 封存位置</label><input type="url" id="ep-wiki-folder" placeholder="https://.../wiki/...（知識庫首頁或目錄頁連結）">
+    <div class="fg-hint" style="font-size:10px;color:var(--t3);margin-top:4px">Lark 知識庫沒有資料夾，貼知識庫首頁或任一目錄頁連結即可；封存內容會出現在該頁下方</div>
   </div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-proj')">取消</button><button class="bpri" onclick="saveEditProject()">儲存</button></div></div></div>
 
@@ -762,7 +758,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 <div class="po" id="pp-archive-proj"><div class="pp"><div class="pph"><h3>封存標案至知識庫</h3><button class="ppc" onclick="cancelArchiveProject()">✕</button></div><div class="ppb">
   <p style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:12px">若已在標案設定「Wiki 封存位置」，會自動帶入。亦可手動修改。系統會從範本複製多維表格並寫入此標案資料，封存後標案將從前台隱藏。</p>
   <div id="ap-export-preview" class="ap-export-preview">載入中…</div>
-  <div class="fg"><label>知識庫存放位置連結</label><input type="url" id="ap-wiki-url" placeholder="https://...（知識庫資料夾或頁面）" oninput="refreshArchivePreview()"></div>
+  <div class="fg"><label>知識庫存放位置連結</label><input type="url" id="ap-wiki-url" placeholder="https://.../wiki/...（知識庫首頁或目錄頁）" oninput="refreshArchivePreview()"></div>
   <div id="ap-proj-name" style="font-size:11px;color:var(--t3)"></div>
 </div><div class="ppf"><button class="bcan" onclick="cancelArchiveProject()">取消</button><button class="bpri" onclick="confirmArchiveProject()">確認封存</button></div></div></div>
 
@@ -2146,6 +2142,15 @@ function storeLoginUser(user) {
   currentLoginUser = user;
   try { sessionStorage.setItem('ximo-login-user', JSON.stringify(user)); } catch (e) {}
   updateTodoLoginLabel();
+  renderTeamPanel();
+}
+function namesMatch(a, b) {
+  if (!a || !b) return false;
+  a = String(a).trim();
+  b = String(b).trim();
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return a.indexOf(b) >= 0 || b.indexOf(a) >= 0;
 }
 function isTaskAssignedToMe(assigneeField) {
   var u = getCurrentLoginUser();
@@ -2154,9 +2159,28 @@ function isTaskAssignedToMe(assigneeField) {
   if (u.openId && openId && u.openId === openId) return true;
   var name = personName(assigneeField);
   if (!name) return false;
-  if (u.name && name === u.name) return true;
-  if (u.enName && name === u.enName) return true;
+  if (namesMatch(u.name, name) || namesMatch(u.enName, name)) return true;
   return false;
+}
+function configH5Sdk(appId, pageUrl) {
+  return new Promise(function(resolve) {
+    if (!window.h5sdk || !window.h5sdk.config) { resolve(false); return; }
+    var url = pageUrl || location.href.split('#')[0];
+    fetch(API + '?action=jssdk-config&url=' + encodeURIComponent(url))
+      .then(function(r) { return r.json(); })
+      .then(function(cfg) {
+        if (!cfg.ok || !cfg.signature) { resolve(false); return; }
+        window.h5sdk.config({
+          appId: appId || cfg.appId,
+          timestamp: cfg.timestamp,
+          nonceStr: cfg.nonceStr,
+          signature: cfg.signature,
+          jsApiList: ['requestAccess', 'requestAuthCode', 'getUserInfo'],
+          onSuccess: function() { resolve(true); },
+          onFail: function(err) { console.warn('h5sdk.config', err); resolve(false); }
+        });
+      }).catch(function(err) { console.warn('jssdk-config', err); resolve(false); });
+  });
 }
 function loginWithCode(code, redirectUri) {
   return fetch(API + '?action=login', {
@@ -2257,12 +2281,21 @@ function tryLarkGetUserInfo(tt) {
   });
 }
 function tryLarkClientAuth(appId) {
-  return waitForLarkBridge(6000).then(function(found) {
+  var pageUrl = location.href.split('#')[0];
+  return waitForLarkBridge(12000).then(function(found) {
     if (!found) return null;
+    return configH5Sdk(appId, pageUrl);
+  }).then(function() {
     return whenLarkReady();
   }).then(function(tt) {
     if (!tt) return null;
-    return exchangeLarkAuthCode(appId, tt);
+    return tryLarkGetUserInfo(tt);
+  }).then(function(user) {
+    if (user) return user;
+    return whenLarkReady().then(function(tt) {
+      if (!tt) return null;
+      return exchangeLarkAuthCode(appId, tt);
+    });
   }).then(function(user) {
     if (user) return user;
     return whenLarkReady().then(function(tt) { return tryLarkGetUserInfo(tt); });
@@ -5679,6 +5712,7 @@ function collectPaymentFields() {
 }
 
 // ── 初始化 ──
+resolveLoginUser().then(function() { updateTodoLoginLabel(); });
 loadData();
 (function initPayForm() {
   var d = new Date();
