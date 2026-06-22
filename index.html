@@ -773,7 +773,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
 <!-- 標案封存至知識庫 -->
 <div class="po" id="pp-archive-proj"><div class="pp"><div class="pph"><h3>封存標案至知識庫</h3><button class="ppc" onclick="cancelArchiveProject()">✕</button></div><div class="ppb">
-  <p style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:12px">若已在標案設定「Wiki 封存位置」，會自動帶入。封存時系統會<strong>直接在知識庫建立新頁面</strong>並寫入資料，封存後標案將從前台隱藏。<br><span style="font-size:11px;color:var(--t3)">請先完成「Lark 登入」（需 wiki + 多維表格授權）。成功後不會產生需申請移動的雲端表格。</span></p>
+  <p style="font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:12px">若已在標案設定「Wiki 封存位置」，會自動帶入。封存時會<strong>在知識庫內複製範本頁面</strong>並寫入資料。<br><span style="font-size:11px;color:var(--t3)">請先 Lark 登入。請在 Vercel 設定 <code>LARK_WIKI_ARCHIVE_TEMPLATE</code> 為「已遷入知識庫」的範本 wiki 連結（比 /base/ 範本穩定）。</span></p>
   <div id="ap-export-preview" class="ap-export-preview">載入中…</div>
   <div class="fg"><label>知識庫存放位置連結</label><input type="url" id="ap-wiki-url" placeholder="https://ajpfe1xdus5o.jp.larksuite.com/wiki/space/7650032628065668632" oninput="refreshArchivePreview()">
     <div style="font-size:10px;color:var(--t3);margin-top:4px;line-height:1.5">須為 wiki/space/… 或 wiki/節點ID，不能是 /base/ 多維表格連結</div></div>
@@ -2051,7 +2051,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260622c';
+var APP_BUILD = '20260622d';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 

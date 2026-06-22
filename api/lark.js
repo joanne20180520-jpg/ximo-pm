@@ -129,8 +129,33 @@ function buildTables() {
 }
 
 const TABLES = buildTables();
-const WIKI_ARCHIVE_TEMPLATE = (process.env.LARK_ARCHIVE_TEMPLATE || process.env.LARK_WIKI_ARCHIVE_TEMPLATE || '').trim();
 const ARCHIVE_OAUTH_SCOPES = 'wiki:wiki wiki:node:read bitable:app';
+
+function resolveArchiveTemplateUrls() {
+  const wikiEnv = normalizeWikiInputUrl(process.env.LARK_WIKI_ARCHIVE_TEMPLATE || '');
+  const mainEnv = normalizeWikiInputUrl(process.env.LARK_ARCHIVE_TEMPLATE || '');
+  let wikiUrl = '';
+  let baseUrl = '';
+  if (wikiEnv) {
+    const p = extractLarkUrlToken(wikiEnv);
+    if (p && p.kind === 'base') baseUrl = wikiEnv;
+    else if (p) wikiUrl = wikiEnv;
+  }
+  if (mainEnv) {
+    const p = extractLarkUrlToken(mainEnv);
+    if (p && p.kind === 'base') {
+      if (!baseUrl) baseUrl = mainEnv;
+    } else if (p) {
+      if (!wikiUrl) wikiUrl = mainEnv;
+    }
+  }
+  return { wikiUrl, baseUrl };
+}
+
+function isArchiveTemplateConfigured() {
+  const u = resolveArchiveTemplateUrls();
+  return !!(u.wikiUrl || u.baseUrl);
+}
 
 const ARCHIVE_TABLE_KEYWORDS = {
   projects: ['標案', '專案', 'project'],
@@ -451,10 +476,10 @@ async function moveBitableDocsToWiki(accessToken, spaceId, parentWikiToken, appT
 
 function buildWikiAccessTokens(userToken, tenantToken) {
   const tokens = [];
-  const tenantTok = String(tenantToken || '').trim();
   const userTok = String(userToken || '').trim();
-  if (tenantTok) tokens.push(tenantTok);
-  if (userTok && userTok !== tenantTok) tokens.push(userTok);
+  const tenantTok = String(tenantToken || '').trim();
+  if (userTok) tokens.push(userTok);
+  if (tenantTok && tenantTok !== userTok) tokens.push(tenantTok);
   return tokens;
 }
 
@@ -543,10 +568,103 @@ async function resolveWikiParentTarget(accessToken, wikiUrl) {
   throw new Error('Wiki 封存位置須為 wiki/space/… 或 wiki/節點ID 連結（不能是 /base/ 連結）');
 }
 
+async function copyArchiveViaWikiTemplate(tenantToken, parent, title, wikiTemplateUrl, wikiTok, parentWikiUrl) {
+  const templateParsed = extractLarkUrlToken(wikiTemplateUrl);
+  if (!templateParsed || !templateParsed.token) throw new Error('知識庫封存範本連結無效');
+
+  const wikiTokens = buildWikiAccessTokens(wikiTok, tenantToken);
+  let templateNode = null;
+  const nodeErrors = [];
+  for (let i = 0; i < wikiTokens.length; i++) {
+    try {
+      templateNode = await getWikiNode(wikiTokens[i], templateParsed.token, '封存範本');
+      if (templateNode) break;
+    } catch (e) {
+      nodeErrors.push((i === 0 ? 'user' : 'app') + ':' + (e.message || String(e)));
+    }
+  }
+  if (!templateNode) {
+    throw new Error('找不到知識庫封存範本。請確認範本頁面 wiki 連結正確。' + (nodeErrors.length ? ' ' + nodeErrors.join(' | ') : ''));
+  }
+
+  const copyOpts = { targetSpaceId: parent.space_id, title: title };
+  if (parent.node_token) copyOpts.targetParentToken = parent.node_token;
+
+  const copyErrors = [];
+  let copied = null;
+  for (let j = 0; j < wikiTokens.length; j++) {
+    try {
+      copied = await copyWikiNode(wikiTokens[j], templateNode.space_id, templateNode.node_token, copyOpts);
+      if (copied) break;
+    } catch (e) {
+      copyErrors.push((j === 0 ? 'user' : 'app') + ':' + (e.message || String(e)));
+    }
+  }
+  if (!copied || !copied.node_token) {
+    throw new Error(
+      '無法在知識庫內複製封存範本（需要 wiki:wiki 或 wiki:node:copy）。'
+      + (copyErrors.length ? ' ' + copyErrors.join(' | ') : '')
+      + ' 請確認：① 開發者後台已開通 wiki:wiki 並發布；② 重新 Lark 登入；③ 您對目標知識庫有編輯權限。'
+    );
+  }
+
+  let appToken = '';
+  let tableMap = null;
+  let wikiUrlOut = buildWikiNodeUrl(parent.wikiUrl || parentWikiUrl, copied.node_token);
+  const resolveErrors = [];
+  for (let k = 0; k < wikiTokens.length; k++) {
+    try {
+      const resolved = await resolveBitableFromWikiNode(wikiTokens[k], copied, parentWikiUrl);
+      appToken = resolved.appToken;
+      tableMap = await resolveArchiveTableMap(tenantToken, appToken);
+      wikiUrlOut = resolved.wikiUrl || wikiUrlOut;
+      break;
+    } catch (e) {
+      resolveErrors.push((k === 0 ? 'user' : 'app') + ':' + (e.message || String(e)));
+    }
+  }
+  if (!appToken || !tableMap) {
+    throw new Error('範本已複製到知識庫，但無法讀取其中的多維表格。' + (resolveErrors.length ? ' ' + resolveErrors.join(' | ') : ''));
+  }
+
+  return {
+    appToken: appToken,
+    tableMap: tableMap,
+    wikiUrl: wikiUrlOut,
+    wikiPlaced: true,
+    wikiPlaceError: '',
+    baseAppUrl: '',
+    wikiFolderUrl: parentWikiUrl
+  };
+}
+
+async function copyArchiveViaBaseTemplate(tenantToken, parent, title, baseTemplateUrl, wikiTok, userOpenId, parentWikiUrl) {
+  const templateParsed = extractLarkUrlToken(baseTemplateUrl);
+  if (!templateParsed || !templateParsed.token) throw new Error('雲端封存範本連結無效');
+
+  const copied = await copyArchiveTemplateBitable(tenantToken, wikiTok, templateParsed.token, title);
+  const newAppToken = copied.appToken;
+  if (copied.copiedBy === 'tenant') {
+    await grantUserBitableAccess(tenantToken, newAppToken, userOpenId);
+  }
+  const tableMap = await resolveArchiveTableMap(tenantToken, newAppToken);
+  const baseAppUrl = buildBaseAppUrl(baseTemplateUrl, newAppToken);
+  const wikiUrlOut = await placeCopiedBitableInWiki(wikiTok, tenantToken, parent, newAppToken, title);
+  return {
+    appToken: newAppToken,
+    tableMap: tableMap,
+    wikiUrl: wikiUrlOut,
+    wikiPlaced: true,
+    wikiPlaceError: '',
+    baseAppUrl: baseAppUrl,
+    wikiFolderUrl: parentWikiUrl
+  };
+}
+
 async function copyArchiveTemplateToParent(tenantToken, parentWikiUrl, projectName, wikiToken, userOpenId) {
-  const templateUrl = WIKI_ARCHIVE_TEMPLATE;
-  if (!templateUrl) {
-    throw new Error('尚未設定封存範本（LARK_ARCHIVE_TEMPLATE）');
+  const templates = resolveArchiveTemplateUrls();
+  if (!templates.wikiUrl && !templates.baseUrl) {
+    throw new Error('尚未設定封存範本（LARK_ARCHIVE_TEMPLATE 或 LARK_WIKI_ARCHIVE_TEMPLATE）');
   }
 
   const normalizedFolder = normalizeWikiInputUrl(parentWikiUrl);
@@ -557,58 +675,14 @@ async function copyArchiveTemplateToParent(tenantToken, parentWikiUrl, projectNa
     parent = await resolveWikiParentTarget(wikiTok, parentWikiUrl);
   }
 
-  const templateParsed = extractLarkUrlToken(templateUrl);
   const title = projectName || '封存標案';
-
-  if (templateParsed && templateParsed.kind === 'base') {
-    if (!wikiTok) throw new Error('封存至知識庫必須先 Lark 登入（使用您個人 wiki 編輯權限，無需事後申請移動）');
-    const copied = await copyArchiveTemplateBitable(tenantToken, wikiTok, templateParsed.token, title);
-    const newAppToken = copied.appToken;
-    if (copied.copiedBy === 'tenant') {
-      await grantUserBitableAccess(tenantToken, newAppToken, userOpenId);
-    }
-    const tableMap = await resolveArchiveTableMap(tenantToken, newAppToken);
-    const baseAppUrl = buildBaseAppUrl(templateUrl, newAppToken);
-    const wikiUrlOut = await placeCopiedBitableInWiki(wikiTok, tenantToken, parent, newAppToken, title);
-    return {
-      appToken: newAppToken,
-      tableMap: tableMap,
-      wikiUrl: wikiUrlOut,
-      wikiPlaced: true,
-      wikiPlaceError: '',
-      baseAppUrl: baseAppUrl,
-      wikiFolderUrl: parentWikiUrl
-    };
-  }
-
-  const templateToken = templateParsed ? templateParsed.token : '';
-  if (!templateToken) throw new Error('封存範本連結無效');
   if (!wikiTok) throw new Error('封存至知識庫必須先 Lark 登入');
-  const templateNode = await getWikiNode(wikiTok, templateToken, '封存範本');
-  if (!templateNode) throw new Error('找不到封存範本');
 
-  const copyOpts = { targetSpaceId: parent.space_id, title: title };
-  if (parent.node_token) copyOpts.targetParentToken = parent.node_token;
-  let copied = null;
-  const wikiTokens = buildWikiAccessTokens(wikiTok, tenantToken);
-  for (let i = 0; i < wikiTokens.length; i++) {
-    try {
-      copied = await copyWikiNode(wikiTokens[i], templateNode.space_id, templateNode.node_token, copyOpts);
-      if (copied) break;
-    } catch (e) { /* try next token */ }
+  if (templates.wikiUrl) {
+    return await copyArchiveViaWikiTemplate(tenantToken, parent, title, templates.wikiUrl, wikiTok, parentWikiUrl);
   }
-  if (!copied) throw new Error('複製封存範本失敗');
 
-  const resolved = await resolveBitableFromWikiNode(wikiTok, copied, parentWikiUrl);
-  return {
-    appToken: resolved.appToken,
-    tableMap: resolved.tableMap,
-    wikiUrl: resolved.wikiUrl,
-    wikiPlaced: true,
-    wikiPlaceError: '',
-    baseAppUrl: '',
-    wikiFolderUrl: parentWikiUrl
-  };
+  return await copyArchiveViaBaseTemplate(tenantToken, parent, title, templates.baseUrl, wikiTok, userOpenId, parentWikiUrl);
 }
 
 async function resolveOrCreateWikiBitableTarget(tenantToken, wikiUrl, projectName, wikiToken, userOpenId) {
@@ -630,10 +704,10 @@ async function resolveOrCreateWikiBitableTarget(tenantToken, wikiUrl, projectNam
         wikiFolderUrl: wikiUrl
       };
     } catch (directErr) {
-      if (!WIKI_ARCHIVE_TEMPLATE) throw directErr;
+      if (!isArchiveTemplateConfigured()) throw directErr;
     }
   }
-  if (!WIKI_ARCHIVE_TEMPLATE) throw new Error('尚未設定封存範本（LARK_ARCHIVE_TEMPLATE）');
+  if (!isArchiveTemplateConfigured()) throw new Error('尚未設定封存範本（LARK_ARCHIVE_TEMPLATE）');
   const created = await copyArchiveTemplateToParent(tenantToken, wikiUrl, projectName, wikiTok, userOpenId);
   return {
     appToken: created.appToken,
@@ -1123,11 +1197,15 @@ async function inspectWikiBitableTarget(accessToken, wikiUrl, projectName) {
     });
     return { mode: 'direct', appToken: appToken, tableNames: tableNames };
   } catch (err) {
-    if (!WIKI_ARCHIVE_TEMPLATE) throw err;
+    if (!isArchiveTemplateConfigured()) throw err;
+    const templates = resolveArchiveTemplateUrls();
     return {
       mode: 'template_copy',
       templateConfigured: true,
-      note: '此位置尚無多維表格，封存時將自動從範本複製新頁面（標題：' + (projectName || '封存標案') + '）並寫入資料'
+      templateMode: templates.wikiUrl ? 'wiki' : 'base',
+      note: templates.wikiUrl
+        ? '封存時將在知識庫內複製範本頁面（直接出現在知識庫，無需事後移入）'
+        : '此位置尚無表格。建議：將封存範本「遷入知識庫」一次，並在 Vercel 設定 LARK_WIKI_ARCHIVE_TEMPLATE 為該 wiki 連結'
     };
   }
 }
@@ -1666,7 +1744,8 @@ export default async function handler(req, res) {
         },
         wikiTarget: wikiTarget,
         wikiTargetError: wikiTargetError,
-        archiveTemplateConfigured: !!WIKI_ARCHIVE_TEMPLATE
+        archiveTemplateConfigured: isArchiveTemplateConfigured(),
+        archiveTemplateMode: resolveArchiveTemplateUrls().wikiUrl ? 'wiki' : 'base'
       });
     }
 
