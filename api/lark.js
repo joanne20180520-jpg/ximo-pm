@@ -320,17 +320,33 @@ async function copyBitableAppPreferUser(tenantToken, userToken, appToken, name) 
 
 async function grantUserBitableAccess(tenantToken, appToken, userOpenId) {
   const oid = String(userOpenId || '').trim();
-  if (!oid || !appToken) return false;
-  try {
-    await larkApiPost(tenantToken, '/drive/v1/permissions/' + encodeURIComponent(appToken) + '/members?type=bitable', {
-      member_type: 'openid',
-      member_id: oid,
-      perm: 'full_access'
-    });
-    return true;
-  } catch (e) {
-    return false;
+  const tok = String(appToken || '').trim();
+  if (!oid) return { ok: false, error: '缺少 Lark openId，請先 Lark 登入' };
+  if (!tok) return { ok: false, error: '缺少多維表格 app_token' };
+  const perms = ['full_access', 'edit'];
+  let lastErr = '';
+  for (let i = 0; i < perms.length; i++) {
+    try {
+      await larkApiPost(tenantToken, '/drive/v1/permissions/' + encodeURIComponent(tok) + '/members?type=bitable', {
+        member_type: 'openid',
+        member_id: oid,
+        perm: perms[i]
+      });
+      return { ok: true, perm: perms[i] };
+    } catch (e) {
+      lastErr = e.message || String(e);
+    }
   }
+  return { ok: false, error: lastErr || '授權失敗' };
+}
+
+function parseBitableAppTokenFromInput(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  const parsed = extractLarkUrlToken(s);
+  if (parsed && parsed.kind === 'base' && parsed.token) return parsed.token;
+  if (/^[A-Za-z0-9]+$/.test(s) && s.length > 10) return s;
+  return '';
 }
 
 async function createWikiBitableNode(accessToken, spaceId, parentNodeToken, appToken, title) {
@@ -459,7 +475,7 @@ async function copyArchiveTemplateToParent(tenantToken, parentWikiUrl, projectNa
 
   if (templateParsed && templateParsed.kind === 'base') {
     const newAppToken = await copyBitableAppPreferUser(tenantToken, wikiTok, templateParsed.token, title);
-    await grantUserBitableAccess(tenantToken, newAppToken, userOpenId);
+    const grantResult = await grantUserBitableAccess(tenantToken, newAppToken, userOpenId);
     const tableMap = await resolveArchiveTableMap(tenantToken, newAppToken);
     const baseAppUrl = buildBaseAppUrl(templateUrl, newAppToken);
     let wikiUrlOut = baseAppUrl;
@@ -487,7 +503,9 @@ async function copyArchiveTemplateToParent(tenantToken, parentWikiUrl, projectNa
       wikiPlaced: wikiPlaced,
       wikiPlaceError: wikiPlaceError,
       baseAppUrl: baseAppUrl,
-      wikiFolderUrl: parentWikiUrl
+      wikiFolderUrl: parentWikiUrl,
+      accessGranted: grantResult.ok,
+      accessGrantError: grantResult.ok ? '' : (grantResult.error || '')
     };
   }
 
@@ -1604,6 +1622,17 @@ export default async function handler(req, res) {
       } catch (e) {
         return res.status(200).json({ ok: false, spaceId: spaceId, usedUserToken: true, error: e.message || String(e) });
       }
+    }
+
+    if (action === 'grant-bitable-access' && req.method === 'POST') {
+      const body = req.body || {};
+      const appToken = parseBitableAppTokenFromInput(body.baseUrl || body.appToken || '');
+      const userOpenId = (body.userOpenId || '').trim();
+      if (!appToken) return res.status(400).json({ ok: false, error: '請提供 /base/ 連結或 app_token' });
+      if (!userOpenId) return res.status(400).json({ ok: false, error: '請先 Lark 登入（缺少 openId）' });
+      const token = await getToken();
+      const result = await grantUserBitableAccess(token, appToken, userOpenId);
+      return res.status(200).json(result);
     }
 
     if (action === 'archive-project' && req.method === 'POST') {

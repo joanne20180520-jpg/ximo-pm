@@ -778,6 +778,13 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
   <div class="fg"><label>知識庫存放位置連結</label><input type="url" id="ap-wiki-url" placeholder="https://ajpfe1xdus5o.jp.larksuite.com/wiki/space/7650032628065668632" oninput="refreshArchivePreview()">
     <div style="font-size:10px;color:var(--t3);margin-top:4px;line-height:1.5">須為 wiki/space/… 或 wiki/節點ID，不能是 /base/ 多維表格連結</div></div>
   <div id="ap-proj-name" style="font-size:11px;color:var(--t3)"></div>
+  <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+    <div style="font-size:11px;font-weight:600;margin-bottom:6px">封存表無法移動／無分享權限？</div>
+    <div class="fg" style="margin-bottom:8px"><label>貼封存表的 /base/ 連結</label>
+      <input type="url" id="ap-grant-base-url" placeholder="https://.../base/Sz7FbHVD3a..."></div>
+    <button type="button" class="bsm" onclick="grantArchiveBitableAccess()">用系統 API 授予我「可管理」</button>
+    <div id="ap-grant-status" style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.5"></div>
+  </div>
 </div><div class="ppf"><button class="bcan" onclick="cancelArchiveProject()">取消</button><button class="bpri" onclick="confirmArchiveProject()">確認封存</button></div></div></div>
 
 <!-- 修改支出明細 -->
@@ -2051,7 +2058,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615h';
+var APP_BUILD = '20260615j';
 var API = '/api/lark';
 
 function apiUrl(pathAndQuery) {
@@ -5298,6 +5305,32 @@ function openArchiveProjectPopup(projId, sel) {
   op('pp-archive-proj');
 }
 
+function grantArchiveBitableAccess() {
+  var u = getCurrentLoginUser();
+  if (!u || !u.openId) {
+    alert('請先 Lark 登入（需要 openId 才能授權）');
+    startBrowserLarkLogin();
+    return;
+  }
+  var baseUrl = (document.getElementById('ap-grant-base-url') && document.getElementById('ap-grant-base-url').value || '').trim();
+  if (!baseUrl) { alert('請貼上封存多維表格的 /base/ 連結'); return; }
+  var statusEl = document.getElementById('ap-grant-status');
+  if (statusEl) statusEl.textContent = '授權中…';
+  fetch(API + '?action=grant-bitable-access', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ baseUrl: baseUrl, userOpenId: u.openId })
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    if (res.ok) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--report)">已授予「可管理」權限（' + (res.perm || 'full_access') + '）。請關閉表格重新開啟，再試「移至知識庫」。</span>';
+    } else {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger)">授權失敗：' + escHtml(res.error || '未知錯誤') + '</span><br>請在 Lark 開發者後台為應用開通 drive 相關權限並發布。';
+    }
+  }).catch(function(err) {
+    if (statusEl) statusEl.textContent = '授權失敗：' + err.message;
+  });
+}
+
 function cancelArchiveProject() {
   archivingProjId = null;
   archivingProjStatusSel = null;
@@ -5361,6 +5394,8 @@ function confirmArchiveProject() {
         var msg = res.wikiNote || res.summary || '封存完成';
         if (!res.wikiPlaced && res.baseAppUrl) {
           msg += '\n\n資料位置：' + res.baseAppUrl;
+          var grantEl = document.getElementById('ap-grant-base-url');
+          if (grantEl) grantEl.value = res.baseAppUrl;
         }
         showUndoToast(res.wikiPlaced ? '標案已封存至知識庫' : '標案已封存（資料在雲端表格，請手動移入知識庫）');
         var openUrl = res.wikiPlaced ? (res.wikiUrl || url) : (res.baseAppUrl || res.wikiUrl || url);
