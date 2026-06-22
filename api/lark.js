@@ -130,6 +130,7 @@ function buildTables() {
 
 const TABLES = buildTables();
 const WIKI_ARCHIVE_TEMPLATE = (process.env.LARK_ARCHIVE_TEMPLATE || process.env.LARK_WIKI_ARCHIVE_TEMPLATE || '').trim();
+const ARCHIVE_OAUTH_SCOPES = 'wiki:wiki wiki:node:read bitable:app base:app:copy';
 
 const ARCHIVE_TABLE_KEYWORDS = {
   projects: ['標案', '專案', 'project'],
@@ -154,12 +155,12 @@ function formatArchiveCopyError(msg) {
     return '【失敗步驟】將複製的多維表格「直接掛入知識庫」（API: create node / move_docs_to_wiki）。'
       + ' 此步驟尚未寫入標案／任務資料。'
       + ' 原因：目前使用的 Lark 身分無法讀取您指定的知識庫空間。'
-      + ' 請依序確認：① Lark 開發者後台已開通並「發布」wiki:wiki、wiki:node:read、bitable:app；'
+      + ' 請依序確認：① Lark 開發者後台已開通並「發布」wiki:wiki、wiki:node:read、bitable:app、base:app:copy；'
       + ' ② 在系統內重新「Lark 登入」後再封存（使用您個人對知識庫的編輯權限，無須在知識庫加入應用）；'
       + ' 原始錯誤：' + s;
   }
   if (/wiki:wiki|wiki:node:read|wiki:wiki:readonly/i.test(s)) {
-    return s + '。請至 Lark 開發者後台 → 權限管理，開通 wiki:wiki、wiki:node:read、bitable:app 並發布應用後再封存。';
+    return s + '。請至 Lark 開發者後台 → 權限管理，開通 wiki:wiki、wiki:node:read、bitable:app、base:app:copy 並發布應用後再封存。';
   }
   if (/not found/i.test(s)) {
     return '找不到指定的知識庫頁面或多維表格範本。請確認：① Wiki 封存位置為知識庫首頁/目錄頁完整連結；② Vercel 的 LARK_ARCHIVE_TEMPLATE 為同一租戶內可開啟的 /base/ 範本連結。';
@@ -324,8 +325,27 @@ async function copyBitableAppRequireUser(userToken, appToken, name) {
     return await copyBitableApp(userTok, appToken, name);
   } catch (e) {
     const detail = e && e.message ? (' ' + e.message) : '';
-    throw new Error('無法以您的 Lark 身分複製封存範本（需 bitable:app）。請重新 Lark 登入後再封存。' + detail);
+    throw new Error('無法以您的 Lark 身分複製封存範本（需 bitable:app 或 base:app:copy）。請重新 Lark 登入後再封存。' + detail);
   }
+}
+
+function isBitableCopyScopeError(err) {
+  const msg = (err && err.message) || String(err || '');
+  return /scope|Access denied|bitable:app|base:app:copy/i.test(msg);
+}
+
+async function copyArchiveTemplateBitable(tenantToken, userToken, appToken, name) {
+  const userTok = String(userToken || '').trim();
+  if (userTok) {
+    try {
+      const copied = await copyBitableApp(userTok, appToken, name);
+      return { appToken: copied, copiedBy: 'user' };
+    } catch (e) {
+      if (!isBitableCopyScopeError(e)) throw e;
+    }
+  }
+  const copied = await copyBitableApp(tenantToken, appToken, name);
+  return { appToken: copied, copiedBy: 'tenant' };
 }
 
 async function grantUserBitableAccess(tenantToken, appToken, userOpenId) {
@@ -525,8 +545,11 @@ async function copyArchiveTemplateToParent(tenantToken, parentWikiUrl, projectNa
 
   if (templateParsed && templateParsed.kind === 'base') {
     if (!wikiTok) throw new Error('封存至知識庫必須先 Lark 登入（使用您個人 wiki 編輯權限，無需事後申請移動）');
-    const newAppToken = await copyBitableAppRequireUser(wikiTok, templateParsed.token, title);
-    await grantUserBitableAccess(tenantToken, newAppToken, userOpenId);
+    const copied = await copyArchiveTemplateBitable(tenantToken, wikiTok, templateParsed.token, title);
+    const newAppToken = copied.appToken;
+    if (copied.copiedBy === 'tenant') {
+      await grantUserBitableAccess(tenantToken, newAppToken, userOpenId);
+    }
     const tableMap = await resolveArchiveTableMap(tenantToken, newAppToken);
     const baseAppUrl = buildBaseAppUrl(templateUrl, newAppToken);
     const wikiUrlOut = await placeCopiedBitableInWiki(wikiTok, parent, newAppToken, title);
@@ -1521,7 +1544,7 @@ function buildAuthUrl(redirectUri) {
     app_id: APP_ID,
     redirect_uri: redirectUri,
     state: 'ximo_pm',
-    scope: 'wiki:wiki wiki:node:read bitable:app'
+    scope: ARCHIVE_OAUTH_SCOPES
   });
   return BASE_URL + '/authen/v1/index?' + q.toString();
 }

@@ -2051,7 +2051,8 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615k';
+var APP_BUILD = '20260615l';
+var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app', 'base:app:copy'];
 var API = '/api/lark';
 
 function apiUrl(pathAndQuery) {
@@ -2491,7 +2492,7 @@ function exchangeLarkAuthCode(appId, tt) {
     if (tt.requestAccess) {
       tt.requestAccess({
         appID: appId,
-        scopeList: ['wiki:wiki', 'wiki:node:read', 'bitable:app'],
+        scopeList: ARCHIVE_OAUTH_SCOPES,
         success: function(res) { onCode(res.code); },
         fail: function(err) {
           if (err && err.errno === 103) callRequestAuthCode();
@@ -5201,18 +5202,25 @@ function archiveErrorHint(errMsg) {
     return '\n\n【原因】Lark 只辨識了您的姓名，未取得 wiki API 授權碼。'
       + '\n【做法】點「Lark 登入」→ 同意授權 → 再封存。';
   }
+  if (/bitable:app|base:app:copy|Access denied/i.test(s)) {
+    return '\n\n【原因】Lark 登入授權缺少「複製多維表格」權限（base:app:copy）。'
+      + '\n【做法】'
+      + '\n1. Lark 開發者後台 → 權限管理 → 開通 base:app:copy 並「發布」'
+      + '\n2. 點「Lark 登入」重新授權（舊授權不會自動補上新權限）'
+      + '\n3. 再試封存';
+  }
   if (/掛入知識庫|wiki space permission|tenant needs read permission|move_docs_to_wiki/i.test(s)) {
     return '\n\n【失敗位置】無法「直接在知識庫建立封存頁面」（不是寫入標案資料失敗）。'
       + '\n【請依序檢查】'
       + '\n1. 先點「Lark 登入」並同意 wiki + 多維表格授權'
-      + '\n2. Lark 開發者後台 → 權限管理：wiki:wiki、wiki:node:read、bitable:app 已開通並「發布」'
+      + '\n2. Lark 開發者後台 → 權限管理：wiki:wiki、wiki:node:read、bitable:app、base:app:copy 已開通並「發布」'
       + '\n3. 確認您對目標知識庫有編輯權限';
   }
   if (/Wiki 封存位置須為|不是 \/base\/|知識庫存放位置連結無效/i.test(s)) {
     return '\n\n【連結格式】請貼 wiki/space/… 或 wiki/節點ID，例如：\nhttps://ajpfe1xdus5o.jp.larksuite.com/wiki/space/7650032628065668632';
   }
   if (/wiki:/i.test(s)) {
-    return '\n\n【請在 Lark 開發者後台開通並發布】\n· wiki:wiki\n· wiki:node:read\n· bitable:app\n路徑：應用 → 權限管理 → 搜尋 wiki / bitable';
+    return '\n\n【請在 Lark 開發者後台開通並發布】\n· wiki:wiki\n· wiki:node:read\n· bitable:app\n· base:app:copy\n路徑：應用 → 權限管理 → 搜尋 wiki / bitable / base';
   }
   if (/FieldNameNotFound/i.test(s)) {
     return '\n\n【常見原因】範本多維表格欄位與後台不一致。請從現行後台複製一份最新範本，更新 Vercel 的 LARK_ARCHIVE_TEMPLATE。';
