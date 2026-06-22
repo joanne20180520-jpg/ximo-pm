@@ -2536,8 +2536,7 @@ function renderTasks() {
     var wiId = wiIds[0] || null;
     var wi = wiId ? wiMap[wiId] : null;
     var projName = wi ? (wi.project || '其他') : '其他';
-    var timeProgress = calcTimeProgress(f['開始日期'], f['預計完成日']);
-    var progress = timeProgress !== null ? timeProgress : parseProgressVal(f['進度狀態'], f['進度數值']);
+    var progress = parseProgressVal(f['進度狀態'], f['進度數值']);
     if (!grouped[projName]) grouped[projName] = [];
     grouped[projName].push({
       id: rec.record_id,
@@ -2569,9 +2568,8 @@ function renderTasks() {
       html += '<button type="button" class="bdel" title="修改任務" style="margin-right:2px;right:28px" onclick="event.stopPropagation();openEditTask(\'' + task.id + '\')">✎</button>';
       html += '<button type="button" class="bdel" title="刪除任務" onclick="event.stopPropagation();deleteTask(\'' + task.id + '\',\'' + escAttr(task.name).replace(/'/g, "\\'") + '\')">×</button>';
       html += '<div class="tit"><div><div class="tn">' + task.name + '</div>';
-      html += '<div class="tm">' + task.wiName + ' · ' + task.assignee + ' · ' + task.progress + '%</div></div>';
+      html += '<div class="tm">' + task.wiName + ' · ' + task.assignee + '</div></div>';
       html += '<div class="tr2"><div class="td2">' + task.dueFull + '</div><div class="tds">' + task.remain + '</div></div></div>';
-      html += '<div class="tpb"><div class="tpf" style="width:' + task.progress + '%;background:' + color + '"></div></div>';
       html += '</div>';
     });
   }
@@ -2631,8 +2629,7 @@ function renderTeamPanel() {
     var wiIds = getLinkIds(f['所屬工作項目']);
     var wi = wiIds[0] ? wiMap[wiIds[0]] : null;
     var projName = wi ? (wi.project || '其他') : '其他';
-    var timeProgress3 = calcTimeProgress(f['開始日期'], f['預計完成日']);
-    var progress = timeProgress3 !== null ? timeProgress3 : parseProgressVal(f['進度狀態'], f['進度數值']);
+    var progress = parseProgressVal(f['進度狀態'], f['進度數值']);
     if (!isTodayTeamTask(f['預計完成日'], progress)) return;
     if (!byPerson[assignee]) byPerson[assignee] = [];
     byPerson[assignee].push({
@@ -2666,7 +2663,7 @@ function renderTeamPanel() {
     tasks.forEach(function(task) {
       html += '<div class="rt-task" onclick="openTaskDetail(\'' + task.id + '\')">';
       html += '<div class="rt-name">' + escHtml(task.name) + '</div>';
-      html += '<div class="rt-meta"><span class="jpt" style="background:' + task.color + ';font-size:8px;padding:1px 5px">' + escHtml(task.projName) + '</span> · ' + task.progress + '%</div>';
+      html += '<div class="rt-meta"><span class="jpt" style="background:' + task.color + ';font-size:8px;padding:1px 5px">' + escHtml(task.projName) + '</span></div>';
       html += '<div class="rt-due">' + task.dueFull + (task.remain ? ' · ' + task.remain : '') + '</div>';
       html += '</div>';
     });
