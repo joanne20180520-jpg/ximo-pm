@@ -130,7 +130,7 @@ function buildTables() {
 
 const TABLES = buildTables();
 const WIKI_ARCHIVE_TEMPLATE = (process.env.LARK_ARCHIVE_TEMPLATE || process.env.LARK_WIKI_ARCHIVE_TEMPLATE || '').trim();
-const ARCHIVE_OAUTH_SCOPES = 'wiki:wiki wiki:node:read bitable:app base:app:copy';
+const ARCHIVE_OAUTH_SCOPES = 'wiki:wiki wiki:node:read bitable:app';
 
 const ARCHIVE_TABLE_KEYWORDS = {
   projects: ['標案', '專案', 'project'],
@@ -155,12 +155,12 @@ function formatArchiveCopyError(msg) {
     return '【失敗步驟】將複製的多維表格「直接掛入知識庫」（API: create node / move_docs_to_wiki）。'
       + ' 此步驟尚未寫入標案／任務資料。'
       + ' 原因：目前使用的 Lark 身分無法讀取您指定的知識庫空間。'
-      + ' 請依序確認：① Lark 開發者後台已開通並「發布」wiki:wiki、wiki:node:read、bitable:app、base:app:copy；'
+      + ' 請依序確認：① Lark 開發者後台已開通並「發布」wiki:wiki、wiki:node:read、bitable:app；'
       + ' ② 在系統內重新「Lark 登入」後再封存（使用您個人對知識庫的編輯權限，無須在知識庫加入應用）；'
       + ' 原始錯誤：' + s;
   }
   if (/wiki:wiki|wiki:node:read|wiki:wiki:readonly/i.test(s)) {
-    return s + '。請至 Lark 開發者後台 → 權限管理，開通 wiki:wiki、wiki:node:read、bitable:app、base:app:copy 並發布應用後再封存。';
+    return s + '。請至 Lark 開發者後台 → 權限管理，開通 wiki:wiki、wiki:node:read、bitable:app 並發布應用後再封存。';
   }
   if (/not found/i.test(s)) {
     return '找不到指定的知識庫頁面或多維表格範本。請確認：① Wiki 封存位置為知識庫首頁/目錄頁完整連結；② Vercel 的 LARK_ARCHIVE_TEMPLATE 為同一租戶內可開啟的 /base/ 範本連結。';
