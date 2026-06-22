@@ -254,14 +254,33 @@ async function copyBitableApp(accessToken, appToken, name) {
 }
 
 async function createWikiBitableNode(accessToken, spaceId, parentNodeToken, appToken, title) {
-  const data = await larkApiPost(accessToken, '/wiki/v2/spaces/' + encodeURIComponent(spaceId) + '/nodes', {
+  const body = {
     obj_type: 'bitable',
     obj_token: appToken,
-    parent_node_token: parentNodeToken,
     node_type: 'origin',
     title: title || '封存標案'
-  });
+  };
+  const parent = String(parentNodeToken || '').trim();
+  if (parent) body.parent_node_token = parent;
+  const data = await larkApiPost(accessToken, '/wiki/v2/spaces/' + encodeURIComponent(spaceId) + '/nodes', body);
   return data.node;
+}
+
+async function resolveWikiParentTarget(accessToken, wikiUrl) {
+  const parsed = extractLarkUrlToken(wikiUrl);
+  if (!parsed || !parsed.token) throw new Error('知識庫存放位置連結無效');
+
+  if (parsed.kind === 'wiki_space') {
+    return { space_id: parsed.token, node_token: '', wikiUrl: wikiUrl };
+  }
+
+  if (parsed.kind === 'wiki') {
+    const node = await getWikiNode(accessToken, parsed.token, 'Wiki 封存位置');
+    if (!node) throw new Error('找不到知識庫存放位置');
+    return { space_id: node.space_id, node_token: node.node_token, node: node, wikiUrl: wikiUrl };
+  }
+
+  throw new Error('Wiki 封存位置須為 wiki/space/… 或 wiki/節點ID 連結');
 }
 
 async function copyArchiveTemplateToParent(accessToken, parentWikiUrl, projectName) {
@@ -270,10 +289,7 @@ async function copyArchiveTemplateToParent(accessToken, parentWikiUrl, projectNa
     throw new Error('尚未設定封存範本（LARK_ARCHIVE_TEMPLATE）');
   }
 
-  const parentToken = getWikiTokenFromUrl(parentWikiUrl);
-  if (!parentToken) throw new Error('知識庫存放位置連結無效');
-  const parentNode = await getWikiNode(accessToken, parentToken, 'Wiki 封存位置');
-  if (!parentNode) throw new Error('找不到知識庫存放位置');
+  const parent = await resolveWikiParentTarget(accessToken, parentWikiUrl);
 
   const templateParsed = extractLarkUrlToken(templateUrl);
   const title = projectName || '封存標案';
@@ -283,8 +299,8 @@ async function copyArchiveTemplateToParent(accessToken, parentWikiUrl, projectNa
     const tableMap = await resolveArchiveTableMap(accessToken, newAppToken);
     let wikiUrl = '';
     try {
-      const node = await createWikiBitableNode(accessToken, parentNode.space_id, parentNode.node_token, newAppToken, title);
-      wikiUrl = buildWikiNodeUrl(parentWikiUrl, node.node_token);
+      const node = await createWikiBitableNode(accessToken, parent.space_id, parent.node_token, newAppToken, title);
+      wikiUrl = buildWikiNodeUrl(parent.wikiUrl, node.node_token);
     } catch (e) {
       wikiUrl = buildBaseAppUrl(templateUrl, newAppToken);
     }
@@ -296,11 +312,9 @@ async function copyArchiveTemplateToParent(accessToken, parentWikiUrl, projectNa
   const templateNode = await getWikiNode(accessToken, templateToken, '封存範本');
   if (!templateNode) throw new Error('找不到封存範本');
 
-  const copied = await copyWikiNode(accessToken, templateNode.space_id, templateNode.node_token, {
-    targetParentToken: parentNode.node_token,
-    targetSpaceId: parentNode.space_id,
-    title: title
-  });
+  const copyOpts = { targetSpaceId: parent.space_id, title: title };
+  if (parent.node_token) copyOpts.targetParentToken = parent.node_token;
+  const copied = await copyWikiNode(accessToken, templateNode.space_id, templateNode.node_token, copyOpts);
   if (!copied) throw new Error('複製封存範本失敗');
 
   return resolveBitableFromWikiNode(accessToken, copied, parentWikiUrl);
@@ -334,8 +348,13 @@ function extractLarkUrlToken(url) {
     const u = new URL(String(url || '').trim());
     const parts = u.pathname.split('/').filter(Boolean);
     for (let i = 0; i < parts.length; i++) {
+      if (parts[i] === 'wiki' && parts[i + 1] === 'space' && parts[i + 2]) {
+        return { kind: 'wiki_space', token: parts[i + 2] };
+      }
       if (parts[i] === 'wiki' || parts[i] === 'base' || parts[i] === 'docx') {
-        return { kind: parts[i], token: parts[i + 1] || '' };
+        const next = parts[i + 1] || '';
+        if (parts[i] === 'wiki' && next === 'space') continue;
+        return { kind: parts[i], token: next };
       }
     }
     const last = parts[parts.length - 1];
@@ -433,6 +452,10 @@ async function resolveBitableAppTokenFromUrl(accessToken, url) {
   if (!parsed || !parsed.token) throw new Error('無法從連結解析 token');
 
   if (parsed.kind === 'base') return parsed.token;
+
+  if (parsed.kind === 'wiki_space') {
+    throw new Error('知識庫空間連結尚無表格，將從範本複製');
+  }
 
   if (parsed.kind === 'docx') {
     const app = await findBitableAppTokenInDocx(accessToken, parsed.token);
