@@ -2067,6 +2067,7 @@ var membersData = [];
 var membersMap = {};
 var currentLoginUser = null;
 var loginUserReady = false;
+var loginResolving = null;
 var currentTaskId = null;
 var journalViewDate = new Date(); journalViewDate.setHours(0,0,0,0);
 var dailyLogDate = new Date(); dailyLogDate.setHours(0,0,0,0);
@@ -2160,22 +2161,103 @@ function loginWithCode(code, redirectUri) {
     return res.user;
   });
 }
-function tryLarkClientAuth(appId) {
+function waitForLarkBridge(timeoutMs) {
   return new Promise(function(resolve) {
-    if (!window.h5sdk) { resolve(null); return; }
-    window.h5sdk.ready(function() {
-      var tt = window.tt;
-      if (!tt || !tt.requestAuthCode) { resolve(null); return; }
+    var start = Date.now();
+    function check() {
+      if (window.tt || window.h5sdk) { resolve(true); return; }
+      if (Date.now() - start >= timeoutMs) { resolve(false); return; }
+      setTimeout(check, 200);
+    }
+    check();
+  });
+}
+function whenLarkReady() {
+  return new Promise(function(resolve) {
+    var done = false;
+    function finish(tt) {
+      if (done) return;
+      done = true;
+      resolve(tt || window.tt || null);
+    }
+    if (window.h5sdk && window.h5sdk.ready) {
+      window.h5sdk.ready(function() { finish(window.tt); });
+      setTimeout(function() { finish(window.tt); }, 12000);
+    } else if (window.tt) {
+      finish(window.tt);
+    } else {
+      finish(null);
+    }
+  });
+}
+function mapLarkClientUser(res) {
+  var u = (res && res.userInfo) || res || {};
+  return {
+    name: u.nickName || u.name || '',
+    enName: u.en_name || u.enName || '',
+    openId: u.open_id || u.openId || '',
+    userId: u.user_id || u.userId || ''
+  };
+}
+function exchangeLarkAuthCode(appId, tt) {
+  return new Promise(function(resolve) {
+    if (!tt) { resolve(null); return; }
+    var redirect = window.location.origin + window.location.pathname;
+    function onCode(code) {
+      if (!code) { resolve(null); return; }
+      loginWithCode(code, redirect).then(resolve).catch(function() {
+        loginWithCode(code, '').then(resolve).catch(function() { resolve(null); });
+      });
+    }
+    function callRequestAuthCode() {
+      if (!tt.requestAuthCode) { resolve(null); return; }
       tt.requestAuthCode({
         appId: appId,
-        success: function(res) {
-          var redirect = window.location.origin + window.location.pathname;
-          loginWithCode(res.code, redirect).then(resolve).catch(function() { resolve(null); });
-        },
+        success: function(res) { onCode(res.code); },
         fail: function() { resolve(null); }
       });
+    }
+    if (tt.requestAccess) {
+      tt.requestAccess({
+        appID: appId,
+        scopeList: [],
+        success: function(res) { onCode(res.code); },
+        fail: function(err) {
+          if (err && err.errno === 103) callRequestAuthCode();
+          else callRequestAuthCode();
+        }
+      });
+    } else {
+      callRequestAuthCode();
+    }
+  });
+}
+function tryLarkGetUserInfo(tt) {
+  return new Promise(function(resolve) {
+    if (!tt || !tt.getUserInfo) { resolve(null); return; }
+    tt.getUserInfo({
+      withCredentials: true,
+      success: function(res) {
+        var user = mapLarkClientUser(res);
+        if (user.name || user.openId) {
+          storeLoginUser(user);
+          resolve(user);
+        } else resolve(null);
+      },
+      fail: function() { resolve(null); }
     });
-    setTimeout(function() { resolve(null); }, 8000);
+  });
+}
+function tryLarkClientAuth(appId) {
+  return waitForLarkBridge(6000).then(function(found) {
+    if (!found) return null;
+    return whenLarkReady();
+  }).then(function(tt) {
+    if (!tt) return null;
+    return exchangeLarkAuthCode(appId, tt);
+  }).then(function(user) {
+    if (user) return user;
+    return whenLarkReady().then(function(tt) { return tryLarkGetUserInfo(tt); });
   });
 }
 function startBrowserLarkLogin() {
@@ -2188,38 +2270,45 @@ function startBrowserLarkLogin() {
     }).catch(function(err) { alert('登入失敗：' + err.message); });
 }
 function resolveLoginUser() {
-  var params = new URLSearchParams(window.location.search);
-  var code = params.get('code');
-  if (code) {
-    var redirect = window.location.origin + window.location.pathname;
-    return loginWithCode(code, redirect).then(function(user) {
-      if (window.history.replaceState) window.history.replaceState({}, '', redirect);
-      loginUserReady = true;
-      return user;
-    }).catch(function(err) {
-      console.warn('Lark login', err);
-      loginUserReady = true;
-      return null;
-    });
-  }
-  var cached = getCurrentLoginUser();
-  if (cached) {
-    loginUserReady = true;
-    return Promise.resolve(cached);
-  }
-  return fetch(API + '?action=appid').then(function(r) { return r.json(); }).then(function(cfg) {
-    if (!cfg.appId) {
-      loginUserReady = true;
-      return null;
+  if (loginUserReady && getCurrentLoginUser()) return Promise.resolve(getCurrentLoginUser());
+  if (loginResolving) return loginResolving;
+
+  loginResolving = (function() {
+    var params = new URLSearchParams(window.location.search);
+    var code = params.get('code');
+    if (code) {
+      var redirect = window.location.origin + window.location.pathname;
+      return loginWithCode(code, redirect).then(function(user) {
+        if (window.history.replaceState) window.history.replaceState({}, '', redirect);
+        loginUserReady = true;
+        return user;
+      }).catch(function(err) {
+        console.warn('Lark login', err);
+        loginUserReady = true;
+        return null;
+      });
     }
-    return tryLarkClientAuth(cfg.appId).then(function(user) {
+    var cached = getCurrentLoginUser();
+    if (cached) {
       loginUserReady = true;
-      return user;
+      return Promise.resolve(cached);
+    }
+    return fetch(API + '?action=appid').then(function(r) { return r.json(); }).then(function(cfg) {
+      if (!cfg.appId) {
+        loginUserReady = true;
+        return null;
+      }
+      return tryLarkClientAuth(cfg.appId).then(function(user) {
+        loginUserReady = true;
+        return user;
+      });
+    }).catch(function() {
+      loginUserReady = true;
+      return null;
     });
-  }).catch(function() {
-    loginUserReady = true;
-    return null;
-  });
+  })();
+
+  return loginResolving.finally(function() { loginResolving = null; });
 }
 function updateTodoLoginLabel() {
   var el = document.getElementById('todo-user-label');
@@ -2478,6 +2567,11 @@ function loadExtraData() {
 function loadData() {
   document.getElementById('pl-projects').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
   document.getElementById('task-list-body').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
+
+  resolveLoginUser().then(function(user) {
+    updateTodoLoginLabel();
+    if (user) renderTeamPanel();
+  });
 
   Promise.all([
     fetch(API + '?table=projects').then(function(r){return r.json();}),
@@ -2867,7 +2961,11 @@ function renderTeamPanel() {
   var buckets = buildTodoTaskItems(todoReminderScope);
   var html = '';
   if (todoReminderScope === 'mine' && !getCurrentLoginUser()) {
-    html += '<div class="todo-login-banner">「我的」依 Lark 登入帳號篩選任務。請在 Lark 內開啟此頁，或 <button type="button" class="todo-login-link" onclick="startBrowserLarkLogin()">點此 Lark 登入</button></div>';
+    if (loginResolving) {
+      html += '<div class="todo-login-banner">正在取得 Lark 登入狀態…</div>';
+    } else {
+      html += '<div class="todo-login-banner">「我的」依 Lark 登入帳號篩選任務。若在 Lark 內仍無法自動登入，請 <button type="button" class="todo-login-link" onclick="startBrowserLarkLogin()">點此 Lark 登入</button></div>';
+    }
   }
   html += renderTodoSection('已逾期', 'overdue', buckets.overdue, '無逾期任務');
   html += renderTodoSection('今日到期', 'today', buckets.today, '今日無到期任務');

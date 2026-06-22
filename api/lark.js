@@ -532,23 +532,33 @@ async function sendWebhook(text) {
 }
 
 async function loginWithOAuthCode(code, redirectUri) {
-  const body = {
+  const baseBody = {
     grant_type: 'authorization_code',
     client_id: APP_ID,
     client_secret: APP_SECRET,
     code: code
   };
-  if (redirectUri) body.redirect_uri = redirectUri;
+  const bodies = [];
+  if (redirectUri) bodies.push(Object.assign({}, baseBody, { redirect_uri: redirectUri }));
+  bodies.push(baseBody);
 
-  let tokenData = null;
-  const v2Res = await fetch(BASE_URL + '/authen/v2/oauth/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json; charset=utf-8' },
-    body: JSON.stringify(body)
-  });
-  tokenData = await v2Res.json();
+  let accessToken = null;
+  let lastErr = '';
+  for (let i = 0; i < bodies.length; i++) {
+    const v2Res = await fetch(BASE_URL + '/authen/v2/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify(bodies[i])
+    });
+    const tokenData = await v2Res.json();
+    if (tokenData.code === 0 && tokenData.data && tokenData.data.access_token) {
+      accessToken = tokenData.data.access_token;
+      break;
+    }
+    lastErr = tokenData.msg || tokenData.message || '';
+  }
 
-  if (tokenData.code !== 0) {
+  if (!accessToken) {
     const tenant = await getToken();
     const v1Res = await fetch(BASE_URL + '/authen/v1/access_token', {
       method: 'POST',
@@ -558,12 +568,13 @@ async function loginWithOAuthCode(code, redirectUri) {
       },
       body: JSON.stringify({ grant_type: 'authorization_code', code: code })
     });
-    tokenData = await v1Res.json();
+    const tokenData = await v1Res.json();
+    accessToken = tokenData.data && tokenData.data.access_token;
+    if (!accessToken) lastErr = tokenData.msg || tokenData.message || lastErr;
   }
 
-  const accessToken = tokenData.data && tokenData.data.access_token;
   if (!accessToken) {
-    throw new Error(tokenData.msg || tokenData.message || '無法取得 user_access_token');
+    throw new Error(lastErr || '無法取得 user_access_token');
   }
 
   const infoRes = await fetch(BASE_URL + '/authen/v1/user_info', {
