@@ -304,7 +304,8 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .dt th{padding:7px 10px;font-size:10px;font-weight:600;color:var(--t3);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
 .dt td{padding:7px 10px;font-size:11px;border-bottom:1px solid var(--border)}
 .dt tr:last-child td{border-bottom:none}
-.dt tr:hover td{background:var(--sf2)}
+.dt tr.erow{cursor:pointer}
+.dt tr.erow:hover td{background:var(--sf2)}
 .gr td{background:var(--sf2);font-weight:600;font-size:11px;color:var(--t2);padding:5px 10px}
 .st{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500}
 .std{background:#e6f4ee;color:#1a7a45}
@@ -677,6 +678,18 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
   <div class="fg"><label>合約結束日</label><input type="date" id="ep-end"></div>
   <div class="fg"><label>合約金額</label><input type="text" id="ep-amount" placeholder="NT$0"></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-proj')">取消</button><button class="bpri" onclick="saveEditProject()">儲存</button></div></div></div>
+
+<!-- 修改支出明細 -->
+<div class="po" id="pp-edit-exp"><div class="pp"><div class="pph"><h3>修改支出明細</h3><button class="ppc" onclick="cl('pp-edit-exp')">✕</button></div><div class="ppb">
+  <div class="fg"><label>支出細項</label><input type="text" id="ee-name"></div>
+  <div class="fg"><label>所屬標案</label><select id="ee-proj" onchange="onEditExpenseProjChange()"></select></div>
+  <div class="fg"><label>所屬工作項目</label><select id="ee-wi"></select></div>
+  <div class="fg"><label>負責人</label><select id="ee-assignee" data-members></select></div>
+  <div class="fg"><label>日期</label><input type="date" id="ee-date"></div>
+  <div class="fg"><label>實際金額</label><input type="text" placeholder="NT$0" id="ee-actual" oninput="calcEditExpense()"></div>
+  <div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ee-untax" readonly style="background:#f0f0f0;color:var(--t3)"></div>
+  <div class="fg"><label>狀態</label><select id="ee-status"><option value="未合銷">待核銷</option><option value="已合銷">已核銷</option></select></div>
+</div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-exp')">取消</button><button class="bpri" onclick="saveEditExpense()">儲存</button></div></div></div>
 
 <!-- 確認對話框 -->
 <div id="confirm-overlay" class="confirm-overlay" style="display:none">
@@ -1568,8 +1581,25 @@ function saveProjectImport() {
   });
 }
 function calcE(){
-  var v=parseInt(document.getElementById('aa').value.replace(/\D/g,''))||0;
-  document.getElementById('ua').value=v?'NT$'+Math.round(v/1.05).toLocaleString():'';
+  var el = document.getElementById('aa');
+  var ua = document.getElementById('ua');
+  if (!el || !ua) return;
+  var v=parseInt(el.value.replace(/\D/g,''))||0;
+  ua.value=v?'NT$'+Math.round(v/1.05).toLocaleString():'';
+}
+function calcEditExpense(){
+  var el = document.getElementById('ee-actual');
+  var ua = document.getElementById('ee-untax');
+  if (!el || !ua) return;
+  var v=parseInt(el.value.replace(/\D/g,''))||0;
+  ua.value=v?'NT$'+Math.round(v/1.05).toLocaleString():'';
+}
+function getExpenseProjIds(f) {
+  if (!f) return [];
+  return getLinkIds(f['所數標案'] || f['所屬標案']);
+}
+function setExpenseProjField(fields, projId) {
+  if (projId) fields['所數標案'] = [projId];
 }
 function adj(btn,d){var s=btn.parentElement.querySelector('span');s.textContent=Math.max(1,parseInt(s.textContent)+d);}
 function addS(){
@@ -2315,11 +2345,12 @@ function renderExpenses() {
     var wiIds = getLinkIds(f['所屬工作項目']);
     var wiId = wiIds[0] || null;
     var wi = wiId ? wiMap[wiId] : null;
-    var projName = resolveProjectName(f['所屬標案']) || (wi ? wi.project : '其他');
+    var projName = resolveProjectName(f['所數標案'] || f['所屬標案']) || (wi ? wi.project : '其他');
     if (!byProject[projName]) byProject[projName] = [];
     var amount = parseFloat(f['實際金額']) || 0;
     var untaxVal = parseFloat(f['未稅金額(X)'] || f['未稅金額']) || Math.round(amount / 1.05);
     byProject[projName].push({
+      id: rec.record_id,
       name: f['支出細項'] || '',
       assignee: personName(f['負責人']),
       wiName: wi ? wi.name : '',
@@ -2345,7 +2376,7 @@ function renderExpenses() {
       byAssignee[aname].forEach(function(item) {
         var stClass = (item.status === '已合銷' || item.status === '已核銷') ? 'std' : 'stp';
         var stLabel = (item.status === '已合銷' || item.status === '已核銷') ? '已核銷' : '待核銷';
-        rows += '<tr><td>'+item.name+'</td><td>'+aname+'</td><td>'+item.wiName+'</td>'
+        rows += '<tr class="erow" onclick="openEditExpense(\'' + item.id + '\')" title="點擊編輯"><td>'+item.name+'</td><td>'+aname+'</td><td>'+item.wiName+'</td>'
           +'<td>'+item.date+'</td>'
           +'<td style="font-weight:600">'+ntf(item.actual)+'</td>'
           +'<td>'+ntf(item.untax)+'</td>'
@@ -2912,7 +2943,7 @@ function confirmTaskReport() {
     journalFields['備註'] = baseNote ? (baseNote + '\n' + noteLine) : ('【' + (catLabels[category] || '進行中') + '】\n' + noteLine);
   }
 
-  var pid = getProjectRecordId(ctx.projName);
+  var pid = findProjectIdByName(ctx.projName);
   if (pid) {
     var projIds = getJournalProjIds(existingJournal).slice();
     if (projIds.indexOf(pid) < 0) projIds.push(pid);
@@ -3463,7 +3494,7 @@ function saveDailyJournal() {
   var projIds = [];
   var allItems = collectDailyLogRows();
   allItems.forEach(function(item) {
-    var pid = getProjectRecordId(item.projName);
+    var pid = findProjectIdByName(item.projName);
     if (pid && projIds.indexOf(pid) < 0) projIds.push(pid);
   });
 
@@ -4116,6 +4147,85 @@ function apiDelete(table, recordId) {
 var editingTaskId = null;
 var editingWiId = null;
 var editingProjId = null;
+var editingExpenseId = null;
+
+function openEditExpense(expId) {
+  var rec = expensesData.find(function(r) { return r.record_id === expId; });
+  if (!rec) return;
+  editingExpenseId = expId;
+  var f = rec.fields || {};
+  refreshFormSelects();
+  document.getElementById('ee-name').value = f['支出細項'] || '';
+  var projIds = getExpenseProjIds(f);
+  var projSel = document.getElementById('ee-proj');
+  if (projSel && projIds[0]) projSel.value = projIds[0];
+  fillEditExpenseWorkitems(projIds[0] || '');
+  var wiIds = getLinkIds(f['所屬工作項目']);
+  var wiSel = document.getElementById('ee-wi');
+  if (wiSel && wiIds[0]) wiSel.value = wiIds[0];
+  var assigneeSel = document.getElementById('ee-assignee');
+  var assigneeName = personName(f['負責人']);
+  if (assigneeSel) {
+    for (var i = 0; i < assigneeSel.options.length; i++) {
+      if (assigneeSel.options[i].text === assigneeName) { assigneeSel.selectedIndex = i; break; }
+    }
+  }
+  var dateEl = document.getElementById('ee-date');
+  if (dateEl) dateEl.value = f['日期'] ? tsToDateInput(f['日期']) : '';
+  var actual = parseFloat(f['實際金額']) || 0;
+  var actualEl = document.getElementById('ee-actual');
+  if (actualEl) actualEl.value = actual ? 'NT$' + Math.round(actual).toLocaleString() : '';
+  calcEditExpense();
+  var status = f['狀態'] || '未合銷';
+  var statusSel = document.getElementById('ee-status');
+  if (statusSel) {
+    var normalized = (status === '已核銷' || status === '已合銷') ? '已合銷' : '未合銷';
+    statusSel.value = normalized;
+  }
+  op('pp-edit-exp');
+}
+
+function saveEditExpense() {
+  if (!editingExpenseId) return;
+  var name = document.getElementById('ee-name').value.trim();
+  var projId = document.getElementById('ee-proj').value;
+  var wiId = document.getElementById('ee-wi').value;
+  var assignee = document.getElementById('ee-assignee').value;
+  var date = document.getElementById('ee-date').value;
+  var actual = parseMoney(document.getElementById('ee-actual').value);
+  var status = document.getElementById('ee-status').value;
+  if (!name) { alert('請填寫支出細項'); return; }
+  if (!projId) { alert('請選擇所屬標案'); return; }
+  if (!wiId) { alert('請選擇工作項目'); return; }
+
+  var rec = expensesData.find(function(r) { return r.record_id === editingExpenseId; });
+  var oldFields = rec ? JSON.parse(JSON.stringify(rec.fields || {})) : null;
+  var fields = {
+    '支出細項': name,
+    '所屬工作項目': [wiId],
+    '狀態': status
+  };
+  setExpenseProjField(fields, projId);
+  if (actual) fields['實際金額'] = actual;
+  if (date) fields['日期'] = dateInputToTs(date);
+  var person = larkPerson(assignee);
+  if (person) fields['負責人'] = person;
+
+  showConfirm({
+    type: 'edit',
+    title: '確認修改支出',
+    body: '確定要儲存這筆修改嗎？<br><span class="confirm-name">「' + name + '」</span>',
+    okText: '儲存',
+    onOk: function() {
+      if (oldFields) undoStack.push({ type: 'update', table: 'expenses', recordId: editingExpenseId, data: oldFields });
+      apiPut('expenses', editingExpenseId, fields).then(function() {
+        cl('pp-edit-exp');
+        loadData();
+        showUndoToast('支出明細已修改');
+      }).catch(function(err) { alert('修改失敗：' + err.message); });
+    }
+  });
+}
 
 function openEditTask(taskId) {
   var rec = tasksData.find(function(r){ return r.record_id === taskId; });
@@ -4401,8 +4511,8 @@ function preparePopup(id) {
   }
 }
 
-function fillExpenseWorkitems(projId) {
-  var sel = document.getElementById('ex-wi');
+function fillExpenseWorkitems(projId, targetId) {
+  var sel = document.getElementById(targetId || 'ex-wi');
   if (!sel) return;
   var items = [];
   if (projId) {
@@ -4417,9 +4527,18 @@ function fillExpenseWorkitems(projId) {
   );
 }
 
+function fillEditExpenseWorkitems(projId) {
+  fillExpenseWorkitems(projId, 'ee-wi');
+}
+
 function onExpenseProjChange() {
   var projSel = document.getElementById('ex-proj');
-  fillExpenseWorkitems(projSel ? projSel.value : '');
+  fillExpenseWorkitems(projSel ? projSel.value : '', 'ex-wi');
+}
+
+function onEditExpenseProjChange() {
+  var projSel = document.getElementById('ee-proj');
+  fillEditExpenseWorkitems(projSel ? projSel.value : '');
 }
 
 function refreshFormSelects() {
@@ -4458,14 +4577,18 @@ function refreshFormSelects() {
       );
     }
   });
-  var exProj = document.getElementById('ex-proj');
-  if (exProj) {
-    fillSelectOptions(exProj,
+  ['ex-proj', 'ee-proj'].forEach(function(id) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    fillSelectOptions(sel,
       projectsData.map(function(p){ return p.fields['標案名稱'] || '未命名'; }),
       projectsData.map(function(p){ return p.record_id; })
     );
-    fillExpenseWorkitems(exProj.value || (projectsData[0] && projectsData[0].record_id) || '');
-  }
+  });
+  var exProj = document.getElementById('ex-proj');
+  if (exProj) fillExpenseWorkitems(exProj.value || (projectsData[0] && projectsData[0].record_id) || '', 'ex-wi');
+  var eeProj = document.getElementById('ee-proj');
+  if (eeProj && eeProj.options.length) fillEditExpenseWorkitems(eeProj.value || eeProj.options[0].value);
   var statusSel = document.getElementById('nt-status');
   if (statusSel) {
     fillSelectOptions(statusSel, PROGRESS_OPTIONS);
@@ -4577,9 +4700,9 @@ function saveExpense() {
 
   var fields = {
     '支出細項': name,
-    '所屬標案': [projId],
     '所屬工作項目': [wiId]
   };
+  setExpenseProjField(fields, projId);
   if (est) fields['預估花費'] = est;
   if (actual) fields['實際金額'] = actual;
   if (date) fields['日期'] = dateInputToTs(date);
