@@ -3602,13 +3602,6 @@ function saveDailyJournal() {
   });
 }
 
-function setJournalView(mode, btn) {
-  journalViewMode = mode;
-  document.querySelectorAll('#journal-page-tabs .jvbtn').forEach(function(b) { b.classList.remove('active'); });
-  if (btn) btn.classList.add('active');
-  renderJournalPage();
-}
-
 function reloadJournal() {
   return fetch(API + '?table=journal').then(function(r) { return r.json(); })
     .then(function(data) {
@@ -3921,15 +3914,86 @@ function getTodayStartMs() {
 }
 
 function getTodayJournalEntries() {
-  var start = getTodayStartMs();
-  var end = start + 86400000;
+  return getJournalEntriesForDay(getTodayStartMs());
+}
+
+function getJournalEntriesForDay(dayStart) {
+  var end = dayStart + 86400000;
   return journalData.filter(function(rec) {
     var ts = journalTs(rec);
-    return ts && ts >= start && ts < end;
+    return ts && ts >= dayStart && ts < end;
   });
 }
 
-function collectJournalPersonData(rec, personName) {
+function getLatestJournalDayStart() {
+  var items = getJournalItemsInRange(90);
+  if (!items.length) return null;
+  var ts = journalTs(items[0]);
+  if (!ts) return null;
+  var d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function getJournalDisplayContext() {
+  var todayStart = getTodayStartMs();
+  var today = new Date();
+  var todayLabel = '今日 ' + (today.getMonth() + 1) + '/' + today.getDate() + '（' + weekdayLabel(today) + '）';
+  if (getTodayJournalEntries().length) {
+    return { dayStart: todayStart, dateLabel: todayLabel, isToday: true };
+  }
+  var latestStart = getLatestJournalDayStart();
+  if (!latestStart) {
+    return { dayStart: todayStart, dateLabel: todayLabel, isToday: true, noDataAtAll: true };
+  }
+  var d = new Date(latestStart);
+  return {
+    dayStart: latestStart,
+    dateLabel: '最近回報 ' + (d.getMonth() + 1) + '/' + d.getDate() + '（' + weekdayLabel(d) + '）· 今日尚無新回報',
+    isToday: false
+  };
+}
+
+function findDailyJournalRecords(dayStart, authorName) {
+  var dayEnd = dayStart + 86400000;
+  return journalData.filter(function(rec) {
+    var ts = journalTs(rec);
+    if (!ts || ts < dayStart || ts >= dayEnd) return false;
+    if (!authorName || authorName === '（未指定）') return true;
+    return journalPersonName(rec) === authorName;
+  });
+}
+
+function mergePersonJournalRecords(recs) {
+  if (!recs || !recs.length) return null;
+  if (recs.length === 1) return recs[0];
+  var sorted = recs.slice().sort(function(a, b) { return (journalTs(b) || 0) - (journalTs(a) || 0); });
+  var base = sorted[0];
+  var fields = {};
+  ['進行中任務', '已完成今日任務', '卡關任務', '明日預計任務'].forEach(function(key) {
+    var ids = [];
+    recs.forEach(function(rec) {
+      getLinkIds(rec.fields[key]).forEach(function(id) {
+        if (ids.indexOf(id) < 0) ids.push(id);
+      });
+    });
+    fields[key] = ids;
+  });
+  var reasonById = {};
+  var legacy = '';
+  recs.forEach(function(rec) {
+    var m = parseBlockReasons(rec);
+    Object.keys(m.byId).forEach(function(k) { reasonById[k] = m.byId[k]; });
+    if (m.legacy && !Object.keys(reasonById).length) legacy = m.legacy;
+  });
+  fields['卡關原因'] = encodeBlockReasons(reasonById) || legacy;
+  if (base.fields['所屬標案']) fields['所屬標案'] = base.fields['所屬標案'];
+  else if (base.fields['所屬專案']) fields['所屬專案'] = base.fields['所屬專案'];
+  return { record_id: base.record_id, fields: fields };
+}
+
+function collectJournalPersonData(rec, personName, opts) {
+  opts = opts || {};
   if (!rec) {
     return {
       name: personName,
@@ -3937,7 +4001,8 @@ function collectJournalPersonData(rec, personName) {
       done: [], doing: [], blocks: [], tomorrow: [],
       doneCount: 0, total: 0, pct: 0,
       journalRecId: null,
-      empty: true
+      empty: true,
+      noDataAtAll: opts.noDataAtAll
     };
   }
   var reasonMap = parseBlockReasons(rec);
@@ -4016,7 +4081,11 @@ function renderJournalPersonCard(p) {
     html += '</ul></div>';
   }
   if (p.empty && !p.blocks.length && !p.tomorrow.length && !p.doing.length && !p.done.length) {
-    html += '<div class="j-empty-note">點右上角「填寫今日日誌」開始回報</div>';
+    if (p.noDataAtAll) {
+      html += '<div class="j-empty-note">尚無日誌資料，請點「填寫今日日誌」開始回報</div>';
+    } else {
+      html += '<div class="j-empty-note">此日尚未填寫日誌</div>';
+    }
   }
   html += '</div>';
   return html;
@@ -4024,40 +4093,45 @@ function renderJournalPersonCard(p) {
 
 function renderJournalDashboard(area) {
   if (!area) return;
-  var today = new Date();
+  var ctx = getJournalDisplayContext();
   var label = document.getElementById('journal-today-label');
-  if (label) label.textContent = '今日 ' + (today.getMonth() + 1) + '/' + today.getDate() + '（' + weekdayLabel(today) + '）';
+  if (label) label.textContent = ctx.dateLabel;
 
-  var todayStart = getTodayStartMs();
-  var todayEntries = getTodayJournalEntries();
+  var dayEntries = getJournalEntriesForDay(ctx.dayStart);
   var kpi = { done: 0, doing: 0, block: 0, tomorrow: 0 };
-  todayEntries.forEach(function(rec) {
+  dayEntries.forEach(function(rec) {
     kpi.done += getLinkIds(rec.fields['已完成今日任務']).length;
     kpi.doing += getLinkIds(rec.fields['進行中任務']).length;
     kpi.block += getLinkIds(rec.fields['卡關任務']).length;
     kpi.tomorrow += getLinkIds(rec.fields['明日預計任務']).length;
   });
 
+  var nameSet = {};
+  dayEntries.forEach(function(rec) {
+    var n = journalPersonName(rec);
+    if (n) nameSet[n] = 1;
+  });
   var names = getMemberNames();
-  if (!names.length) {
-    var nameSet = {};
-    todayEntries.forEach(function(rec) {
-      var n = journalPersonName(rec);
-      if (n) nameSet[n] = 1;
-    });
-    names = Object.keys(nameSet);
-  }
+  if (!names.length) names = Object.keys(nameSet);
+  Object.keys(nameSet).forEach(function(n) {
+    if (names.indexOf(n) < 0) names.push(n);
+  });
   if (!names.length) names = ['（未指定）'];
 
   var persons = names.map(function(name) {
-    var rec = findDailyJournalRecord(todayStart, name);
-    return collectJournalPersonData(rec, name);
+    var recs = findDailyJournalRecords(ctx.dayStart, name);
+    var rec = mergePersonJournalRecords(recs);
+    return collectJournalPersonData(rec, name, { noDataAtAll: ctx.noDataAtAll });
   }).sort(function(a, b) {
     if (a.empty !== b.empty) return a.empty ? 1 : -1;
     return a.name.localeCompare(b.name, 'zh-Hant');
   });
 
-  var html = '<div class="j-dash-kpi">';
+  var html = '';
+  if (!ctx.isToday && dayEntries.length) {
+    html += '<div class="j-empty-note" style="margin-bottom:12px;padding:0">以下顯示 Lark 最近一筆日誌（非今日）。填寫今日日誌後會改顯示今日資料。</div>';
+  }
+  html += '<div class="j-dash-kpi">';
   html += '<div class="j-kpi-card j-kpi-done"><div class="j-kpi-label">完成</div><div class="j-kpi-val">' + kpi.done + '</div></div>';
   html += '<div class="j-kpi-card j-kpi-doing"><div class="j-kpi-label">進行中</div><div class="j-kpi-val">' + kpi.doing + '</div></div>';
   html += '<div class="j-kpi-card j-kpi-block"><div class="j-kpi-label">卡關</div><div class="j-kpi-val">' + kpi.block + '</div></div>';
