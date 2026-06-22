@@ -168,6 +168,13 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .jfeed-proj-hdr{font-size:13px;font-weight:700;padding:9px 12px;border-radius:var(--rs);margin-bottom:10px;display:flex;align-items:center;gap:8px;color:#fff}
 .jfeed-proj-count{font-size:11px;opacity:.85;font-weight:600}
 .j-today-label{font-size:12px;color:var(--t3);font-weight:500}
+.j-date-nav{display:flex;align-items:center;gap:4px}
+.j-date-btn{width:28px;height:28px;border:1px solid var(--border);border-radius:var(--rs);background:var(--sf2);cursor:pointer;font-size:14px;line-height:1;color:var(--t2)}
+.j-date-btn:hover{border-color:var(--accent);color:var(--accent)}
+.j-date-input{padding:4px 8px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;background:#fff;color:var(--text)}
+.j-date-today{padding:4px 10px;border:1px solid var(--border);border-radius:var(--rs);background:var(--sf2);font-size:11px;cursor:pointer;font-weight:600;color:var(--t2)}
+.j-date-today:hover{border-color:var(--accent);color:var(--accent)}
+.j-date-today.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .j-dash-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
 .j-kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .j-kpi-label{font-size:12px;color:var(--t2);margin-bottom:6px}
@@ -567,6 +574,12 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
       <div class="jpage-single">
         <div class="jpage-toolbar">
           <h3>墨日誌小天地</h3>
+          <div class="j-date-nav">
+            <button type="button" class="j-date-btn" onclick="shiftJournalDay(-1)" title="前一天">‹</button>
+            <input type="date" id="journal-date-input" class="j-date-input" onchange="onJournalDateChange(this.value)">
+            <button type="button" class="j-date-btn" onclick="shiftJournalDay(1)" title="後一天">›</button>
+            <button type="button" class="j-date-today" id="journal-today-btn" onclick="goJournalToday()">今日</button>
+          </div>
           <span class="j-today-label" id="journal-today-label"></span>
           <button class="bjlog" onclick="openDailyLog()">＋ 填寫今日日誌</button>
         </div>
@@ -765,7 +778,11 @@ function sw(btn,id){
   btn.classList.add('active');
   document.getElementById(id).classList.add('active');
   if(id==='pg-s') renderGanttFromData();
-  if(id==='pg-journal') reloadJournal().then(function(){ renderJournalPage(); });
+  if(id==='pg-journal') {
+    journalViewDate = new Date();
+    journalViewDate.setHours(0, 0, 0, 0);
+    reloadJournal().then(function(){ renderJournalPage(); });
+  }
   if(id==='pg-e') reloadExpenses().then(function(){ renderExpenses(); });
   if(id==='pg-b') renderBudget();
   if(id==='pg-d') renderDesigns();
@@ -3925,33 +3942,52 @@ function getJournalEntriesForDay(dayStart) {
   });
 }
 
-function getLatestJournalDayStart() {
-  var items = getJournalItemsInRange(90);
-  if (!items.length) return null;
-  var ts = journalTs(items[0]);
-  if (!ts) return null;
-  var d = new Date(ts);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
+function getSelectedJournalDayStart() {
+  return journalViewDate.getTime();
 }
 
-function getJournalDisplayContext() {
-  var todayStart = getTodayStartMs();
-  var today = new Date();
-  var todayLabel = '今日 ' + (today.getMonth() + 1) + '/' + today.getDate() + '（' + weekdayLabel(today) + '）';
-  if (getTodayJournalEntries().length) {
-    return { dayStart: todayStart, dateLabel: todayLabel, isToday: true };
-  }
-  var latestStart = getLatestJournalDayStart();
-  if (!latestStart) {
-    return { dayStart: todayStart, dateLabel: todayLabel, isToday: true, noDataAtAll: true };
-  }
-  var d = new Date(latestStart);
-  return {
-    dayStart: latestStart,
-    dateLabel: '最近回報 ' + (d.getMonth() + 1) + '/' + d.getDate() + '（' + weekdayLabel(d) + '）· 今日尚無新回報',
-    isToday: false
-  };
+function isJournalViewToday() {
+  return getSelectedJournalDayStart() === getTodayStartMs();
+}
+
+function syncJournalDateInput() {
+  var input = document.getElementById('journal-date-input');
+  if (input) input.value = tsToDateInput(journalViewDate.getTime());
+  var todayBtn = document.getElementById('journal-today-btn');
+  if (todayBtn) todayBtn.classList.toggle('active', isJournalViewToday());
+}
+
+function updateJournalDateLabel() {
+  var label = document.getElementById('journal-today-label');
+  var d = new Date(journalViewDate.getTime());
+  var text = (d.getMonth() + 1) + '/' + d.getDate() + '（' + weekdayLabel(d) + '）';
+  if (isJournalViewToday()) text = '今日 ' + text;
+  if (label) label.textContent = text;
+}
+
+function shiftJournalDay(delta) {
+  journalViewDate.setDate(journalViewDate.getDate() + delta);
+  syncJournalDateInput();
+  updateJournalDateLabel();
+  renderJournalPage();
+}
+
+function goJournalToday() {
+  journalViewDate = new Date();
+  journalViewDate.setHours(0, 0, 0, 0);
+  syncJournalDateInput();
+  updateJournalDateLabel();
+  renderJournalPage();
+}
+
+function onJournalDateChange(val) {
+  if (!val) return;
+  var parts = val.split('-');
+  journalViewDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  journalViewDate.setHours(0, 0, 0, 0);
+  updateJournalDateLabel();
+  syncJournalDateInput();
+  renderJournalPage();
 }
 
 function findDailyJournalRecords(dayStart, authorName) {
@@ -4047,7 +4083,7 @@ function renderJournalPersonCard(p) {
   html += '<div class="j-person-hdr">';
   html += '<div><div class="j-person-name">' + escHtml(p.name) + '</div>';
   if (p.proj) html += '<div class="j-person-sub">' + escHtml(p.proj) + '</div>';
-  else if (p.empty) html += '<div class="j-person-sub">今日尚未填寫日誌</div>';
+  else if (p.empty) html += '<div class="j-person-sub">此日尚未填寫日誌</div>';
   html += '</div>';
   html += '<span class="j-person-badge">完成率 ' + p.pct + '%</span></div>';
   html += '<div class="j-progress"><div class="j-progress-bar" style="width:' + p.pct + '%"></div></div>';
@@ -4093,11 +4129,12 @@ function renderJournalPersonCard(p) {
 
 function renderJournalDashboard(area) {
   if (!area) return;
-  var ctx = getJournalDisplayContext();
-  var label = document.getElementById('journal-today-label');
-  if (label) label.textContent = ctx.dateLabel;
+  syncJournalDateInput();
+  updateJournalDateLabel();
 
-  var dayEntries = getJournalEntriesForDay(ctx.dayStart);
+  var dayStart = getSelectedJournalDayStart();
+  var dayEntries = getJournalEntriesForDay(dayStart);
+  var noDataAtAll = !journalData.length;
   var kpi = { done: 0, doing: 0, block: 0, tomorrow: 0 };
   dayEntries.forEach(function(rec) {
     kpi.done += getLinkIds(rec.fields['已完成今日任務']).length;
@@ -4119,17 +4156,20 @@ function renderJournalDashboard(area) {
   if (!names.length) names = ['（未指定）'];
 
   var persons = names.map(function(name) {
-    var recs = findDailyJournalRecords(ctx.dayStart, name);
+    var recs = findDailyJournalRecords(dayStart, name);
     var rec = mergePersonJournalRecords(recs);
-    return collectJournalPersonData(rec, name, { noDataAtAll: ctx.noDataAtAll });
+    return collectJournalPersonData(rec, name, { noDataAtAll: noDataAtAll });
   }).sort(function(a, b) {
     if (a.empty !== b.empty) return a.empty ? 1 : -1;
     return a.name.localeCompare(b.name, 'zh-Hant');
   });
 
   var html = '';
-  if (!ctx.isToday && dayEntries.length) {
-    html += '<div class="j-empty-note" style="margin-bottom:12px;padding:0">以下顯示 Lark 最近一筆日誌（非今日）。填寫今日日誌後會改顯示今日資料。</div>';
+  if (!dayEntries.length && !noDataAtAll) {
+    var d = new Date(dayStart);
+    html += '<div class="j-empty-note" style="margin-bottom:12px;padding:0">' +
+      (isJournalViewToday() ? '今日尚無日誌回報，可點右上角填寫。' : '此日（' + (d.getMonth()+1) + '/' + d.getDate() + '）尚無日誌資料。') +
+      '</div>';
   }
   html += '<div class="j-dash-kpi">';
   html += '<div class="j-kpi-card j-kpi-done"><div class="j-kpi-label">完成</div><div class="j-kpi-val">' + kpi.done + '</div></div>';
