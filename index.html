@@ -4670,17 +4670,14 @@ function renderJournalProjCard(proj) {
   html += renderJournalProjSection('done', '已完成', proj.done);
   html += renderJournalProjSection('doing', '進行中', proj.doing);
   html += renderJournalProjSection('block', '需要處理', proj.blocks);
-  html += renderJournalProjSection('tomorrow', '下一步', proj.tomorrow);
+  html += renderJournalProjSection('tomorrow', '明日預計任務', proj.tomorrow);
   html += '</div></div>';
   return html;
 }
 
 function renderJournalPersonCard(p) {
   var html = '<div class="j-person-section">';
-  html += '<div class="j-person-hdr">';
-  html += '<div class="j-person-name">' + escHtml(p.name) + '</div>';
-  html += '<span class="j-person-badge">完成率 ' + p.pct + '%</span></div>';
-  html += '<div class="j-progress"><div class="j-progress-bar" style="width:' + p.pct + '%"></div></div>';
+  html += '<div class="j-person-hdr"><div class="j-person-name">' + escHtml(p.name) + '</div></div>';
 
   if (p.projects && p.projects.length) {
     html += '<div class="j-proj-stack">';
