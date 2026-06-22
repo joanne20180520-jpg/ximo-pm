@@ -179,11 +179,23 @@ function formatArchiveCopyError(msg) {
   return s;
 }
 
+async function parseLarkJsonResponse(res, apiPath) {
+  const text = await res.text();
+  if (!text || !text.trim()) {
+    throw new Error('Lark API 空回應（' + apiPath + ', HTTP ' + res.status + '）');
+  }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error('Lark API 回應非 JSON（' + apiPath + ', HTTP ' + res.status + '）：' + text.slice(0, 160));
+  }
+}
+
 async function larkApiGet(accessToken, apiPath) {
   const res = await fetch(BASE_URL + apiPath, {
     headers: { Authorization: 'Bearer ' + accessToken }
   });
-  const data = await res.json();
+  const data = await parseLarkJsonResponse(res, apiPath);
   if (data.code !== 0) throw new Error(data.msg || 'Lark API error');
   return data.data;
 }
@@ -197,7 +209,7 @@ async function larkApiPost(accessToken, apiPath, body) {
     },
     body: JSON.stringify(body || {})
   });
-  const data = await res.json();
+  const data = await parseLarkJsonResponse(res, apiPath);
   if (data.code !== 0) throw new Error(data.msg || 'Lark API error');
   return data.data;
 }
@@ -354,16 +366,6 @@ async function placeCopiedBitableInWiki(accessToken, parent, appToken, title) {
       }
     } catch (e) {
       lastErr = new Error('createWikiNode: ' + (e.message || String(e)));
-    }
-  }
-  for (let i = 0; i < parentCandidates.length; i++) {
-    try {
-      const node = await moveBitableToWikiSpace(accessToken, parent.space_id, parentCandidates[i], appToken);
-      if (node && node.node_token) {
-        return buildWikiNodeUrl(parent.wikiUrl, node.node_token);
-      }
-    } catch (e) {
-      lastErr = new Error('move_docs: ' + (e.message || String(e)));
     }
   }
   if (lastErr) throw lastErr;
