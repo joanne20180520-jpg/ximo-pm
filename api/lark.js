@@ -130,6 +130,9 @@ function formatArchiveCopyError(msg) {
   if (/wiki:wiki|wiki:node:read|wiki:wiki:readonly/i.test(s)) {
     return s + '。請至 Lark 開發者後台 → 權限管理，開通 wiki:wiki、wiki:node:read、bitable:app 並發布應用後再封存。';
   }
+  if (/not found/i.test(s)) {
+    return '找不到指定的知識庫頁面或多維表格範本。請確認：① Wiki 封存位置為知識庫首頁/目錄頁完整連結；② Vercel 的 LARK_ARCHIVE_TEMPLATE 為同一租戶內可開啟的 /base/ 範本連結。';
+  }
   return s;
 }
 
@@ -231,13 +234,23 @@ function buildBaseAppUrl(templateUrl, appToken) {
 }
 
 async function copyBitableApp(accessToken, appToken, name) {
-  const data = await larkApiPost(accessToken, '/bitable/v1/apps/' + encodeURIComponent(appToken) + '/copy', {
-    name: name || '封存標案'
-  });
-  const newToken = data && data.app && data.app.app_token;
-  if (!newToken) throw new Error('複製雲端多維表格失敗');
-  await ensureBitableReady(accessToken, newToken);
-  return newToken;
+  const token = String(appToken || '').trim();
+  if (!token) throw new Error('封存範本 app_token 無效');
+  try {
+    const data = await larkApiPost(accessToken, '/bitable/v1/apps/' + encodeURIComponent(token) + '/copy', {
+      name: name || '封存標案'
+    });
+    const newToken = data && data.app && data.app.app_token;
+    if (!newToken) throw new Error('複製雲端多維表格失敗');
+    await ensureBitableReady(accessToken, newToken);
+    return newToken;
+  } catch (err) {
+    const msg = err.message || '';
+    if (/not found/i.test(msg)) {
+      throw new Error('找不到封存範本多維表格（app: ' + token + '）。請確認 Vercel 環境變數 LARK_ARCHIVE_TEMPLATE 的 /base/ 連結正確，且範本仍存在於同一 Lark 租戶。');
+    }
+    throw err;
+  }
 }
 
 async function createWikiBitableNode(accessToken, spaceId, parentNodeToken, appToken, title) {
@@ -259,7 +272,7 @@ async function copyArchiveTemplateToParent(accessToken, parentWikiUrl, projectNa
 
   const parentToken = getWikiTokenFromUrl(parentWikiUrl);
   if (!parentToken) throw new Error('知識庫存放位置連結無效');
-  const parentNode = await getWikiNode(accessToken, parentToken);
+  const parentNode = await getWikiNode(accessToken, parentToken, 'Wiki 封存位置');
   if (!parentNode) throw new Error('找不到知識庫存放位置');
 
   const templateParsed = extractLarkUrlToken(templateUrl);
@@ -280,11 +293,12 @@ async function copyArchiveTemplateToParent(accessToken, parentWikiUrl, projectNa
 
   const templateToken = templateParsed ? templateParsed.token : '';
   if (!templateToken) throw new Error('封存範本連結無效');
-  const templateNode = await getWikiNode(accessToken, templateToken);
+  const templateNode = await getWikiNode(accessToken, templateToken, '封存範本');
   if (!templateNode) throw new Error('找不到封存範本');
 
   const copied = await copyWikiNode(accessToken, templateNode.space_id, templateNode.node_token, {
     targetParentToken: parentNode.node_token,
+    targetSpaceId: parentNode.space_id,
     title: title
   });
   if (!copied) throw new Error('複製封存範本失敗');
@@ -336,9 +350,21 @@ function parseBitableAppTokenFromBlockToken(blockToken) {
   return idx > 0 ? blockToken.slice(0, idx) : blockToken;
 }
 
-async function getWikiNode(accessToken, nodeToken) {
-  const data = await larkApiGet(accessToken, '/wiki/v2/spaces/get_node?token=' + encodeURIComponent(nodeToken));
-  return data.node;
+async function getWikiNode(accessToken, nodeToken, label) {
+  const token = String(nodeToken || '').trim();
+  if (!token || token.length < 6) {
+    throw new Error((label || '知識庫連結') + '無效，請貼上完整的 wiki 或 base 連結');
+  }
+  try {
+    const data = await larkApiGet(accessToken, '/wiki/v2/spaces/get_node?token=' + encodeURIComponent(token));
+    return data.node;
+  } catch (err) {
+    const msg = err.message || '';
+    if (/not found/i.test(msg)) {
+      throw new Error('找不到' + (label || '知識庫頁面') + '（token: ' + token + '）。請在 Lark 開啟該知識庫頁面，從瀏覽器複製完整網址（須含 wiki/ 後面的節點 ID）。');
+    }
+    throw err;
+  }
 }
 
 async function listWikiChildNodes(accessToken, spaceId, parentNodeToken) {
@@ -374,7 +400,7 @@ async function findBitableAppTokenInDocx(accessToken, docToken) {
 }
 
 async function findBitableAppTokenInWikiSubtree(accessToken, spaceId, nodeToken) {
-  const node = await getWikiNode(accessToken, nodeToken);
+  const node = await getWikiNode(accessToken, nodeToken, '知識庫頁面');
   if (!node) return '';
 
   if (node.obj_type === 'bitable') return node.obj_token || '';
@@ -415,7 +441,7 @@ async function resolveBitableAppTokenFromUrl(accessToken, url) {
   }
 
   const wikiToken = parsed.token;
-  const node = await getWikiNode(accessToken, wikiToken);
+  const node = await getWikiNode(accessToken, wikiToken, '知識庫連結');
   if (!node) throw new Error('找不到知識庫節點');
 
   if (node.obj_type === 'bitable' && node.obj_token) return node.obj_token;

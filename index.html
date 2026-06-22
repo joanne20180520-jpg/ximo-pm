@@ -5115,8 +5115,10 @@ function confirmArchiveProject() {
         if (res.copyError && !res.copiedToWikiBase) {
           var hint = /wiki:/i.test(res.copyError)
             ? '\n\n【請在 Lark 開發者後台開通並發布】\n· wiki:wiki\n· wiki:node:read\n· bitable:app\n路徑：應用 → 權限管理 → 搜尋 wiki / bitable'
-            : '';
-          alert('標案已在系統標記為封存，但資料尚未寫入知識庫。\n\n' + res.copyError + hint);
+            : (/not found/i.test(res.copyError)
+              ? '\n\n【常見原因】\n1. Wiki 封存位置連結不是知識庫頁面完整網址\n2. LARK_ARCHIVE_TEMPLATE 範本連結錯誤或已刪除\n3. 範本與標案不在同一 Lark 租戶'
+              : '');
+          alert('標案已在系統標記為封存，但資料尚未寫入知識庫。\n\n' + res.copyError + hint + '\n\n請將標案狀態改回「進行中」後，修正連結再重新封存。');
         } else {
           var msg = res.wikiNote || res.summary || '封存完成';
           if (confirm(msg + '\n\n是否開啟知識庫頁面？')) {
