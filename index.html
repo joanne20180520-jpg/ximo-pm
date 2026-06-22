@@ -646,13 +646,17 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
   </details>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-proj')">取消</button><button class="bpri" id="np-save-btn" onclick="saveProjectImport()" disabled>確認新增標案</button></div></div></div>
 
-<div class="po" id="pp-work"><div class="pp ppw"><div class="pph"><h3>建立標案的工作項目</h3><button class="ppc" onclick="cl('pp-work')">✕</button></div><div class="ppb"><div class="fg"><label>標案</label><select id="nw-proj"></select></div><div class="fg"><label>開始日期</label><input type="date" id="nw-start"></div><div style="display:grid;grid-template-columns:1fr 90px 1fr 70px 50px;gap:6px;padding:4px 0;font-size:10px;color:var(--t3)"><span>工作項目名稱</span><span>天數</span><span>負責夥伴</span><span>可用成本</span><span>權重</span></div><div class="slist" id="sl"></div><button class="bads" onclick="addS()">＋ 新增工作項目</button></div><div class="ppf"><button class="bcan" onclick="cl('pp-work')">取消</button><button class="bpri" onclick="saveWorkItems()">新增</button></div></div></div>
+<div class="po" id="pp-work"><div class="pp ppw"><div class="pph"><h3>建立標案的工作項目</h3><button class="ppc" onclick="cl('pp-work')">✕</button></div><div class="ppb"><div class="fg"><label>標案</label><select id="nw-proj" onchange="onNwProjChange()"></select></div><div class="fg"><label>起始日（合約）</label><div id="nw-start-hint" class="fg-hint" style="padding:8px 10px;background:var(--sf2);border-radius:var(--rs);font-size:12px;color:var(--t2)">依所選標案合約開始日</div></div><div style="display:grid;grid-template-columns:1fr 90px 1fr 70px 50px;gap:6px;padding:4px 0;font-size:10px;color:var(--t3)"><span>工作項目名稱</span><span>天數</span><span>負責夥伴</span><span>可用成本</span><span>權重</span></div><div class="slist" id="sl"></div><button class="bads" onclick="addS()">＋ 新增工作項目</button></div><div class="ppf"><button class="bcan" onclick="cl('pp-work')">取消</button><button class="bpri" onclick="saveWorkItems()">新增</button></div></div></div>
 
-<div class="po" id="pp-task"><div class="pp"><div class="pph"><h3>建立新任務</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fg"><label>任務名稱</label><input type="text" id="nt-name" placeholder="拜訪OO茶主"></div><div class="fg"><label>負責人</label><select id="nt-assignee" data-members></select></div><div class="fg"><label>所屬工作項目</label><select id="nt-wi"></select></div><div class="fg"><label>開始日期</label><input type="date" id="nt-start"></div><div class="fg"><label>預計完成日</label><input type="date" id="nt-due"></div><div class="fg"><label>進度狀態</label><select id="nt-status"></select></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri" onclick="saveTask()">新增</button></div></div></div>
+<div class="po" id="pp-task"><div class="pp"><div class="pph"><h3>建立新任務</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fg"><label>任務名稱</label><input type="text" id="nt-name" placeholder="拜訪OO茶主"></div><div class="fg"><label>負責人</label><select id="nt-assignee" data-members></select></div><div class="fg"><label>所屬工作項目</label><select id="nt-wi"></select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px"><div class="fg" style="margin:0"><label>開始日期</label><input type="date" id="nt-start"></div><div class="fg" style="margin:0"><label>預計完成日</label><input type="date" id="nt-due"></div></div><div class="fg"><label>進度狀態</label><select id="nt-status"></select></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri" onclick="saveTask()">新增</button></div></div></div>
 
 <div class="po" id="pp-td"><div class="pp"><div class="pph pph-report" id="td-header"><h3 id="td-title">任務回報</h3><div class="td-hdr-actions"><button type="button" class="td-open-report" onclick="openDailyLogFromTask()">開啟今日回報表</button><button type="button" class="ppc" onclick="cl('pp-td')">✕</button></div></div><div class="ppb">
   <div id="td-proj-tag" class="td-proj"></div>
   <div id="td-meta" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+    <div class="fg" style="margin:0"><label>開始日期</label><input type="date" id="td-start"></div>
+    <div class="fg" style="margin:0"><label>預計完成日</label><input type="date" id="td-due"></div>
+  </div>
   <div class="fg"><label>今日回報分類</label><div class="td-cats" id="td-cats">
     <span class="td-cat active" data-cat="doing" onclick="pickTaskReportCat(this)">進行中</span>
     <span class="td-cat" data-cat="done" onclick="pickTaskReportCat(this)">今日完成</span>
@@ -676,6 +680,9 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 
 <div class="po" id="pp-des"><div class="pp ppw"><div class="pph"><h3>建立新設計任務</h3><button class="ppc" onclick="cl('pp-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ds-name" placeholder="Logo"></div><div class="fg"><label>所屬工作項目</label><select id="ds-wi"></select></div><div class="fg"><label>負責PM</label><select id="ds-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ds-item" placeholder="A"></div><div class="fg"><label>設計需求</label><input type="text" id="ds-req" placeholder="AA"></div><div class="fg"><label>設計師</label><select id="ds-designer" data-members></select></div><div class="fg"><label>狀態</label><select id="ds-status"><option>進行中</option><option>待開始</option><option>已完成</option></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" id="ds-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" id="ds-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ds-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ds-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ds-deliver"></div><div class="fg"><label>備註</label><textarea id="ds-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-des')">取消</button><button class="bpri" onclick="saveDesign()">新增</button></div></div></div>
 
+<!-- 修改設計任務單 -->
+<div class="po" id="pp-edit-des"><div class="pp ppw"><div class="pph"><h3>修改設計任務單</h3><button class="ppc" onclick="cl('pp-edit-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ed-name"></div><div class="fg"><label>所屬工作項目</label><select id="ed-wi"></select></div><div class="fg"><label>負責PM</label><select id="ed-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ed-item"></div><div class="fg"><label>設計需求</label><input type="text" id="ed-req"></div><div class="fg"><label>設計師</label><select id="ed-designer" data-members></select></div><div class="fg"><label>狀態</label><select id="ed-status"><option>進行中</option><option>待開始</option><option>已完成</option></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" id="ed-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" id="ed-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ed-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ed-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ed-deliver"></div><div class="fg"><label>備註</label><textarea id="ed-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-des')">取消</button><button class="bpri" onclick="saveEditDesign()">儲存</button></div></div></div>
+
 <!-- 付款預覽（元頂集團格式） -->
 <div class="po" id="pp-prev" style="align-items:flex-start;padding-top:20px">
   <div class="pp pp-pay">
@@ -697,7 +704,10 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
   <div class="fg"><label>任務名稱</label><input type="text" id="et-name"></div>
   <div class="fg"><label>負責人</label><select id="et-assignee" data-members></select></div>
   <div class="fg"><label>所屬工作項目</label><select id="et-wi"></select></div>
-  <div class="fg"><label>預計完成日</label><input type="date" id="et-due"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
+    <div class="fg" style="margin:0"><label>開始日期</label><input type="date" id="et-start"></div>
+    <div class="fg" style="margin:0"><label>預計完成日</label><input type="date" id="et-due"></div>
+  </div>
   <div class="fg"><label>進度狀態</label><select id="et-status"></select></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-task')">取消</button><button class="bpri" onclick="saveEditTask()">儲存</button></div></div></div>
 
@@ -705,7 +715,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 <div class="po" id="pp-edit-wi"><div class="pp"><div class="pph"><h3>修改工作項目</h3><button class="ppc" onclick="cl('pp-edit-wi')">✕</button></div><div class="ppb">
   <div class="fg"><label>工作項目名稱</label><input type="text" id="ew-name"></div>
   <div class="fg"><label>負責人</label><select id="ew-assignee" data-members></select></div>
-  <div class="fg"><label>開始日期</label><input type="date" id="ew-start"></div>
+  <div class="fg"><label>起始日（合約）</label><div id="ew-start-hint" class="fg-hint" style="padding:8px 10px;background:var(--sf2);border-radius:var(--rs);font-size:12px;color:var(--t2)">依標案合約開始日</div></div>
   <div class="fg"><label>截止日</label><input type="date" id="ew-end"></div>
   <div class="fg"><label>可用成本</label><input type="text" id="ew-cost" placeholder="NT$0"></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-wi')">取消</button><button class="bpri" onclick="saveEditWorkItem()">儲存</button></div></div></div>
@@ -1599,7 +1609,6 @@ function saveProjectImport() {
         var wiFields = {
           '工作項目名稱': item.name.trim(),
           '所屬標案': [projId],
-          '開始日期': startTs,
           '截止日': endTs,
           '可用成本': item.cost || 0,
           '權重': parseWeight(String(item.weight))
@@ -2057,8 +2066,8 @@ function daysRemaining(val) {
   return diff + 'Ds';
 }
 function tsToDateInput(ts) {
-  if (!ts) return '';
-  var d = new Date(ts);
+  var d = parseTs(ts);
+  if (!d) return '';
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 function dateInputToTs(str) {
@@ -2217,6 +2226,29 @@ function getWorkitemsForProject(rec) {
     }
   });
   return result;
+}
+
+function getProjectForWorkItem(wi) {
+  if (!wi) return null;
+  var ids = getLinkIds(wi.fields['所屬標案']);
+  if (ids[0]) {
+    var proj = projectsData.find(function(p) { return p.record_id === ids[0]; });
+    if (proj) return proj;
+  }
+  var wiId = wi.record_id;
+  return projectsData.find(function(p) {
+    return getWiIds(p.fields).indexOf(wiId) >= 0;
+  });
+}
+
+function getProjectContractStart(proj) {
+  if (!proj || !proj.fields) return null;
+  return proj.fields['合約開始日'];
+}
+
+function getWorkItemStartTs(wi) {
+  var proj = getProjectForWorkItem(wi);
+  return parseTs(proj ? getProjectContractStart(proj) : null);
 }
 
 function buildExpenseSummary() {
@@ -2457,7 +2489,7 @@ function renderProjects() {
     workitems.forEach(function(wi) {
       var wf = wi.fields;
       var wName = wf['工作項目名稱'] || '';
-      var wiStart = parseTs(wf['開始日期']) || parseTs(f['合約開始日']);
+      var wiStart = parseTs(f['合約開始日']);
       var wiEnd = parseTs(wf['截止日']);
       var weightStr = formatWeightProgress(wf, wi.record_id);
       var dateStr = '';
@@ -2504,17 +2536,7 @@ function renderTasks() {
     var wiId = wiIds[0] || null;
     var wi = wiId ? wiMap[wiId] : null;
     var projName = wi ? (wi.project || '其他') : '其他';
-    // 取工作項目的開始日，找不到就用所屬標案合約開始日
-    var wiRec = wiId ? workitemsData.find(function(w){ return w.record_id === wiId; }) : null;
-    var startTs = wiRec ? wiRec.fields['開始日期'] : null;
-    if (!startTs && wiRec) {
-      var projRec = projectsData.find(function(p){
-        var wids = getLinkIds(p.fields['工作項目']);
-        return wids.indexOf(wiId) >= 0;
-      });
-      if (projRec) startTs = projRec.fields['合約開始日'];
-    }
-    var timeProgress = calcTimeProgress(startTs, f['預計完成日']);
+    var timeProgress = calcTimeProgress(f['開始日期'], f['預計完成日']);
     var progress = timeProgress !== null ? timeProgress : parseProgressVal(f['進度狀態'], f['進度數值']);
     if (!grouped[projName]) grouped[projName] = [];
     grouped[projName].push({
@@ -2609,17 +2631,7 @@ function renderTeamPanel() {
     var wiIds = getLinkIds(f['所屬工作項目']);
     var wi = wiIds[0] ? wiMap[wiIds[0]] : null;
     var projName = wi ? (wi.project || '其他') : '其他';
-    var wiId2 = wiIds[0] || null;
-    var wiRec3 = wiId2 ? workitemsData.find(function(w){ return w.record_id === wiId2; }) : null;
-    var startTs3 = wiRec3 ? wiRec3.fields['開始日期'] : null;
-    if (!startTs3 && wiRec3) {
-      var projRec3 = projectsData.find(function(p){
-        var wids = getLinkIds(p.fields['工作項目']);
-        return wids.indexOf(wiId2) >= 0;
-      });
-      if (projRec3) startTs3 = projRec3.fields['合約開始日'];
-    }
-    var timeProgress3 = calcTimeProgress(startTs3, f['預計完成日']);
+    var timeProgress3 = calcTimeProgress(f['開始日期'], f['預計完成日']);
     var progress = timeProgress3 !== null ? timeProgress3 : parseProgressVal(f['進度狀態'], f['進度數值']);
     if (!isTodayTeamTask(f['預計完成日'], progress)) return;
     if (!byPerson[assignee]) byPerson[assignee] = [];
@@ -2785,7 +2797,7 @@ function renderGanttFromData() {
       var wf = wiRecord.fields;
       var wiId = wiRecord.record_id;
       var wiName = wf['工作項目名稱'] || '';
-      var wiStart = parseTs(wf['開始日期']) || contractStart;
+      var wiStart = contractStart;
       var wiEnd = parseTs(wf['截止日']) || contractEnd;
       var weightStr = formatWeightProgress(wf, wiId);
       var metaStr = '';
@@ -3001,6 +3013,10 @@ function confirmTaskReport() {
     '進度狀態': status,
     '進度數值': parseProgressVal(status, null)
   };
+  var tdStart = document.getElementById('td-start');
+  var tdDue = document.getElementById('td-due');
+  if (tdStart && tdStart.value) taskFields['開始日期'] = dateInputToTs(tdStart.value);
+  if (tdDue && tdDue.value) taskFields['預計完成日'] = dateInputToTs(tdDue.value);
 
   var btn = document.getElementById('td-confirm-btn');
   if (btn) { btn.disabled = true; btn.textContent = '儲存中…'; }
@@ -3009,6 +3025,8 @@ function confirmTaskReport() {
   var oldFields = {};
   if (taskFields['進度狀態'] !== undefined) oldFields['進度狀態'] = oldRec.fields['進度狀態'] || '';
   if (taskFields['進度數值'] !== undefined) oldFields['進度數值'] = oldRec.fields['進度數值'] || 0;
+  if (taskFields['開始日期'] !== undefined) oldFields['開始日期'] = oldRec.fields['開始日期'];
+  if (taskFields['預計完成日'] !== undefined) oldFields['預計完成日'] = oldRec.fields['預計完成日'];
   undoStack.push({ type: 'update', table: 'tasks', recordId: currentTaskId, data: oldFields });
 
   var journalPromise = existingJournal
@@ -3092,6 +3110,10 @@ function openTaskDetail(taskId) {
     + '<span style="font-size:12px;color:var(--t2)">' + ctx.assignee + ' · ' + dateRange + '</span>'
     + '<span style="font-size:11px;color:var(--warn);font-weight:600">' + remain + '</span>'
     + '<span style="font-size:11px;color:var(--t3)">' + ctx.progress + '%</span>';
+  var tdStartEl = document.getElementById('td-start');
+  var tdDueEl = document.getElementById('td-due');
+  if (tdStartEl) tdStartEl.value = ctx.startTs ? tsToDateInput(ctx.startTs) : '';
+  if (tdDueEl) tdDueEl.value = ctx.dueTs ? tsToDateInput(ctx.dueTs) : '';
   document.querySelectorAll('#td-cats .td-cat').forEach(function(c) {
     c.classList.toggle('active', c.dataset.cat === taskReportCategory);
   });
@@ -4248,6 +4270,7 @@ function renderDesigns() {
     var proj = wi ? (wi.project || '其他') : '其他';
     if (!byProject[proj]) byProject[proj] = [];
     byProject[proj].push({
+      id: rec.record_id,
       name: f['設計項目名稱'] || '',
       wiName: wi ? wi.name : getLinkText(f['所屬工作項目']) || '',
       pm: personName(f['負責PM']),
@@ -4268,7 +4291,7 @@ function renderDesigns() {
     if (!list || !list.length) return '';
     var rows = '';
     list.forEach(function(d) {
-      rows += '<tr><td style="font-weight:500">' + escHtml(d.name) + '</td><td>' + escHtml(d.wiName) + '</td><td>' + escHtml(d.pm) + '</td><td>' + escHtml(d.item) + '</td><td>' + escHtml(d.req) + '</td><td>' + escHtml(d.designer) + '</td>'
+      rows += '<tr class="erow" onclick="openEditDesign(\'' + d.id + '\')" title="點擊編輯"><td style="font-weight:500">' + escHtml(d.name) + '</td><td>' + escHtml(d.wiName) + '</td><td>' + escHtml(d.pm) + '</td><td>' + escHtml(d.item) + '</td><td>' + escHtml(d.req) + '</td><td>' + escHtml(d.designer) + '</td>'
         + '<td><span class="ds">' + escHtml(d.status) + '</span></td><td>' + (typeof d.budget === 'number' ? ntf(d.budget) : escHtml(String(d.budget))) + '</td>'
         + '<td>' + (typeof d.spent === 'number' ? ntf(d.spent) : escHtml(String(d.spent))) + '</td>'
         + '<td>' + d.draft + '</td><td>' + d.final + '</td><td>' + d.deliver + '</td></tr>';
@@ -4389,6 +4412,96 @@ var editingTaskId = null;
 var editingWiId = null;
 var editingProjId = null;
 var editingExpenseId = null;
+var editingDesignId = null;
+
+function openEditDesign(desId) {
+  var rec = designsData.find(function(r) { return r.record_id === desId; });
+  if (!rec) return;
+  editingDesignId = desId;
+  var f = rec.fields || {};
+  refreshFormSelects();
+  document.getElementById('ed-name').value = f['設計項目名稱'] || '';
+  var wiIds = getLinkIds(f['所屬工作項目']);
+  var wiSel = document.getElementById('ed-wi');
+  if (wiSel && wiIds[0]) wiSel.value = wiIds[0];
+  var pmSel = document.getElementById('ed-pm');
+  var pmName = personName(f['負責PM']);
+  if (pmSel) {
+    for (var i = 0; i < pmSel.options.length; i++) {
+      if (pmSel.options[i].text === pmName) { pmSel.selectedIndex = i; break; }
+    }
+  }
+  document.getElementById('ed-item').value = f['項目'] || '';
+  document.getElementById('ed-req').value = f['設計需求'] || '';
+  var designerSel = document.getElementById('ed-designer');
+  var designerName = personName(f['設計師']);
+  if (designerSel) {
+    for (var j = 0; j < designerSel.options.length; j++) {
+      if (designerSel.options[j].text === designerName) { designerSel.selectedIndex = j; break; }
+    }
+  }
+  var statusSel = document.getElementById('ed-status');
+  if (statusSel) statusSel.value = f['狀態'] || '進行中';
+  var budget = parseFloat(f['預算金費'] || f['預算']) || 0;
+  var spent = parseFloat(f['實際花費']) || 0;
+  document.getElementById('ed-budget').value = budget ? 'NT$' + Math.round(budget).toLocaleString() : '';
+  document.getElementById('ed-spent').value = spent ? 'NT$' + Math.round(spent).toLocaleString() : '';
+  document.getElementById('ed-draft').value = f['初稿交付日'] ? tsToDateInput(f['初稿交付日']) : '';
+  document.getElementById('ed-final').value = f['完稿交付日'] ? tsToDateInput(f['完稿交付日']) : '';
+  document.getElementById('ed-deliver').value = f['成品交付日'] ? tsToDateInput(f['成品交付日']) : '';
+  document.getElementById('ed-remark').value = f['備註'] || '';
+  op('pp-edit-des');
+}
+
+function saveEditDesign() {
+  if (!editingDesignId) return;
+  var name = document.getElementById('ed-name').value.trim();
+  var wiId = document.getElementById('ed-wi').value;
+  if (!name) { alert('請填寫設計項目名稱'); return; }
+  if (!wiId) { alert('請選擇工作項目'); return; }
+
+  var rec = designsData.find(function(r) { return r.record_id === editingDesignId; });
+  var oldFields = rec ? JSON.parse(JSON.stringify(rec.fields || {})) : null;
+  var fields = {
+    '設計項目名稱': name,
+    '所屬工作項目': [wiId],
+    '項目': document.getElementById('ed-item').value.trim(),
+    '設計需求': document.getElementById('ed-req').value.trim(),
+    '狀態': document.getElementById('ed-status').value,
+    '備註': document.getElementById('ed-remark').value.trim()
+  };
+  var budget = parseMoney(document.getElementById('ed-budget').value);
+  var spent = parseMoney(document.getElementById('ed-spent').value);
+  if (budget) fields['預算金費'] = budget;
+  if (spent) fields['實際花費'] = spent;
+  var pm = larkPerson(document.getElementById('ed-pm').value);
+  var designer = larkPerson(document.getElementById('ed-designer').value);
+  if (pm) fields['負責PM'] = pm;
+  if (designer) fields['設計師'] = designer;
+  var draft = document.getElementById('ed-draft').value;
+  var final = document.getElementById('ed-final').value;
+  var deliver = document.getElementById('ed-deliver').value;
+  if (draft) fields['初稿交付日'] = dateInputToTs(draft);
+  if (final) fields['完稿交付日'] = dateInputToTs(final);
+  if (deliver) fields['成品交付日'] = dateInputToTs(deliver);
+
+  showConfirm({
+    type: 'edit',
+    title: '確認修改設計任務單',
+    body: '確定要儲存這筆修改嗎？<br><span class="confirm-name">「' + name + '」</span>',
+    okText: '儲存',
+    onOk: function() {
+      if (oldFields) undoStack.push({ type: 'update', table: 'designs', recordId: editingDesignId, data: oldFields });
+      apiPut('designs', editingDesignId, fields).then(function() {
+        cl('pp-edit-des');
+        loadExtraData();
+        renderDesigns();
+        renderGanttFromData();
+        showUndoToast('設計任務單已修改');
+      }).catch(function(err) { alert('修改失敗：' + err.message); });
+    }
+  });
+}
 
 function openEditExpense(expId) {
   var rec = expensesData.find(function(r) { return r.record_id === expId; });
@@ -4486,6 +4599,7 @@ function openEditTask(taskId) {
   for (var j = 0; j < wiSel.options.length; j++) {
     if (wiSel.options[j].value === wiId) { wiSel.selectedIndex = j; break; }
   }
+  document.getElementById('et-start').value = f['開始日期'] ? tsToDateInput(f['開始日期']) : '';
   document.getElementById('et-due').value = f['預計完成日'] ? tsToDateInput(f['預計完成日']) : '';
   var statusSel = document.getElementById('et-status');
   for (var k = 0; k < statusSel.options.length; k++) {
@@ -4501,19 +4615,23 @@ function saveEditTask() {
     '任務名稱': rec.fields['任務名稱'] || '',
     '負責人': rec.fields['負責人'],
     '所屬工作項目': rec.fields['所屬工作項目'],
+    '開始日期': rec.fields['開始日期'],
     '預計完成日': rec.fields['預計完成日'],
     '進度狀態': rec.fields['進度狀態'] || '',
     '進度數值': rec.fields['進度數值'] || 0
   } : null;
   var status = document.getElementById('et-status').value;
+  var startVal = document.getElementById('et-start').value;
+  var dueVal = document.getElementById('et-due').value;
   var fields = {
     '任務名稱': document.getElementById('et-name').value.trim(),
     '負責人': document.getElementById('et-assignee').value,
     '所屬工作項目': [document.getElementById('et-wi').value],
-    '預計完成日': dateInputToTs(document.getElementById('et-due').value),
     '進度狀態': status,
     '進度數值': parseProgressVal(status, null)
   };
+  if (startVal) fields['開始日期'] = dateInputToTs(startVal);
+  if (dueVal) fields['預計完成日'] = dateInputToTs(dueVal);
   if (!fields['任務名稱']) { alert('請填寫任務名稱'); return; }
   showConfirm({
     type: 'edit',
@@ -4531,6 +4649,15 @@ function saveEditTask() {
   });
 }
 
+function onNwProjChange() {
+  var projId = document.getElementById('nw-proj').value;
+  var hint = document.getElementById('nw-start-hint');
+  if (!hint) return;
+  var proj = projectsData.find(function(p) { return p.record_id === projId; });
+  var ts = proj ? getProjectContractStart(proj) : null;
+  hint.textContent = ts ? ('標案合約開始日：' + fmtDate(ts)) : '請先為標案設定合約開始日';
+}
+
 function openEditWorkItem(wiId) {
   var rec = workitemsData.find(function(r){ return r.record_id === wiId; });
   if (!rec) return;
@@ -4543,9 +4670,14 @@ function openEditWorkItem(wiId) {
   for (var i = 0; i < assigneeSel.options.length; i++) {
     if (assigneeSel.options[i].text === assigneeName) { assigneeSel.selectedIndex = i; break; }
   }
-  document.getElementById('ew-start').value = f['開始日期'] ? tsToDateInput(f['開始日期']) : '';
   document.getElementById('ew-end').value = f['截止日'] ? tsToDateInput(f['截止日']) : '';
   document.getElementById('ew-cost').value = f['可用成本'] ? 'NT$' + Math.round(f['可用成本']).toLocaleString() : '';
+  var hint = document.getElementById('ew-start-hint');
+  if (hint) {
+    var proj = getProjectForWorkItem(rec);
+    var cts = proj ? getProjectContractStart(proj) : null;
+    hint.textContent = cts ? ('標案合約開始日：' + fmtDate(cts)) : '標案未設定合約開始日';
+  }
   op('pp-edit-wi');
 }
 
@@ -4555,19 +4687,18 @@ function saveEditWorkItem() {
   var oldFields = rec ? {
     '工作項目名稱': rec.fields['工作項目名稱'] || '',
     '負責人': rec.fields['負責人'],
-    '開始日期': rec.fields['開始日期'],
     '截止日': rec.fields['截止日'],
     '可用成本': rec.fields['可用成本']
   } : null;
   var name = document.getElementById('ew-name').value.trim();
   if (!name) { alert('請填寫工作項目名稱'); return; }
   var costRaw = document.getElementById('ew-cost').value.replace(/[^\d]/g, '');
+  var endVal = document.getElementById('ew-end').value;
   var fields = {
     '工作項目名稱': name,
-    '負責人': document.getElementById('ew-assignee').value,
-    '開始日期': dateInputToTs(document.getElementById('ew-start').value),
-    '截止日': dateInputToTs(document.getElementById('ew-end').value)
+    '負責人': document.getElementById('ew-assignee').value
   };
+  if (endVal) fields['截止日'] = dateInputToTs(endVal);
   if (costRaw) fields['可用成本'] = parseInt(costRaw, 10);
   showConfirm({
     type: 'edit',
@@ -4730,11 +4861,7 @@ function preparePopup(id) {
       sl.innerHTML = workRowHtml();
       fillSelectOptions(sl.querySelector('.wi-member'), getMemberNames());
     }
-    var today = new Date();
-    var start = document.getElementById('nw-start');
-    if (start && !start.value) {
-      start.value = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
-    }
+    onNwProjChange();
   }
   if (id === 'pp-task') {
     var due = document.getElementById('nt-due');
@@ -4806,7 +4933,7 @@ function refreshFormSelects() {
       workitemsData.map(function(w){ return w.record_id; })
     );
   }
-  ['ds-wi'].forEach(function(id) {
+  ['ds-wi', 'ed-wi'].forEach(function(id) {
     var sel = document.getElementById(id);
     if (sel) {
       fillSelectOptions(sel,
@@ -4838,9 +4965,11 @@ function refreshFormSelects() {
 
 function saveWorkItems() {
   var projId = document.getElementById('nw-proj').value;
-  var startStr = document.getElementById('nw-start').value;
   if (!projId) { alert('請選擇標案'); return; }
-  if (!startStr) { alert('請選擇開始日期'); return; }
+  var projRec = projectsData.find(function(p) { return p.record_id === projId; });
+  var contractStart = projRec ? getProjectContractStart(projRec) : null;
+  if (!contractStart) { alert('此標案尚未設定合約開始日，請先修改標案'); return; }
+  var startTs = dateInputToTs(tsToDateInput(contractStart));
 
   var rows = document.querySelectorAll('#sl .srow');
   var items = [];
@@ -4856,7 +4985,6 @@ function saveWorkItems() {
   });
   if (!items.length) { alert('請至少新增一個工作項目'); return; }
 
-  var startTs = dateInputToTs(startStr);
   var wiIds = [];
   var chain = Promise.resolve();
   items.forEach(function(item) {
@@ -4865,7 +4993,6 @@ function saveWorkItems() {
       var fields = {
         '工作項目名稱': item.name,
         '所屬標案': [projId],
-        '開始日期': startTs,
         '截止日': endTs,
         '可用成本': item.cost,
         '權重': item.weight
