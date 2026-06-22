@@ -774,6 +774,18 @@ async function buildJssdkConfig(token, pageUrl) {
   return { ok: true, appId: APP_ID, timestamp: timestamp, nonceStr: nonceStr, signature: signature };
 }
 
+async function getAppAccessToken() {
+  const res = await fetch(BASE_URL + '/auth/v3/app_access_token/internal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ app_id: APP_ID, app_secret: APP_SECRET })
+  });
+  const data = await res.json();
+  const token = data.app_access_token || (data.data && data.data.app_access_token);
+  if (!token) throw new Error(data.msg || '無法取得 app_access_token');
+  return token;
+}
+
 async function loginWithOAuthCode(code, redirectUri) {
   const baseBody = {
     grant_type: 'authorization_code',
@@ -798,22 +810,29 @@ async function loginWithOAuthCode(code, redirectUri) {
       accessToken = tokenData.data.access_token;
       break;
     }
-    lastErr = tokenData.msg || tokenData.message || '';
+    lastErr = tokenData.msg || tokenData.message || JSON.stringify(tokenData);
   }
 
   if (!accessToken) {
-    const tenant = await getToken();
-    const v1Res = await fetch(BASE_URL + '/authen/v1/access_token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + tenant
-      },
-      body: JSON.stringify({ grant_type: 'authorization_code', code: code })
-    });
-    const tokenData = await v1Res.json();
-    accessToken = tokenData.data && tokenData.data.access_token;
-    if (!accessToken) lastErr = tokenData.msg || tokenData.message || lastErr;
+    try {
+      const appToken = await getAppAccessToken();
+      const v1Res = await fetch(BASE_URL + '/authen/v1/access_token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + appToken
+        },
+        body: JSON.stringify({ grant_type: 'authorization_code', code: code })
+      });
+      const tokenData = await v1Res.json();
+      if (tokenData.code === 0 && tokenData.data && tokenData.data.access_token) {
+        accessToken = tokenData.data.access_token;
+      } else {
+        lastErr = tokenData.msg || tokenData.message || lastErr;
+      }
+    } catch (e) {
+      lastErr = e.message || lastErr;
+    }
   }
 
   if (!accessToken) {
@@ -837,12 +856,11 @@ async function loginWithOAuthCode(code, redirectUri) {
 
 function buildAuthUrl(redirectUri) {
   const q = new URLSearchParams({
-    client_id: APP_ID,
+    app_id: APP_ID,
     redirect_uri: redirectUri,
-    response_type: 'code',
     state: 'ximo_pm'
   });
-  return 'https://passport.larksuite.com/suite/passport/oauth/authorize?' + q.toString();
+  return BASE_URL + '/authen/v1/index?' + q.toString();
 }
 
 export default async function handler(req, res) {
@@ -878,10 +896,14 @@ export default async function handler(req, res) {
 
     if (action === 'login' && req.method === 'POST') {
       const code = req.body && req.body.code;
-      if (!code) return res.status(400).json({ error: 'missing code' });
+      if (!code) return res.status(400).json({ ok: false, error: 'missing code' });
       const redirectUri = (req.body.redirect_uri || '').trim();
-      const user = await loginWithOAuthCode(code, redirectUri);
-      return res.status(200).json({ ok: true, user });
+      try {
+        const user = await loginWithOAuthCode(code, redirectUri);
+        return res.status(200).json({ ok: true, user });
+      } catch (loginErr) {
+        return res.status(400).json({ ok: false, error: loginErr.message || '登入失敗' });
+      }
     }
 
     if (action === 'ping' && req.method === 'GET') {

@@ -134,6 +134,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .todo-login-warn{color:var(--warn)}
 .todo-login-link{border:none;background:none;padding:0;font-size:10px;color:var(--c2);cursor:pointer;font-weight:600;text-decoration:underline}
 .todo-login-banner{font-size:11px;color:var(--t2);background:var(--sf2);border:1px solid var(--border);border-radius:var(--rs);padding:8px 10px;margin-bottom:10px;line-height:1.5}
+.login-error-banner{display:none;font-size:11px;color:var(--danger);background:#fef2f2;border:1px solid #fecaca;border-radius:var(--rs);padding:8px 10px;margin:8px 10px 0;line-height:1.5}
 .ap-export-preview{margin:12px 0;padding:10px 12px;background:var(--sf2);border:1px solid var(--border);border-radius:var(--rs)}
 .ap-export-title{font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px}
 .ap-export-list{list-style:none;padding:0;margin:0;font-size:11px;color:var(--t2);line-height:1.7}
@@ -620,6 +621,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
       <button type="button" class="todo-scope-btn" data-scope="all" onclick="setTodoScope('all')">全部</button>
     </div>
   </div>
+  <div class="login-error-banner" id="login-error-banner"></div>
   <div class="tl2" id="team-task-list">
     <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
   </div>
@@ -2248,8 +2250,19 @@ function loginWithCode(code, redirectUri) {
   }).then(function(r) { return r.json(); }).then(function(res) {
     if (!res.ok || !res.user) throw new Error(res.error || res.msg || '登入失敗');
     finalizeLoginUser(res.user);
+    clearLoginError();
     return res.user;
   });
+}
+function showLoginError(msg) {
+  var el = document.getElementById('login-error-banner');
+  if (!el) return;
+  el.textContent = msg || 'Lark 登入失敗';
+  el.style.display = 'block';
+}
+function clearLoginError() {
+  var el = document.getElementById('login-error-banner');
+  if (el) el.style.display = 'none';
 }
 function waitForLarkBridge(timeoutMs) {
   return new Promise(function(resolve) {
@@ -2385,15 +2398,32 @@ function tryLarkClientAuth(appId) {
   });
 }
 function startBrowserLarkLogin() {
-  loadLarkAppConfig().then(function() {
-    var redirect = getLoginRedirectUri();
-    fetch(API + '?action=auth-url')
-      .then(function(r) { return r.json(); })
-      .then(function(res) {
+  clearLoginError();
+  loadLarkAppConfig().then(function(cfg) {
+    if (!cfg.appId) {
+      alert('Lark 應用未設定（缺少 App ID）');
+      return;
+    }
+    return waitForLarkBridge(4000).then(function(inLark) {
+      if (!inLark) return false;
+      return tryLarkClientAuth(cfg.appId).then(function(user) { return !!user; });
+    }).then(function(loggedIn) {
+      if (loggedIn) {
+        updateTodoLoginLabel();
+        applyLoginUserToForms();
+        renderTeamPanel();
+        return;
+      }
+      var redirect = getLoginRedirectUri();
+      return fetch(API + '?action=auth-url').then(function(r) { return r.json(); }).then(function(res) {
         if (res.redirectUri) larkAppConfig.redirectUri = res.redirectUri;
         if (res.url) window.location.href = res.url;
         else alert('無法取得 Lark 登入連結。請在 Lark 開發者後台「安全設定 > 重定向 URL」加入：\n' + redirect);
-      }).catch(function(err) { alert('登入失敗：' + err.message); });
+      });
+    });
+  }).catch(function(err) {
+    showLoginError(err.message || '登入失敗');
+    alert('登入失敗：' + (err.message || '請稍後再試'));
   });
 }
 function resolveLoginUser() {
@@ -2412,7 +2442,9 @@ function resolveLoginUser() {
           return user;
         }).catch(function(err) {
           console.warn('Lark login', err);
-          loginUserReady = true;
+          if (window.history.replaceState) window.history.replaceState({}, '', redirect);
+          showLoginError('Lark 登入失敗：' + (err.message || '授權碼無效或已過期，請再點一次 Lark 登入'));
+          loginUserReady = false;
           return null;
         });
       });
