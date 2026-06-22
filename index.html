@@ -711,6 +711,7 @@ function sw(btn,id){
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   btn.classList.add('active');
   document.getElementById(id).classList.add('active');
+  if(id==='pg-s') renderGanttFromData();
   if(id==='pg-journal') reloadJournal().then(function(){ renderJournalPage(); });
   if(id==='pg-e') reloadExpenses().then(function(){ renderExpenses(); });
   if(id==='pg-b') renderBudget();
@@ -2662,6 +2663,9 @@ function designBarOpacity(status) {
   if (status.indexOf('進行') >= 0) return 0.9;
   return 0.65;
 }
+
+// ── 渲染甘特圖（使用真實資料）──
+function renderGanttFromData() {
   var ganttArea = document.getElementById('gantt-area');
   if (!ganttArea) return;
   ganttArea.innerHTML = '';
