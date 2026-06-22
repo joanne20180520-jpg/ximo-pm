@@ -282,28 +282,76 @@ async function inspectWikiBitableTarget(accessToken, wikiUrl) {
   return { appToken: appToken, tableNames: tableNames };
 }
 
-function getLinkIds(field) {
-  if (!field) return [];
-  if (Array.isArray(field)) {
-    return field.map(function(x) {
-      if (typeof x === 'string') return x;
-      return x.record_id || x.id || '';
-    }).filter(Boolean);
+function getLinkIds(linkField) {
+  if (!linkField) return [];
+  if (linkField.record_ids) return linkField.record_ids.slice();
+  if (linkField.link_record_ids) return linkField.link_record_ids.slice();
+  if (typeof linkField === 'string') return [linkField];
+  if (Array.isArray(linkField)) {
+    var ids = [];
+    linkField.forEach(function(item) {
+      if (!item) return;
+      if (typeof item === 'string') ids.push(item);
+      else if (item.record_ids) ids = ids.concat(item.record_ids);
+      else if (item.link_record_ids) ids = ids.concat(item.link_record_ids);
+      else if (item.record_id) ids.push(item.record_id);
+      else if (item.id) ids.push(item.id);
+    });
+    return ids;
   }
   return [];
 }
 
-function getProjectWiIds(proj) {
-  const f = proj.fields || {};
-  const ids = [];
-  const wiField = f['工作項目'];
-  if (Array.isArray(wiField)) {
-    wiField.forEach(function(x) {
-      if (typeof x === 'string') ids.push(x);
-      else if (x && x.record_id) ids.push(x.record_id);
-    });
+function getLinkText(linkField) {
+  if (!linkField) return '';
+  if (linkField.text_arr && linkField.text_arr[0]) return linkField.text_arr[0];
+  if (Array.isArray(linkField) && linkField[0]) {
+    if (linkField[0].text_arr && linkField[0].text_arr[0]) return linkField[0].text_arr[0];
+    if (linkField[0].text) return linkField[0].text;
   }
-  return ids;
+  return '';
+}
+
+function getProjectWiIds(proj) {
+  return getLinkIds((proj.fields || {})['工作項目']);
+}
+
+function getProjectNameFromWiFields(wiFields, projects) {
+  if (!wiFields) return '';
+  var text = getLinkText(wiFields['所屬標案']);
+  if (text) return text;
+  var ids = getLinkIds(wiFields['所屬標案']);
+  if (ids[0]) {
+    var proj = projects.find(function(p) { return p.record_id === ids[0]; });
+    if (proj) return (proj.fields && proj.fields['標案名稱']) || '';
+  }
+  return '';
+}
+
+function gatherWorkitemsForProject(proj, allWorkitems, allProjects) {
+  var f = proj.fields || {};
+  var pname = f['標案名稱'] || '';
+  var projId = proj.record_id;
+  var result = [];
+  var seen = {};
+  getProjectWiIds(proj).forEach(function(id) {
+    var wi = allWorkitems.find(function(w) { return w.record_id === id; });
+    if (wi) { seen[wi.record_id] = 1; result.push(wi); }
+  });
+  allWorkitems.forEach(function(wi) {
+    if (seen[wi.record_id]) return;
+    var linkedIds = getLinkIds(wi.fields['所屬標案']);
+    if (linkedIds.indexOf(projId) >= 0) {
+      seen[wi.record_id] = 1;
+      result.push(wi);
+      return;
+    }
+    if (pname && getProjectNameFromWiFields(wi.fields, allProjects) === pname) {
+      seen[wi.record_id] = 1;
+      result.push(wi);
+    }
+  });
+  return result;
 }
 
 function getExpenseProjIds(f) {
@@ -329,11 +377,7 @@ async function gatherProjectRelated(token, projectId) {
   const expenses = await getRecords(token, TABLES.expenses);
   const designs = await getRecords(token, TABLES.designs);
 
-  const projWiIds = getProjectWiIds(proj);
-  const workitemsRel = workitems.filter(function(wi) {
-    if (projWiIds.indexOf(wi.record_id) >= 0) return true;
-    return getLinkIds(wi.fields['所屬標案']).indexOf(projectId) >= 0;
-  });
+  const workitemsRel = gatherWorkitemsForProject(proj, workitems, projects);
   const wiIdSet = {};
   workitemsRel.forEach(function(w) { wiIdSet[w.record_id] = 1; });
 

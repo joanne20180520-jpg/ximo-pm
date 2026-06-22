@@ -2263,6 +2263,7 @@ function getWiIds(f) {
 function getLinkIds(linkField) {
   if (!linkField) return [];
   if (linkField.record_ids) return linkField.record_ids.slice();
+  if (linkField.link_record_ids) return linkField.link_record_ids.slice();
   if (typeof linkField === 'string') return [linkField];
   if (Array.isArray(linkField)) {
     var ids = [];
@@ -2270,6 +2271,7 @@ function getLinkIds(linkField) {
       if (!item) return;
       if (typeof item === 'string') ids.push(item);
       else if (item.record_ids) ids = ids.concat(item.record_ids);
+      else if (item.link_record_ids) ids = ids.concat(item.link_record_ids);
       else if (item.record_id) ids.push(item.record_id);
     });
     return ids;
