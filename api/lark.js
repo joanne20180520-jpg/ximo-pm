@@ -1311,13 +1311,82 @@ async function archiveProject(token, projectId, wikiUrl, userAccessToken) {
  
 async function sendWebhook(text) {
   const url = process.env.LARK_WEBHOOK_URL;
-  if (!url) return { skipped: true, reason: 'LARK_WEBHOOK_URL not set' };
+  if (!url) return { ok: false, skipped: true, reason: 'LARK_WEBHOOK_URL not set' };
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ msg_type: 'text', content: { text } })
   });
-  return await res.json();
+  const data = await res.json();
+  if (data.StatusCode !== 0 && data.code !== 0) {
+    return { ok: false, error: data.msg || data.StatusMessage || 'webhook failed', raw: data };
+  }
+  return { ok: true, raw: data };
+}
+
+function paymentApplicantText(fields) {
+  const a = fields && fields['申請人'];
+  if (!a) return '';
+  if (typeof a === 'string') return a;
+  if (Array.isArray(a) && a[0]) {
+    if (a[0].name) return String(a[0].name);
+    if (a[0].en_name) return String(a[0].en_name);
+    if (a[0].id) return String(a[0].id);
+  }
+  return '';
+}
+
+function buildPaymentPrintPath(fields) {
+  const params = new URLSearchParams();
+  function set(k, v) {
+    if (v !== undefined && v !== null && String(v).trim()) params.set(k, String(v).trim());
+  }
+  set('dept', fields['申請部門']);
+  const dateVal = fields['申請日期'];
+  if (dateVal) {
+    const d = new Date(dateVal);
+    if (!isNaN(d.getTime())) {
+      set('date', d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+    }
+  }
+  set('payee', fields['支付對象']);
+  set('vendor', fields['廠商名稱']);
+  set('method', fields['支付方式']);
+  set('reason', fields['事由']);
+  set('remark', fields['備註']);
+  const total = fields['付款總金額'];
+  if (total !== undefined && total !== null && String(total).trim()) {
+    set('total', String(total).replace(/[^0-9.]/g, ''));
+  }
+  const nature = fields['支付性質'];
+  if (Array.isArray(nature) && nature.length) set('nature', nature.join(','));
+  else if (nature) set('nature', String(nature).replace(/、/g, ','));
+  const applicant = paymentApplicantText(fields);
+  if (applicant) set('applicant', applicant);
+  const q = params.toString();
+  return q ? 'payment-print.html?' + q : 'payment-print.html';
+}
+
+async function sendPaymentNotify(fields) {
+  const site = (process.env.SITE_URL || 'https://ximo-pm.vercel.app').replace(/\/$/, '');
+  const printPath = buildPaymentPrintPath(fields || {});
+  const printUrl = site + '/' + printPath;
+  const amount = fields && fields['付款總金額'];
+  const amountStr = amount ? 'NT$' + Number(amount).toLocaleString() : '';
+  const notifyTo = process.env.PAYMENT_NOTIFY_TARGET || '會計';
+  const text = [
+    '【付款申請待處理】',
+    '通知對象：' + notifyTo,
+    '申請人：' + paymentApplicantText(fields),
+    '申請部門：' + (fields['申請部門'] || ''),
+    '支付對象：' + (fields['支付對象'] || ''),
+    '事由：' + (fields['事由'] || ''),
+    '金額：' + amountStr,
+    printUrl,
+    '已列印存檔，請會計審核處理 👇'
+  ].join('\n');
+  const result = await sendWebhook(text);
+  return Object.assign({ notifyTo: notifyTo, printUrl: printUrl }, result);
 }
 
 let jsapiTicketCache = { ticket: '', expiresAt: 0 };
@@ -1731,24 +1800,15 @@ export default async function handler(req, res) {
 
     if (action === 'notify' && req.method === 'POST') {
       const b = req.body || {};
-      const site = process.env.SITE_URL || 'https://ximo-pm.vercel.app';
-      const printUrl = b.printPath
-        ? site + '/' + b.printPath
-        : (b.printUrl || site);
-      const notifyTo = b.notifyTo || process.env.PAYMENT_NOTIFY_TARGET || '會計';
-      const text = [
-        '【付款申請待處理】',
-        '通知對象：' + notifyTo,
-        '申請人：' + (b.applicant || ''),
-        '申請部門：' + (b.dept || ''),
-        '支付對象：' + (b.payee || ''),
-        '事由：' + (b.reason || ''),
-        '金額：' + (b.amount || ''),
-        printUrl,
-        '請點連結確認資料後列印送會計 👇'
-      ].join('\n');
-      const result = await sendWebhook(text);
-      return res.status(200).json({ ok: true, notify: result, notifyTo: notifyTo });
+      const fields = {
+        '申請人': b.applicant || '',
+        '申請部門': b.dept || '',
+        '支付對象': b.payee || '',
+        '事由': b.reason || '',
+        '付款總金額': (b.amount || '').replace(/[^0-9.]/g, '')
+      };
+      const result = await sendPaymentNotify(fields);
+      return res.status(200).json({ ok: true, notify: result, notifyTo: result.notifyTo });
     }
 
     if (req.method === 'POST') {
@@ -1756,6 +1816,11 @@ export default async function handler(req, res) {
       const cleanBody = stripAuthFromBody(req.body || {});
       if (table === 'payments') {
         const result = await createPaymentInBothBases(tenantToken, userAccessToken, cleanBody);
+        try {
+          result.notify = await sendPaymentNotify(cleanBody);
+        } catch (notifyErr) {
+          result.notify = { ok: false, error: notifyErr.message || String(notifyErr) };
+        }
         return res.status(200).json(result);
       }
       const tableAppToken = appTokenForTable(table);

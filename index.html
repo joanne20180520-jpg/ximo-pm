@@ -1973,6 +1973,13 @@ function doPrint() {
     if (res && res.partialErrors && res.partialErrors.length) {
       msg += '\n（部分寫入失敗：' + res.partialErrors.join('；') + '）';
     }
+    if (res && res.notify) {
+      if (res.notify.skipped) {
+        msg += '\n（機器人通知未設定：請在 Vercel 設定 LARK_WEBHOOK_URL）';
+      } else if (!res.notify.ok) {
+        msg += '\n（機器人通知失敗：' + (res.notify.error || res.notify.reason || '請稍後再試') + '）';
+      }
+    }
     alert(msg);
   }).catch(function(err) {
     console.error(err);
@@ -2189,7 +2196,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260623i';
+var APP_BUILD = '20260623j';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
