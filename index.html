@@ -478,6 +478,8 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .undo-toast.show{opacity:1;pointer-events:auto}
 .undo-btn{padding:4px 10px;border-radius:var(--rs);border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;font-size:11px;font-weight:600;cursor:pointer}
 .undo-btn:hover{background:rgba(255,255,255,.22)}
+button:disabled,.bpri:disabled,.bsub:disabled,.bsub2:disabled,.bsm:disabled,.bdel:disabled,.confirm-ok:disabled{opacity:.5;cursor:not-allowed;pointer-events:none}
+button.btn-loading::after{content:'…';margin-left:2px}
 </style>
 </head>
 <body>
@@ -810,6 +812,26 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 </div>
 </div>
 <script>
+  // ── 全域防連點：所有送出按鈕點擊後鎖定 1.2 秒，避免重複送出 ──
+(function() {
+  var LOCK_SELECTOR = '.bpri, .bsub, .bsub2, .bsm, .bdel, .confirm-ok, .bads, .badd';
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest(LOCK_SELECTOR);
+    if (!btn) return;
+    if (btn.disabled || btn.classList.contains('btn-loading')) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return;
+    }
+    btn.classList.add('btn-loading');
+    btn.disabled = true;
+    setTimeout(function() {
+      btn.disabled = false;
+      btn.classList.remove('btn-loading');
+    }, 1200);
+  }, true);
+})();
 // 動態載入外部腳本，避免 Lark 內建瀏覽器被 CDN 卡住整頁
 var optionalLibLoads = {};
 function loadScriptOnce(url, globalName) {
