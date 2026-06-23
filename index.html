@@ -1015,6 +1015,7 @@ function sw(btn,id){
   if(id==='pg-e') reloadExpenses().then(function(){ renderExpenses(); });
   if(id==='pg-b') renderBudget();
   if(id==='pg-d') renderDesigns();
+  if(id==='pg-p') applyLoginUserToForms();
 }
 function sf(el,color){
   document.querySelectorAll('.ftag').forEach(function(t){t.style.background='';t.style.color='';});
@@ -2234,7 +2235,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260623s';
+var APP_BUILD = '20260623t';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -2607,13 +2608,24 @@ function completeAuthAfterLogin() {
     currentUserRole = result.role || 'PM';
     hideAuthGate();
     applyRolePermissions();
+    if (result.loginUser || result.memberName) {
+      var merged = Object.assign({}, getCurrentLoginUser() || {}, result.loginUser || {});
+      if (result.memberName) {
+        if (!merged.name) merged.name = result.memberName;
+        if (!merged.enName) merged.enName = result.memberName;
+      }
+      var tok = getUserAccessToken();
+      if (tok) merged.accessToken = tok;
+      if (merged.name || merged.accessToken) finalizeLoginUser(merged);
+    }
     if (!authReady) {
       authReady = true;
       loadData();
+    } else {
+      updateTodoLoginLabel();
+      applyLoginUserToForms();
+      renderTeamPanel();
     }
-    updateTodoLoginLabel();
-    applyLoginUserToForms();
-    renderTeamPanel();
     return true;
   });
 }
@@ -2759,7 +2771,12 @@ function getLoginLarkPerson() {
 function applyLoginUserToForms() {
   var name = getLoginDisplayName();
   var payApplicant = document.getElementById('p-applicant');
-  if (payApplicant && name) payApplicant.value = name;
+  if (payApplicant && name) {
+    if (payApplicant.dataset.userEdited !== '1') {
+      payApplicant.value = name;
+      payApplicant.dataset.autoName = name;
+    }
+  }
   var payLabel = document.getElementById('pay-user-label');
   if (payLabel) {
     if (name) payLabel.textContent = '申請人：' + name;
@@ -5325,11 +5342,15 @@ function savePaymentRecord(data) {
     '付款總金額': parseFloat(data.total),
     '狀態': '待處理'
   };
-  var applicantPerson = getLoginLarkPerson();
-  if (applicantPerson) fields['申請人'] = applicantPerson;
-  else if (data.applicant) fields['申請人'] = data.applicant;
+  var applicantName = (data.applicant || '').trim();
   var loginUser = getCurrentLoginUser();
-  if (loginUser && loginUser.openId) fields.applicantOpenId = loginUser.openId;
+  var loginName = getLoginDisplayName();
+  if (applicantName) {
+    fields['申請人'] = applicantName;
+    if (loginUser && loginUser.openId && loginName && namesMatch(applicantName, loginName)) {
+      fields.applicantOpenId = loginUser.openId;
+    }
+  }
   return fetch(API + '?table=payments', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -6527,6 +6548,14 @@ if (document.readyState === 'loading') {
   var el = document.getElementById('p-date');
   if (el && !el.value) {
     el.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  var applicantEl = document.getElementById('p-applicant');
+  if (applicantEl) {
+    applicantEl.addEventListener('input', function() {
+      var auto = applicantEl.dataset.autoName || '';
+      if (applicantEl.value.trim() !== auto) applicantEl.dataset.userEdited = '1';
+      else delete applicantEl.dataset.userEdited;
+    });
   }
 })();
 window.addEventListener('resize', function() {

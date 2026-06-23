@@ -969,37 +969,33 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
 }
 
 async function enrichPaymentApplicant(tenantToken, userToken, fields, hintOpenId) {
-  let openId = String(hintOpenId || '').trim();
-  if (!openId && userToken) {
-    try {
-      const u = await getUserInfoFromToken(userToken);
-      openId = String(u.open_id || u.openId || '').trim();
-    } catch (e) {}
-  }
   const raw = fields['申請人'];
+  const rawName = typeof raw === 'string' ? raw.trim() : paymentApplicantText(fields);
+  let openId = String(hintOpenId || '').trim();
+  const loginName = userToken ? (await getUserInfoFromToken(userToken).catch(function() { return null; })) : null;
+  const tokenName = loginName ? String(loginName.name || loginName.en_name || '').trim() : '';
+  if (!openId && userToken && tokenName && rawName && namesMatch(rawName, tokenName)) {
+    openId = String(loginName.open_id || '').trim();
+  }
   if (!openId && Array.isArray(raw) && raw[0] && raw[0].id) {
     const rid = String(raw[0].id);
     if (/^ou_/i.test(rid) || /^on_/i.test(rid)) openId = rid;
   }
-  if (!openId) {
-    const name = typeof raw === 'string' ? raw.trim() : paymentApplicantText(fields);
-    if (name) {
-      const members = await getRecords(tenantToken, TABLES.members);
-      for (let i = 0; i < members.length; i++) {
-        const mf = members[i].fields || {};
-        const mn = getMemberName(mf);
-        if (mn && namesMatch(mn, name)) {
-          openId = getMemberPersonOpenId(mf);
-          if (openId) break;
-        }
+  if (!openId && rawName) {
+    const members = await getRecords(tenantToken, TABLES.members);
+    for (let i = 0; i < members.length; i++) {
+      const mf = members[i].fields || {};
+      const mn = getMemberName(mf);
+      if (mn && namesMatch(mn, rawName)) {
+        openId = getMemberPersonOpenId(mf);
+        if (openId) break;
       }
     }
   }
   if (openId) {
     fields['申請人'] = [{ id: openId }];
-  } else {
-    const name = typeof raw === 'string' ? raw.trim() : paymentApplicantText(fields);
-    if (name) fields['申請人'] = name;
+  } else if (rawName) {
+    fields['申請人'] = rawName;
   }
   return fields;
 }
