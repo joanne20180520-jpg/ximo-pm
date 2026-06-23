@@ -1459,6 +1459,28 @@ async function sendPaymentNotify(fields) {
   return Object.assign({ notifyTo: notifyTo, printUrl: printUrl }, result);
 }
 
+function paymentNotifyMode() {
+  const raw = (process.env.PAYMENT_NOTIFY_MODE || '').trim().toLowerCase();
+  if (raw === 'automation' || raw === 'lark' || raw === 'skip' || raw === 'off' || raw === 'false') return 'automation';
+  if (raw === 'both') return 'both';
+  return 'app';
+}
+
+async function maybeSendPaymentNotify(fields) {
+  const mode = paymentNotifyMode();
+  if (mode === 'automation') {
+    return {
+      ok: true,
+      skipped: true,
+      mode: 'automation',
+      reason: '已略過 App 通知，改由 Lark 多維表格自動化發送'
+    };
+  }
+  const result = await sendPaymentNotify(fields);
+  result.mode = mode;
+  return result;
+}
+
 let jsapiTicketCache = { ticket: '', expiresAt: 0 };
 
 async function getJsapiTicket(token) {
@@ -1808,6 +1830,7 @@ export default async function handler(req, res) {
           hasAppTokenPayments: !!APP_TOKEN_PAYMENTS,
           hasWebhook: !!process.env.LARK_WEBHOOK_URL,
           hasWebhookKeyword: !!process.env.LARK_WEBHOOK_KEYWORD,
+          paymentNotifyMode: paymentNotifyMode(),
           paymentsTableMain: paymentsFrontConfig().tableId,
           paymentsTableAccounting: paymentsAccountingConfig().tableId,
           paymentsFrontUrlSet: !!(process.env.LARK_PAYMENTS_FRONTEND_URL || '').trim(),
@@ -1888,7 +1911,7 @@ export default async function handler(req, res) {
         '事由': b.reason || '',
         '付款總金額': (b.amount || '').replace(/[^0-9.]/g, '')
       };
-      const result = await sendPaymentNotify(fields);
+      const result = await maybeSendPaymentNotify(fields);
       return res.status(200).json({ ok: true, notify: result, notifyTo: result.notifyTo });
     }
 
@@ -1898,7 +1921,7 @@ export default async function handler(req, res) {
       if (table === 'payments') {
         const result = await createPaymentInBothBases(tenantToken, userAccessToken, cleanBody);
         try {
-          result.notify = await sendPaymentNotify(cleanBody);
+          result.notify = await maybeSendPaymentNotify(cleanBody);
         } catch (notifyErr) {
           result.notify = { ok: false, error: notifyErr.message || String(notifyErr) };
         }
