@@ -166,6 +166,33 @@ function buildTables() {
 const TABLES = buildTables();
 const PAYMENTS_TABLE_MAIN = (process.env.LARK_TABLE_PAYMENTS_MAIN || '').trim();
 const PAYMENTS_TABLE_ACCOUNTING = (process.env.LARK_TABLE_PAYMENTS_ACCOUNTING || '').trim();
+
+function parseBitableShareUrl(url) {
+  const out = { appToken: '', tableId: '' };
+  if (!url) return out;
+  const s = String(url).trim();
+  const baseMatch = s.match(/\/base\/([A-Za-z0-9]+)/);
+  if (baseMatch) out.appToken = baseMatch[1];
+  const tableMatch = s.match(/[?&]table=([A-Za-z0-9]+)/);
+  if (tableMatch) out.tableId = tableMatch[1];
+  return out;
+}
+
+function paymentsFrontConfig() {
+  const fromUrl = parseBitableShareUrl(process.env.LARK_PAYMENTS_FRONTEND_URL || '');
+  return {
+    appToken: (process.env.LARK_APP_TOKEN_PAYMENTS_FRONTEND || fromUrl.appToken || APP_TOKEN).trim(),
+    tableId: (PAYMENTS_TABLE_MAIN || fromUrl.tableId || TABLES.payments).trim()
+  };
+}
+
+function paymentsAccountingConfig() {
+  const fromUrl = parseBitableShareUrl(process.env.LARK_PAYMENTS_ACCOUNTING_URL || '');
+  return {
+    appToken: (APP_TOKEN_PAYMENTS || fromUrl.appToken || '').trim(),
+    tableId: (PAYMENTS_TABLE_ACCOUNTING || fromUrl.tableId || TABLES.payments).trim()
+  };
+}
 const ARCHIVE_OAUTH_SCOPES = 'wiki:wiki wiki:node:read bitable:app';
 
 const ARCHIVE_TABLE_KEYWORDS = {
@@ -955,33 +982,34 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields) {
   const fields = Object.assign({}, rawFields || {});
   if (fields['狀態'] === undefined) fields['狀態'] = '待處理';
 
+  const frontCfg = paymentsFrontConfig();
   try {
     const mainTableId = await resolvePaymentsTableId(
       tenantToken,
-      APP_TOKEN,
-      PAYMENTS_TABLE_MAIN || TABLES.payments
+      frontCfg.appToken,
+      frontCfg.tableId
     );
     if (!mainTableId) throw new Error('找不到前台付款資料表');
-    const mainBody = await normalizeWriteFields(tenantToken, mainTableId, fields, APP_TOKEN);
+    const mainBody = await normalizeWriteFields(tenantToken, mainTableId, fields, frontCfg.appToken);
     results.main = await writeWithUserFallback(tenantToken, userToken, function(tok, asUser) {
-      return createRecord(tok, mainTableId, mainBody, APP_TOKEN, asUser);
+      return createRecord(tok, mainTableId, mainBody, frontCfg.appToken, asUser);
     });
   } catch (err) {
     errors.push('前台資料庫：' + (err.message || String(err)));
   }
 
-  const accAppToken = APP_TOKEN_PAYMENTS;
-  if (accAppToken && accAppToken !== APP_TOKEN) {
+  const accCfg = paymentsAccountingConfig();
+  if (accCfg.appToken && (accCfg.appToken !== frontCfg.appToken || accCfg.tableId !== frontCfg.tableId)) {
     try {
       const accTableId = await resolvePaymentsTableId(
         tenantToken,
-        accAppToken,
-        PAYMENTS_TABLE_ACCOUNTING || TABLES.payments
+        accCfg.appToken,
+        accCfg.tableId
       );
       if (!accTableId) throw new Error('找不到會計付款資料表');
-      const accBody = await normalizeWriteFields(tenantToken, accTableId, fields, accAppToken);
+      const accBody = await normalizeWriteFields(tenantToken, accTableId, fields, accCfg.appToken);
       results.accounting = await writeWithUserFallback(tenantToken, userToken, function(tok, asUser) {
-        return createRecord(tok, accTableId, accBody, accAppToken, asUser);
+        return createRecord(tok, accTableId, accBody, accCfg.appToken, asUser);
       });
     } catch (err) {
       errors.push('會計資料庫：' + (err.message || String(err)));
@@ -1417,7 +1445,7 @@ async function sendPaymentNotify(fields) {
   const amountStr = amount ? 'NT$' + Number(amount).toLocaleString() : '';
   const notifyTo = process.env.PAYMENT_NOTIFY_TARGET || '會計';
   const text = [
-    '【付款申請待處理】',
+    '【標案·付款申請待處理】',
     '通知對象：' + notifyTo,
     '申請人：' + paymentApplicantText(fields),
     '申請部門：' + (fields['申請部門'] || ''),
@@ -1780,8 +1808,9 @@ export default async function handler(req, res) {
           hasAppTokenPayments: !!APP_TOKEN_PAYMENTS,
           hasWebhook: !!process.env.LARK_WEBHOOK_URL,
           hasWebhookKeyword: !!process.env.LARK_WEBHOOK_KEYWORD,
-          paymentsTableMain: PAYMENTS_TABLE_MAIN || TABLES.payments,
-          paymentsTableAccounting: PAYMENTS_TABLE_ACCOUNTING || TABLES.payments,
+          paymentsTableMain: paymentsFrontConfig().tableId,
+          paymentsTableAccounting: paymentsAccountingConfig().tableId,
+          paymentsFrontUrlSet: !!(process.env.LARK_PAYMENTS_FRONTEND_URL || '').trim(),
           siteUrl: (process.env.SITE_URL || '').trim(),
           appIdLen: APP_ID ? APP_ID.length : 0,
           appSecretLen: APP_SECRET ? APP_SECRET.length : 0,
