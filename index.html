@@ -482,7 +482,8 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .auth-gate.hidden{display:none}
 .auth-gate-box{text-align:center;max-width:360px;padding:32px 24px;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow)}
 .auth-gate-box .logo{font-size:22px;margin-bottom:20px}
-.auth-gate-msg{font-size:14px;color:var(--t2);line-height:1.6;margin-bottom:16px}
+.auth-gate-msg{font-size:14px;color:var(--t2);line-height:1.6;margin-bottom:8px}
+.auth-gate-sub{font-size:12px;color:var(--t3);margin-bottom:16px;line-height:1.6;white-space:pre-line}
 .auth-gate-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
 body.role-designer #lp,body.role-designer #rp,body.role-designer #tl,body.role-designer #tr{display:none!important}
 button:disabled,.bpri:disabled,.bsub:disabled,.bsub2:disabled,.bsm:disabled,.bdel:disabled,.confirm-ok:disabled{opacity:.5;cursor:not-allowed;pointer-events:none}
@@ -495,6 +496,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="auth-gate-box">
     <div class="logo">璽墨</div>
     <div class="auth-gate-msg" id="auth-gate-msg">驗證登入中…</div>
+    <div class="auth-gate-sub" id="auth-gate-sub" style="font-size:12px;color:var(--t3);margin-bottom:16px;line-height:1.5"></div>
     <div class="auth-gate-actions">
       <button type="button" class="bpri" id="auth-gate-login" style="display:none" onclick="startBrowserLarkLogin()">請登入 Lark</button>
       <button type="button" class="bcan" id="auth-gate-logout" style="display:none" onclick="logoutAndShowGate()">登出重新登入</button>
@@ -836,6 +838,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   document.addEventListener('click', function(e) {
     var btn = e.target.closest(LOCK_SELECTOR);
     if (!btn) return;
+    if (btn.closest('#auth-gate')) return;
     if (btn.disabled || btn.classList.contains('btn-loading')) {
       e.preventDefault();
       e.stopPropagation();
@@ -2088,7 +2091,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260623c';
+var APP_BUILD = '20260623d';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -2224,14 +2227,24 @@ var ROLE_PAGES = {
   '設計師': ['pg-d']
 };
 
-function showAuthGate(state, msg) {
+function formatLoginDisplayName(user) {
+  if (!user) return '';
+  var parts = [];
+  if (user.name) parts.push(user.name);
+  if (user.enName && user.enName !== user.name) parts.push(user.enName);
+  return parts.join(' / ');
+}
+
+function showAuthGate(state, msg, sub) {
   var gate = document.getElementById('auth-gate');
   var msgEl = document.getElementById('auth-gate-msg');
+  var subEl = document.getElementById('auth-gate-sub');
   var loginBtn = document.getElementById('auth-gate-login');
   var logoutBtn = document.getElementById('auth-gate-logout');
   if (!gate) return;
   gate.classList.remove('hidden');
   if (msgEl) msgEl.textContent = msg || '';
+  if (subEl) subEl.textContent = sub || '';
   if (loginBtn) loginBtn.style.display = state === 'login' ? '' : 'none';
   if (logoutBtn) logoutBtn.style.display = state === 'denied' ? '' : 'none';
 }
@@ -2247,7 +2260,7 @@ function logoutAndShowGate() {
   loginUserReady = false;
   try { sessionStorage.removeItem('ximo-login-user'); } catch (e) {}
   document.body.classList.remove('role-designer');
-  showAuthGate('login', '請登入 Lark');
+  showAuthGate('login', '請登入 Lark', '璽墨專案管理系統');
 }
 
 function withUserToken(payload) {
@@ -2264,8 +2277,15 @@ function checkMemberAuthorization() {
     .then(function(r) { return r.json(); })
     .then(function(res) {
       if (!res || !res.ok || res.needLogin) return { authorized: false, needLogin: true };
-      if (!res.authorized) return { authorized: false, needLogin: false };
-      return { authorized: true, role: res.role || 'PM', memberName: res.memberName || '' };
+      if (!res.authorized) {
+        return {
+          authorized: false,
+          needLogin: false,
+          loginUser: res.user || null,
+          memberCount: res.memberCount || 0
+        };
+      }
+      return { authorized: true, role: res.role || 'PM', memberName: res.memberName || '', loginUser: res.user || null };
     })
     .catch(function() { return { authorized: false, needLogin: true }; });
 }
@@ -2291,8 +2311,15 @@ function applyRolePermissions() {
 function completeAuthAfterLogin() {
   return checkMemberAuthorization().then(function(result) {
     if (!result.authorized) {
-      if (result.needLogin) showAuthGate('login', '請登入 Lark');
-      else showAuthGate('denied', '不在授權名單內');
+      if (result.needLogin) {
+        showAuthGate('login', '請登入 Lark', '璽墨專案管理系統');
+      } else {
+        var who = formatLoginDisplayName(result.loginUser) || '目前帳號';
+        var sub = '已登入：' + who;
+        if (result.memberCount === 0) sub += '\n（後台讀不到人員資料，請確認 Vercel 環境變數 LARK_APP_TOKEN 與人員表）';
+        else sub += '\n請確認人員資料表已登記此 Lark 帳號（姓名或成員欄位需一致）';
+        showAuthGate('denied', '不在授權名單內', sub);
+      }
       return false;
     }
     currentUserRole = result.role || 'PM';
@@ -2310,7 +2337,7 @@ function completeAuthAfterLogin() {
 }
 
 function runAuthGate() {
-  showAuthGate('loading', '驗證登入中…');
+  showAuthGate('loading', '驗證登入中…', '璽墨專案管理系統');
   return resolveLoginUser().then(function() {
     return completeAuthAfterLogin();
   });

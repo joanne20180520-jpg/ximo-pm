@@ -1397,27 +1397,65 @@ function fieldTextValue(raw) {
 
 function namesMatch(a, b) {
   if (!a || !b) return false;
-  a = String(a).trim();
-  b = String(b).trim();
+  a = String(a).trim().toLowerCase().replace(/\s+/g, ' ');
+  b = String(b).trim().toLowerCase().replace(/\s+/g, ' ');
   if (!a || !b) return false;
   if (a === b) return true;
   return a.indexOf(b) >= 0 || b.indexOf(a) >= 0;
 }
 
+function listMemberPersonIds(fields) {
+  const ids = [];
+  const keys = ['成員', '姓名', '名稱', '人員', 'Member'];
+  keys.forEach(function(k) {
+    const p = fields[k];
+    if (!p) return;
+    const items = Array.isArray(p) ? p : [p];
+    items.forEach(function(x) {
+      if (!x) return;
+      if (typeof x === 'string' && x) ids.push(String(x).trim());
+      else if (x.id) ids.push(String(x.id).trim());
+      else if (x.open_id) ids.push(String(x.open_id).trim());
+      else if (x.user_id) ids.push(String(x.user_id).trim());
+    });
+  });
+  const extra = fieldTextValue(fields['open_id'] || fields['Open ID'] || fields['user_id'] || fields['User ID'] || fields['userid']);
+  if (extra) ids.push(extra);
+  return ids.filter(Boolean);
+}
+
+function listMemberPersonNames(fields) {
+  const names = [];
+  const keys = ['成員', '姓名', '名稱', '人員', 'Member'];
+  keys.forEach(function(k) {
+    const p = fields[k];
+    if (!p) return;
+    if (typeof p === 'string' && p.trim()) {
+      names.push(p.trim());
+      return;
+    }
+    const items = Array.isArray(p) ? p : [p];
+    items.forEach(function(x) {
+      if (!x) return;
+      if (typeof x === 'string' && x.trim()) names.push(x.trim());
+      if (x.name) names.push(String(x.name).trim());
+      if (x.en_name) names.push(String(x.en_name).trim());
+      if (x.enName) names.push(String(x.enName).trim());
+    });
+  });
+  const text = fieldTextValue(fields['姓名'] || fields['名稱'] || fields['顯示名稱']);
+  if (text) names.push(text);
+  return names.filter(Boolean);
+}
+
 function getMemberPersonOpenId(fields) {
-  const person = fields['成員'] || fields['姓名'] || fields['名稱'];
-  if (!person) return '';
-  if (Array.isArray(person) && person[0]) {
-    return String(person[0].id || person[0].open_id || '').trim();
-  }
-  if (person && typeof person === 'object') {
-    return String(person.id || person.open_id || '').trim();
-  }
-  return '';
+  const ids = listMemberPersonIds(fields);
+  return ids[0] || '';
 }
 
 function getMemberName(fields) {
-  return fieldTextValue(fields['姓名'] || fields['名稱'] || fields['成員']);
+  const names = listMemberPersonNames(fields);
+  return names[0] || '';
 }
 
 function getMemberRole(fields) {
@@ -1429,17 +1467,19 @@ function getMemberRole(fields) {
 function findMemberForUser(members, user) {
   const openId = String(user.openId || '').trim();
   const userId = String(user.userId || '').trim();
-  const name = String(user.name || '').trim();
-  const enName = String(user.enName || '').trim();
+  const userNames = [user.name, user.enName].map(function(s) { return String(s || '').trim(); }).filter(Boolean);
   for (let i = 0; i < members.length; i++) {
     const f = members[i].fields || {};
-    const mOpenId = fieldTextValue(f['open_id'] || f['Open ID']) || getMemberPersonOpenId(f);
+    const personIds = listMemberPersonIds(f);
+    if (openId && personIds.some(function(id) { return id === openId; })) return members[i];
     const mUserId = fieldTextValue(f['user_id'] || f['User ID'] || f['userid']);
-    const mName = getMemberName(f);
-    if (openId && mOpenId && openId === mOpenId) return members[i];
     if (userId && mUserId && userId === mUserId) return members[i];
-    if (name && mName && namesMatch(mName, name)) return members[i];
-    if (enName && mName && namesMatch(mName, enName)) return members[i];
+    const mNames = listMemberPersonNames(f);
+    for (let u = 0; u < userNames.length; u++) {
+      for (let n = 0; n < mNames.length; n++) {
+        if (namesMatch(mNames[n], userNames[u])) return members[i];
+      }
+    }
   }
   return null;
 }
@@ -1488,7 +1528,7 @@ async function checkMemberAuthorization(userAccessToken) {
   const members = await getRecords(tenantToken, TABLES.members);
   const memberRec = findMemberForUser(members, user);
   if (!memberRec) {
-    return { ok: true, needLogin: false, authorized: false, user };
+    return { ok: true, needLogin: false, authorized: false, user, memberCount: members.length };
   }
   const role = getMemberRole(memberRec.fields || {});
   return {
