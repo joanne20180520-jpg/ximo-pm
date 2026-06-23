@@ -1726,11 +1726,18 @@ export default async function handler(req, res) {
       return res.status(200).json({
         ok: tokenOk,
         baseUrl: BASE_URL,
+        deploy: {
+          commit: (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 12),
+          ref: process.env.VERCEL_GIT_COMMIT_REF || process.env.VERCEL_GIT_REF || '',
+          url: process.env.VERCEL_URL || ''
+        },
         env: {
           hasAppId: !!APP_ID,
           hasAppSecret: !!APP_SECRET,
           hasAppToken: !!APP_TOKEN,
           hasAppTokenPayments: !!APP_TOKEN_PAYMENTS,
+          hasWebhook: !!process.env.LARK_WEBHOOK_URL,
+          siteUrl: (process.env.SITE_URL || '').trim(),
           appIdLen: APP_ID ? APP_ID.length : 0,
           appSecretLen: APP_SECRET ? APP_SECRET.length : 0,
           appTokenLen: APP_TOKEN ? APP_TOKEN.length : 0,
