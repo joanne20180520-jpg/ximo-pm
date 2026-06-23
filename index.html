@@ -496,6 +496,10 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .auth-gate-icon.state-denied{background:linear-gradient(135deg,#fef2f2,#fde8e8);color:var(--danger)}
 @keyframes authPulse{0%,100%{opacity:.55;transform:scale(.96)}50%{opacity:1;transform:scale(1)}}
 .auth-gate-msg{font-size:16px;font-weight:600;color:var(--text);margin-bottom:12px;line-height:1.45}
+.auth-gate.gate-login .auth-gate-msg{font-size:14px;font-weight:500;color:var(--t2);margin-bottom:22px}
+.auth-gate.gate-login .auth-gate-body{padding-top:32px}
+.auth-gate-actions .auth-gate-login-btn{width:100%;max-width:280px;padding:13px 20px;font-size:14px;border-radius:var(--rs)}
+.auth-gate-actions .auth-gate-login-btn:active{background:var(--c1)!important;transform:scale(0.97);box-shadow:0 0 0 3px rgba(45,106,79,.28)}
 .auth-gate-user{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:14px;background:var(--sf2);border:1px solid var(--border);border-radius:var(--rs);text-align:left}
 .auth-gate-user-dot{width:40px;height:40px;border-radius:50%;background:linear-gradient(145deg,#e8a04a,#c96d28);color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(201,109,40,.25)}
 .auth-gate-user-name{font-size:13px;font-weight:600;color:var(--text);line-height:1.3}
@@ -567,7 +571,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
       </div>
       <div class="auth-gate-sub" id="auth-gate-sub" style="display:none"></div>
       <div class="auth-gate-actions">
-        <button type="button" class="bpri" id="auth-gate-login" style="display:none" onclick="startBrowserLarkLogin()">使用 Lark 登入</button>
+        <button type="button" class="bpri auth-gate-login-btn" id="auth-gate-login" style="display:none" onclick="startBrowserLarkLogin()">使用 Lark 登入</button>
         <button type="button" class="bcan" id="auth-gate-logout" style="display:none" onclick="logoutAndShowGate()">登出並重新登入</button>
       </div>
     </div>
@@ -924,7 +928,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   }
   document.addEventListener('click', function(e) {
     var btn = e.target.closest('button');
-    if (btn && !btn.closest('#auth-gate')) pulseButton(btn);
+    if (btn && (!btn.closest('#auth-gate') || btn.id === 'auth-gate-login')) pulseButton(btn);
     var lockBtn = e.target.closest(LOCK_SELECTOR);
     if (!lockBtn) return;
     if (lockBtn.closest('#auth-gate')) return;
@@ -2181,7 +2185,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260623f';
+var APP_BUILD = '20260623h';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -2310,6 +2314,9 @@ var loginResolving = null;
 var larkAppConfig = { appId: '', redirectUri: '' };
 var oauthCodeConsumed = false;
 var loginPending = false;
+var loginFlowActive = false;
+var autoLoginAttempted = false;
+var cachedAuthUrl = null;
 var authReady = false;
 var currentUserRole = 'PM';
 var ROLE_PAGES = {
@@ -2325,6 +2332,98 @@ function formatLoginDisplayName(user) {
   return parts.join(' / ');
 }
 
+function setAuthLoginButtonLoading(loading) {
+  var btn = document.getElementById('auth-gate-login');
+  if (!btn) return;
+  if (loading) {
+    btn.disabled = true;
+    btn.classList.add('btn-loading');
+    btn.textContent = '登入中…';
+  } else {
+    btn.disabled = false;
+    btn.classList.remove('btn-loading');
+    btn.textContent = '使用 Lark 登入';
+  }
+}
+
+function preloadAuthUrl() {
+  if (cachedAuthUrl) return Promise.resolve(cachedAuthUrl);
+  return fetch(apiUrl('?action=auth-url')).then(function(r) { return r.json(); }).then(function(res) {
+    if (res && res.redirectUri) larkAppConfig.redirectUri = res.redirectUri;
+    if (res && res.url) cachedAuthUrl = res.url;
+    return cachedAuthUrl;
+  }).catch(function() { return null; });
+}
+
+function redirectToLarkOAuth() {
+  return preloadAuthUrl().then(function(url) {
+    if (url) {
+      window.location.href = url;
+      return true;
+    }
+    var redirect = getLoginRedirectUri();
+    alert('無法取得 Lark 登入連結。請在 Lark 開發者後台「安全設定 > 重定向 URL」加入：\n' + redirect);
+    return false;
+  });
+}
+
+function attemptAutoLogin(force) {
+  if (loginFlowActive) return Promise.resolve(false);
+  if (autoLoginAttempted && !force) return Promise.resolve(false);
+  autoLoginAttempted = true;
+  loginFlowActive = true;
+  showAuthGate('loading', '正在登入 Lark…', '', null);
+  clearLoginError();
+  return loadLarkAppConfig().then(function(cfg) {
+    if (!cfg.appId) {
+      showAuthGate('login', '無法自動登入', 'Lark 應用未設定（缺少 App ID）', null);
+      preloadAuthUrl();
+      return false;
+    }
+    if (!isLikelyLarkClient()) {
+      return redirectToLarkOAuth().then(function(ok) {
+        if (!ok) {
+          showAuthGate('login', '請使用 Lark 帳號登入', '', null);
+          preloadAuthUrl();
+        }
+        return ok;
+      });
+    }
+    return waitForLarkBridge(2000).then(function(inLark) {
+      if (!inLark) {
+        return redirectToLarkOAuth().then(function(ok) {
+          if (!ok) {
+            showAuthGate('login', '請使用 Lark 帳號登入', '', null);
+            preloadAuthUrl();
+          }
+          return ok;
+        });
+      }
+      return promiseWithTimeout(tryLarkClientAuth(cfg.appId), 10000, null).then(function(user) {
+        if (user && user.accessToken) {
+          return completeAuthAfterLogin().then(function(ok) {
+            if (!ok && !getUserAccessToken()) return attemptAutoLogin(true);
+            return ok;
+          });
+        }
+        return redirectToLarkOAuth().then(function(ok) {
+          if (!ok) {
+            showAuthGate('login', '請使用 Lark 帳號登入', '', null);
+            preloadAuthUrl();
+          }
+          return ok;
+        });
+      });
+    });
+  }).catch(function(err) {
+    showAuthGate('login', '登入失敗', err.message || '請點擊下方按鈕重試', null);
+    preloadAuthUrl();
+    return false;
+  }).finally(function() {
+    loginFlowActive = false;
+  });
+}
+
 function showAuthGate(state, msg, sub, loginUser) {
   var gate = document.getElementById('auth-gate');
   var iconEl = document.getElementById('auth-gate-icon');
@@ -2337,10 +2436,16 @@ function showAuthGate(state, msg, sub, loginUser) {
   var logoutBtn = document.getElementById('auth-gate-logout');
   if (!gate) return;
   gate.classList.remove('hidden');
+  gate.classList.toggle('gate-login', state === 'login');
   if (msgEl) msgEl.textContent = msg || '';
   if (iconEl) {
-    iconEl.className = 'auth-gate-icon state-' + (state === 'denied' ? 'denied' : state === 'login' ? 'login' : 'loading');
-    iconEl.textContent = state === 'denied' ? '!' : state === 'login' ? '→' : '◎';
+    if (state === 'login') {
+      iconEl.style.display = 'none';
+    } else {
+      iconEl.style.display = 'flex';
+      iconEl.className = 'auth-gate-icon state-' + (state === 'denied' ? 'denied' : 'loading');
+      iconEl.textContent = state === 'denied' ? '!' : '◎';
+    }
   }
   var who = formatLoginDisplayName(loginUser);
   if (userBox && userNameEl && userDot) {
@@ -2353,7 +2458,7 @@ function showAuthGate(state, msg, sub, loginUser) {
     }
   }
   if (subEl) {
-    if (sub) {
+    if (sub && state !== 'login') {
       subEl.style.display = 'block';
       subEl.textContent = sub;
     } else {
@@ -2361,7 +2466,10 @@ function showAuthGate(state, msg, sub, loginUser) {
       subEl.textContent = '';
     }
   }
-  if (loginBtn) loginBtn.style.display = state === 'login' ? '' : 'none';
+  if (loginBtn) {
+    loginBtn.style.display = state === 'login' ? '' : 'none';
+    if (state === 'login' && !loginFlowActive) setAuthLoginButtonLoading(false);
+  }
   if (logoutBtn) logoutBtn.style.display = state === 'denied' ? '' : 'none';
 }
 
@@ -2376,7 +2484,8 @@ function logoutAndShowGate() {
   loginUserReady = false;
   try { sessionStorage.removeItem('ximo-login-user'); } catch (e) {}
   document.body.classList.remove('role-designer');
-  showAuthGate('login', '請登入以繼續', '', null);
+  autoLoginAttempted = false;
+  attemptAutoLogin(true);
 }
 
 function withUserToken(payload) {
@@ -2428,7 +2537,16 @@ function completeAuthAfterLogin() {
   return checkMemberAuthorization().then(function(result) {
     if (!result.authorized) {
       if (result.needLogin) {
-        showAuthGate('login', '請登入以繼續', '使用公司 Lark 帳號登入後即可使用', null);
+        if (getUserAccessToken()) {
+          try { sessionStorage.removeItem('ximo-login-user'); } catch (e) {}
+          currentLoginUser = null;
+          loginUserReady = false;
+        }
+        if (!autoLoginAttempted) {
+          return attemptAutoLogin().then(function(ok) { return !!ok; });
+        }
+        showAuthGate('login', '請使用 Lark 帳號登入', '', null);
+        preloadAuthUrl();
       } else {
         var who = formatLoginDisplayName(result.loginUser);
         var sub = '此人員尚未加入授權名單。\n請在「人員資料」表登記 Lark 帳號（帳號或姓名欄位）。';
@@ -2452,10 +2570,14 @@ function completeAuthAfterLogin() {
 }
 
 function runAuthGate() {
-  showAuthGate('loading', '正在驗證登入狀態…', '', null);
-  return resolveLoginUser().then(function() {
-    return completeAuthAfterLogin();
-  });
+  var hasOAuthCode = !!new URLSearchParams(window.location.search).get('code');
+  if (hasOAuthCode || getUserAccessToken()) {
+    showAuthGate('loading', '正在驗證登入狀態…', '', null);
+    return resolveLoginUser().then(function() {
+      return completeAuthAfterLogin();
+    });
+  }
+  return attemptAutoLogin(true);
 }
 
 function promiseWithTimeout(promise, ms, fallback) {
@@ -2826,30 +2948,8 @@ function tryLarkClientAuth(appId) {
   });
 }
 function startBrowserLarkLogin() {
-  clearLoginError();
-  loadLarkAppConfig().then(function(cfg) {
-    if (!cfg.appId) {
-      alert('Lark 應用未設定（缺少 App ID）');
-      return;
-    }
-    return waitForLarkBridge(4000).then(function(inLark) {
-      if (!inLark) return false;
-      return tryLarkClientAuth(cfg.appId).then(function(user) { return user && user.accessToken; });
-    }).then(function(loggedIn) {
-      if (loggedIn) {
-        return completeAuthAfterLogin();
-      }
-      var redirect = getLoginRedirectUri();
-      return fetch(API + '?action=auth-url').then(function(r) { return r.json(); }).then(function(res) {
-        if (res.redirectUri) larkAppConfig.redirectUri = res.redirectUri;
-        if (res.url) window.location.href = res.url;
-        else alert('無法取得 Lark 登入連結。請在 Lark 開發者後台「安全設定 > 重定向 URL」加入：\n' + redirect);
-      });
-    });
-  }).catch(function(err) {
-    showLoginError(err.message || '登入失敗');
-    alert('登入失敗：' + (err.message || '請稍後再試'));
-  });
+  autoLoginAttempted = false;
+  return attemptAutoLogin(true);
 }
 function resolveLoginUser() {
   if (loginUserReady && getCurrentLoginUser()) return Promise.resolve(getCurrentLoginUser());
@@ -2886,7 +2986,7 @@ function resolveLoginUser() {
         loginUserReady = true;
         return null;
       }
-      return promiseWithTimeout(tryLarkClientAuth(cfg.appId), 12000, null).then(function(user) {
+      return promiseWithTimeout(tryLarkClientAuth(cfg.appId), 3500, null).then(function(user) {
         loginUserReady = true;
         return user;
       });
