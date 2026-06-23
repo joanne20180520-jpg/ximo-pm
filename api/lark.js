@@ -53,8 +53,15 @@ async function getRecords(token, tableId) {
 }
  
 // 新增記錄
-async function createRecord(token, tableId, fields) {
-  const url = BASE_URL + '/bitable/v1/apps/' + APP_TOKEN + '/tables/' + tableId + '/records';
+function buildMainRecordUrl(tableId, recordId, asUser) {
+  let path = '/bitable/v1/apps/' + APP_TOKEN + '/tables/' + encodeURIComponent(tableId) + '/records';
+  if (recordId) path += '/' + encodeURIComponent(recordId);
+  if (asUser) path += '?user_id_type=open_id';
+  return BASE_URL + path;
+}
+
+async function createRecord(token, tableId, fields, asUser) {
+  const url = buildMainRecordUrl(tableId, null, asUser);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -63,12 +70,14 @@ async function createRecord(token, tableId, fields) {
     },
     body: JSON.stringify({ fields: fields })
   });
-  return await res.json();
+  const data = await res.json();
+  if (data.code !== 0) throw new Error(data.msg || 'create failed');
+  return data;
 }
- 
+
 // 更新記錄
-async function updateRecord(token, tableId, recordId, fields) {
-  const url = BASE_URL + '/bitable/v1/apps/' + APP_TOKEN + '/tables/' + tableId + '/records/' + recordId;
+async function updateRecord(token, tableId, recordId, fields, asUser) {
+  const url = buildMainRecordUrl(tableId, recordId, asUser);
   const res = await fetch(url, {
     method: 'PUT',
     headers: {
@@ -80,6 +89,30 @@ async function updateRecord(token, tableId, recordId, fields) {
   const data = await res.json();
   if (data.code !== 0) throw new Error(data.msg || 'update failed');
   return data;
+}
+
+// 刪除記錄
+async function deleteRecord(token, tableId, recordId, asUser) {
+  const url = buildMainRecordUrl(tableId, recordId, asUser);
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: { 'Authorization': 'Bearer ' + token }
+  });
+  const data = await res.json();
+  if (data.code !== 0) throw new Error(data.msg || 'delete failed');
+  return data;
+}
+
+async function writeWithUserFallback(tenantToken, userToken, writeFn) {
+  if (userToken) {
+    try {
+      const data = await writeFn(userToken, true);
+      return data;
+    } catch (err) {
+      console.warn('User token write failed, fallback to tenant:', err.message || err);
+    }
+  }
+  return writeFn(tenantToken, false);
 }
 
 async function updateBitableRecord(token, appToken, tableId, recordId, fields) {
@@ -95,16 +128,6 @@ async function updateBitableRecord(token, appToken, tableId, recordId, fields) {
   const data = await res.json();
   if (data.code !== 0) throw new Error(data.msg || 'update failed');
   return data;
-}
- 
-// 刪除記錄
-async function deleteRecord(token, tableId, recordId) {
-  const url = BASE_URL + '/bitable/v1/apps/' + APP_TOKEN + '/tables/' + tableId + '/records/' + recordId;
-  const res = await fetch(url, {
-    method: 'DELETE',
-    headers: { 'Authorization': 'Bearer ' + token }
-  });
-  return await res.json();
 }
 
 // 各表 table_id：換公司 Lark 時在 Vercel 改環境變數即可，不必改程式
@@ -1347,10 +1370,129 @@ function buildAuthUrl(redirectUri) {
   return BASE_URL + '/authen/v1/index?' + q.toString();
 }
 
+function fieldTextValue(raw) {
+  if (raw === undefined || raw === null || raw === '') return '';
+  if (typeof raw === 'string') return raw.trim();
+  if (typeof raw === 'number') return String(raw);
+  if (Array.isArray(raw) && raw.length) return fieldTextValue(raw[0]);
+  if (raw && typeof raw === 'object') {
+    if (raw.text) return String(raw.text).trim();
+    if (raw.name) return String(raw.name).trim();
+    if (raw.text_arr && raw.text_arr[0]) return String(raw.text_arr[0]).trim();
+  }
+  return String(raw).trim();
+}
+
+function namesMatch(a, b) {
+  if (!a || !b) return false;
+  a = String(a).trim();
+  b = String(b).trim();
+  if (!a || !b) return false;
+  if (a === b) return true;
+  return a.indexOf(b) >= 0 || b.indexOf(a) >= 0;
+}
+
+function getMemberPersonOpenId(fields) {
+  const person = fields['成員'] || fields['姓名'] || fields['名稱'];
+  if (!person) return '';
+  if (Array.isArray(person) && person[0]) {
+    return String(person[0].id || person[0].open_id || '').trim();
+  }
+  if (person && typeof person === 'object') {
+    return String(person.id || person.open_id || '').trim();
+  }
+  return '';
+}
+
+function getMemberName(fields) {
+  return fieldTextValue(fields['姓名'] || fields['名稱'] || fields['成員']);
+}
+
+function getMemberRole(fields) {
+  const r = fieldTextValue(fields['角色'] || fields['Role']);
+  if (r === '設計師' || r === '设计师' || r.toLowerCase() === 'designer') return '設計師';
+  return 'PM';
+}
+
+function findMemberForUser(members, user) {
+  const openId = String(user.openId || '').trim();
+  const userId = String(user.userId || '').trim();
+  const name = String(user.name || '').trim();
+  const enName = String(user.enName || '').trim();
+  for (let i = 0; i < members.length; i++) {
+    const f = members[i].fields || {};
+    const mOpenId = fieldTextValue(f['open_id'] || f['Open ID']) || getMemberPersonOpenId(f);
+    const mUserId = fieldTextValue(f['user_id'] || f['User ID'] || f['userid']);
+    const mName = getMemberName(f);
+    if (openId && mOpenId && openId === mOpenId) return members[i];
+    if (userId && mUserId && userId === mUserId) return members[i];
+    if (name && mName && namesMatch(mName, name)) return members[i];
+    if (enName && mName && namesMatch(mName, enName)) return members[i];
+  }
+  return null;
+}
+
+function extractUserAccessToken(req) {
+  const body = req.body || {};
+  const fromBody = String(body.userAccessToken || body.user_access_token || '').trim();
+  if (fromBody) return fromBody;
+  const fromQuery = String(req.query.userAccessToken || '').trim();
+  if (fromQuery) return fromQuery;
+  const hdr = req.headers['x-user-access-token'] || req.headers['X-User-Access-Token'];
+  return String(hdr || '').trim();
+}
+
+function stripAuthFromBody(body) {
+  const out = Object.assign({}, body || {});
+  delete out.userAccessToken;
+  delete out.user_access_token;
+  return out;
+}
+
+async function getUserInfoFromToken(userAccessToken) {
+  const infoRes = await fetch(BASE_URL + '/authen/v1/user_info', {
+    headers: { 'Authorization': 'Bearer ' + userAccessToken }
+  });
+  const info = await infoRes.json();
+  if (info.code !== 0) throw new Error(info.msg || '無法取得使用者資訊');
+  const u = info.data || {};
+  return {
+    name: u.name || u.en_name || '',
+    enName: u.en_name || '',
+    openId: u.open_id || '',
+    userId: u.user_id || ''
+  };
+}
+
+async function checkMemberAuthorization(userAccessToken) {
+  if (!userAccessToken) return { ok: true, needLogin: true, authorized: false };
+  let user;
+  try {
+    user = await getUserInfoFromToken(userAccessToken);
+  } catch (err) {
+    return { ok: true, needLogin: true, authorized: false, error: err.message };
+  }
+  const tenantToken = await getToken();
+  const members = await getRecords(tenantToken, TABLES.members);
+  const memberRec = findMemberForUser(members, user);
+  if (!memberRec) {
+    return { ok: true, needLogin: false, authorized: false, user };
+  }
+  const role = getMemberRole(memberRec.fields || {});
+  return {
+    ok: true,
+    needLogin: false,
+    authorized: true,
+    role,
+    memberName: getMemberName(memberRec.fields || {}),
+    user
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-User-Access-Token');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const { table, recordId, action } = req.query;
@@ -1388,6 +1530,12 @@ export default async function handler(req, res) {
       } catch (loginErr) {
         return res.status(400).json({ ok: false, error: loginErr.message || '登入失敗' });
       }
+    }
+
+    if (action === 'auth-check' && req.method === 'GET') {
+      const userAccessToken = extractUserAccessToken(req);
+      const result = await checkMemberAuthorization(userAccessToken);
+      return res.status(200).json(result);
     }
 
     if (action === 'ping' && req.method === 'GET') {
@@ -1468,7 +1616,8 @@ export default async function handler(req, res) {
       }
     }
 
-    const token = await getToken();
+    const tenantToken = await getToken();
+    const userAccessToken = extractUserAccessToken(req);
 
     if (action === 'notify' && req.method === 'POST') {
       const b = req.body || {};
@@ -1494,21 +1643,29 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       if (!TABLES[table]) return res.status(400).json({ error: 'Invalid table' });
-      const body = await normalizeWriteFields(token, TABLES[table], req.body || {});
-      const result = await createRecord(token, TABLES[table], body);
+      const cleanBody = stripAuthFromBody(req.body || {});
+      const body = await normalizeWriteFields(tenantToken, TABLES[table], cleanBody);
+      const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
+        return createRecord(tok, TABLES[table], body, asUser);
+      });
       return res.status(200).json(result);
     }
 
     if (req.method === 'PUT') {
       if (!TABLES[table] || !recordId) return res.status(400).json({ error: 'Invalid params' });
-      const body = await normalizeWriteFields(token, TABLES[table], req.body || {});
-      const result = await updateRecord(token, TABLES[table], recordId, body);
+      const cleanBody = stripAuthFromBody(req.body || {});
+      const body = await normalizeWriteFields(tenantToken, TABLES[table], cleanBody);
+      const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
+        return updateRecord(tok, TABLES[table], recordId, body, asUser);
+      });
       return res.status(200).json(result);
     }
 
     if (req.method === 'DELETE') {
       if (!TABLES[table] || !recordId) return res.status(400).json({ error: 'Invalid params' });
-      const result = await deleteRecord(token, TABLES[table], recordId);
+      const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
+        return deleteRecord(tok, TABLES[table], recordId, asUser);
+      });
       return res.status(200).json(result);
     }
 

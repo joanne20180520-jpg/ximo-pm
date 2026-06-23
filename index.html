@@ -478,9 +478,27 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .undo-toast.show{opacity:1;pointer-events:auto}
 .undo-btn{padding:4px 10px;border-radius:var(--rs);border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;font-size:11px;font-weight:600;cursor:pointer}
 .undo-btn:hover{background:rgba(255,255,255,.22)}
+.auth-gate{position:fixed;inset:0;z-index:2000;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+.auth-gate.hidden{display:none}
+.auth-gate-box{text-align:center;max-width:360px;padding:32px 24px;background:var(--surface);border-radius:var(--r);box-shadow:var(--shadow)}
+.auth-gate-box .logo{font-size:22px;margin-bottom:20px}
+.auth-gate-msg{font-size:14px;color:var(--t2);line-height:1.6;margin-bottom:16px}
+.auth-gate-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+body.role-designer #lp,body.role-designer #rp,body.role-designer #tl,body.role-designer #tr{display:none!important}
 </style>
 </head>
 <body>
+
+<div id="auth-gate" class="auth-gate">
+  <div class="auth-gate-box">
+    <div class="logo">璽墨</div>
+    <div class="auth-gate-msg" id="auth-gate-msg">驗證登入中…</div>
+    <div class="auth-gate-actions">
+      <button type="button" class="bpri" id="auth-gate-login" style="display:none" onclick="startBrowserLarkLogin()">請登入 Lark</button>
+      <button type="button" class="bcan" id="auth-gate-logout" style="display:none" onclick="logoutAndShowGate()">登出重新登入</button>
+    </div>
+  </div>
+</div>
 
 <div id="boot-status" style="display:none;position:fixed;top:var(--th);left:0;right:0;z-index:300;background:#fff3e0;color:#92400e;padding:8px 12px;font-size:11px;text-align:center;border-bottom:1px solid #fcd34d"></div>
 <div id="topbar">
@@ -2048,7 +2066,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260623a';
+var APP_BUILD = '20260623b';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -2177,6 +2195,104 @@ var loginResolving = null;
 var larkAppConfig = { appId: '', redirectUri: '' };
 var oauthCodeConsumed = false;
 var loginPending = false;
+var authReady = false;
+var currentUserRole = 'PM';
+var ROLE_PAGES = {
+  PM: ['pg-s', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal'],
+  '設計師': ['pg-d']
+};
+
+function showAuthGate(state, msg) {
+  var gate = document.getElementById('auth-gate');
+  var msgEl = document.getElementById('auth-gate-msg');
+  var loginBtn = document.getElementById('auth-gate-login');
+  var logoutBtn = document.getElementById('auth-gate-logout');
+  if (!gate) return;
+  gate.classList.remove('hidden');
+  if (msgEl) msgEl.textContent = msg || '';
+  if (loginBtn) loginBtn.style.display = state === 'login' ? '' : 'none';
+  if (logoutBtn) logoutBtn.style.display = state === 'denied' ? '' : 'none';
+}
+
+function hideAuthGate() {
+  var gate = document.getElementById('auth-gate');
+  if (gate) gate.classList.add('hidden');
+}
+
+function logoutAndShowGate() {
+  authReady = false;
+  currentLoginUser = null;
+  loginUserReady = false;
+  try { sessionStorage.removeItem('ximo-login-user'); } catch (e) {}
+  document.body.classList.remove('role-designer');
+  showAuthGate('login', '請登入 Lark');
+}
+
+function withUserToken(payload) {
+  var tok = getUserAccessToken();
+  var out = Object.assign({}, payload || {});
+  if (tok) out.userAccessToken = tok;
+  return out;
+}
+
+function checkMemberAuthorization() {
+  var tok = getUserAccessToken();
+  if (!tok) return Promise.resolve({ authorized: false, needLogin: true });
+  return fetch(apiUrl('?action=auth-check&userAccessToken=' + encodeURIComponent(tok)))
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (!res || !res.ok || res.needLogin) return { authorized: false, needLogin: true };
+      if (!res.authorized) return { authorized: false, needLogin: false };
+      return { authorized: true, role: res.role || 'PM', memberName: res.memberName || '' };
+    })
+    .catch(function() { return { authorized: false, needLogin: true }; });
+}
+
+function applyRolePermissions() {
+  var role = currentUserRole || 'PM';
+  var allowed = ROLE_PAGES[role] || ROLE_PAGES.PM;
+  document.querySelectorAll('.tbar-tab').forEach(function(btn) {
+    var onclick = btn.getAttribute('onclick') || '';
+    var m = onclick.match(/sw\(this,'([^']+)'\)/);
+    var pageId = m ? m[1] : '';
+    btn.style.display = allowed.indexOf(pageId) >= 0 ? '' : 'none';
+  });
+  if (role === '設計師') {
+    document.body.classList.add('role-designer');
+    var designTab = document.querySelector('.tbar-tab[onclick*="pg-d"]');
+    if (designTab) sw(designTab, 'pg-d');
+  } else {
+    document.body.classList.remove('role-designer');
+  }
+}
+
+function completeAuthAfterLogin() {
+  return checkMemberAuthorization().then(function(result) {
+    if (!result.authorized) {
+      if (result.needLogin) showAuthGate('login', '請登入 Lark');
+      else showAuthGate('denied', '不在授權名單內');
+      return false;
+    }
+    currentUserRole = result.role || 'PM';
+    hideAuthGate();
+    applyRolePermissions();
+    if (!authReady) {
+      authReady = true;
+      loadData();
+    }
+    updateTodoLoginLabel();
+    applyLoginUserToForms();
+    renderTeamPanel();
+    return true;
+  });
+}
+
+function runAuthGate() {
+  showAuthGate('loading', '驗證登入中…');
+  return resolveLoginUser().then(function() {
+    return completeAuthAfterLogin();
+  });
+}
 
 function promiseWithTimeout(promise, ms, fallback) {
   return new Promise(function(resolve) {
@@ -2557,10 +2673,7 @@ function startBrowserLarkLogin() {
       return tryLarkClientAuth(cfg.appId).then(function(user) { return user && user.accessToken; });
     }).then(function(loggedIn) {
       if (loggedIn) {
-        updateTodoLoginLabel();
-        applyLoginUserToForms();
-        renderTeamPanel();
-        return;
+        return completeAuthAfterLogin();
       }
       var redirect = getLoginRedirectUri();
       return fetch(API + '?action=auth-url').then(function(r) { return r.json(); }).then(function(res) {
@@ -4223,12 +4336,12 @@ function saveDailyJournal() {
     ? fetch(API + '?table=journal&recordId=' + existing.record_id, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(journalFields)
+        body: JSON.stringify(withUserToken(journalFields))
       }).then(function(r) { return r.json(); })
     : fetch(API + '?table=journal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(journalFields)
+        body: JSON.stringify(withUserToken(journalFields))
       }).then(function(r) { return r.json(); });
 
   var taskUpdates = allItems.map(function(row) {
@@ -4248,7 +4361,7 @@ function saveDailyJournal() {
     return fetch(API + '?table=tasks&recordId=' + row.id, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(fields)
+      body: JSON.stringify(withUserToken(fields))
     }).then(function(r) { return r.json(); });
   });
 
@@ -4904,7 +5017,7 @@ function savePaymentRecord(data) {
   return fetch(API + '?table=payments', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(fields)
+    body: JSON.stringify(withUserToken(fields))
   }).then(function(r) { return r.json(); }).then(function(res) {
     if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '存檔失敗');
     return res;
@@ -4986,7 +5099,11 @@ function buildMembersMap() {
     var name = memberLabel(f['姓名'] || f['名稱'] || f['成員']);
     var id = f['open_id'] || f['user_id'] || f['User ID'] || f['userid']
       || (f['成員'] && f['成員'][0] && (f['成員'][0].id || f['成員'][0].open_id));
-    if (name) membersMap[name] = { id: id, name: name };
+    if (name) membersMap[name] = {
+      id: id,
+      name: name,
+      role: fieldTextValue(f['角色'] || f['Role']) || 'PM'
+    };
   });
   tasksData.forEach(function(t) {
     var p = t.fields['負責人'];
@@ -5041,7 +5158,7 @@ function apiPost(table, fields) {
   return fetch(API + '?table=' + table, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(fields)
+    body: JSON.stringify(withUserToken(fields))
   }).then(function(r) { return r.json(); }).then(function(res) {
     if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '儲存失敗');
     return res;
@@ -5052,7 +5169,7 @@ function apiPut(table, recordId, fields) {
   return fetch(API + '?table=' + table + '&recordId=' + recordId, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(fields)
+    body: JSON.stringify(withUserToken(fields))
   }).then(function(r) { return r.json(); }).then(function(res) {
     if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '更新失敗');
     return res;
@@ -5060,8 +5177,12 @@ function apiPut(table, recordId, fields) {
 }
 
 function apiDelete(table, recordId) {
-  return fetch(API + '?table=' + table + '&recordId=' + recordId, {
-    method: 'DELETE'
+  var tok = getUserAccessToken();
+  var url = API + '?table=' + table + '&recordId=' + recordId;
+  if (tok) url += '&userAccessToken=' + encodeURIComponent(tok);
+  return fetch(url, {
+    method: 'DELETE',
+    headers: tok ? { 'X-User-Access-Token': tok } : {}
   }).then(function(r) { return r.json(); }).then(function(res) {
     if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '刪除失敗');
     return res;
@@ -6071,15 +6192,10 @@ function collectPaymentFields() {
 
 // ── 初始化 ──
 function bootApp() {
-  loadData();
   if (isLikelyLarkClient()) {
     ensureH5Sdk().catch(function() {});
   }
-  resolveLoginUser().then(function(user) {
-    updateTodoLoginLabel();
-    applyLoginUserToForms();
-    renderTeamPanel();
-  });
+  runAuthGate();
 }
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', bootApp);
