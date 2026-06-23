@@ -485,6 +485,8 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .auth-gate-msg{font-size:14px;color:var(--t2);line-height:1.6;margin-bottom:16px}
 .auth-gate-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
 body.role-designer #lp,body.role-designer #rp,body.role-designer #tl,body.role-designer #tr{display:none!important}
+button:disabled,.bpri:disabled,.bsub:disabled,.bsub2:disabled,.bsm:disabled,.bdel:disabled,.confirm-ok:disabled{opacity:.5;cursor:not-allowed;pointer-events:none}
+button.btn-loading::after{content:'…';margin-left:2px}
 </style>
 </head>
 <body>
@@ -828,6 +830,26 @@ body.role-designer #lp,body.role-designer #rp,body.role-designer #tl,body.role-d
 </div>
 </div>
 <script>
+  // ── 全域防連點：所有送出按鈕點擊後鎖定 1.2 秒，避免重複送出 ──
+(function() {
+  var LOCK_SELECTOR = '.bpri, .bsub, .bsub2, .bsm, .bdel, .confirm-ok, .bads, .badd';
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest(LOCK_SELECTOR);
+    if (!btn) return;
+    if (btn.disabled || btn.classList.contains('btn-loading')) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return;
+    }
+    btn.classList.add('btn-loading');
+    btn.disabled = true;
+    setTimeout(function() {
+      btn.disabled = false;
+      btn.classList.remove('btn-loading');
+    }, 1200);
+  }, true);
+})();
 // 動態載入外部腳本，避免 Lark 內建瀏覽器被 CDN 卡住整頁
 var optionalLibLoads = {};
 function loadScriptOnce(url, globalName) {
@@ -2066,7 +2088,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260623b';
+var APP_BUILD = '20260623c';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 

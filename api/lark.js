@@ -3,6 +3,8 @@ import { createHash } from 'crypto';
 const APP_ID = (process.env.LARK_APP_ID || '').trim();
 const APP_SECRET = (process.env.LARK_APP_SECRET || '').trim();
 const APP_TOKEN = (process.env.LARK_APP_TOKEN || '').trim();
+// 付款申請單獨立 Base（會計用），其餘 7 張表仍用上面的 APP_TOKEN
+const APP_TOKEN_PAYMENTS = (process.env.LARK_APP_TOKEN_PAYMENTS || '').trim();
 const BASE_URL = 'https://open.larksuite.com/open-apis';
 
 /** OAuth 重定向 URL — 須與 Lark 開發者後台「安全設定 > 重定向 URL」完全一致 */
@@ -33,13 +35,20 @@ async function getToken() {
   }
   return data.tenant_access_token;
 }
+
+// 各資料表所屬的 app_token：預設為主 Base，payments 用獨立 Base
+function appTokenForTable(tableKey) {
+  if (tableKey === 'payments' && APP_TOKEN_PAYMENTS) return APP_TOKEN_PAYMENTS;
+  return APP_TOKEN;
+}
  
 // 讀取表格資料（自動翻頁取回全部記錄）
-async function getRecords(token, tableId) {
+async function getRecords(token, tableId, appToken) {
+  const targetAppToken = appToken || APP_TOKEN;
   var items = [];
   var pageToken = '';
   do {
-    var url = BASE_URL + '/bitable/v1/apps/' + APP_TOKEN + '/tables/' + tableId + '/records?page_size=500';
+    var url = BASE_URL + '/bitable/v1/apps/' + targetAppToken + '/tables/' + tableId + '/records?page_size=500';
     if (pageToken) url += '&page_token=' + encodeURIComponent(pageToken);
     const res = await fetch(url, {
       headers: { 'Authorization': 'Bearer ' + token }
@@ -53,15 +62,16 @@ async function getRecords(token, tableId) {
 }
  
 // 新增記錄
-function buildMainRecordUrl(tableId, recordId, asUser) {
-  let path = '/bitable/v1/apps/' + APP_TOKEN + '/tables/' + encodeURIComponent(tableId) + '/records';
+function buildMainRecordUrl(tableId, recordId, appToken, asUser) {
+  const targetAppToken = appToken || APP_TOKEN;
+  let path = '/bitable/v1/apps/' + encodeURIComponent(targetAppToken) + '/tables/' + encodeURIComponent(tableId) + '/records';
   if (recordId) path += '/' + encodeURIComponent(recordId);
   if (asUser) path += '?user_id_type=open_id';
   return BASE_URL + path;
 }
 
-async function createRecord(token, tableId, fields, asUser) {
-  const url = buildMainRecordUrl(tableId, null, asUser);
+async function createRecord(token, tableId, fields, appToken, asUser) {
+  const url = buildMainRecordUrl(tableId, null, appToken, asUser);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -76,8 +86,8 @@ async function createRecord(token, tableId, fields, asUser) {
 }
 
 // 更新記錄
-async function updateRecord(token, tableId, recordId, fields, asUser) {
-  const url = buildMainRecordUrl(tableId, recordId, asUser);
+async function updateRecord(token, tableId, recordId, fields, appToken, asUser) {
+  const url = buildMainRecordUrl(tableId, recordId, appToken, asUser);
   const res = await fetch(url, {
     method: 'PUT',
     headers: {
@@ -92,8 +102,8 @@ async function updateRecord(token, tableId, recordId, fields, asUser) {
 }
 
 // 刪除記錄
-async function deleteRecord(token, tableId, recordId, asUser) {
-  const url = buildMainRecordUrl(tableId, recordId, asUser);
+async function deleteRecord(token, tableId, recordId, appToken, asUser) {
+  const url = buildMainRecordUrl(tableId, recordId, appToken, asUser);
   const res = await fetch(url, {
     method: 'DELETE',
     headers: { 'Authorization': 'Bearer ' + token }
@@ -131,17 +141,18 @@ async function updateBitableRecord(token, appToken, tableId, recordId, fields) {
 }
 
 // 各表 table_id：換公司 Lark 時在 Vercel 改環境變數即可，不必改程式
-// LARK_APP_TOKEN = 多維表格 base 的 app_token
+// LARK_APP_TOKEN = 主要多維表格 base 的 app_token（標案/工作項目/任務/支出/設計/日誌/成員）
+// LARK_APP_TOKEN_PAYMENTS = 付款申請單獨立 Base 的 app_token（會計用）
 // LARK_TABLE_PROJECTS / WORKITEMS / TASKS / … 見 TABLE_DEFAULTS 的 key
 const TABLE_DEFAULTS = {
-  projects:  'tbl8ldUZKRcteYFu',
-  workitems: 'tblc5QbFf04I3DFl',
-  tasks:     'tbl7mC8KaVVXQOVG',
-  expenses:  'tblsUdkQN56T6Jnk',
-  payments:  'tblv9SmBvbhxNftU',
-  designs:   'tblc3a8IofsGlbKu',
-  journal:   'tblVs9L5WAJcE2a3',
-  members:   'tblIHdb6u6S2xdJH'
+  projects:  'tblM49Vzl0ZgKGDa',
+  workitems: 'tbl9wBZj2UXXmuQv',
+  tasks:     'tblqmQCM0N5KFtBH',
+  expenses:  'tbl72u0sONmWjZn2',
+  payments:  'tblBm4BmoSzkxh0B',
+  designs:   'tblGJkK7Vqpkeh7A',
+  journal:   'tbl4Q2bKqkfGm0t6',
+  members:   'tblrXjQ5GOLfzWrQ'
 };
 
 function buildTables() {
@@ -887,10 +898,11 @@ async function resolveArchiveTableMap(accessToken, appToken) {
   return map;
 }
 
-async function normalizeWriteFields(token, tableId, fields) {
+async function normalizeWriteFields(token, tableId, fields, appToken) {
   if (!fields || !tableId) return fields;
+  const targetAppToken = appToken || APP_TOKEN;
   const cache = {};
-  const schemas = await getTableFieldSchemas(token, APP_TOKEN, tableId, cache);
+  const schemas = await getTableFieldSchemas(token, targetAppToken, tableId, cache);
   const meta = schemas.fieldMeta;
   const out = Object.assign({}, fields);
   Object.keys(out).forEach(function(name) {
@@ -1554,9 +1566,11 @@ export default async function handler(req, res) {
           hasAppId: !!APP_ID,
           hasAppSecret: !!APP_SECRET,
           hasAppToken: !!APP_TOKEN,
+          hasAppTokenPayments: !!APP_TOKEN_PAYMENTS,
           appIdLen: APP_ID ? APP_ID.length : 0,
           appSecretLen: APP_SECRET ? APP_SECRET.length : 0,
           appTokenLen: APP_TOKEN ? APP_TOKEN.length : 0,
+          appTokenPaymentsLen: APP_TOKEN_PAYMENTS ? APP_TOKEN_PAYMENTS.length : 0,
           tables: TABLES
         },
         tokenError: lark
@@ -1607,7 +1621,8 @@ export default async function handler(req, res) {
       if (!TABLES[table]) return res.status(400).json({ error: 'Invalid table: ' + table });
       try {
         const token = await getToken();
-        const records = await getRecords(token, TABLES[table]);
+        const tableAppToken = appTokenForTable(table);
+        const records = await getRecords(token, TABLES[table], tableAppToken);
         return res.status(200).json({ records: records });
       } catch (err) {
         console.error('GET ' + table, err);
@@ -1643,28 +1658,31 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       if (!TABLES[table]) return res.status(400).json({ error: 'Invalid table' });
+      const tableAppToken = appTokenForTable(table);
       const cleanBody = stripAuthFromBody(req.body || {});
-      const body = await normalizeWriteFields(tenantToken, TABLES[table], cleanBody);
+      const body = await normalizeWriteFields(tenantToken, TABLES[table], cleanBody, tableAppToken);
       const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
-        return createRecord(tok, TABLES[table], body, asUser);
+        return createRecord(tok, TABLES[table], body, tableAppToken, asUser);
       });
       return res.status(200).json(result);
     }
 
     if (req.method === 'PUT') {
       if (!TABLES[table] || !recordId) return res.status(400).json({ error: 'Invalid params' });
+      const tableAppToken = appTokenForTable(table);
       const cleanBody = stripAuthFromBody(req.body || {});
-      const body = await normalizeWriteFields(tenantToken, TABLES[table], cleanBody);
+      const body = await normalizeWriteFields(tenantToken, TABLES[table], cleanBody, tableAppToken);
       const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
-        return updateRecord(tok, TABLES[table], recordId, body, asUser);
+        return updateRecord(tok, TABLES[table], recordId, body, tableAppToken, asUser);
       });
       return res.status(200).json(result);
     }
 
     if (req.method === 'DELETE') {
       if (!TABLES[table] || !recordId) return res.status(400).json({ error: 'Invalid params' });
+      const tableAppToken = appTokenForTable(table);
       const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
-        return deleteRecord(tok, TABLES[table], recordId, asUser);
+        return deleteRecord(tok, TABLES[table], recordId, tableAppToken, asUser);
       });
       return res.status(200).json(result);
     }
@@ -1676,4 +1694,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
- 
