@@ -36,9 +36,8 @@ async function getToken() {
   return data.tenant_access_token;
 }
 
-// 各資料表所屬的 app_token：預設為主 Base，payments 用獨立 Base
+// 各資料表所屬的 app_token：預設為主 Base
 function appTokenForTable(tableKey) {
-  if (tableKey === 'payments' && APP_TOKEN_PAYMENTS) return APP_TOKEN_PAYMENTS;
   return APP_TOKEN;
 }
  
@@ -165,6 +164,7 @@ function buildTables() {
 }
 
 const TABLES = buildTables();
+const PAYMENTS_TABLE_ACCOUNTING = (process.env.LARK_TABLE_PAYMENTS_ACCOUNTING || '').trim();
 const ARCHIVE_OAUTH_SCOPES = 'wiki:wiki wiki:node:read bitable:app';
 
 const ARCHIVE_TABLE_KEYWORDS = {
@@ -761,6 +761,10 @@ function normalizeArchiveSelectValue(val) {
 
 function normalizeArchiveMultiSelectValue(val) {
   if (!val) return null;
+  if (typeof val === 'string') {
+    const parts = val.split(/[、,，/|]/).map(function(s) { return s.trim(); }).filter(Boolean);
+    if (parts.length) return parts;
+  }
   const raw = Array.isArray(val) ? val : [val];
   const out = [];
   raw.forEach(function(x) {
@@ -904,25 +908,64 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
   const cache = {};
   const schemas = await getTableFieldSchemas(token, targetAppToken, tableId, cache);
   const meta = schemas.fieldMeta;
-  const out = Object.assign({}, fields);
-  Object.keys(out).forEach(function(name) {
-    const m = meta[name];
-    if (!m) return;
-    const val = out[name];
-    if (m.type === 15) {
-      if (val === '' || val === null) {
-        out[name] = null;
-        return;
-      }
-      const normalized = normalizeArchiveUrlValue(val);
-      if (normalized) out[name] = normalized;
-    }
-  });
   const allowed = schemas.allowedSet;
-  Object.keys(out).forEach(function(name) {
-    if (!allowed[name]) delete out[name];
+  const out = {};
+  Object.keys(fields).forEach(function(name) {
+    if (!allowed[name]) return;
+    const m = meta[name];
+    const val = fields[name];
+    if (!m) {
+      out[name] = val;
+      return;
+    }
+    const normalized = normalizeArchiveFieldValue(m, val);
+    if (normalized !== null && normalized !== undefined) out[name] = normalized;
   });
   return out;
+}
+
+async function createPaymentInBothBases(tenantToken, userToken, rawFields) {
+  const tableId = TABLES.payments;
+  const results = { main: null, accounting: null };
+  const errors = [];
+  const fields = Object.assign({}, rawFields || {});
+  if (fields['狀態'] === undefined) fields['狀態'] = '待處理';
+
+  try {
+    const mainBody = await normalizeWriteFields(tenantToken, tableId, fields, APP_TOKEN);
+    results.main = await writeWithUserFallback(tenantToken, userToken, function(tok, asUser) {
+      return createRecord(tok, tableId, mainBody, APP_TOKEN, asUser);
+    });
+  } catch (err) {
+    errors.push('前台資料庫：' + (err.message || String(err)));
+  }
+
+  const accAppToken = APP_TOKEN_PAYMENTS;
+  if (accAppToken && accAppToken !== APP_TOKEN) {
+    try {
+      const accTableId = PAYMENTS_TABLE_ACCOUNTING || tableId;
+      const accBody = await normalizeWriteFields(tenantToken, accTableId, fields, accAppToken);
+      results.accounting = await writeWithUserFallback(tenantToken, userToken, function(tok, asUser) {
+        return createRecord(tok, accTableId, accBody, accAppToken, asUser);
+      });
+    } catch (err) {
+      errors.push('會計資料庫：' + (err.message || String(err)));
+    }
+  }
+
+  if (!results.main && !results.accounting) {
+    throw new Error(errors.join('；') || '付款資料寫入失敗');
+  }
+  if (errors.length) results.partialErrors = errors;
+
+  const primary = results.main || results.accounting;
+  return {
+    code: 0,
+    data: primary && primary.data ? primary.data : {},
+    main: results.main,
+    accounting: results.accounting,
+    partialErrors: results.partialErrors || []
+  };
 }
 
 async function inspectWikiBitableTarget(accessToken, wikiUrl, projectName) {
@@ -1710,8 +1753,12 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       if (!TABLES[table]) return res.status(400).json({ error: 'Invalid table' });
-      const tableAppToken = appTokenForTable(table);
       const cleanBody = stripAuthFromBody(req.body || {});
+      if (table === 'payments') {
+        const result = await createPaymentInBothBases(tenantToken, userAccessToken, cleanBody);
+        return res.status(200).json(result);
+      }
+      const tableAppToken = appTokenForTable(table);
       const body = await normalizeWriteFields(tenantToken, TABLES[table], cleanBody, tableAppToken);
       const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
         return createRecord(tok, TABLES[table], body, tableAppToken, asUser);

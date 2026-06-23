@@ -1967,9 +1967,13 @@ function doPrint() {
 
   triggerPaymentPrint();
 
-  savePaymentRecord(data).then(function() {
+  savePaymentRecord(data).then(function(res) {
     cl('pp-prev');
-    alert('已列印並存檔至多維表格！');
+    var msg = '已列印並存檔至多維表格！';
+    if (res && res.partialErrors && res.partialErrors.length) {
+      msg += '\n（部分寫入失敗：' + res.partialErrors.join('；') + '）';
+    }
+    alert(msg);
   }).catch(function(err) {
     console.error(err);
     alert('已開啟列印，但存檔失敗：' + (err.message || '請稍後再試'));
@@ -2185,7 +2189,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260623h';
+var APP_BUILD = '20260623i';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -5269,11 +5273,12 @@ function savePaymentRecord(data) {
     '申請日期': dateInputToTs(data.date),
     '支付對象': data.payee,
     '廠商名稱': data.vendor,
-    '支付性質': data.nature,
+    '支付性質': (data.natureList && data.natureList.length) ? data.natureList : data.nature,
     '支付方式': data.method,
     '事由': data.reason,
     '備註': data.remark,
-    '付款總金額': parseFloat(data.total)
+    '付款總金額': parseFloat(data.total),
+    '狀態': '待處理'
   };
   var applicantPerson = getLoginLarkPerson();
   if (applicantPerson) fields['申請人'] = applicantPerson;
@@ -5283,7 +5288,11 @@ function savePaymentRecord(data) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(withUserToken(fields))
   }).then(function(r) { return r.json(); }).then(function(res) {
+    if (res.error) throw new Error(res.error);
     if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '存檔失敗');
+    if (res.partialErrors && res.partialErrors.length) {
+      console.warn('付款部分寫入失敗', res.partialErrors);
+    }
     return res;
   });
 }
