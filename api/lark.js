@@ -970,32 +970,34 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
 
 async function enrichPaymentApplicant(tenantToken, userToken, fields, hintOpenId) {
   const raw = fields['申請人'];
-  const rawName = typeof raw === 'string' ? raw.trim() : paymentApplicantText(fields);
+  let rawName = typeof raw === 'string' ? raw.trim() : paymentApplicantText(fields);
+  if (!rawName && fields._applicantDisplayName) rawName = String(fields._applicantDisplayName).trim();
+
   let openId = String(hintOpenId || '').trim();
-  const loginName = userToken ? (await getUserInfoFromToken(userToken).catch(function() { return null; })) : null;
-  const tokenName = loginName ? String(loginName.name || loginName.en_name || '').trim() : '';
-  if (!openId && userToken && tokenName && rawName && namesMatch(rawName, tokenName)) {
-    openId = String(loginName.open_id || '').trim();
+  if (openId && !/^ou_/i.test(openId) && !/^on_/i.test(openId)) openId = '';
+
+  if (!openId && Array.isArray(raw) && raw[0]) {
+    const rid = String(raw[0].id || raw[0].open_id || '').trim();
+    if (rid && (/^ou_/i.test(rid) || /^on_/i.test(rid))) openId = rid;
+    if (!rawName && raw[0].name) rawName = String(raw[0].name).trim();
   }
-  if (!openId && Array.isArray(raw) && raw[0] && raw[0].id) {
-    const rid = String(raw[0].id);
-    if (/^ou_/i.test(rid) || /^on_/i.test(rid)) openId = rid;
+
+  if (!openId) {
+    openId = await resolveApplicantOpenId(tenantToken, userToken, rawName, hintOpenId);
   }
-  if (!openId && rawName) {
-    const members = await getRecords(tenantToken, TABLES.members);
-    for (let i = 0; i < members.length; i++) {
-      const mf = members[i].fields || {};
-      const mn = getMemberName(mf);
-      if (mn && namesMatch(mn, rawName)) {
-        openId = getMemberPersonOpenId(mf);
-        if (openId) break;
-      }
-    }
-  }
+
   if (openId) {
     fields['申請人'] = [{ id: openId }];
+    if (!rawName && userToken) {
+      try {
+        const loginUser = await getUserInfoFromToken(userToken);
+        rawName = String(loginUser.name || loginUser.en_name || '').trim();
+      } catch (e) {}
+    }
+    if (rawName) fields._applicantDisplayName = rawName;
   } else if (rawName) {
-    fields['申請人'] = rawName;
+    fields._applicantDisplayName = rawName;
+    delete fields['申請人'];
   }
   return fields;
 }
@@ -1032,6 +1034,7 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
   await enrichPaymentApplicant(tenantToken, userToken, fields, applicantOpenIdHint);
 
   const frontCfg = paymentsFrontConfig();
+  const schemaCache = {};
   try {
     const mainTableId = await resolvePaymentsTableId(
       tenantToken,
@@ -1039,7 +1042,22 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
       frontCfg.tableId
     );
     if (!mainTableId) throw new Error('找不到前台付款資料表');
+    const mainSchemas = await getTableFieldSchemas(tenantToken, frontCfg.appToken, mainTableId, schemaCache);
+    if (!fields['申請人'] && fields._applicantDisplayName) {
+      applyApplicantTextFallback(fields, mainSchemas.allowedSet);
+    }
     const mainBody = await normalizeWriteFields(tenantToken, mainTableId, fields, frontCfg.appToken);
+    injectApplicantIntoBody(mainBody, fields, mainSchemas.allowedSet, mainSchemas.fieldMeta);
+    const applicantKey = findApplicantFieldName(mainSchemas.allowedSet) || '申請人';
+    if (fields._applicantDisplayName && !mainBody[applicantKey] && !hasApplicantTextFallback(mainBody, mainSchemas.allowedSet)) {
+      errors.push('申請人未寫入：無法對應 Lark 人員（' + fields._applicantDisplayName + '），請確認人員資料表');
+    }
+    results.applicantDebug = {
+      hint: applicantOpenIdHint || '',
+      enriched: fields['申請人'],
+      inBody: mainBody[applicantKey],
+      fieldName: applicantKey
+    };
     results.main = await writeWithUserFallback(tenantToken, userToken, function(tok, asUser) {
       return createRecord(tok, mainTableId, mainBody, frontCfg.appToken, asUser);
     });
@@ -1056,7 +1074,12 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
         accCfg.tableId
       );
       if (!accTableId) throw new Error('找不到會計付款資料表');
-      const accBody = await normalizeWriteFields(tenantToken, accTableId, fields, accCfg.appToken);
+      const accSchemas = await getTableFieldSchemas(tenantToken, accCfg.appToken, accTableId, schemaCache);
+      const accFields = Object.assign({}, fields);
+      if (!accFields['申請人'] && accFields._applicantDisplayName) {
+        applyApplicantTextFallback(accFields, accSchemas.allowedSet);
+      }
+      const accBody = await normalizeWriteFields(tenantToken, accTableId, accFields, accCfg.appToken);
       results.accounting = await writeWithUserFallback(tenantToken, userToken, function(tok, asUser) {
         return createRecord(tok, accTableId, accBody, accCfg.appToken, asUser);
       });
@@ -1076,8 +1099,15 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
     data: primary && primary.data ? primary.data : {},
     main: results.main,
     accounting: results.accounting,
-    partialErrors: results.partialErrors || []
+    partialErrors: results.partialErrors || [],
+    enrichedFields: fields,
+    applicantDebug: results.applicantDebug || null
   };
+}
+
+function hasApplicantTextFallback(body, allowedSet) {
+  const fallbacks = ['申請人姓名', '申请人姓名', '申請人名稱', '申请人', '申請人文字'];
+  return fallbacks.some(function(name) { return allowedSet[name] && body[name]; });
 }
 
 async function inspectWikiBitableTarget(accessToken, wikiUrl, projectName) {
@@ -1444,15 +1474,79 @@ async function sendWebhook(text) {
 }
 
 function paymentApplicantText(fields) {
-  const a = fields && fields['申請人'];
+  if (!fields) return '';
+  if (fields._applicantDisplayName) return String(fields._applicantDisplayName).trim();
+  const a = fields['申請人'];
   if (!a) return '';
-  if (typeof a === 'string') return a;
+  if (typeof a === 'string') return a.trim();
   if (Array.isArray(a) && a[0]) {
-    if (a[0].name) return String(a[0].name);
-    if (a[0].en_name) return String(a[0].en_name);
-    if (a[0].id) return String(a[0].id);
+    if (a[0].name) return String(a[0].name).trim();
+    if (a[0].en_name) return String(a[0].en_name).trim();
+    if (a[0].id && !/^ou_/i.test(String(a[0].id))) return String(a[0].id).trim();
   }
   return '';
+}
+
+function findApplicantFieldName(allowedSet) {
+  const names = ['申請人', '申請人員', 'Applicant', '申请人'];
+  for (let i = 0; i < names.length; i++) {
+    if (allowedSet[names[i]]) return names[i];
+  }
+  return '';
+}
+
+function applyApplicantTextFallback(fields, allowedSet) {
+  const displayName = paymentApplicantText(fields);
+  if (!displayName) return;
+  const fallbacks = ['申請人姓名', '申请人姓名', '申請人名稱', '申请人', '申請人文字'];
+  fallbacks.forEach(function(name) {
+    if (allowedSet[name] && !fields[name]) fields[name] = displayName;
+  });
+}
+
+async function resolveApplicantOpenId(tenantToken, userToken, rawName, hintOpenId) {
+  let openId = String(hintOpenId || '').trim();
+  if (openId && !/^ou_/i.test(openId) && !/^on_/i.test(openId)) openId = '';
+  if (openId) return openId;
+
+  let loginUser = null;
+  if (userToken) {
+    try { loginUser = await getUserInfoFromToken(userToken); } catch (e) {}
+  }
+  if (loginUser) {
+    const tokenOpenId = String(loginUser.open_id || '').trim();
+    const tokenNames = [loginUser.name, loginUser.en_name].map(function(s) { return String(s || '').trim(); }).filter(Boolean);
+    if (tokenOpenId) {
+      if (!rawName) return tokenOpenId;
+      for (let i = 0; i < tokenNames.length; i++) {
+        if (namesMatch(rawName, tokenNames[i])) return tokenOpenId;
+      }
+    }
+  }
+  if (rawName) {
+    const members = await getRecords(tenantToken, TABLES.members, appTokenForTable('members'));
+    for (let i = 0; i < members.length; i++) {
+      const mf = members[i].fields || {};
+      const mn = getMemberName(mf);
+      if (mn && namesMatch(mn, rawName)) {
+        openId = getMemberPersonOpenId(mf);
+        if (openId) break;
+      }
+    }
+  }
+  return openId;
+}
+
+function injectApplicantIntoBody(body, fields, allowedSet, fieldMeta) {
+  const key = findApplicantFieldName(allowedSet);
+  if (!key || body[key]) return body;
+  const src = fields['申請人'];
+  if (!src) return body;
+  const meta = fieldMeta[key];
+  if (!meta || meta.type !== 11) return body;
+  const norm = normalizePersonFieldValue(src);
+  if (norm) body[key] = norm;
+  return body;
 }
 
 function buildPaymentPrintPath(fields) {
@@ -1977,10 +2071,11 @@ export default async function handler(req, res) {
       if (table === 'payments') {
         const result = await createPaymentInBothBases(tenantToken, userAccessToken, cleanBody, applicantHint);
         try {
-          result.notify = await maybeSendPaymentNotify(cleanBody);
+          result.notify = await maybeSendPaymentNotify(result.enrichedFields || cleanBody);
         } catch (notifyErr) {
           result.notify = { ok: false, error: notifyErr.message || String(notifyErr) };
         }
+        delete result.enrichedFields;
         return res.status(200).json(result);
       }
       const tableAppToken = appTokenForTable(table);

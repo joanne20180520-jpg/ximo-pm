@@ -434,22 +434,43 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .bads:hover{border-color:var(--accent);color:var(--accent)}
 .bads:active{border-color:var(--c2)!important;color:var(--c2)!important;background:rgba(26,74,122,.06)!important;transform:scale(0.98)}
 
-/* procurement upload */
-.upload-zone{border:2px dashed var(--border);border-radius:var(--r);padding:20px;text-align:center;background:var(--sf2);margin-bottom:12px;cursor:pointer;transition:border-color .15s}
-.upload-zone:hover,.upload-zone.drag{border-color:var(--accent)}
-.upload-zone .uz-title{font-size:13px;font-weight:600;margin-bottom:4px}
-.upload-zone .uz-hint{font-size:10px;color:var(--t3);line-height:1.5}
-.upload-zone .uz-file{font-size:11px;color:var(--c2);margin-top:8px;font-weight:600}
-.upload-zone .uz-status{font-size:10px;color:var(--t2);margin-top:6px;min-height:14px}
-.upload-zone .proc-clear{position:absolute;top:8px;right:8px;width:26px;height:26px;border:1px solid var(--border);border-radius:50%;background:#fff;color:var(--t2);font-size:14px;cursor:pointer;line-height:24px;padding:0;z-index:2}
-.upload-zone .proc-clear:hover{color:#c0392b;border-color:#c0392b;background:#fff8f8}
-.upload-zone{position:relative}
-.proc-preview{margin-top:10px}
+/* procurement upload — 服務建議書 popup */
+.pp-proj-modal{width:520px;max-width:96vw;border-radius:14px;overflow:hidden}
+.pp-proj-modal .pph{padding:16px 20px;border-bottom:1px solid #eceae6}
+.pp-proj-modal .pph h3{font-size:15px;font-weight:700;color:#1a1916}
+.pp-proj-modal .ppb{padding:20px}
+.pp-proj-foot{padding:14px 20px;border-top:1px solid #eceae6;justify-content:flex-end;gap:10px;background:#fff}
+.proc-upload-wrap{border:2px dashed #d8d4ce;border-radius:12px;padding:28px 20px 24px;text-align:center;background:#faf8f5;margin-bottom:14px;transition:border-color .15s,background .15s}
+.proc-upload-wrap:hover,.proc-upload-wrap.drag{border-color:#93b4d4;background:#f3f7fb}
+.proc-upload-wrap.is-processing{pointer-events:none;opacity:.88;border-color:#93b4d4}
+.upload-zone-inner{display:block;cursor:pointer}
+.uz-empty{display:flex;flex-direction:column;align-items:center;gap:6px}
+.uz-icon{width:44px;height:44px;border-radius:10px;background:#e8f0fa;color:#2563eb;font-size:22px;line-height:44px;font-weight:700;margin-bottom:4px}
+.uz-title{font-size:14px;font-weight:700;color:#1a1916}
+.uz-formats{font-size:11px;color:#9e9b96}
+.proc-file-card{display:flex;align-items:center;gap:12px;padding:12px 14px;background:#fff;border:1px solid #e2ddd8;border-radius:10px;text-align:left;max-width:100%}
+.proc-file-icon{width:36px;height:36px;border-radius:8px;background:#e8f0fa;color:#2563eb;font-size:18px;line-height:36px;text-align:center;flex-shrink:0}
+.proc-file-info{flex:1;min-width:0}
+.proc-file-name{font-size:13px;font-weight:600;color:#2563eb;line-height:1.35;word-break:break-all}
+.proc-file-status{font-size:11px;color:#9e9b96;margin-top:4px;line-height:1.45;min-height:14px}
+.proc-file-status.is-err{color:#c0392b}
+.proc-file-remove{width:28px;height:28px;border:1px solid #e2ddd8;border-radius:50%;background:#fff;color:#9e9b96;font-size:14px;cursor:pointer;line-height:26px;padding:0;flex-shrink:0}
+.proc-file-remove:hover{color:#c0392b;border-color:#e8b4b4;background:#fff8f8}
+.proc-instructions{font-size:11px;color:#9e9b96;line-height:1.65;margin:0 0 12px}
+.proc-manual-link{margin-top:4px;font-size:12px;color:#6b6860}
+.proc-manual-link summary{cursor:pointer;list-style:none;padding:4px 0;font-weight:500}
+.proc-manual-link summary::-webkit-details-marker{display:none}
+.proc-manual-link summary::before{content:'› ';color:#9e9b96}
+.proc-manual-link[open] summary::before{content:'› '}
+.proc-btn-cancel{padding:9px 20px;border-radius:8px;border:1px solid #e2ddd8;background:#fff;color:#1a1916;font-size:13px;font-weight:600;cursor:pointer}
+.proc-btn-cancel:hover{background:#f7f5f2}
+.proc-btn-confirm{padding:9px 22px;border-radius:8px;border:none;background:#dbeafe;color:#1d4ed8;font-size:13px;font-weight:600;cursor:pointer}
+.proc-btn-confirm:hover{background:#bfdbfe}
+.proc-btn-confirm:disabled{opacity:.45;cursor:not-allowed}
+.proc-file-input{position:absolute;width:0;height:0;opacity:0;pointer-events:none}
+.proc-preview{margin-top:4px}
 .proc-wi{margin:4px 0 6px}
 .proc-wi .srow{grid-template-columns:1fr 70px 90px 50px}
-.manual-toggle{margin-top:10px;font-size:11px;color:var(--t2)}
-.manual-toggle summary{cursor:pointer;padding:6px 0;font-weight:600}
-.manual-toggle[open] summary{margin-bottom:8px}
 
 .pp-pay{width:900px;max-width:96vw;display:flex;flex-direction:column;max-height:90vh}
 .pp-pay .ppb{flex:1;overflow:hidden;padding:0;background:#f0f0f0}
@@ -483,31 +504,51 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .undo-toast.show{opacity:1;pointer-events:auto}
 .undo-btn{padding:4px 10px;border-radius:var(--rs);border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;font-size:11px;font-weight:600;cursor:pointer}
 .undo-btn:hover{background:rgba(255,255,255,.22)}
-.auth-gate{position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(165deg,#f3f0ea 0%,#e6e0d6 45%,#f7f4ef 100%)}
+.auth-gate{position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;padding:24px;background:#f2efe9}
 .auth-gate.hidden{display:none}
-.auth-gate-card{width:100%;max-width:420px;background:var(--surface);border-radius:16px;border:1px solid rgba(226,221,216,.9);box-shadow:0 12px 48px rgba(26,25,22,.1),0 1px 0 rgba(255,255,255,.9) inset;overflow:hidden}
-.auth-gate-brand{padding:28px 32px 22px;text-align:center;background:linear-gradient(180deg,#fff 0%,#faf8f5 100%);border-bottom:1px solid var(--border)}
-.auth-gate-brand .logo{font-size:28px;font-weight:700;letter-spacing:8px;margin:0;line-height:1.2}
-.auth-gate-brand .tagline{font-size:11px;color:var(--t3);margin-top:10px;letter-spacing:.5px}
-.auth-gate-body{padding:28px 32px 32px;text-align:center}
-.auth-gate-icon{width:52px;height:52px;border-radius:50%;margin:0 auto 18px;display:flex;align-items:center;justify-content:center;font-size:24px;line-height:1}
-.auth-gate-icon.state-loading{background:#f4f1ec;color:var(--t2);animation:authPulse 1.4s ease-in-out infinite}
-.auth-gate-icon.state-login{background:linear-gradient(135deg,#e8f5ee,#d4ebe0);color:var(--c1)}
-.auth-gate-icon.state-denied{background:linear-gradient(135deg,#fef2f2,#fde8e8);color:var(--danger)}
-@keyframes authPulse{0%,100%{opacity:.55;transform:scale(.96)}50%{opacity:1;transform:scale(1)}}
-.auth-gate-msg{font-size:16px;font-weight:600;color:var(--text);margin-bottom:12px;line-height:1.45}
-.auth-gate.gate-login .auth-gate-msg{font-size:14px;font-weight:500;color:var(--t2);margin-bottom:22px}
-.auth-gate.gate-login .auth-gate-body{padding-top:32px}
-.auth-gate-actions .auth-gate-login-btn{width:100%;max-width:280px;padding:13px 20px;font-size:14px;border-radius:var(--rs)}
-.auth-gate-actions .auth-gate-login-btn:active{background:var(--c1)!important;transform:scale(0.97);box-shadow:0 0 0 3px rgba(45,106,79,.28)}
-.auth-gate-user{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:14px;background:var(--sf2);border:1px solid var(--border);border-radius:var(--rs);text-align:left}
-.auth-gate-user-dot{width:40px;height:40px;border-radius:50%;background:linear-gradient(145deg,#e8a04a,#c96d28);color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 8px rgba(201,109,40,.25)}
-.auth-gate-user-name{font-size:13px;font-weight:600;color:var(--text);line-height:1.3}
-.auth-gate-user-hint{font-size:11px;color:var(--t3);margin-top:2px;line-height:1.4}
-.auth-gate-sub{font-size:12px;color:var(--t2);line-height:1.65;white-space:pre-line;margin-bottom:20px;padding:12px 14px;background:var(--sf2);border-radius:var(--rs);border:1px solid var(--border);text-align:left}
+.auth-gate-card{width:100%;max-width:400px;background:#fff;border-radius:14px;border:1px solid #eceae6;box-shadow:0 8px 32px rgba(26,25,22,.08);overflow:hidden}
+.auth-gate-brand{padding:36px 32px 28px;text-align:center}
+.auth-gate-brand .logo{font-size:32px;font-weight:700;letter-spacing:10px;margin:0;line-height:1.2;color:#1a1916}
+.auth-gate-brand .tagline{font-size:12px;color:#9e9b96;margin-top:12px;letter-spacing:.3px}
+.auth-gate-divider{height:1px;background:#eceae6;margin:0 28px}
+.auth-gate-body{padding:28px 32px 36px;text-align:center}
+.auth-gate-loading{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:16px}
+.auth-gate-loading .dot{width:7px;height:7px;border-radius:50%;background:#c8c4bc;animation:authDotPulse 1.2s ease-in-out infinite}
+.auth-gate-loading .dot:nth-child(2){animation-delay:.15s}
+.auth-gate-loading .dot:nth-child(3){animation-delay:.3s}
+@keyframes authDotPulse{0%,80%,100%{opacity:.35;transform:scale(.85)}40%{opacity:1;transform:scale(1)}}
+.auth-gate-icon{width:48px;height:48px;border-radius:50%;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1}
+.auth-gate-icon.state-denied{background:#fde8e8;color:#b91c1c}
+.auth-gate-msg{font-size:14px;font-weight:500;color:#6b6860;margin:0;line-height:1.5}
+.auth-gate.gate-login .auth-gate-msg{margin-bottom:20px}
+.auth-gate.gate-login .auth-gate-body{padding-top:28px}
+.auth-gate-actions .auth-gate-login-btn{width:100%;max-width:280px;padding:13px 20px;font-size:14px;border-radius:8px}
+.auth-gate-user{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:14px;background:#f7f5f2;border:1px solid #e2ddd8;border-radius:8px;text-align:left}
+.auth-gate-user-dot{width:40px;height:40px;border-radius:50%;background:linear-gradient(145deg,#e8a04a,#c96d28);color:#fff;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.auth-gate-user-name{font-size:13px;font-weight:600;color:#1a1916;line-height:1.3}
+.auth-gate-user-hint{font-size:11px;color:#9e9b96;margin-top:2px}
+.auth-gate-sub{font-size:12px;color:#6b6860;line-height:1.65;white-space:pre-line;margin-bottom:20px;padding:12px 14px;background:#f7f5f2;border-radius:8px;border:1px solid #e2ddd8;text-align:left}
 .auth-gate-actions{display:flex;flex-direction:column;gap:10px;align-items:center}
-.auth-gate-actions .bpri{width:100%;max-width:280px;padding:12px 20px;font-size:13px;border-radius:var(--rs)}
-.auth-gate-actions .bcan{width:100%;max-width:280px;padding:11px 20px;border-radius:var(--rs)}
+.auth-gate-actions .bpri{width:100%;max-width:280px;padding:12px 20px;font-size:13px;border-radius:8px}
+.auth-gate-actions .bcan{width:100%;max-width:280px;padding:11px 20px;border-radius:8px}
+.pay-save-notice{position:fixed;inset:0;z-index:3500;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(42,40,36,.22);backdrop-filter:blur(3px);animation:payNoticeFadeIn .22s ease}
+.pay-save-notice.hidden{display:none}
+@keyframes payNoticeFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes payNoticePop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.pay-save-notice-card{width:100%;max-width:400px;background:#fff;border:1px solid #eceae6;border-radius:14px;padding:20px 20px 16px;box-shadow:0 12px 40px rgba(0,0,0,.12);animation:payNoticePop .28s cubic-bezier(.22,1,.36,1)}
+.pay-save-notice-card.is-error{border-color:#f0d8d8}
+.pay-save-notice-row{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px}
+.pay-save-notice-icon{width:40px;height:40px;border-radius:10px;background:#e8f5ee;color:#2d6a4f;font-size:20px;line-height:40px;text-align:center;font-weight:700;flex-shrink:0}
+.pay-save-notice-card.is-error .pay-save-notice-icon{background:#fde8e8;color:#b91c1c}
+.pay-save-notice-text{flex:1;min-width:0;padding-top:2px}
+.pay-save-notice-msg{font-size:15px;font-weight:700;color:#1a1916;line-height:1.45;margin:0}
+.pay-save-notice-sub{font-size:12px;color:#9e9b96;line-height:1.5;margin:6px 0 0}
+.pay-save-notice-sub:empty{display:none}
+.pay-save-notice-card.is-error .pay-save-notice-msg{color:#7f1d1d}
+.pay-save-notice-foot{display:flex;justify-content:flex-end}
+.pay-save-notice-btn{padding:8px 22px;border:none;border-radius:8px;background:#dbeafe;color:#1d4ed8;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s,transform .1s}
+.pay-save-notice-btn:hover{background:#bfdbfe}
+.pay-save-notice-btn:active{transform:scale(0.97)}
 body.role-designer #lp,body.role-designer #rp,body.role-designer #tl,body.role-designer #tr{display:none!important}
 .bpri:active{background:var(--c1)!important;transform:scale(0.97);box-shadow:0 0 0 3px rgba(45,106,79,.28)}
 .bcan:active{background:#fef3c7!important;border-color:#f59e0b!important;color:#92400e!important;transform:scale(0.97);box-shadow:0 0 0 3px rgba(245,158,11,.2)}
@@ -559,9 +600,11 @@ button.btn-loading::after{content:'…';margin-left:2px}
       <div class="logo">璽墨</div>
       <div class="tagline">專案管理系統</div>
     </div>
+    <div class="auth-gate-divider"></div>
     <div class="auth-gate-body">
-      <div class="auth-gate-icon state-loading" id="auth-gate-icon">◎</div>
-      <div class="auth-gate-msg" id="auth-gate-msg">驗證登入中…</div>
+      <div class="auth-gate-loading" id="auth-gate-loading"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      <div class="auth-gate-icon state-denied" id="auth-gate-icon" style="display:none">!</div>
+      <div class="auth-gate-msg" id="auth-gate-msg">正在登入 Lark…</div>
       <div class="auth-gate-user" id="auth-gate-user" style="display:none">
         <div class="auth-gate-user-dot" id="auth-gate-user-dot">?</div>
         <div>
@@ -574,6 +617,21 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <button type="button" class="bpri auth-gate-login-btn" id="auth-gate-login" style="display:none" onclick="startBrowserLarkLogin()">使用 Lark 登入</button>
         <button type="button" class="bcan" id="auth-gate-logout" style="display:none" onclick="logoutAndShowGate()">登出並重新登入</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div id="pay-save-notice" class="pay-save-notice hidden" onclick="if(event.target===this)hidePaymentSaveNotice()">
+  <div class="pay-save-notice-card" id="pay-save-notice-card">
+    <div class="pay-save-notice-row">
+      <div class="pay-save-notice-icon" id="pay-save-notice-icon">✓</div>
+      <div class="pay-save-notice-text">
+        <p class="pay-save-notice-msg" id="pay-save-notice-msg"></p>
+        <p class="pay-save-notice-sub" id="pay-save-notice-sub"></p>
+      </div>
+    </div>
+    <div class="pay-save-notice-foot">
+      <button type="button" class="pay-save-notice-btn" onclick="hidePaymentSaveNotice()">確定</button>
     </div>
   </div>
 </div>
@@ -740,15 +798,26 @@ button.btn-loading::after{content:'…';margin-left:2px}
 </div><!-- /body -->
 
 <!-- ══ POPUPS ══ -->
-<div class="po" id="pp-proj"><div class="pp ppw"><div class="pph"><h3>上傳服務建議書建立標案</h3><button class="ppc" onclick="cl('pp-proj')">✕</button></div><div class="ppb">
-  <div class="upload-zone" id="proc-upload-zone" onclick="procPickFile()">
-    <button type="button" class="proc-clear" id="proc-clear-btn" title="清除上傳" style="display:none" onclick="event.stopPropagation();clearProcUpload()">✕</button>
-    <input type="file" id="proc-file" accept=".pdf,.doc,.docx,.txt,.text" hidden onchange="onProcFileSelect(this)">
-    <div class="uz-title">📄 點此上傳服務建議書</div>
-    <div class="uz-hint">支援 PDF、Word（.doc/.docx）<br>經費表請用 Word 表格，表頭保留「服務細項」「複價」，勿貼截圖<br>自動帶入標案名稱、工作項目、合約金額；主PM與日期請手填</div>
-    <div class="uz-file" id="proc-file-name"></div>
-    <div class="uz-status" id="proc-parse-status"></div>
+<div class="po" id="pp-proj"><div class="pp ppw pp-proj-modal"><div class="pph"><h3>上傳服務建議書</h3><button class="ppc" onclick="cl('pp-proj')">✕</button></div><div class="ppb">
+  <div class="proc-upload-wrap" id="proc-upload-zone">
+    <label for="proc-file" class="upload-zone-inner" id="proc-upload-label">
+      <div class="uz-empty" id="proc-empty-state">
+        <div class="uz-icon">↑</div>
+        <div class="uz-title">點此上傳服務建議書</div>
+        <div class="uz-formats">支援 PDF、Word（.docx）</div>
+      </div>
+      <div class="proc-file-card" id="proc-file-card" style="display:none">
+        <div class="proc-file-icon">📄</div>
+        <div class="proc-file-info">
+          <div class="proc-file-name" id="proc-file-name"></div>
+          <div class="proc-file-status" id="proc-parse-status"></div>
+        </div>
+        <button type="button" class="proc-file-remove" id="proc-clear-btn" title="移除檔案" onclick="event.preventDefault();clearProcUpload()">✕</button>
+      </div>
+    </label>
+    <input type="file" id="proc-file" class="proc-file-input" accept=".pdf,.docx,.txt,.text,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="onProcFileSelect(this)">
   </div>
+  <p class="proc-instructions">請以 Word 表格格式製作，表頭保留「服務細項」與「複價」欄位，勿貼截圖。系統將自動帶入標案名稱、工作項目、合約金額；主PM與日期請手填。</p>
   <div class="proc-preview" id="proc-preview" style="display:none">
     <div class="ppb2">
       <div>
@@ -771,7 +840,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     </div>
     <div class="fg"><label>工作項目（可編輯，系統已自動帶入）</label><div class="proc-wi" id="np-workitems"></div><button type="button" class="bads" onclick="addProjWorkItem()">＋ 新增工作項目</button></div>
   </div>
-  <details class="manual-toggle"><summary>改用手動填寫（不經檔案）</summary>
+  <details class="proc-manual-link"><summary>改用手動填寫（不經檔案）</summary>
     <div class="ppb2" style="margin-top:8px">
       <div><div class="fg"><label>標案名稱</label><input type="text" id="np-name-manual" placeholder="115花蓮山茶"></div>
       <div class="fg"><label>Wiki 封存位置（選填）</label><input type="url" id="np-wiki-folder-manual" placeholder="https://.../wiki/..."></div></div>
@@ -779,7 +848,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     </div>
     <button type="button" class="bads" onclick="applyManualProject()">套用到上方欄位</button>
   </details>
-</div><div class="ppf"><button class="bcan" onclick="cl('pp-proj')">取消</button><button class="bpri" id="np-save-btn" onclick="saveProjectImport()" disabled>確認新增標案</button></div></div></div>
+</div><div class="ppf pp-proj-foot"><button type="button" class="proc-btn-cancel" onclick="cl('pp-proj')">取消</button><button type="button" class="proc-btn-confirm" id="np-save-btn" onclick="saveProjectImport()" disabled>確認新增標案</button></div></div></div>
 
 <div class="po" id="pp-work"><div class="pp ppw"><div class="pph"><h3>建立標案的工作項目</h3><button class="ppc" onclick="cl('pp-work')">✕</button></div><div class="ppb"><div class="fg"><label>標案</label><select id="nw-proj" onchange="onNwProjChange()"></select></div><div class="fg"><label>起始日（合約）</label><div id="nw-start-hint" class="fg-hint" style="padding:8px 10px;background:var(--sf2);border-radius:var(--rs);font-size:12px;color:var(--t2)">依所選標案合約開始日</div></div><div style="display:grid;grid-template-columns:1fr 90px 1fr 70px 50px;gap:6px;padding:4px 0;font-size:10px;color:var(--t3)"><span>工作項目名稱</span><span>天數</span><span>負責夥伴</span><span>可用成本</span><span>權重</span></div><div class="slist" id="sl"></div><button class="bads" onclick="addS()">＋ 新增工作項目</button></div><div class="ppf"><button class="bcan" onclick="cl('pp-work')">取消</button><button class="bpri" onclick="saveWorkItems()">新增</button></div></div></div>
 
@@ -830,7 +899,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="ppf">
       <button class="bcan" onclick="cl('pp-prev')">返回修改</button>
       <button class="bsm" onclick="savePaymentOnly(true)">僅存檔不列印</button>
-      <button class="bsm" onclick="window.open(buildPayPrintUrl({print:true}),'_blank')">新分頁列印</button>
+      <button class="bsm" onclick="openPayPrintTab()">新分頁列印</button>
       <button class="bpri" onclick="doPrint()">🖨 確認列印並存檔</button>
     </div>
   </div>
@@ -959,10 +1028,23 @@ function loadScriptOnce(url, globalName) {
     s.src = url;
     s.async = true;
     s.onload = function() { resolve(); };
-    s.onerror = function() { reject(new Error('無法載入腳本：' + url)); };
+    s.onerror = function() { delete optionalLibLoads[url]; reject(new Error('無法載入腳本：' + url)); };
     document.head.appendChild(s);
   });
   return optionalLibLoads[url];
+}
+function loadScriptWithFallback(urls, globalName) {
+  if (globalName && window[globalName]) return Promise.resolve();
+  var key = (globalName || 'lib') + ':' + urls.join('|');
+  if (optionalLibLoads[key]) return optionalLibLoads[key];
+  optionalLibLoads[key] = (function tryAt(i) {
+    if (globalName && window[globalName]) return Promise.resolve();
+    if (i >= urls.length) {
+      return Promise.reject(new Error('無法載入解析元件，請改用瀏覽器開啟或稍後再試'));
+    }
+    return loadScriptOnce(urls[i], globalName).catch(function() { return tryAt(i + 1); });
+  })(0);
+  return optionalLibLoads[key];
 }
 function ensureH5Sdk() {
   return loadScriptOnce(
@@ -971,16 +1053,29 @@ function ensureH5Sdk() {
   );
 }
 function ensurePdfJs() {
-  return loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', 'pdfjsLib');
+  return loadScriptWithFallback([
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+    'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js'
+  ], 'pdfjsLib');
 }
 function ensureMammoth() {
-  return loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js', 'mammoth');
+  return loadScriptWithFallback([
+    'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js',
+    'https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js',
+    'https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js'
+  ], 'mammoth');
 }
 function ensureJsZip() {
-  return loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', 'JSZip');
+  return loadScriptWithFallback([
+    'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+    'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'
+  ], 'JSZip');
 }
 function ensureTesseract() {
-  return loadScriptOnce('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js', 'Tesseract');
+  return loadScriptWithFallback([
+    'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
+    'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'
+  ], 'Tesseract');
 }
 </script>
 <script>
@@ -1048,8 +1143,28 @@ function procPickFile() {
   var input = document.getElementById('proc-file');
   if (input) {
     input.value = '';
-    input.click();
+    try { input.click(); } catch (e) {}
   }
+}
+
+function preloadProcLibs() {
+  var formatsEl = document.querySelector('#proc-empty-state .uz-formats');
+  var defaultFormats = '支援 PDF、Word（.docx）';
+  var card = document.getElementById('proc-file-card');
+  if (formatsEl && (!card || card.style.display === 'none') && formatsEl.textContent === defaultFormats) {
+    formatsEl.textContent = '正在準備解析元件…';
+  }
+  return Promise.all([
+    ensureMammoth().catch(function() {}),
+    ensureJsZip().catch(function() {}),
+    ensurePdfJs().catch(function() {})
+  ]).then(function() {
+    if (formatsEl && formatsEl.textContent === '正在準備解析元件…') {
+      formatsEl.textContent = defaultFormats;
+    }
+  }).catch(function() {
+    if (formatsEl) formatsEl.textContent = '解析元件載入失敗，請改用瀏覽器開啟';
+  });
 }
 
 function initProcUpload() {
@@ -1062,24 +1177,33 @@ function initProcUpload() {
     e.preventDefault();
     zone.classList.remove('drag');
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      document.getElementById('proc-file').files = e.dataTransfer.files;
-      onProcFileSelect(document.getElementById('proc-file'));
+      onProcFileSelect(null, e.dataTransfer.files[0]);
     }
   });
-  if (window.pdfjsLib) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  }
+}
+
+function setProcFileUi(hasFile) {
+  var empty = document.getElementById('proc-empty-state');
+  var card = document.getElementById('proc-file-card');
+  if (empty) empty.style.display = hasFile ? 'none' : '';
+  if (card) card.style.display = hasFile ? 'flex' : 'none';
 }
 
 function setProcStatus(msg, isErr) {
   var el = document.getElementById('proc-parse-status');
-  if (el) { el.textContent = msg; el.style.color = isErr ? '#c0392b' : 'var(--t2)'; }
+  if (el) {
+    el.textContent = msg || '';
+    el.classList.toggle('is-err', !!isErr);
+  }
 }
 
 function clearProcUpload() {
   procUploadSeq++;
   resetProcForm();
-  setProcStatus('已清除，請重新上傳');
+  setProcFileUi(false);
+  var formatsEl = document.querySelector('#proc-empty-state .uz-formats');
+  if (formatsEl) formatsEl.textContent = '已清除，請重新上傳';
+  setProcStatus('');
 }
 
 function resetProcFormForNewUpload() {
@@ -1105,20 +1229,23 @@ function resetProcFormForNewUpload() {
   if (sp) sp.textContent = 'NT$0';
 }
 
-function onProcFileSelect(input) {
-  var file = input.files && input.files[0];
+function onProcFileSelect(input, droppedFile) {
+  var file = droppedFile || (input && input.files && input.files[0]);
   if (!file) return;
+  var zone = document.getElementById('proc-upload-zone');
   procUploadSeq++;
   var uploadId = procUploadSeq;
   resetProcFormForNewUpload();
+  setProcFileUi(true);
   document.getElementById('proc-file-name').textContent = file.name;
-  var clearBtn = document.getElementById('proc-clear-btn');
-  if (clearBtn) clearBtn.style.display = '';
+  if (zone) zone.classList.add('is-processing');
   setProcStatus('正在讀取服務建議書…');
-  extractProcurementText(file, function(msg) {
+  var extractPromise = extractProcurementText(file, function(msg) {
     if (uploadId === procUploadSeq) setProcStatus(msg);
-  }).then(function(text) {
+  });
+  promiseWithTimeout(extractPromise, 120000, null).then(function(text) {
     if (uploadId !== procUploadSeq) return;
+    if (text === null) throw new Error('讀取逾時，檔案可能過大，請稍後再試或改用較小檔案');
     if (!text || text.length < 20) throw new Error('檔案內容太少，請確認是否為服務建議書');
     var parsed = parseServiceProposalText(text);
     applyProcurementParse(parsed);
@@ -1139,6 +1266,8 @@ function onProcFileSelect(input) {
     if (uploadId !== procUploadSeq) return;
     console.error(err);
     setProcStatus('讀取失敗：' + (err.message || '請換檔案格式再試'), true);
+  }).finally(function() {
+    if (uploadId === procUploadSeq && zone) zone.classList.remove('is-processing');
   });
 }
 
@@ -1417,6 +1546,9 @@ function hasParsedBudgetTable(text) {
 
 function extractProcurementText(file, onProgress) {
   var name = (file.name || '').toLowerCase();
+  if (name.endsWith('.doc') && !name.endsWith('.docx')) {
+    return Promise.reject(new Error('舊版 .doc 請在 Word 另存為 .docx 後再上傳'));
+  }
   if (name.endsWith('.txt') || name.endsWith('.text')) {
     return file.text();
   }
@@ -1443,7 +1575,7 @@ function extractProcurementText(file, onProgress) {
       });
     });
   }
-  if (name.endsWith('.docx') || name.endsWith('.doc')) {
+  if (name.endsWith('.docx')) {
     return ensureMammoth().then(function() {
       return file.arrayBuffer();
     }).then(function(buf) {
@@ -1771,14 +1903,10 @@ function applyManualProject() {
 
 function resetProcForm() {
   parsedProjWorkItems = [];
-  ['proc-file-name', 'proc-parse-status'].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.textContent = '';
-  });
+  setProcFileUi(false);
+  setProcStatus('');
   var f = document.getElementById('proc-file');
   if (f) f.value = '';
-  var clearBtn = document.getElementById('proc-clear-btn');
-  if (clearBtn) clearBtn.style.display = 'none';
   var prev = document.getElementById('proc-preview');
   if (prev) prev.style.display = 'none';
   var btn = document.getElementById('np-save-btn');
@@ -1898,7 +2026,20 @@ function workRowHtml() {
 
 // ── 付款預覽 / 列印（元頂集團格式，同 payment-form GitHub Pages）──
 var PAY_PRINT_BASE = '/payment-print.html';
+var PAY_PRINT_STORAGE_KEY = 'ximo-pay-print';
 var payPreviewUrl = '';
+
+function stashPayPrintData() {
+  try {
+    localStorage.setItem(PAY_PRINT_STORAGE_KEY, JSON.stringify(collectPaymentFields()));
+  } catch (e) {}
+}
+function postPayPrintToIframe(iframe) {
+  if (!iframe || !iframe.contentWindow) return;
+  try {
+    iframe.contentWindow.postMessage({ type: 'ximo-pay-fill', data: collectPaymentFields() }, location.origin);
+  } catch (e) {}
+}
 
 function buildPayPrintUrl(opts) {
   opts = opts || {};
@@ -1929,6 +2070,11 @@ function buildPayPrintUrl(opts) {
   return PAY_PRINT_BASE + '?' + params.toString();
 }
 
+function openPayPrintTab() {
+  stashPayPrintData();
+  window.open(buildPayPrintUrl({ print: true }), '_blank');
+}
+
 function prevPay() {
   if (!getLoginDisplayName()) {
     alert('請先 Lark 登入，列印與存檔才會記錄申請人');
@@ -1937,15 +2083,22 @@ function prevPay() {
     alert('請填寫付款總金額');
     return;
   }
+  stashPayPrintData();
   payPreviewUrl = buildPayPrintUrl({ embed: true });
-  document.getElementById('prev-iframe').src = payPreviewUrl;
+  var iframe = document.getElementById('prev-iframe');
+  iframe.onload = function() {
+    iframe.onload = null;
+    postPayPrintToIframe(iframe);
+    setTimeout(function() { postPayPrintToIframe(iframe); }, 120);
+  };
+  iframe.src = payPreviewUrl;
   op('pp-prev');
 }
 
 function triggerPaymentPrint() {
   var iframe = document.getElementById('prev-iframe');
   if (!iframe) {
-    window.open(buildPayPrintUrl({ print: true }), '_blank');
+    openPayPrintTab();
     return;
   }
   function printOnce() {
@@ -1955,37 +2108,62 @@ function triggerPaymentPrint() {
         iframe.contentWindow.print();
       }
     } catch (e) {
-      window.open(buildPayPrintUrl({ print: true }), '_blank');
+      openPayPrintTab();
     }
   }
   var src = iframe.src || '';
   var hasPreview = src.indexOf('payment-print') >= 0;
   if (hasPreview) {
+    postPayPrintToIframe(iframe);
     setTimeout(printOnce, 200);
     return;
   }
+  stashPayPrintData();
   iframe.onload = function() {
     iframe.onload = null;
+    postPayPrintToIframe(iframe);
     setTimeout(printOnce, 300);
   };
   iframe.src = buildPayPrintUrl({ embed: true });
 }
 
-function formatPaymentSaveMessage(res, printed) {
-  var msg = printed ? '已列印並存檔至多維表格！' : '已存檔至多維表格（未列印）';
-  if (res && res.partialErrors && res.partialErrors.length) {
-    msg += '\n（部分寫入失敗：' + res.partialErrors.join('；') + '）';
-  }
-  if (res && res.notify) {
-    if (res.notify.mode === 'automation') {
-      msg += '\n（通知由 Lark 多維表格自動化發送）';
-    } else if (res.notify.skipped) {
-      msg += '\n（機器人通知未設定：請在 Vercel 設定 LARK_WEBHOOK_URL）';
-    } else if (!res.notify.ok) {
-      msg += '\n（機器人通知失敗：' + (res.notify.error || res.notify.reason || '請稍後再試') + '）';
-    }
-  }
-  return msg;
+function showPaymentSaveNotice(printed, res) {
+  var el = document.getElementById('pay-save-notice');
+  var card = document.getElementById('pay-save-notice-card');
+  var icon = document.getElementById('pay-save-notice-icon');
+  var msgEl = document.getElementById('pay-save-notice-msg');
+  var subEl = document.getElementById('pay-save-notice-sub');
+  if (!el || !msgEl) return;
+  if (card) card.classList.remove('is-error');
+  if (icon) icon.textContent = '✓';
+  msgEl.textContent = '付款申請單資料已填入表格。';
+  var subParts = [];
+  if (printed) subParts.push('已列印');
+  else subParts.push('未列印');
+  if (res && res.notify && res.notify.mode === 'automation') subParts.push('由 Lark 自動化發送');
+  if (res && res.partialErrors && res.partialErrors.length) subParts.push(res.partialErrors.join(' '));
+  if (res && res.applicantDebug && !res.applicantDebug.inBody) subParts.push('申請人未寫入表格');
+  if (subEl) subEl.textContent = subParts.join(' · ');
+  el.classList.remove('hidden');
+}
+
+function showPaymentSaveError(message) {
+  var el = document.getElementById('pay-save-notice');
+  var card = document.getElementById('pay-save-notice-card');
+  var icon = document.getElementById('pay-save-notice-icon');
+  var msgEl = document.getElementById('pay-save-notice-msg');
+  var subEl = document.getElementById('pay-save-notice-sub');
+  if (!el || !msgEl) return;
+  if (card) card.classList.add('is-error');
+  if (icon) icon.textContent = '!';
+  msgEl.textContent = message || '存檔失敗，請稍後再試。';
+  if (subEl) subEl.textContent = '';
+  el.classList.remove('hidden');
+}
+
+function hidePaymentSaveNotice() {
+  var el = document.getElementById('pay-save-notice');
+  if (el) el.classList.add('hidden');
 }
 
 function validatePaymentForm() {
@@ -2004,10 +2182,10 @@ function savePaymentOnly(closePreview) {
   if (!data) return;
   savePaymentRecord(data).then(function(res) {
     if (closePreview) cl('pp-prev');
-    alert(formatPaymentSaveMessage(res, false));
+    showPaymentSaveNotice(false, res);
   }).catch(function(err) {
     console.error(err);
-    alert('存檔失敗：' + (err.message || '請稍後再試'));
+    showPaymentSaveError('存檔失敗：' + (err.message || '請稍後再試'));
   });
 }
 
@@ -2019,10 +2197,10 @@ function doPrint() {
 
   savePaymentRecord(data).then(function(res) {
     cl('pp-prev');
-    alert(formatPaymentSaveMessage(res, true));
+    showPaymentSaveNotice(true, res);
   }).catch(function(err) {
     console.error(err);
-    alert('已開啟列印，但存檔失敗：' + (err.message || '請稍後再試'));
+    showPaymentSaveError('已開啟列印，但存檔失敗：' + (err.message || '請稍後再試'));
   });
 }
 
@@ -2235,7 +2413,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260623t';
+var APP_BUILD = '20260615ui';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -2476,6 +2654,7 @@ function attemptAutoLogin(force) {
 
 function showAuthGate(state, msg, sub, loginUser) {
   var gate = document.getElementById('auth-gate');
+  var loadingEl = document.getElementById('auth-gate-loading');
   var iconEl = document.getElementById('auth-gate-icon');
   var msgEl = document.getElementById('auth-gate-msg');
   var subEl = document.getElementById('auth-gate-sub');
@@ -2488,13 +2667,15 @@ function showAuthGate(state, msg, sub, loginUser) {
   gate.classList.remove('hidden');
   gate.classList.toggle('gate-login', state === 'login');
   if (msgEl) msgEl.textContent = msg || '';
+  var showLoading = state === 'loading';
+  if (loadingEl) loadingEl.style.display = showLoading ? 'flex' : 'none';
   if (iconEl) {
-    if (state === 'login') {
-      iconEl.style.display = 'none';
-    } else {
+    if (state === 'denied') {
       iconEl.style.display = 'flex';
-      iconEl.className = 'auth-gate-icon state-' + (state === 'denied' ? 'denied' : 'loading');
-      iconEl.textContent = state === 'denied' ? '!' : '◎';
+      iconEl.className = 'auth-gate-icon state-denied';
+      iconEl.textContent = '!';
+    } else {
+      iconEl.style.display = 'none';
     }
   }
   var who = formatLoginDisplayName(loginUser);
@@ -2623,9 +2804,10 @@ function completeAuthAfterLogin() {
       loadData();
     } else {
       updateTodoLoginLabel();
-      applyLoginUserToForms();
       renderTeamPanel();
     }
+    initPayFormDefaults();
+    applyLoginUserToForms();
     return true;
   });
 }
@@ -2633,7 +2815,7 @@ function completeAuthAfterLogin() {
 function runAuthGate() {
   var hasOAuthCode = !!new URLSearchParams(window.location.search).get('code');
   if (hasOAuthCode || getUserAccessToken()) {
-    showAuthGate('loading', '正在驗證登入狀態…', '', null);
+    showAuthGate('loading', '正在登入 Lark…', '', null);
     return resolveLoginUser().then(function() {
       return completeAuthAfterLogin();
     });
@@ -2768,13 +2950,25 @@ function getLoginLarkPerson() {
   if (name) return larkPerson(name);
   return undefined;
 }
+function initPayFormDefaults() {
+  var deptEl = document.getElementById('p-dept');
+  if (deptEl && !deptEl.value.trim()) deptEl.value = '璽墨';
+  var dateEl = document.getElementById('p-date');
+  if (dateEl && !dateEl.value) {
+    var d = new Date();
+    dateEl.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+}
 function applyLoginUserToForms() {
+  initPayFormDefaults();
   var name = getLoginDisplayName();
   var payApplicant = document.getElementById('p-applicant');
   if (payApplicant && name) {
-    if (payApplicant.dataset.userEdited !== '1') {
+    var cur = payApplicant.value.trim();
+    if (!cur || payApplicant.dataset.userEdited !== '1') {
       payApplicant.value = name;
       payApplicant.dataset.autoName = name;
+      if (!cur || cur === name) delete payApplicant.dataset.userEdited;
     }
   }
   var payLabel = document.getElementById('pay-user-label');
@@ -2907,21 +3101,65 @@ function mapLarkClientUser(res) {
   };
 }
 
+function memberFieldPersonIds(fields) {
+  var ids = [];
+  var keys = ['帳號', '成員', '姓名', '名稱', '人員', 'Member', 'Account'];
+  keys.forEach(function(k) {
+    var oid = getPersonOpenId(fields[k]);
+    if (oid) ids.push(oid);
+  });
+  Object.keys(fields || {}).forEach(function(k) {
+    var oid = getPersonOpenId(fields[k]);
+    if (oid) ids.push(oid);
+  });
+  var extra = fieldTextValue(fields['open_id'] || fields['Open ID'] || fields['user_id'] || fields['User ID'] || fields['userid']);
+  if (extra) ids.push(extra);
+  return ids;
+}
+function memberFieldPersonNames(fields) {
+  var names = [];
+  var keys = ['帳號', '成員', '姓名', '名稱', '人員', 'Member', 'Account', '顯示名稱'];
+  keys.forEach(function(k) {
+    var n = memberLabel(fields[k]) || personName(fields[k]);
+    if (n) names.push(n);
+  });
+  Object.keys(fields || {}).forEach(function(k) {
+    var n = memberLabel(fields[k]) || personName(fields[k]);
+    if (n) names.push(n);
+  });
+  return names;
+}
 function enrichLoginUserFromMembers(user) {
   if (!user || !membersData.length) return user;
-  if (user.openId) return user;
-  var name = user.name || user.enName;
-  if (!name) return user;
-  membersData.forEach(function(m) {
-    var f = m.fields || {};
-    var mn = personName(f['姓名'] || f['名稱'] || f['成員']);
-    if (!mn) return;
-    if (namesMatch(mn, name)) {
-      var oid = getPersonOpenId(f['姓名'] || f['名稱'] || f['成員']);
-      if (oid) user.openId = oid;
-      if (!user.name) user.name = mn;
+  var openId = String(user.openId || '').trim();
+  var unionId = String(user.unionId || '').trim();
+  var userId = String(user.userId || '').trim();
+  var userNames = [user.name, user.enName].map(function(s) { return String(s || '').trim(); }).filter(Boolean);
+  for (var i = 0; i < membersData.length; i++) {
+    var f = membersData[i].fields || {};
+    var personIds = memberFieldPersonIds(f);
+    var mNames = memberFieldPersonNames(f);
+    var matched = false;
+    if (openId && personIds.indexOf(openId) >= 0) matched = true;
+    else if (unionId && personIds.indexOf(unionId) >= 0) matched = true;
+    else {
+      var mUserId = fieldTextValue(f['user_id'] || f['User ID'] || f['userid']);
+      if (userId && mUserId && userId === mUserId) matched = true;
+      else {
+        for (var u = 0; u < userNames.length && !matched; u++) {
+          for (var n = 0; n < mNames.length; n++) {
+            if (namesMatch(mNames[n], userNames[u])) matched = true;
+          }
+        }
+      }
     }
-  });
+    if (matched) {
+      if (!user.openId && personIds[0]) user.openId = personIds[0];
+      if (!user.name && mNames[0]) user.name = mNames[0];
+      if (!user.enName && mNames[0]) user.enName = mNames[0];
+      break;
+    }
+  }
   return user;
 }
 
@@ -5345,21 +5583,30 @@ function savePaymentRecord(data) {
   var applicantName = (data.applicant || '').trim();
   var loginUser = getCurrentLoginUser();
   var loginName = getLoginDisplayName();
-  if (applicantName) {
-    fields['申請人'] = applicantName;
-    if (loginUser && loginUser.openId && loginName && namesMatch(applicantName, loginName)) {
-      fields.applicantOpenId = loginUser.openId;
-    }
+  if (!applicantName && loginName) applicantName = loginName;
+  if (loginUser && loginUser.openId) {
+    fields['申請人'] = [{ id: loginUser.openId }];
+    fields.applicantOpenId = loginUser.openId;
+  } else if (applicantName) {
+    var person = larkPerson(applicantName);
+    if (person) fields['申請人'] = person;
+    else fields['申請人'] = applicantName;
   }
+  var headers = { 'Content-Type': 'application/json' };
+  var tok = getUserAccessToken();
+  if (tok) headers['X-User-Access-Token'] = tok;
   return fetch(API + '?table=payments', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: headers,
     body: JSON.stringify(withUserToken(fields))
   }).then(function(r) { return r.json(); }).then(function(res) {
     if (res.error) throw new Error(res.error);
     if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '存檔失敗');
     if (res.partialErrors && res.partialErrors.length) {
       console.warn('付款部分寫入失敗', res.partialErrors);
+    }
+    if (res.applicantDebug && !res.applicantDebug.inBody) {
+      console.warn('申請人未寫入 Lark', res.applicantDebug);
     }
     return res;
   });
@@ -5438,8 +5685,10 @@ function buildMembersMap() {
   membersData.forEach(function(m) {
     var f = m.fields || {};
     var name = memberLabel(f['姓名'] || f['名稱'] || f['成員']);
-    var id = f['open_id'] || f['user_id'] || f['User ID'] || f['userid']
-      || (f['成員'] && f['成員'][0] && (f['成員'][0].id || f['成員'][0].open_id));
+    var id = getPersonOpenId(f['帳號']) || getPersonOpenId(f['成員']) || getPersonOpenId(f['姓名'])
+      || (f['open_id'] && String(f['open_id']).trim())
+      || (f['user_id'] && String(f['user_id']).trim())
+      || (f['User ID'] && String(f['User ID']).trim());
     if (name) membersMap[name] = {
       id: id,
       name: name,
@@ -6203,6 +6452,7 @@ function preparePopup(id) {
   refreshFormSelects();
   if (id === 'pp-proj') {
     initProcUpload();
+    preloadProcLibs();
     refreshFormSelects();
   }
   if (id === 'pp-work') {
@@ -6544,16 +6794,13 @@ if (document.readyState === 'loading') {
   bootApp();
 }
 (function initPayForm() {
-  var d = new Date();
-  var el = document.getElementById('p-date');
-  if (el && !el.value) {
-    el.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  }
+  initPayFormDefaults();
   var applicantEl = document.getElementById('p-applicant');
   if (applicantEl) {
     applicantEl.addEventListener('input', function() {
       var auto = applicantEl.dataset.autoName || '';
-      if (applicantEl.value.trim() !== auto) applicantEl.dataset.userEdited = '1';
+      var val = applicantEl.value.trim();
+      if (val && val !== auto) applicantEl.dataset.userEdited = '1';
       else delete applicantEl.dataset.userEdited;
     });
   }

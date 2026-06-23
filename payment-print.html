@@ -175,47 +175,75 @@ function fillAmount(val) {
   });
 }
  
-function autoFillFromURL() {
-  const p = new URLSearchParams(window.location.search);
-  if (!p.toString()) return;
+function applyPayPrintData(data) {
+  if (!data) return false;
   let filled = false;
- 
-  ['dept','payee','vendor','serial'].forEach(k => {
-    if (p.get(k)) { document.getElementById(k).value=p.get(k); document.getElementById(k).classList.add('filled'); filled=true; }
-  });
-  if (p.get('applicant')) { document.getElementById('applicant_show').textContent=p.get('applicant'); filled=true; }
-  ['reason','remark'].forEach(k => {
-    if (p.get(k)) { const el=document.getElementById(k); el.value=p.get(k); el.classList.add('filled'); filled=true; }
-  });
-  if (p.get('total')) {
-    const num=parseInt(p.get('total').replace(/[^0-9]/g,'')||0);
-    document.getElementById('total').value='NT$'+num.toLocaleString();
-    document.getElementById('total').classList.add('filled');
-    fillAmount(num); filled=true;
+  function setText(id, val) {
+    if (!val) return;
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = val;
+    el.classList.add('filled');
+    filled = true;
   }
-  if (p.get('nature')) {
-    p.get('nature').split(/[,，、]/).forEach(n => {
-      const t=n.trim();
-      ['貨款','工程款','薪工資','公用事業費用','交際','稅捐','勞健退','租金','差旅','其他'].forEach(key => {
-        if (t.includes(key)||key.includes(t)) { const cb=document.getElementById('cb_'+key); if(cb){cb.checked=true;filled=true;} }
-      });
+  setText('dept', data.dept);
+  setText('payee', data.payee);
+  setText('vendor', data.vendor);
+  setText('serial', data.serial);
+  if (data.applicant) {
+    document.getElementById('applicant_show').textContent = data.applicant;
+    filled = true;
+  }
+  if (data.reason) {
+    const el = document.getElementById('reason');
+    el.value = data.reason;
+    el.classList.add('filled');
+    filled = true;
+  }
+  if (data.remark) {
+    const el = document.getElementById('remark');
+    el.value = data.remark;
+    el.classList.add('filled');
+    filled = true;
+  }
+  const totalRaw = data.total || data.amountDisplay || '';
+  if (totalRaw) {
+    const num = parseInt(String(totalRaw).replace(/[^0-9]/g, '') || 0, 10);
+    if (num) {
+      document.getElementById('total').value = 'NT$' + num.toLocaleString();
+      document.getElementById('total').classList.add('filled');
+      fillAmount(num);
+      filled = true;
+    }
+  }
+  const natureItems = (data.natureList && data.natureList.length)
+    ? data.natureList
+  : (data.nature ? String(data.nature).split(/[,，、]/).map(function(s) { return s.trim(); }).filter(Boolean) : []);
+  natureItems.forEach(function(n) {
+    ['貨款','工程款','薪工資','公用事業費用','交際','稅捐','勞健退','租金','差旅','其他'].forEach(function(key) {
+      if (n.includes(key) || key.includes(n)) {
+        const cb = document.getElementById('cb_' + key);
+        if (cb) { cb.checked = true; filled = true; }
+      }
     });
+  });
+  const payMethod = (data.method || data.pay || '').trim();
+  if (payMethod) {
+    const cb = document.getElementById('pay_' + payMethod);
+    if (cb) { cb.checked = true; filled = true; }
   }
-  if (p.get('pay')) { const cb=document.getElementById('pay_'+p.get('pay').trim()); if(cb){cb.checked=true;filled=true;} }
-  if (p.get('date')) {
-    const dateVal = p.get('date');
+  if (data.date) {
+    const dateVal = String(data.date);
     let y, m, d;
     if (/^\d{10,13}$/.test(dateVal)) {
-      // Unix 時間戳記（秒或毫秒）
-      const ts = dateVal.length === 13 ? parseInt(dateVal) : parseInt(dateVal) * 1000;
+      const ts = dateVal.length === 13 ? parseInt(dateVal, 10) : parseInt(dateVal, 10) * 1000;
       const dt = new Date(ts);
       y = dt.getFullYear();
       m = dt.getMonth() + 1;
       d = dt.getDate();
     } else {
-      // 一般格式 2026/06/10 或 2026-06-10
       const parts = dateVal.split(/[\/\-]/);
-      if (parts.length >= 3) { y=parts[0]; m=parseInt(parts[1]); d=parseInt(parts[2]); }
+      if (parts.length >= 3) { y = parts[0]; m = parseInt(parts[1], 10); d = parseInt(parts[2], 10); }
     }
     if (y) {
       document.getElementById('year').value = y;
@@ -224,7 +252,40 @@ function autoFillFromURL() {
       filled = true;
     }
   }
-  if (filled) document.getElementById('autofillBanner').style.display='block';
+  if (filled) document.getElementById('autofillBanner').style.display = 'block';
+  return filled;
+}
+
+function payDataFromUrlParams(p) {
+  if (!p.toString()) return null;
+  return {
+    dept: p.get('dept'),
+    payee: p.get('payee'),
+    vendor: p.get('vendor'),
+    serial: p.get('serial'),
+    applicant: p.get('applicant'),
+    reason: p.get('reason'),
+    remark: p.get('remark'),
+    total: p.get('total'),
+    nature: p.get('nature'),
+    pay: p.get('pay'),
+    date: p.get('date')
+  };
+}
+
+function autoFillFromStorage() {
+  try {
+    const raw = localStorage.getItem('ximo-pay-print');
+    if (!raw) return false;
+    return applyPayPrintData(JSON.parse(raw));
+  } catch (e) {
+    return false;
+  }
+}
+
+function autoFillFromURL() {
+  const p = new URLSearchParams(window.location.search);
+  return applyPayPrintData(payDataFromUrlParams(p));
 }
  
 function clearForm() {
@@ -247,8 +308,19 @@ function applyEmbedMode() {
   }
 }
 
-autoFillFromURL();
-applyEmbedMode();
+function initPayPrintPage() {
+  applyEmbedMode();
+  autoFillFromStorage();
+  autoFillFromURL();
+  window.addEventListener('message', function(ev) {
+    if (ev.origin !== location.origin) return;
+    if (ev.data && ev.data.type === 'ximo-pay-fill') {
+      applyPayPrintData(ev.data.data);
+    }
+  });
+}
+
+initPayPrintPage();
 
 const p = new URLSearchParams(window.location.search);
 // 僅「新分頁列印」自動印；嵌入預覽 iframe 由父頁呼叫 print()，避免印兩次
