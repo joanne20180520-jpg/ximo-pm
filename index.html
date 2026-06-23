@@ -1940,23 +1940,32 @@ function prevPay() {
 }
 
 function triggerPaymentPrint() {
-  var printUrl = buildPayPrintUrl({ embed: true, print: true });
   var iframe = document.getElementById('prev-iframe');
-  if (iframe) {
-    iframe.src = printUrl;
-    setTimeout(function() {
-      try {
-        if (iframe.contentWindow) {
-          iframe.contentWindow.focus();
-          iframe.contentWindow.print();
-        }
-      } catch (e) {
-        window.open(buildPayPrintUrl({ print: true }), '_blank');
-      }
-    }, 500);
+  if (!iframe) {
+    window.open(buildPayPrintUrl({ print: true }), '_blank');
     return;
   }
-  window.open(buildPayPrintUrl({ print: true }), '_blank');
+  function printOnce() {
+    try {
+      if (iframe.contentWindow) {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      }
+    } catch (e) {
+      window.open(buildPayPrintUrl({ print: true }), '_blank');
+    }
+  }
+  var src = iframe.src || '';
+  var hasPreview = src.indexOf('payment-print') >= 0;
+  if (hasPreview) {
+    setTimeout(printOnce, 200);
+    return;
+  }
+  iframe.onload = function() {
+    iframe.onload = null;
+    setTimeout(printOnce, 300);
+  };
+  iframe.src = buildPayPrintUrl({ embed: true });
 }
 
 function doPrint() {
@@ -2196,7 +2205,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260623m';
+var APP_BUILD = '20260623n';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 

@@ -7,9 +7,18 @@
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:"Microsoft JhengHei","PingFang TC",sans-serif; font-size:13px; background:#f0f0f0; }
 @media print {
-  body { background:white; }
-  .controls,.autofill-banner { display:none !important; }
-  .page { box-shadow:none; margin:0; padding:10mm 12mm; }
+  html, body { height: auto !important; margin: 0; padding: 0; background: white !important; }
+  body { background: white; }
+  .controls,.autofill-banner { display: none !important; }
+  .page {
+    box-shadow: none;
+    margin: 0;
+    padding: 10mm 12mm;
+    min-height: 0;
+    width: 100%;
+    page-break-after: avoid;
+    page-break-inside: avoid;
+  }
 }
 .controls { background:#2d5be3; color:white; padding:14px 24px; display:flex; align-items:center; gap:16px; }
 .controls h2 { font-size:15px; flex:1; }
@@ -242,7 +251,8 @@ autoFillFromURL();
 applyEmbedMode();
 
 const p = new URLSearchParams(window.location.search);
-if (p.get('print') === '1') {
+// 僅「新分頁列印」自動印；嵌入預覽 iframe 由父頁呼叫 print()，避免印兩次
+if (p.get('print') === '1' && p.get('embed') !== '1') {
   window.addEventListener('load', function() {
     setTimeout(function() { window.focus(); window.print(); }, 800);
   });
