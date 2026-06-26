@@ -1056,11 +1056,17 @@ function loadScriptWithFallback(urls, globalName) {
   return optionalLibLoads[key];
 }
 function ensureH5Sdk() {
+  if (window.h5sdk || (window.tt && window.tt.requestAuthCode)) {
+    return Promise.resolve();
+  }
   return loadScriptWithFallback([
     'https://sf1-lark-tos.larksuitecdn.com/obj/lark-static-sg/lark/h5sdk/h5-js-sdk-1.5.16.js',
     'https://lf1-cdn-tos.bytegoofy.com/obj/static/developer/jssdk/jssdk-1.5.23.js',
     'https://lf-package-cn.feishucdn.com/obj/feishu-static/developer/jssdk/jssdk-1.5.23.js'
   ], 'h5sdk');
+}
+function getLarkPageUrl() {
+  return location.href.split('?')[0].split('#')[0];
 }
 function ensurePdfJs() {
   return loadScriptWithFallback([
@@ -2423,7 +2429,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v8';
+var APP_BUILD = '20260615v9';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -3028,14 +3034,15 @@ function isTaskAssignedToMe(assigneeField) {
 }
 function configH5Sdk(appId, pageUrl) {
   var candidates = [];
-  var base = String(pageUrl || location.href.split('#')[0]);
+  var base = String(pageUrl || getLarkPageUrl());
   candidates.push(base);
   try {
     var u = new URL(base);
     var clean = u.origin + u.pathname.replace(/\/$/, '');
     if (clean !== base) candidates.push(clean);
-    if (u.search) candidates.push(u.origin + u.pathname.replace(/\/$/, ''));
+    if (u.pathname !== '/' && !u.pathname.endsWith('/')) candidates.push(clean + '/');
     candidates.push(u.origin);
+    candidates.push(u.origin + '/');
   } catch (e) {}
   function tryOne(i) {
     if (i >= candidates.length) return Promise.resolve(false);
@@ -3099,19 +3106,77 @@ function clearLoginError() {
   var el = document.getElementById('login-error-banner');
   if (el) el.style.display = 'none';
 }
-function waitForLarkBridge(timeoutMs) {
-  timeoutMs = timeoutMs || 8000;
+function ensureLarkBridge() {
+  if (window.tt && window.tt.requestAuthCode) return Promise.resolve(true);
+  if (window.h5sdk) return Promise.resolve(true);
   return ensureH5Sdk().catch(function() {}).then(function() {
     return new Promise(function(resolve) {
-      if (window.tt) { resolve(true); return; }
-      if (!isLikelyLarkClient()) { resolve(false); return; }
       var start = Date.now();
       function check() {
         if (window.tt || window.h5sdk) { resolve(true); return; }
-        if (Date.now() - start >= timeoutMs) { resolve(false); return; }
-        setTimeout(check, 150);
+        if (Date.now() - start >= 10000) { resolve(false); return; }
+        setTimeout(check, 200);
       }
       check();
+    });
+  });
+}
+function tryLarkInAppLogin(appId) {
+  if (!isLikelyLarkClient() || !loginUserConfirmed) return Promise.resolve(null);
+  return ensureLarkBridge().then(function(ready) {
+    if (!ready) {
+      lastLoginError = 'Lark SDK 未就緒';
+      return null;
+    }
+    return new Promise(function(resolve) {
+      var settled = false;
+      function done(user) {
+        if (settled) return;
+        settled = true;
+        loginUserConfirmed = false;
+        resolve(user);
+      }
+      function requestCode() {
+        var tt = window.tt;
+        if (!tt || !tt.requestAuthCode) {
+          lastLoginError = 'Lark 不支援 requestAuthCode';
+          done(null);
+          return;
+        }
+        tt.requestAuthCode({
+          appId: appId,
+          success: function(res) {
+            var code = res && res.code;
+            if (!code) {
+              lastLoginError = '未取得授權碼';
+              done(null);
+              return;
+            }
+            loginWithCode(code, '', true).then(function(user) {
+              done(user);
+            }).catch(function(err) {
+              lastLoginError = err.message || '登入失敗';
+              done(null);
+            });
+          },
+          fail: function(err) {
+            console.warn('requestAuthCode', err);
+            lastLoginError = (err && (err.errMsg || err.errorMessage || err.errString)) || '授權被取消';
+            done(null);
+          }
+        });
+      }
+      if (window.h5sdk && window.h5sdk.ready) {
+        window.h5sdk.ready(function() { requestCode(); });
+        setTimeout(function() {
+          if (!settled && window.tt && window.tt.requestAuthCode) requestCode();
+        }, 12000);
+      } else if (window.tt && window.tt.requestAuthCode) {
+        requestCode();
+      } else {
+        lastLoginError = 'Lark JSAPI 未載入';
+        done(null);
+      }
     });
   });
 }
@@ -3214,100 +3279,6 @@ function finalizeLoginUser(user) {
   storeLoginUser(user);
   return user;
 }
-function exchangeLarkAuthCode(appId, tt) {
-  return new Promise(function(resolve) {
-    if (!tt) { resolve(null); return; }
-    if (!loginUserConfirmed) { resolve(null); return; }
-    var settled = false;
-    function finish(val) {
-      if (settled) return;
-      settled = true;
-      loginUserConfirmed = false;
-      resolve(val);
-    }
-    setTimeout(function() { finish(null); }, 15000);
-    function onCode(code) {
-      if (!code) {
-        lastLoginError = '未取得授權碼';
-        showAuthGateLogin('登入失敗', lastLoginError);
-        finish(null);
-        return;
-      }
-      loginWithCode(code, '', true).then(finish).catch(function(err) {
-        lastLoginError = err.message || '登入失敗';
-        console.warn('loginWithCode', err);
-        showAuthGateLogin('登入失敗', lastLoginError);
-        finish(null);
-      });
-    }
-    function callRequestAuthCode() {
-      if (!tt.requestAuthCode) {
-        lastLoginError = 'Lark 版本不支援 requestAuthCode';
-        showAuthGateLogin('登入失敗', lastLoginError);
-        finish(null);
-        return;
-      }
-      tt.requestAuthCode({
-        appId: appId,
-        success: function(res) { onCode(res.code); },
-        fail: function(err) {
-          console.warn('requestAuthCode', err);
-          lastLoginError = (err && (err.errMsg || err.errorMessage)) || '授權被取消或失敗';
-          showAuthGateLogin('登入失敗', lastLoginError);
-          finish(null);
-        }
-      });
-    }
-    callRequestAuthCode();
-  });
-}
-function tryLarkGetUserInfo(tt, persist) {
-  persist = persist !== false;
-  return new Promise(function(resolve) {
-    if (!tt || !tt.getUserInfo) { resolve(null); return; }
-    tt.getUserInfo({
-      withCredentials: true,
-      success: function(res) {
-        var user = mapLarkClientUser(res);
-        if (user.name || user.openId) {
-          if (persist) finalizeLoginUser(user);
-          resolve(user);
-        } else resolve(null);
-      },
-      fail: function() { resolve(null); }
-    });
-  });
-}
-function tryLarkClientAuth(appId) {
-  if (!isLikelyLarkClient()) return Promise.resolve(null);
-  var pageUrl = location.href.split('#')[0];
-  return ensureH5Sdk().catch(function() {}).then(function() {
-    return waitForLarkBridge(8000);
-  }).then(function(found) {
-    if (!found) return null;
-    return configH5Sdk(appId, pageUrl);
-  }).then(function(configOk) {
-    if (configOk === null) return null;
-    if (!configOk) console.warn('h5sdk config failed, will still try tt APIs');
-    return whenLarkReady(8000);
-  }).then(function(tt) {
-    if (!tt) return null;
-    return exchangeLarkAuthCode(appId, tt).then(function(tokenUser) {
-      if (tokenUser && tokenUser.accessToken) {
-        return tryLarkGetUserInfo(tt, false).then(function(infoUser) {
-          if (infoUser) {
-            if (!tokenUser.name) tokenUser.name = infoUser.name;
-            if (!tokenUser.openId) tokenUser.openId = infoUser.openId;
-            if (!tokenUser.userId) tokenUser.userId = infoUser.userId;
-          }
-          finalizeLoginUser(tokenUser);
-          return tokenUser;
-        });
-      }
-      return tryLarkGetUserInfo(tt, false);
-    });
-  });
-}
 function startBrowserLarkLogin() {
   if (loginAuthInProgress) return Promise.resolve(false);
   loginAuthInProgress = true;
@@ -3324,18 +3295,24 @@ function startBrowserLarkLogin() {
       return false;
     }
     if (isLikelyLarkClient()) {
-      return promiseWithTimeout(tryLarkClientAuth(cfg.appId), 20000, null).then(function(user) {
+      return promiseWithTimeout(tryLarkInAppLogin(cfg.appId), 25000, null).then(function(user) {
         if (user && user.accessToken) {
           return completeAuthAfterLogin({ skipAutoRetry: true }).then(function(ok) {
             if (!ok) setAuthLoginButtonLoading(false);
             return ok;
           });
         }
-        if (!lastLoginError) {
-          showAuthGateLogin('登入失敗', '未取得有效登入憑證，請再試一次');
-        }
-        setAuthLoginButtonLoading(false);
-        return false;
+        var errHint = lastLoginError || 'Lark 內授權未完成';
+        showAuthGate('loading', '改用網頁授權…', errHint, null);
+        loginUserConfirmed = true;
+        return redirectToLarkOAuth().then(function(ok) {
+          if (!ok) {
+            showAuthGateLogin('Lark 內登入失敗', errHint + '\n請複製網址到瀏覽器開啟：' + location.origin);
+            setAuthLoginButtonLoading(false);
+            loginUserConfirmed = false;
+          }
+          return ok;
+        });
       });
     }
     return redirectToLarkOAuth().then(function(ok) {
