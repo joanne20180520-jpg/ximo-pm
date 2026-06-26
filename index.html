@@ -2423,7 +2423,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v7';
+var APP_BUILD = '20260615v8';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -2557,6 +2557,8 @@ var autoLoginAttempted = false;
 var cachedAuthUrl = null;
 var authReady = false;
 var lastLoginError = '';
+var loginUserConfirmed = false;
+var loginAuthInProgress = false;
 var currentUserRole = 'PM';
 var ROLE_PAGES = {
   PM: ['pg-s', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal'],
@@ -2609,8 +2611,10 @@ function redirectToLarkOAuth() {
 }
 
 function showAuthGateLogin(msg, sub) {
-  showAuthGate('login', msg || '請使用 Lark 帳號登入', sub || '', null);
+  var detail = sub || lastLoginError || '點擊下方黑色按鈕開始登入';
+  showAuthGate('login', msg || '請使用 Lark 帳號登入', detail, null);
   preloadAuthUrl();
+  setAuthLoginButtonLoading(false);
 }
 
 function attemptAutoLogin(force) {
@@ -2618,7 +2622,6 @@ function attemptAutoLogin(force) {
   if (autoLoginAttempted && !force) return Promise.resolve(false);
   autoLoginAttempted = true;
   loginFlowActive = true;
-  showAuthGate('loading', '正在登入 Lark…', '', null);
   clearLoginError();
   return loadLarkAppConfig().then(function(cfg) {
     if (!cfg.appId) {
@@ -2626,29 +2629,12 @@ function attemptAutoLogin(force) {
       preloadAuthUrl();
       return false;
     }
-    var inLark = isLikelyLarkClient();
-    if (!inLark) {
-      return redirectToLarkOAuth().then(function(ok) {
-        if (!ok) showAuthGateLogin();
-        return ok;
-      });
+    if (isLikelyLarkClient()) {
+      showAuthGateLogin('請點擊下方按鈕登入', '點擊後才會開啟 Lark 授權（不會自動跳出）');
+      return false;
     }
-    return waitForLarkBridge(8000).then(function(bridgeOk) {
-      if (!bridgeOk) {
-        showAuthGateLogin('請點擊下方按鈕登入', '若仍失敗，請改用瀏覽器開啟此連結登入');
-        return false;
-      }
-      return promiseWithTimeout(tryLarkClientAuth(cfg.appId), 15000, null).then(function(user) {
-        if (user && user.accessToken) {
-          return completeAuthAfterLogin({ skipAutoRetry: true }).then(function(ok) {
-            if (!ok) setAuthLoginButtonLoading(false);
-            return ok;
-          });
-        }
-        showAuthGateLogin('請點擊下方按鈕登入', '自動登入未完成，請手動授權');
-        return false;
-      });
-    });
+    showAuthGateLogin('請點擊下方按鈕登入', '將跳轉至 Lark 授權頁完成登入');
+    return false;
   }).catch(function(err) {
     showAuthGate('login', '登入失敗', err.message || '請點擊下方按鈕重試', null);
     preloadAuthUrl();
@@ -2795,11 +2781,7 @@ function completeAuthAfterLogin(opts) {
           currentLoginUser = null;
           loginUserReady = false;
         }
-        if (!opts.skipAutoRetry && !autoLoginAttempted) {
-          return attemptAutoLogin(true).then(function(ok) { return !!ok; });
-        }
-        var sub = opts.loginSub || result.authError || lastLoginError || '';
-        showAuthGateLogin(opts.loginMsg, sub);
+        showAuthGateLogin(opts.loginMsg, opts.loginSub || result.authError || lastLoginError);
       } else {
         var sub = '此人員尚未加入授權名單。\n請在「人員資料」表登記 Lark 帳號（帳號或姓名欄位）。';
         if (result.memberCount === 0) sub = '系統讀不到人員資料，請確認 Vercel 的 LARK_APP_TOKEN 是否正確。';
@@ -3235,29 +3217,43 @@ function finalizeLoginUser(user) {
 function exchangeLarkAuthCode(appId, tt) {
   return new Promise(function(resolve) {
     if (!tt) { resolve(null); return; }
+    if (!loginUserConfirmed) { resolve(null); return; }
     var settled = false;
     function finish(val) {
       if (settled) return;
       settled = true;
+      loginUserConfirmed = false;
       resolve(val);
     }
-    setTimeout(function() { finish(null); }, 12000);
-    var redirect = getLoginRedirectUri();
+    setTimeout(function() { finish(null); }, 15000);
     function onCode(code) {
-      if (!code) { finish(null); return; }
-      loginWithCode(code, redirect, true).then(finish).catch(function(err) {
+      if (!code) {
+        lastLoginError = '未取得授權碼';
+        showAuthGateLogin('登入失敗', lastLoginError);
+        finish(null);
+        return;
+      }
+      loginWithCode(code, '', true).then(finish).catch(function(err) {
         lastLoginError = err.message || '登入失敗';
         console.warn('loginWithCode', err);
+        showAuthGateLogin('登入失敗', lastLoginError);
         finish(null);
       });
     }
     function callRequestAuthCode() {
-      if (!tt.requestAuthCode) { finish(null); return; }
+      if (!tt.requestAuthCode) {
+        lastLoginError = 'Lark 版本不支援 requestAuthCode';
+        showAuthGateLogin('登入失敗', lastLoginError);
+        finish(null);
+        return;
+      }
       tt.requestAuthCode({
         appId: appId,
         success: function(res) { onCode(res.code); },
         fail: function(err) {
           console.warn('requestAuthCode', err);
+          lastLoginError = (err && (err.errMsg || err.errorMessage)) || '授權被取消或失敗';
+          showAuthGateLogin('登入失敗', lastLoginError);
           finish(null);
         }
       });
@@ -3313,6 +3309,10 @@ function tryLarkClientAuth(appId) {
   });
 }
 function startBrowserLarkLogin() {
+  if (loginAuthInProgress) return Promise.resolve(false);
+  loginAuthInProgress = true;
+  loginUserConfirmed = true;
+  lastLoginError = '';
   setAuthLoginButtonLoading(true);
   autoLoginAttempted = false;
   showAuthGate('loading', '正在登入 Lark…', '', null);
@@ -3320,17 +3320,20 @@ function startBrowserLarkLogin() {
     if (!cfg.appId) {
       showAuthGate('login', '無法登入', 'Lark 應用未設定（缺少 App ID）', null);
       setAuthLoginButtonLoading(false);
+      loginUserConfirmed = false;
       return false;
     }
     if (isLikelyLarkClient()) {
-      return promiseWithTimeout(tryLarkClientAuth(cfg.appId), 18000, null).then(function(user) {
+      return promiseWithTimeout(tryLarkClientAuth(cfg.appId), 20000, null).then(function(user) {
         if (user && user.accessToken) {
           return completeAuthAfterLogin({ skipAutoRetry: true }).then(function(ok) {
             if (!ok) setAuthLoginButtonLoading(false);
             return ok;
           });
         }
-        showAuthGateLogin('登入失敗', lastLoginError || '未取得授權，請確認 Lark 已允許此應用存取');
+        if (!lastLoginError) {
+          showAuthGateLogin('登入失敗', '未取得有效登入憑證，請再試一次');
+        }
         setAuthLoginButtonLoading(false);
         return false;
       });
@@ -3339,13 +3342,17 @@ function startBrowserLarkLogin() {
       if (!ok) {
         showAuthGateLogin();
         setAuthLoginButtonLoading(false);
+        loginUserConfirmed = false;
       }
       return ok;
     });
   }).catch(function(err) {
     showAuthGate('login', '登入失敗', err.message || '請稍後再試', null);
     setAuthLoginButtonLoading(false);
+    loginUserConfirmed = false;
     return false;
+  }).finally(function() {
+    loginAuthInProgress = false;
   });
 }
 function resolveLoginUser() {
@@ -3380,14 +3387,8 @@ function resolveLoginUser() {
         loginUserReady = true;
         return null;
       }
-      if (!isLikelyLarkClient()) {
-        loginUserReady = true;
-        return null;
-      }
-      return promiseWithTimeout(tryLarkClientAuth(cfg.appId), 3500, null).then(function(user) {
-        loginUserReady = true;
-        return user;
-      });
+      loginUserReady = true;
+      return null;
     }).catch(function() {
       loginUserReady = true;
       return null;
