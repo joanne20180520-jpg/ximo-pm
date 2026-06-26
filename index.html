@@ -2423,7 +2423,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v6';
+var APP_BUILD = '20260615v7';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -2556,6 +2556,7 @@ var loginFlowActive = false;
 var autoLoginAttempted = false;
 var cachedAuthUrl = null;
 var authReady = false;
+var lastLoginError = '';
 var currentUserRole = 'PM';
 var ROLE_PAGES = {
   PM: ['pg-s', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal'],
@@ -2737,10 +2738,16 @@ function withUserToken(payload) {
 function checkMemberAuthorization() {
   var tok = getUserAccessToken();
   if (!tok) return Promise.resolve({ authorized: false, needLogin: true });
-  return fetch(apiUrl('?action=auth-check&userAccessToken=' + encodeURIComponent(tok)))
-    .then(function(r) { return r.json(); })
+  return fetch(apiUrl('?action=auth-check'), {
+    headers: { 'X-User-Access-Token': tok }
+  }).then(function(r) { return r.json(); })
     .then(function(res) {
-      if (!res || !res.ok || res.needLogin) return { authorized: false, needLogin: true };
+      if (!res || !res.ok) {
+        return { authorized: false, needLogin: true, authError: (res && res.error) || '' };
+      }
+      if (res.needLogin) {
+        return { authorized: false, needLogin: true, authError: res.error || '' };
+      }
       if (!res.authorized) {
         return {
           authorized: false,
@@ -2751,7 +2758,9 @@ function checkMemberAuthorization() {
       }
       return { authorized: true, role: res.role || 'PM', memberName: res.memberName || '', loginUser: res.user || null };
     })
-    .catch(function() { return { authorized: false, needLogin: true }; });
+    .catch(function(err) {
+      return { authorized: false, needLogin: false, networkError: true, authError: err.message || '連線失敗' };
+    });
 }
 
 function applyRolePermissions() {
@@ -2776,6 +2785,10 @@ function completeAuthAfterLogin(opts) {
   opts = opts || {};
   return checkMemberAuthorization().then(function(result) {
     if (!result.authorized) {
+      if (result.networkError) {
+        showAuthGate('login', '連線失敗', (result.authError || '請稍後再試') + '\n（已登入，無需重新授權）', null);
+        return false;
+      }
       if (result.needLogin) {
         if (getUserAccessToken()) {
           try { sessionStorage.removeItem('ximo-login-user'); } catch (e) {}
@@ -2785,7 +2798,8 @@ function completeAuthAfterLogin(opts) {
         if (!opts.skipAutoRetry && !autoLoginAttempted) {
           return attemptAutoLogin(true).then(function(ok) { return !!ok; });
         }
-        showAuthGateLogin(opts.loginMsg, opts.loginSub);
+        var sub = opts.loginSub || result.authError || lastLoginError || '';
+        showAuthGateLogin(opts.loginMsg, sub);
       } else {
         var sub = '此人員尚未加入授權名單。\n請在「人員資料」表登記 Lark 帳號（帳號或姓名欄位）。';
         if (result.memberCount === 0) sub = '系統讀不到人員資料，請確認 Vercel 的 LARK_APP_TOKEN 是否正確。';
@@ -2829,7 +2843,7 @@ function runAuthGate() {
           return completeAuthAfterLogin({
             skipAutoRetry: true,
             loginMsg: '登入失敗',
-            loginSub: '授權碼無效或已過期，請點擊下方按鈕重試'
+            loginSub: lastLoginError || '授權碼無效或已過期，請點擊下方按鈕重試'
           });
         }
         return completeAuthAfterLogin();
@@ -3071,13 +3085,23 @@ function configH5Sdk(appId, pageUrl) {
   if (!window.h5sdk || !window.h5sdk.config) return Promise.resolve(false);
   return tryOne(0);
 }
-function loginWithCode(code, redirectUri) {
+function loginWithCode(code, redirectUri, fromLarkJsapi) {
+  var body = { code: code };
+  if (fromLarkJsapi) {
+    body.from_lark_jsapi = true;
+  } else if (redirectUri) {
+    body.redirect_uri = redirectUri;
+  }
   return fetch(API + '?action=login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code: code, redirect_uri: redirectUri || '' })
+    body: JSON.stringify(body)
   }).then(function(r) { return r.json(); }).then(function(res) {
-    if (!res.ok || !res.user) throw new Error(res.error || res.msg || '登入失敗');
+    if (!res.ok || !res.user) {
+      lastLoginError = res.error || res.msg || '登入失敗';
+      throw new Error(lastLoginError);
+    }
+    lastLoginError = '';
     finalizeLoginUser(res.user);
     clearLoginError();
     return res.user;
@@ -3221,7 +3245,8 @@ function exchangeLarkAuthCode(appId, tt) {
     var redirect = getLoginRedirectUri();
     function onCode(code) {
       if (!code) { finish(null); return; }
-      loginWithCode(code, redirect).then(finish).catch(function(err) {
+      loginWithCode(code, redirect, true).then(finish).catch(function(err) {
+        lastLoginError = err.message || '登入失敗';
         console.warn('loginWithCode', err);
         finish(null);
       });
@@ -3237,19 +3262,7 @@ function exchangeLarkAuthCode(appId, tt) {
         }
       });
     }
-    if (tt.requestAccess) {
-      tt.requestAccess({
-        appID: appId,
-        scopeList: [],
-        success: function(res) { onCode(res.code); },
-        fail: function(err) {
-          console.warn('requestAccess', err);
-          callRequestAuthCode();
-        }
-      });
-    } else {
-      callRequestAuthCode();
-    }
+    callRequestAuthCode();
   });
 }
 function tryLarkGetUserInfo(tt, persist) {
@@ -3317,7 +3330,7 @@ function startBrowserLarkLogin() {
             return ok;
           });
         }
-        showAuthGateLogin('登入失敗', '未取得授權，請確認 Lark 已允許此應用存取');
+        showAuthGateLogin('登入失敗', lastLoginError || '未取得授權，請確認 Lark 已允許此應用存取');
         setAuthLoginButtonLoading(false);
         return false;
       });
@@ -3350,7 +3363,8 @@ function resolveLoginUser() {
           return user;
         }).catch(function(err) {
           console.warn('Lark login', err);
-          showLoginError('Lark 登入失敗：' + (err.message || '授權碼無效或已過期，請再點一次 Lark 登入'));
+          lastLoginError = err.message || '授權碼無效或已過期';
+          showLoginError('Lark 登入失敗：' + lastLoginError);
           loginUserReady = true;
           return null;
         });

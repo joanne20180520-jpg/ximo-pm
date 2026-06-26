@@ -1670,15 +1670,16 @@ async function getAppAccessToken() {
   return token;
 }
 
-async function loginWithOAuthCode(code, redirectUri) {
+async function loginWithOAuthCode(code, redirectUri, opts) {
+  opts = opts || {};
   let accessToken = null;
   let expiresIn = 7200;
   let lastErr = '';
 
-  try {
+  async function exchangeOnce(useRedirect) {
     const appToken = await getAppAccessToken();
     const v1Body = { grant_type: 'authorization_code', code: code };
-    if (redirectUri) v1Body.redirect_uri = redirectUri;
+    if (useRedirect && redirectUri) v1Body.redirect_uri = redirectUri;
     const v1Res = await fetch(BASE_URL + '/authen/v1/access_token', {
       method: 'POST',
       headers: {
@@ -1689,13 +1690,31 @@ async function loginWithOAuthCode(code, redirectUri) {
     });
     const tokenData = await v1Res.json();
     if (tokenData.code === 0 && tokenData.data && tokenData.data.access_token) {
-      accessToken = tokenData.data.access_token;
-      expiresIn = Number(tokenData.data.expires_in) || 7200;
-    } else {
-      lastErr = tokenData.msg || tokenData.message || JSON.stringify(tokenData);
+      return {
+        accessToken: tokenData.data.access_token,
+        expiresIn: Number(tokenData.data.expires_in) || 7200
+      };
     }
-  } catch (e) {
-    lastErr = e.message || lastErr;
+    throw new Error(tokenData.msg || tokenData.message || JSON.stringify(tokenData));
+  }
+
+  const attempts = [];
+  if (opts.fromLarkJsapi) {
+    attempts.push(false);
+  } else {
+    if (redirectUri) attempts.push(true);
+    attempts.push(false);
+  }
+
+  for (let i = 0; i < attempts.length; i++) {
+    try {
+      const hit = await exchangeOnce(attempts[i]);
+      accessToken = hit.accessToken;
+      expiresIn = hit.expiresIn;
+      break;
+    } catch (e) {
+      lastErr = e.message || lastErr;
+    }
   }
 
   if (!accessToken) {
@@ -1723,8 +1742,7 @@ function buildAuthUrl(redirectUri) {
   const q = new URLSearchParams({
     app_id: APP_ID,
     redirect_uri: redirectUri,
-    state: 'ximo_pm',
-    scope: ARCHIVE_OAUTH_SCOPES
+    state: 'ximo_pm'
   });
   return BASE_URL + '/authen/v1/index?' + q.toString();
 }
@@ -1940,9 +1958,10 @@ export default async function handler(req, res) {
     if (action === 'login' && req.method === 'POST') {
       const code = req.body && req.body.code;
       if (!code) return res.status(400).json({ ok: false, error: 'missing code' });
-      const redirectUri = (req.body.redirect_uri || '').trim();
+      const fromLarkJsapi = !!(req.body && req.body.from_lark_jsapi);
+      const redirectUri = fromLarkJsapi ? '' : (req.body.redirect_uri || '').trim();
       try {
-        const user = await loginWithOAuthCode(code, redirectUri);
+        const user = await loginWithOAuthCode(code, redirectUri, { fromLarkJsapi: fromLarkJsapi });
         return res.status(200).json({ ok: true, user });
       } catch (loginErr) {
         return res.status(400).json({ ok: false, error: loginErr.message || '登入失敗' });
