@@ -1899,6 +1899,42 @@ async function getUserInfoFromToken(userAccessToken) {
   };
 }
 
+function isTableConfigError(err) {
+  const msg = (err && err.message) || String(err || '');
+  return msg.indexOf('TableIdNotFound') >= 0 || msg.indexOf('1254041') >= 0;
+}
+
+function tableConfigErrorMessage() {
+  return 'LARK_APP_TOKEN 與程式設定的表格 ID 不符（TableIdNotFound）。請在 Vercel 將 LARK_APP_TOKEN 改成與正式多維表格相同的 Base app_token，或開啟 /api/lark?action=tables-check 查看診斷。';
+}
+
+async function buildTablesCheckReport() {
+  if (!APP_TOKEN) {
+    return { ok: false, error: '缺少 LARK_APP_TOKEN 環境變數' };
+  }
+  const token = await getToken();
+  const listed = await listBitableTables(token, APP_TOKEN);
+  const ids = listed.map(function(t) { return t.table_id || t.id || ''; });
+  const report = Object.keys(TABLES).map(function(key) {
+    return {
+      key: key,
+      configuredId: TABLES[key],
+      found: ids.indexOf(TABLES[key]) >= 0
+    };
+  });
+  const missing = report.filter(function(r) { return !r.found; });
+  return {
+    ok: missing.length === 0,
+    appTokenSuffix: APP_TOKEN.slice(-6),
+    tableCount: listed.length,
+    tables: listed.map(function(t) {
+      return { id: t.table_id || t.id, name: t.name || '' };
+    }),
+    report: report,
+    missingKeys: missing.map(function(m) { return m.key; })
+  };
+}
+
 async function checkMemberAuthorization(userAccessToken) {
   if (!userAccessToken) return { ok: true, needLogin: true, authorized: false };
   let user;
@@ -1908,7 +1944,22 @@ async function checkMemberAuthorization(userAccessToken) {
     return { ok: true, needLogin: true, authorized: false, error: err.message };
   }
   const tenantToken = await getToken();
-  const members = await getRecords(tenantToken, TABLES.members);
+  let members;
+  try {
+    members = await getRecords(tenantToken, TABLES.members);
+  } catch (err) {
+    if (isTableConfigError(err)) {
+      return {
+        ok: false,
+        needLogin: false,
+        authorized: false,
+        user,
+        configError: tableConfigErrorMessage(),
+        memberCount: 0
+      };
+    }
+    throw err;
+  }
   const memberRec = findMemberForUser(members, user);
   if (!memberRec) {
     return { ok: true, needLogin: false, authorized: false, user, memberCount: members.length };
@@ -1972,6 +2023,11 @@ export default async function handler(req, res) {
       const userAccessToken = extractUserAccessToken(req);
       const result = await checkMemberAuthorization(userAccessToken);
       return res.status(200).json(result);
+    }
+
+    if (action === 'tables-check' && req.method === 'GET') {
+      const report = await buildTablesCheckReport();
+      return res.status(200).json(report);
     }
 
     if (action === 'ping' && req.method === 'GET') {

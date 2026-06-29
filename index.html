@@ -2453,7 +2453,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v11';
+var APP_BUILD = '20260615v12';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -2777,8 +2777,15 @@ function checkMemberAuthorization() {
     headers: { 'X-User-Access-Token': tok }
   }).then(function(r) { return r.json(); })
     .then(function(res) {
+      if (res && res.configError) {
+        return { authorized: false, needLogin: false, configError: res.configError, loginUser: res.user || null };
+      }
       if (!res || !res.ok) {
-        return { authorized: false, needLogin: true, authError: (res && res.error) || '' };
+        var errMsg = (res && res.error) || '';
+        if (errMsg.indexOf('TableIdNotFound') >= 0 || errMsg.indexOf('1254041') >= 0) {
+          return { authorized: false, needLogin: false, configError: errMsg, loginUser: res.user || null };
+        }
+        return { authorized: false, needLogin: true, authError: errMsg };
       }
       if (res.needLogin) {
         return { authorized: false, needLogin: true, authError: res.error || '' };
@@ -2820,6 +2827,11 @@ function completeAuthAfterLogin(opts) {
   opts = opts || {};
   return checkMemberAuthorization().then(function(result) {
     if (!result.authorized) {
+      if (result.configError) {
+        showAuthGate('login', '後台設定錯誤', result.configError, result.loginUser || null);
+        setAuthLoginButtonLoading(false);
+        return false;
+      }
       if (result.networkError) {
         showAuthGate('login', '連線失敗', (result.authError || '請稍後再試') + '\n（已登入，無需重新授權）', null);
         return false;
