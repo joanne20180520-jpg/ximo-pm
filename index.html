@@ -264,7 +264,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .dl-row{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:8px 10px;border-bottom:1px solid var(--border)}
 .dl-row:last-child{border-bottom:none}
 .dl-row:hover{background:var(--sf2)}
-.dl-row-excluded{display:none}
+.dl-row-unlisted{opacity:.78;background:var(--sf2)}
 .dl-row-top{display:flex;align-items:center;gap:8px}
 .dl-row input[type=checkbox]{width:15px;height:15px;flex-shrink:0;cursor:pointer}
 .dl-proj-tag{font-size:10px;padding:2px 7px;border-radius:8px;color:#fff;font-weight:600;flex-shrink:0;max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -910,7 +910,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
 <div class="po" id="pp-daily-log"><div class="pp pp-daily"><div class="pph pph-report"><h3>每日工作回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-daily-log')">✕</button></div><div class="ppb">
   <div class="dl-date" id="dl-date-display"></div>
   <div class="fg"><label>回報人</label><select id="dl-author" data-members onchange="onDailyLogAuthorChange()"></select></div>
-  <div class="fg"><label>任務分類（每項選一種狀態）</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-person-filter" id="dl-person-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">預設只顯示目前回報人負責的任務／設計。選「不列入」的項目不會寫進日報摘要。</div></div>
+  <div class="fg"><label>任務分類（每項選一種狀態）</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-person-filter" id="dl-person-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">預設只顯示目前回報人負責的項目。選擇狀態後會即時出現在下方備註；「不列入」不會寫進日報。</div></div>
   <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="選擇任務後自動產生…"></textarea></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
@@ -5136,7 +5136,7 @@ function onDailyLogCatChange(sel) {
   if (row) {
     var blockInput = row.querySelector('.dl-block-reason');
     if (blockInput) blockInput.style.display = sel.value === 'block' ? 'block' : 'none';
-    row.classList.toggle('dl-row-excluded', !sel.value);
+    row.classList.toggle('dl-row-unlisted', !sel.value);
   }
   dailyLogContentEdited = false;
   refreshDailyLogContent();
@@ -5265,8 +5265,8 @@ function renderDailyLogTasks(preselectId) {
       var isBlock = cat === 'block';
       var rowAttr = isDesign ? 'data-design-id="' + it.id + '" data-kind="design"' : 'data-task-id="' + it.id + '" data-kind="task"';
       var nameBadge = isDesign ? '<span class="dl-design-badge">設計</span>' : '';
-      var excludedClass = cat ? '' : ' dl-row-excluded';
-      html += '<div class="dl-row' + excludedClass + '" ' + rowAttr + '>';
+      var unlistedClass = cat ? '' : ' dl-row-unlisted';
+      html += '<div class="dl-row' + unlistedClass + '" ' + rowAttr + '>';
       html += '<div class="dl-row-top">';
       html += buildDailyCatSelect(cat, isBlock);
       html += '<div class="dl-task-main"><span class="dl-task-name">' + nameBadge + escHtml(it.taskName) + '</span>';
@@ -5282,7 +5282,16 @@ function renderDailyLogTasks(preselectId) {
   area.querySelectorAll('.dl-note').forEach(function(el) {
     el.addEventListener('input', refreshDailyLogContent);
   });
-  if (!dailyLogContentEdited) refreshDailyLogContent();
+  area.querySelectorAll('.dl-cat').forEach(function(el) {
+    el.addEventListener('change', function() { onDailyLogCatChange(el); });
+  });
+  area.querySelectorAll('.dl-block-reason').forEach(function(el) {
+    el.addEventListener('input', function() {
+      dailyLogContentEdited = false;
+      refreshDailyLogContent();
+    });
+  });
+  refreshDailyLogContent();
 }
 
 function collectDailyLogCategories() {
