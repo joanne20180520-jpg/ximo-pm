@@ -387,6 +387,8 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .std{background:#e6f4ee;color:#1a7a45}
 .stp{background:#fff3e0;color:#b06000}
 .ds{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500;background:#fff3e0;color:#b06000}
+.ds-done{background:#e8f5e9;color:#2e7d32}
+.ds-pending{background:#f0f0f0;color:#888}
 
 /* payment form */
 .pfw{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px}
@@ -918,10 +920,10 @@ button.btn-loading::after{content:'…';margin-left:2px}
 
 <div class="po" id="pp-exp"><div class="pp"><div class="pph"><h3>新增支出明細</h3><button class="ppc" onclick="cl('pp-exp')">✕</button></div><div class="ppb"><div class="fg"><label>支出細項</label><input type="text" id="ex-name" placeholder="茶葉5斤"></div><div class="fg"><label>所屬標案</label><select id="ex-proj" onchange="onExpenseProjChange()"></select></div><div class="fg"><label>所屬工作項目</label><select id="ex-wi"></select></div><div class="fg"><label>負責人</label><select id="ex-assignee" data-members></select></div><div class="fg"><label>預估花費</label><input type="text" id="ex-est" placeholder="NT$0"></div><div class="fg"><label>日期</label><input type="date" id="ex-date"></div><div class="fg"><label>實際金額</label><input type="text" placeholder="NT$0" id="aa" oninput="calcE()"></div><div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ua" readonly style="background:#f0f0f0;color:var(--t3)"></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-exp')">取消</button><button class="bpri" onclick="saveExpense()">新增</button></div></div></div>
 
-<div class="po" id="pp-des"><div class="pp ppw"><div class="pph"><h3>建立新設計任務</h3><button class="ppc" onclick="cl('pp-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ds-name" placeholder="Logo"></div><div class="fg"><label>所屬工作項目</label><select id="ds-wi"></select></div><div class="fg"><label>負責PM</label><select id="ds-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ds-item" placeholder="A"></div><div class="fg"><label>設計需求</label><input type="text" id="ds-req" placeholder="AA"></div><div class="fg"><label>設計師</label><select id="ds-designer" data-members></select></div><div class="fg"><label>狀態</label><select id="ds-status"><option>進行中</option><option>待開始</option><option>已完成</option></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" id="ds-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" id="ds-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ds-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ds-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ds-deliver"></div><div class="fg"><label>備註</label><textarea id="ds-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-des')">取消</button><button class="bpri" onclick="saveDesign()">新增</button></div></div></div>
+<div class="po" id="pp-des"><div class="pp ppw"><div class="pph"><h3>建立新設計任務</h3><button class="ppc" onclick="cl('pp-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ds-name" placeholder="Logo"></div><div class="fg"><label>所屬工作項目</label><select id="ds-wi"></select></div><div class="fg"><label>負責PM</label><select id="ds-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ds-item" placeholder="A"></div><div class="fg"><label>設計需求</label><input type="text" id="ds-req" placeholder="AA"></div><div class="fg"><label>設計師</label><select id="ds-designer" data-members></select></div><div class="fg"><label>進度狀態</label><select id="ds-status"></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" id="ds-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" id="ds-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ds-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ds-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ds-deliver"></div><div class="fg"><label>備註</label><textarea id="ds-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-des')">取消</button><button class="bpri" onclick="saveDesign()">新增</button></div></div></div>
 
 <!-- 修改設計任務單 -->
-<div class="po" id="pp-edit-des"><div class="pp ppw"><div class="pph"><h3>修改設計任務單</h3><button class="ppc" onclick="cl('pp-edit-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ed-name"></div><div class="fg"><label>所屬工作項目</label><select id="ed-wi"></select></div><div class="fg"><label>負責PM</label><select id="ed-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ed-item"></div><div class="fg"><label>設計需求</label><input type="text" id="ed-req"></div><div class="fg"><label>設計師</label><select id="ed-designer" data-members></select></div><div class="fg"><label>狀態</label><select id="ed-status"><option>進行中</option><option>待開始</option><option>已完成</option></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" id="ed-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" id="ed-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ed-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ed-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ed-deliver"></div><div class="fg"><label>備註</label><textarea id="ed-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-des')">取消</button><button class="bpri" onclick="saveEditDesign()">儲存</button></div></div></div>
+<div class="po" id="pp-edit-des"><div class="pp ppw"><div class="pph"><h3>修改設計任務單</h3><button class="ppc" onclick="cl('pp-edit-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ed-name"></div><div class="fg"><label>所屬工作項目</label><select id="ed-wi"></select></div><div class="fg"><label>負責PM</label><select id="ed-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ed-item"></div><div class="fg"><label>設計需求</label><input type="text" id="ed-req"></div><div class="fg"><label>設計師</label><select id="ed-designer" data-members></select></div><div class="fg"><label>進度狀態</label><select id="ed-status"></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" id="ed-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" id="ed-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ed-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ed-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ed-deliver"></div><div class="fg"><label>備註</label><textarea id="ed-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-des')">取消</button><button class="bpri" onclick="saveEditDesign()">儲存</button></div></div></div>
 
 <!-- 付款預覽（元頂集團格式） -->
 <div class="po" id="pp-prev" style="align-items:flex-start;padding-top:20px">
@@ -2458,7 +2460,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v17';
+var APP_BUILD = '20260615v18';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -2597,7 +2599,7 @@ var loginAuthInProgress = false;
 var currentUserRole = 'PM';
 var ROLE_PAGES = {
   PM: ['pg-s', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal'],
-  '設計師': ['pg-s', 'pg-d']
+  '設計師': ['pg-d']
 };
 
 function isPMRole() {
@@ -2968,9 +2970,27 @@ function parseProgressVal(status, num) {
   if (typeof num === 'number' && num > 0) return num <= 1 ? Math.round(num * 100) : Math.round(num);
   if (!status) return 0;
   if (status === '已完成') return 100;
-  if (status === '未開始') return 0;
+  if (status === '未開始' || status === '待開始') return 0;
   var m = String(status).match(/(\d+)/);
   return m ? parseInt(m[1], 10) : 0;
+}
+function getDesignProgressStatus(f) {
+  f = f || {};
+  if (f['進度狀態']) return String(f['進度狀態']);
+  var pct = parseProgressVal(null, f['進度數值']);
+  if (pct >= 100) return '已完成';
+  if (pct > 0) return '進行中' + pct + '%';
+  if (f['狀態']) return String(f['狀態']);
+  return '未開始';
+}
+function buildProgressStatusBadge(status, num) {
+  var pct = parseProgressVal(status, num);
+  var label = status || (pct >= 100 ? '已完成' : pct > 0 ? '進行中' + pct + '%' : '未開始');
+  var cls = 'ds';
+  if (pct >= 100 || label === '已完成') cls += ' ds-done';
+  else if (pct > 0 || /進行中/.test(label)) cls += ' ds-doing';
+  else cls += ' ds-pending';
+  return '<span class="' + cls + '">' + escHtml(label) + '</span>';
 }
 function daysRemaining(val) {
   var due = parseTs(val);
@@ -6327,7 +6347,9 @@ function renderDesigns() {
       item: f['項目'] || '',
       req: f['設計需求'] || '',
       designer: personName(f['設計師']),
-      status: f['狀態'] || '',
+      status: getDesignProgressStatus(f),
+      progressStatus: f['進度狀態'] || '',
+      progressNum: f['進度數值'],
       budget: f['預算金費'] || f['預算'] || '—',
       spent: f['實際花費'] || '—',
       draft: f['初稿交付日'] ? fmtDate(f['初稿交付日']) : '—',
@@ -6342,14 +6364,14 @@ function renderDesigns() {
     var rows = '';
     list.forEach(function(d) {
       rows += '<tr class="erow" onclick="openEditDesign(\'' + d.id + '\')" title="點擊編輯"><td style="font-weight:500">' + escHtml(d.name) + '</td><td>' + escHtml(d.wiName) + '</td><td>' + escHtml(d.pm) + '</td><td>' + escHtml(d.item) + '</td><td>' + escHtml(d.req) + '</td><td>' + escHtml(d.designer) + '</td>'
-        + '<td><span class="ds">' + escHtml(d.status) + '</span></td><td>' + (typeof d.budget === 'number' ? ntf(d.budget) : escHtml(String(d.budget))) + '</td>'
+        + '<td>' + buildProgressStatusBadge(d.progressStatus || d.status, d.progressNum) + '</td><td>' + (typeof d.budget === 'number' ? ntf(d.budget) : escHtml(String(d.budget))) + '</td>'
         + '<td>' + (typeof d.spent === 'number' ? ntf(d.spent) : escHtml(String(d.spent))) + '</td>'
         + '<td>' + d.draft + '</td><td>' + d.final + '</td><td>' + d.deliver + '</td></tr>';
     });
     return '<div class="dc"><div class="dch"><div class="pdot" style="background:' + color + '"></div><h3>' + escHtml(pname) + '</h3>'
       + (isPMRole() ? '<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-des\')">＋ 新增設計任務單</button>' : '')
       + '</div>'
-      + '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>設計項目名稱</th><th>所屬工作項目</th><th>負責PM</th><th>項目</th><th>設計需求</th><th>設計師</th><th>狀態</th><th>預算</th><th>實際花費</th><th>初稿</th><th>完稿</th><th>成品</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+      + '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>設計項目名稱</th><th>所屬工作項目</th><th>負責PM</th><th>項目</th><th>設計需求</th><th>設計師</th><th>進度狀態</th><th>預算</th><th>實際花費</th><th>初稿</th><th>完稿</th><th>成品</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }
 
   var html = '';
@@ -6727,7 +6749,13 @@ function openEditDesign(desId) {
     }
   }
   var statusSel = document.getElementById('ed-status');
-  if (statusSel) statusSel.value = f['狀態'] || '進行中';
+  if (statusSel) {
+    fillSelectOptions(statusSel, PROGRESS_OPTIONS);
+    var progStatus = f['進度狀態'] || getDesignProgressStatus(f);
+    for (var k = 0; k < statusSel.options.length; k++) {
+      if (statusSel.options[k].value === progStatus) { statusSel.selectedIndex = k; break; }
+    }
+  }
   var budget = parseFloat(f['預算金費'] || f['預算']) || 0;
   var spent = parseFloat(f['實際花費']) || 0;
   document.getElementById('ed-budget').value = budget ? 'NT$' + Math.round(budget).toLocaleString() : '';
@@ -6759,12 +6787,14 @@ function saveEditDesign() {
 
   var rec = designsData.find(function(r) { return r.record_id === editingDesignId; });
   var oldFields = rec ? JSON.parse(JSON.stringify(rec.fields || {})) : null;
+  var status = document.getElementById('ed-status').value;
   var fields = {
     '設計項目名稱': name,
     '所屬工作項目': [wiId],
     '項目': document.getElementById('ed-item').value.trim(),
     '設計需求': document.getElementById('ed-req').value.trim(),
-    '狀態': document.getElementById('ed-status').value,
+    '進度狀態': status,
+    '進度數值': parseProgressVal(status, null),
     '備註': document.getElementById('ed-remark').value.trim()
   };
   var budget = parseMoney(document.getElementById('ed-budget').value);
@@ -7263,6 +7293,10 @@ function refreshFormSelects() {
   if (statusSel) {
     fillSelectOptions(statusSel, PROGRESS_OPTIONS);
   }
+  ['ds-status', 'ed-status'].forEach(function(id) {
+    var sel = document.getElementById(id);
+    if (sel) fillSelectOptions(sel, PROGRESS_OPTIONS);
+  });
 }
 
 function saveWorkItems() {
@@ -7397,12 +7431,14 @@ function saveDesign() {
   if (!name) { alert('請填寫設計項目名稱'); return; }
   if (!wiId) { alert('請選擇工作項目'); return; }
 
+  var status = document.getElementById('ds-status').value || '未開始';
   var fields = {
     '設計項目名稱': name,
     '所屬工作項目': [wiId],
     '項目': document.getElementById('ds-item').value.trim(),
     '設計需求': document.getElementById('ds-req').value.trim(),
-    '狀態': document.getElementById('ds-status').value,
+    '進度狀態': status,
+    '進度數值': parseProgressVal(status, null),
     '備註': document.getElementById('ds-remark').value.trim()
   };
   var budget = parseMoney(document.getElementById('ds-budget').value);
