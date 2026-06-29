@@ -2663,7 +2663,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v28';
+var APP_BUILD = '20260615v29';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -3943,11 +3943,11 @@ function calcWeightedProgressPct(wf) {
   return null;
 }
 
-function getWiProgressPct(wf, wiId) {
-  if (!wf) return '';
+function getWiProgressNum(wf, wiId) {
+  if (!wf) return null;
   var computed = calcWeightedProgressPct(wf);
-  if (computed != null) return computed + '%';
-  if (!wiId) return '';
+  if (computed != null) return computed;
+  if (!wiId) return null;
   var sum = 0, count = 0;
   tasksData.forEach(function(t) {
     if (getLinkIds(t.fields['所屬工作項目']).indexOf(wiId) < 0) return;
@@ -3959,7 +3959,53 @@ function getWiProgressPct(wf, wiId) {
     sum += parseProgressVal(d.fields['進度狀態'], d.fields['進度數值']);
     count++;
   });
-  return count ? (Math.round(sum / count) + '%') : '';
+  return count ? Math.round(sum / count) : null;
+}
+
+function parseWeightNum(wf) {
+  var n = parseAvgProgressField(wf && wf['權重']);
+  if (n == null) return null;
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+function calcProjectProgressPct(projRec) {
+  var workitems = getWorkitemsForProject(projRec);
+  if (!workitems.length) return null;
+  var totalW = 0, weightedSum = 0, plainSum = 0, plainCount = 0;
+  workitems.forEach(function(wi) {
+    var wf = wi.fields;
+    var w = parseWeightNum(wf);
+    var p = getWiProgressNum(wf, wi.record_id);
+    if (p == null) return;
+    if (w != null && w > 0) {
+      totalW += w;
+      weightedSum += w * p;
+    } else {
+      plainSum += p;
+      plainCount++;
+    }
+  });
+  if (totalW > 0) return Math.min(100, Math.round(weightedSum / totalW));
+  if (plainCount > 0) return Math.min(100, Math.round(plainSum / plainCount));
+  return null;
+}
+
+function getProjectProgressPct(projRec) {
+  var computed = calcProjectProgressPct(projRec);
+  if (computed != null) return computed;
+  var f = projRec.fields || {};
+  var raw = f['標案完成%'];
+  if (raw === '' || raw == null) return 0;
+  var n = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(/[^0-9.-]/g, ''));
+  if (isNaN(n)) return 0;
+  if (n > 100) return 100;
+  if (n > 0 && n <= 1) return Math.min(100, Math.round(n * 100));
+  return Math.min(100, Math.round(n));
+}
+
+function getWiProgressPct(wf, wiId) {
+  var n = getWiProgressNum(wf, wiId);
+  return n != null ? (n + '%') : '';
 }
 
 function formatWeightProgress(wf, wiId) {
@@ -7762,6 +7808,8 @@ function preparePopup(id) {
     initProcUpload();
     preloadProcLibs();
     refreshFormSelects();
+    var zone = document.getElementById('proc-upload-zone');
+    if (zone && !zone.classList.contains('has-file')) zone.classList.remove('is-processing');
   }
   if (id === 'pp-work') {
     var sl = document.getElementById('sl');
