@@ -2663,7 +2663,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v31';
+var APP_BUILD = '20260615v32';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -3288,7 +3288,10 @@ function avatarClass(name) {
   return n % 2 ? 'avl' : 'avy';
 }
 function parseProgressVal(status, num) {
-  if (typeof num === 'number' && num > 0) return num <= 1 ? Math.round(num * 100) : Math.round(num);
+  if (typeof num === 'number' && num > 0) {
+    var n = num <= 1 ? Math.round(num * 100) : Math.round(num);
+    return Math.min(100, n);
+  }
   if (!status) return 0;
   if (status === '已完成') return 100;
   if (status === '未開始' || status === '待開始') return 0;
@@ -3915,6 +3918,15 @@ function formatWeight(val) {
 }
 
 // Lark 公式：IF([設計平均進度], ([任務平均進度]+[設計平均進度])/200, [任務平均進度]/100)
+function parseLarkProgressPct(val) {
+  if (val === '' || val == null) return null;
+  var n = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.-]/g, ''));
+  if (isNaN(n)) return null;
+  if (n > 0 && n <= 1) return Math.min(100, Math.round(n * 100));
+  if (n <= 100) return Math.min(100, Math.round(n));
+  return Math.min(100, Math.round(n / 100));
+}
+
 function parseAvgProgressField(val) {
   if (val === '' || val == null) return null;
   var n = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.-]/g, ''));
@@ -3923,43 +3935,82 @@ function parseAvgProgressField(val) {
   return n;
 }
 
-function calcWeightedProgressPct(wf) {
-  if (!wf) return null;
-  var taskAvg = parseAvgProgressField(wf['任務平均進度']);
-  var designAvg = parseAvgProgressField(wf['設計平均進度']);
-  if (designAvg != null && designAvg > 0) {
+function calcWiProgressFromLinked(wiId) {
+  if (!wiId) return null;
+  var taskSum = 0, taskCount = 0;
+  var designSum = 0, designCount = 0;
+  var seenTasks = {}, seenDesigns = {};
+
+  function addTask(t) {
+    if (!t || seenTasks[t.record_id]) return;
+    seenTasks[t.record_id] = 1;
+    taskSum += parseProgressVal(t.fields['進度狀態'], t.fields['進度數值']);
+    taskCount++;
+  }
+  function addDesign(d) {
+    if (!d || seenDesigns[d.record_id]) return;
+    seenDesigns[d.record_id] = 1;
+    var df = d.fields;
+    designSum += parseProgressVal(df['進度狀態'] || getDesignProgressStatus(df), df['進度數值']);
+    designCount++;
+  }
+
+  tasksData.forEach(function(t) {
+    if (getLinkIds(t.fields['所屬工作項目']).indexOf(wiId) >= 0) addTask(t);
+  });
+  designsData.forEach(function(d) {
+    if (getLinkIds(d.fields['所屬工作項目']).indexOf(wiId) >= 0) addDesign(d);
+  });
+
+  var wi = workitemsData.find(function(w) { return w.record_id === wiId; });
+  if (wi) {
+    getLinkIds(wi.fields['任務']).forEach(function(tid) {
+      addTask(tasksData.find(function(t) { return t.record_id === tid; }));
+    });
+    getLinkIds(wi.fields['設計需求']).forEach(function(did) {
+      addDesign(designsData.find(function(d) { return d.record_id === did; }));
+    });
+  }
+
+  if (taskCount === 0 && designCount === 0) return null;
+  var taskAvg = taskCount ? taskSum / taskCount : null;
+  var designAvg = designCount ? designSum / designCount : null;
+  if (designCount > 0) {
     var t = taskAvg != null ? taskAvg : 0;
-    return Math.min(100, Math.round((t + designAvg) / 2));
+    var d = designAvg != null ? designAvg : 0;
+    return Math.min(100, Math.round((t + d) / 2));
   }
   if (taskAvg != null) return Math.min(100, Math.round(taskAvg));
-  var raw = wf['加權進度'];
-  if (raw !== '' && raw != null) {
-    var n = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(/[^0-9.-]/g, ''));
-    if (!isNaN(n)) {
-      if (n > 0 && n <= 1) return Math.min(100, Math.round(n * 100));
-      if (n <= 100) return Math.round(n);
-    }
+  if (designAvg != null) return Math.min(100, Math.round(designAvg));
+  return 0;
+}
+
+function calcWeightedProgressPct(wf) {
+  if (!wf) return null;
+  var weighted = parseLarkProgressPct(wf['加權進度']);
+  if (weighted != null) return weighted;
+  var taskRaw = wf['任務平均進度'];
+  var designRaw = wf['設計平均進度'];
+  var hasDesign = designRaw !== '' && designRaw != null
+    && !isNaN(parseFloat(String(designRaw).replace(/[^0-9.-]/g, '')))
+    && parseFloat(String(designRaw).replace(/[^0-9.-]/g, '')) > 0;
+  if (hasDesign) {
+    var t = parseFloat(String(taskRaw).replace(/[^0-9.-]/g, '')) || 0;
+    var d = parseFloat(String(designRaw).replace(/[^0-9.-]/g, '')) || 0;
+    if (t <= 100 && d <= 100) return Math.min(100, Math.round((t + d) / 2));
+    return Math.min(100, Math.round((t + d) / 200));
   }
+  if (taskRaw !== '' && taskRaw != null) return parseLarkProgressPct(taskRaw);
   return null;
 }
 
 function getWiProgressNum(wf, wiId) {
   if (!wf) return null;
+  var fromLinked = calcWiProgressFromLinked(wiId);
+  if (fromLinked != null) return fromLinked;
   var computed = calcWeightedProgressPct(wf);
   if (computed != null) return computed;
-  if (!wiId) return null;
-  var sum = 0, count = 0;
-  tasksData.forEach(function(t) {
-    if (getLinkIds(t.fields['所屬工作項目']).indexOf(wiId) < 0) return;
-    sum += parseProgressVal(t.fields['進度狀態'], t.fields['進度數值']);
-    count++;
-  });
-  designsData.forEach(function(d) {
-    if (getLinkIds(d.fields['所屬工作項目']).indexOf(wiId) < 0) return;
-    sum += parseProgressVal(d.fields['進度狀態'], d.fields['進度數值']);
-    count++;
-  });
-  return count ? Math.round(sum / count) : null;
+  return null;
 }
 
 function parseWeightNum(wf) {
