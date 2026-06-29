@@ -185,6 +185,154 @@ const TABLES = buildTables();
 const PAYMENTS_TABLE_MAIN = (process.env.LARK_TABLE_PAYMENTS_MAIN || '').trim();
 const PAYMENTS_TABLE_ACCOUNTING = (process.env.LARK_TABLE_PAYMENTS_ACCOUNTING || '').trim();
 
+function getFrontBitableConfig() {
+  return { appToken: APP_TOKEN, tables: TABLES };
+}
+
+function getBackendBitableConfig() {
+  const appToken = (process.env.LARK_APP_TOKEN_BACKEND || '').trim();
+  if (!appToken) return null;
+  const profileKey = (process.env.LARK_TABLE_PROFILE_BACKEND || resolveTableProfileKey()).trim().toLowerCase();
+  const profile = TABLE_PROFILES[profileKey] || TABLE_PROFILES.joanne;
+  const tables = {};
+  Object.keys(profile).forEach(function(key) {
+    const envKey = 'LARK_TABLE_BACKEND_' + key.toUpperCase();
+    tables[key] = (process.env[envKey] || profile[key] || '').trim();
+  });
+  return { appToken: appToken, tables: tables };
+}
+
+function extractRecordId(res) {
+  if (!res || !res.data) return null;
+  const d = res.data;
+  if (d.record && d.record.record_id) return d.record.record_id;
+  if (d.record_id) return d.record_id;
+  if (d.records && d.records[0] && d.records[0].record_id) return d.records[0].record_id;
+  return null;
+}
+
+async function createNormalizedRecord(tenantToken, userToken, cfg, tableKey, rawFields) {
+  const tableId = cfg.tables[tableKey];
+  if (!tableId) throw new Error('找不到資料表：' + tableKey);
+  const body = await normalizeWriteFields(tenantToken, tableId, rawFields, cfg.appToken);
+  const result = await writeWithUserFallback(tenantToken, userToken, function(tok, asUser) {
+    return createRecord(tok, tableId, body, cfg.appToken, asUser);
+  });
+  const id = extractRecordId(result);
+  if (!id) throw new Error('建立記錄失敗：' + tableKey);
+  return { id: id, result: result };
+}
+
+async function updateNormalizedRecord(tenantToken, userToken, cfg, tableKey, recordId, rawFields) {
+  const tableId = cfg.tables[tableKey];
+  if (!tableId) throw new Error('找不到資料表：' + tableKey);
+  const body = await normalizeWriteFields(tenantToken, tableId, rawFields, cfg.appToken);
+  return writeWithUserFallback(tenantToken, userToken, function(tok, asUser) {
+    return updateRecord(tok, tableId, recordId, body, cfg.appToken, asUser);
+  });
+}
+
+async function findProjectIdByName(token, cfg, name) {
+  const trim = String(name || '').trim();
+  if (!trim) return null;
+  const tableId = cfg.tables.projects;
+  if (!tableId) return null;
+  const records = await getRecords(token, tableId, cfg.appToken);
+  const hit = records.find(function(r) {
+    return String((r.fields || {})['標案名稱'] || '').trim() === trim;
+  });
+  return hit ? hit.record_id : null;
+}
+
+async function createProjectImportBundle(tenantToken, userToken, projectFields, workItemFieldsList) {
+  const front = getFrontBitableConfig();
+  const mirrorErrors = [];
+
+  const frontProj = await createNormalizedRecord(tenantToken, userToken, front, 'projects', projectFields);
+  const frontWiIds = [];
+  for (let i = 0; i < workItemFieldsList.length; i++) {
+    const wi = await createNormalizedRecord(tenantToken, userToken, front, 'workitems', workItemFieldsList[i]);
+    frontWiIds.push(wi.id);
+  }
+  if (frontWiIds.length) {
+    await updateNormalizedRecord(tenantToken, userToken, front, 'projects', frontProj.id, { '工作項目': frontWiIds });
+  }
+
+  const backend = getBackendBitableConfig();
+  if (backend && backend.appToken !== front.appToken) {
+    try {
+      const backProj = await createNormalizedRecord(tenantToken, userToken, backend, 'projects', projectFields);
+      const backWiIds = [];
+      for (let j = 0; j < workItemFieldsList.length; j++) {
+        const linked = Object.assign({}, workItemFieldsList[j]);
+        linked['所屬標案'] = [backProj.id];
+        const wi = await createNormalizedRecord(tenantToken, userToken, backend, 'workitems', linked);
+        backWiIds.push(wi.id);
+      }
+      if (backWiIds.length) {
+        await updateNormalizedRecord(tenantToken, userToken, backend, 'projects', backProj.id, { '工作項目': backWiIds });
+      }
+    } catch (err) {
+      mirrorErrors.push('後台資料庫：' + (err.message || String(err)));
+    }
+  }
+
+  const out = Object.assign({}, frontProj.result);
+  out.projectId = frontProj.id;
+  out.workItemIds = frontWiIds;
+  if (mirrorErrors.length) out.partialErrors = mirrorErrors;
+  return out;
+}
+
+async function createWorkItemsBundle(tenantToken, userToken, frontProjId, workItemFieldsList) {
+  const front = getFrontBitableConfig();
+  const mirrorErrors = [];
+  const frontRecords = await getRecords(tenantToken, front.tables.projects, front.appToken);
+  const projRec = frontRecords.find(function(r) { return r.record_id === frontProjId; });
+  const projName = projRec ? String((projRec.fields || {})['標案名稱'] || '').trim() : '';
+
+  const frontWiIds = [];
+  for (let i = 0; i < workItemFieldsList.length; i++) {
+    const linked = Object.assign({}, workItemFieldsList[i]);
+    linked['所屬標案'] = [frontProjId];
+    const wi = await createNormalizedRecord(tenantToken, userToken, front, 'workitems', linked);
+    frontWiIds.push(wi.id);
+  }
+  if (frontWiIds.length && projRec) {
+    const existingIds = getLinkIds((projRec.fields || {})['工作項目']);
+    const merged = existingIds.slice();
+    frontWiIds.forEach(function(id) { if (merged.indexOf(id) < 0) merged.push(id); });
+    await updateNormalizedRecord(tenantToken, userToken, front, 'projects', frontProjId, { '工作項目': merged });
+  }
+
+  const backend = getBackendBitableConfig();
+  if (backend && backend.appToken !== front.appToken && projName) {
+    try {
+      const backProjId = await findProjectIdByName(tenantToken, backend, projName);
+      if (!backProjId) throw new Error('後台找不到標案「' + projName + '」');
+      const backRecords = await getRecords(tenantToken, backend.tables.projects, backend.appToken);
+      const backProj = backRecords.find(function(r) { return r.record_id === backProjId; });
+      const backWiIds = [];
+      for (let j = 0; j < workItemFieldsList.length; j++) {
+        const linked = Object.assign({}, workItemFieldsList[j]);
+        linked['所屬標案'] = [backProjId];
+        const wi = await createNormalizedRecord(tenantToken, userToken, backend, 'workitems', linked);
+        backWiIds.push(wi.id);
+      }
+      if (backWiIds.length && backProj) {
+        const backExisting = getLinkIds((backProj.fields || {})['工作項目']);
+        const backMerged = backExisting.slice();
+        backWiIds.forEach(function(id) { if (backMerged.indexOf(id) < 0) backMerged.push(id); });
+        await updateNormalizedRecord(tenantToken, userToken, backend, 'projects', backProjId, { '工作項目': backMerged });
+      }
+    } catch (err) {
+      mirrorErrors.push('後台資料庫：' + (err.message || String(err)));
+    }
+  }
+
+  return { code: 0, workItemIds: frontWiIds, partialErrors: mirrorErrors };
+}
+
 function parseBitableShareUrl(url) {
   const out = { appToken: '', tableId: '' };
   if (!url) return out;
@@ -2129,6 +2277,7 @@ export default async function handler(req, res) {
           hasAppId: !!APP_ID,
           hasAppSecret: !!APP_SECRET,
           hasAppToken: !!APP_TOKEN,
+          hasAppTokenBackend: !!(process.env.LARK_APP_TOKEN_BACKEND || '').trim(),
           hasAppTokenPayments: !!APP_TOKEN_PAYMENTS,
           hasWebhook: !!process.env.LARK_WEBHOOK_URL,
           hasWebhookKeyword: !!process.env.LARK_WEBHOOK_KEYWORD,
@@ -2174,6 +2323,27 @@ export default async function handler(req, res) {
         wikiTargetError: wikiTargetError,
         archiveTemplateConfigured: isArchiveTemplateConfigured()
       });
+    }
+
+    if (action === 'project-import' && req.method === 'POST') {
+      const tenantToken = await getToken();
+      const userAccessToken = extractUserAccessToken(req);
+      const b = stripAuthFromBody(req.body || {});
+      const projectFields = b.project || {};
+      const workitems = Array.isArray(b.workitems) ? b.workitems : [];
+      const result = await createProjectImportBundle(tenantToken, userAccessToken, projectFields, workitems);
+      return res.status(200).json(result);
+    }
+
+    if (action === 'workitems-import' && req.method === 'POST') {
+      const tenantToken = await getToken();
+      const userAccessToken = extractUserAccessToken(req);
+      const b = stripAuthFromBody(req.body || {});
+      const projectId = String(b.projectId || '').trim();
+      const workitems = Array.isArray(b.workitems) ? b.workitems : [];
+      if (!projectId) return res.status(400).json({ error: 'missing projectId' });
+      const result = await createWorkItemsBundle(tenantToken, userAccessToken, projectId, workitems);
+      return res.status(200).json(result);
     }
 
     if (action === 'archive-project' && req.method === 'POST') {

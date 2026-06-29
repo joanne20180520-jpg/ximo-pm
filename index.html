@@ -2218,9 +2218,14 @@ function getNwProjEndDate() {
 }
 
 function buildWiFieldsForSave(item, projId, pmFallback) {
+  var fields = buildWiFieldsForImport(item, item.partner || pmFallback);
+  fields['所屬標案'] = [projId];
+  return fields;
+}
+
+function buildWiFieldsForImport(item, pmFallback) {
   var fields = {
     '工作項目名稱': item.name.trim(),
-    '所屬標案': [projId],
     '可用成本': item.cost || 0,
     '權重': parseWeight(String(item.weight != null ? item.weight : 0))
   };
@@ -2229,6 +2234,30 @@ function buildWiFieldsForSave(item, projId, pmFallback) {
   var partner = larkPerson(item.partner || pmFallback);
   if (partner) fields['負責夥伴'] = partner;
   return fields;
+}
+
+function apiProjectImport(projectFields, workItemFieldsList) {
+  return fetch(API + '?action=project-import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(withUserToken({ project: projectFields, workitems: workItemFieldsList }))
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    if (res.error) throw new Error(res.error);
+    if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '儲存失敗');
+    return res;
+  });
+}
+
+function apiWorkItemsImport(projectId, workItemFieldsList) {
+  return fetch(API + '?action=workitems-import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(withUserToken({ projectId: projectId, workitems: workItemFieldsList }))
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    if (res.error) throw new Error(res.error);
+    if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '儲存失敗');
+    return res;
+  });
 }
 
 function onProjWiDateChange(idx, field, value) {
@@ -2347,33 +2376,17 @@ function saveProjectImport() {
 
   var items = parsedProjWorkItems.filter(function(it) { return it.name && it.name.trim(); });
   items.forEach(normalizeProjWiItem);
+  var wiFieldsList = items.map(function(item) { return buildWiFieldsForImport(item, pm); });
 
-  apiPost('projects', fields).then(function(res) {
-    var projId = getProjectRecordId(res);
-    if (!projId) {
-      if (items.length) throw new Error('標案已建立但無法取得 ID，工作項目未寫入');
-      return res;
-    }
-    if (!items.length) return res;
-    var wiIds = [];
-    var chain = Promise.resolve();
-    items.forEach(function(item) {
-      chain = chain.then(function() {
-        return apiPost('workitems', buildWiFieldsForSave(item, projId, pm)).then(function(wiRes) {
-          var wiId = getProjectRecordId(wiRes);
-          if (!wiId) throw new Error('工作項目「' + item.name.trim() + '」建立失敗');
-          wiIds.push(wiId);
-        });
-      });
-    });
-    return chain.then(function() {
-      return apiPut('projects', projId, { '工作項目': wiIds }).then(function() { return res; });
-    });
-  }).then(function() {
+  apiProjectImport(fields, wiFieldsList).then(function(res) {
     cl('pp-proj');
     resetProcForm();
     loadData();
-    alert('標案與工作項目已新增！');
+    var msg = '標案與工作項目已新增！';
+    if (res.partialErrors && res.partialErrors.length) {
+      msg += '\n\n後台同步警告：\n' + res.partialErrors.join('\n');
+    }
+    alert(msg);
   }).catch(function(err) {
     alert('新增失敗：' + err.message);
   });
@@ -2809,7 +2822,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v38';
+var APP_BUILD = '20260615v39';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -8159,30 +8172,19 @@ function saveWorkItems() {
   });
   if (!items.length) { alert('請至少新增一個工作項目'); return; }
 
-  var wiIds = [];
-  var chain = Promise.resolve();
-  items.forEach(function(item) {
-    chain = chain.then(function() {
-      return apiPost('workitems', buildWiFieldsForSave(item, projId, '')).then(function(res) {
-        var wiId = getProjectRecordId(res);
-        if (!wiId) throw new Error('工作項目「' + item.name + '」建立失敗');
-        wiIds.push(wiId);
-      });
-    });
+  var wiFieldsList = items.map(function(item) {
+    return buildWiFieldsForImport(item, item.partner);
   });
 
-  chain.then(function() {
-    if (!wiIds.length) return;
-    var projRec = projectsData.find(function(p) { return p.record_id === projId; });
-    var existingIds = projRec ? getWiIds(projRec.fields) : [];
-    var merged = existingIds.slice();
-    wiIds.forEach(function(id) { if (merged.indexOf(id) < 0) merged.push(id); });
-    return apiPut('projects', projId, { '工作項目': merged });
-  }).then(function() {
+  apiWorkItemsImport(projId, wiFieldsList).then(function(res) {
     cl('pp-work');
     document.getElementById('sl').innerHTML = '';
     loadData();
-    alert('工作項目已新增！');
+    var msg = '工作項目已新增！';
+    if (res.partialErrors && res.partialErrors.length) {
+      msg += '\n\n後台同步警告：\n' + res.partialErrors.join('\n');
+    }
+    alert(msg);
   }).catch(function(err) {
     alert('新增失敗：' + err.message);
   });
