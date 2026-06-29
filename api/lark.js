@@ -980,6 +980,16 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
       out[name] = val;
       return;
     }
+    if (BITABLE_LINK_FIELD_TYPES[m.type]) {
+      const ids = normalizeLinkFieldValue(val);
+      if (ids.length) out[name] = ids;
+      return;
+    }
+    if (m.type === 11) {
+      const normalized = normalizePersonFieldValue(val);
+      if (normalized) out[name] = normalized;
+      return;
+    }
     const normalized = normalizeArchiveFieldValue(m, val);
     if (normalized !== null && normalized !== undefined) out[name] = normalized;
   });
