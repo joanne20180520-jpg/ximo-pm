@@ -2663,7 +2663,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v29';
+var APP_BUILD = '20260615v31';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -4361,7 +4361,7 @@ function renderProjects() {
     var color = PROJECT_COLORS[visibleIdx % PROJECT_COLORS.length];
     visibleIdx++;
     var pmName = personName(f['主PM']);
-    var progress = Math.round((f['標案完成%'] || 0) * 100);
+    var progress = getProjectProgressPct(rec);
     var meta = pmName || '';
     var workitems = getWorkitemsForProject(rec);
     var subHTML = '';
@@ -4674,7 +4674,7 @@ function renderGanttFromData() {
     var name = f['標案名稱'] || '未命名';
     var color = PROJECT_COLORS[visibleIdx % PROJECT_COLORS.length];
     visibleIdx++;
-    var progress = Math.round((f['標案完成%'] || 0) * 100);
+    var progress = getProjectProgressPct(rec);
     var contractStart = parseTs(f['合約開始日']);
     var contractEnd = parseTs(f['合約結束日']);
     var workitems = getWorkitemsForProject(rec);
