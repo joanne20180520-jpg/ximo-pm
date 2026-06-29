@@ -139,26 +139,44 @@ async function updateBitableRecord(token, appToken, tableId, recordId, fields) {
   return data;
 }
 
-// 各表 table_id：換公司 Lark 時在 Vercel 改環境變數即可，不必改程式
-// LARK_APP_TOKEN = 主要多維表格 base 的 app_token（標案/工作項目/任務/支出/設計/日誌/成員）
-// LARK_APP_TOKEN_PAYMENTS = 付款申請單獨立 Base 的 app_token（會計用）
-// LARK_TABLE_PROJECTS / WORKITEMS / TASKS / … 見 TABLE_DEFAULTS 的 key
-const TABLE_DEFAULTS = {
-  projects:  'tblM49Vzl0ZgKGDa',
-  workitems: 'tbl9wBZj2UXXmuQv',
-  tasks:     'tblqmQCM0N5KFtBH',
-  expenses:  'tbl72u0sONmWjZn2',
-  payments:  'tblBm4BmoSzkxh0B',
-  designs:   'tblGJkK7Vqpkeh7A',
-  journal:   'tbl4Q2bKqkfGm0t6',
-  members:   'tblrXjQ5GOLfzWrQ'
+// 各表 table_id：兩套獨立 Lark Base 用 LARK_TABLE_PROFILE 切換（joanne | yd），或單表用 LARK_TABLE_* 覆寫
+// LARK_APP_TOKEN = 主要多維表格 base 的 app_token
+const TABLE_PROFILES = {
+  joanne: {
+    projects:  'tbl8ldUZKRcteYFu',
+    workitems: 'tblc5QbFf04I3DFl',
+    tasks:     'tbl7mC8KaVVXQOVG',
+    expenses:  'tblsUdkQN56T6Jnk',
+    payments:  'tblv9SmBvbhxNftU',
+    designs:   'tblc3a8IofsGlbKu',
+    journal:   'tblVs9L5WAJcE2a3',
+    members:   'tblIHdb6u6S2xdJH'
+  },
+  yd: {
+    projects:  'tblM49Vzl0ZgKGDa',
+    workitems: 'tbl9wBZj2UXXmuQv',
+    tasks:     'tblqmQCM0N5KFtBH',
+    expenses:  'tbl72u0sONmWjZn2',
+    payments:  'tblxn7BG7bllcpk0',
+    designs:   'tblGJkK7Vqpkeh7A',
+    journal:   'tbl4Q2bKqkfGm0t6',
+    members:   'tblrXjQ5GOLfzWrQ'
+  }
 };
 
+function resolveTableProfileKey() {
+  const raw = (process.env.LARK_TABLE_PROFILE || 'joanne').trim().toLowerCase();
+  if (TABLE_PROFILES[raw]) return raw;
+  return 'joanne';
+}
+
 function buildTables() {
+  const profileKey = resolveTableProfileKey();
+  const base = TABLE_PROFILES[profileKey];
   const out = {};
-  Object.keys(TABLE_DEFAULTS).forEach(function(key) {
+  Object.keys(base).forEach(function(key) {
     const envKey = 'LARK_TABLE_' + key.toUpperCase();
-    out[key] = (process.env[envKey] || TABLE_DEFAULTS[key] || '').trim();
+    out[key] = (process.env[envKey] || base[key] || '').trim();
   });
   return out;
 }
@@ -1925,6 +1943,7 @@ async function buildTablesCheckReport() {
   const missing = report.filter(function(r) { return !r.found; });
   return {
     ok: missing.length === 0,
+    tableProfile: resolveTableProfileKey(),
     appTokenSuffix: APP_TOKEN.slice(-6),
     tableCount: listed.length,
     tables: listed.map(function(t) {
@@ -2048,6 +2067,7 @@ export default async function handler(req, res) {
           url: process.env.VERCEL_URL || ''
         },
         env: {
+          tableProfile: resolveTableProfileKey(),
           hasAppId: !!APP_ID,
           hasAppSecret: !!APP_SECRET,
           hasAppToken: !!APP_TOKEN,
