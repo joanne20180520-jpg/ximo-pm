@@ -557,6 +557,8 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .pay-save-notice-btn:hover{background:#bfdbfe}
 .pay-save-notice-btn:active{transform:scale(0.97)}
 body.role-designer #lp,body.role-designer #rp,body.role-designer #tl,body.role-designer #tr{display:none!important}
+.gtb-status-readonly{font-size:11px;color:var(--t2);padding:2px 8px;background:var(--sf2);border-radius:4px}
+.dl-design-badge{font-size:10px;background:#d4a017;color:#fff;padding:1px 5px;border-radius:3px;margin-right:4px;vertical-align:middle}
 .bpri:active{background:var(--c1)!important;transform:scale(0.97);box-shadow:0 0 0 3px rgba(45,106,79,.28)}
 .bcan:active{background:#fef3c7!important;border-color:#f59e0b!important;color:#92400e!important;transform:scale(0.97);box-shadow:0 0 0 3px rgba(245,158,11,.2)}
 .bdel:active{background:rgba(180,40,40,.9)!important;color:#fff!important;transform:scale(0.92);box-shadow:0 0 0 3px rgba(180,40,40,.25)}
@@ -882,10 +884,30 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <button class="bads" style="margin-top:4px" onclick="openNewTaskFromContext()">＋ 建立新任務</button>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-td')">取消</button><button class="bpri btn-report" id="td-confirm-btn" onclick="confirmTaskReport()">確認儲存</button></div></div></div>
 
+<div class="po" id="pp-dd"><div class="pp"><div class="pph pph-report" id="dd-header"><h3 id="dd-title">設計回報</h3><div class="td-hdr-actions"><button type="button" class="td-open-report" onclick="openDailyLogFromDesign()">開啟今日回報表</button><button type="button" class="ppc" onclick="cl('pp-dd')">✕</button></div></div><div class="ppb">
+  <div id="dd-proj-tag" class="td-proj"></div>
+  <div id="dd-meta" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+    <div class="fg" style="margin:0"><label>初稿交付日</label><input type="date" id="dd-draft"></div>
+    <div class="fg" style="margin:0"><label>完稿交付日</label><input type="date" id="dd-final"></div>
+    <div class="fg" style="margin:0"><label>成品交付日</label><input type="date" id="dd-deliver"></div>
+  </div>
+  <div class="fg"><label>今日回報分類</label><div class="td-cats" id="dd-cats">
+    <span class="td-cat active" data-cat="doing" onclick="pickDesignReportCat(this)">進行中</span>
+    <span class="td-cat" data-cat="done" onclick="pickDesignReportCat(this)">今日完成</span>
+    <span class="td-cat block" data-cat="block" onclick="pickDesignReportCat(this)">卡關</span>
+    <span class="td-cat" data-cat="tomorrow" onclick="pickDesignReportCat(this)">明日預計</span>
+  </div></div>
+  <div class="fg"><label>進度狀態</label><select id="dd-status"></select></div>
+  <div class="fg"><label>補充說明</label><textarea id="dd-note" rows="3" placeholder="寫進今日回報的補充說明…"></textarea></div>
+  <div class="fg dd-block-box" id="dd-block-wrap" style="display:none"><label>卡關原因</label><textarea id="dd-block-reason" rows="2" placeholder="說明卡在哪、需要誰協助…"></textarea></div>
+  <button class="bads" style="margin-top:4px" onclick="openNewDesignFromContext()">＋ 建立新設計任務</button>
+</div><div class="ppf"><button class="bcan" onclick="cl('pp-dd')">取消</button><button class="bpri btn-report" id="dd-confirm-btn" onclick="confirmDesignReport()">確認儲存</button></div></div></div>
+
 <div class="po" id="pp-daily-log"><div class="pp pp-daily"><div class="pph pph-report"><h3>每日工作回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-daily-log')">✕</button></div><div class="ppb">
   <div class="dl-date" id="dl-date-display"></div>
   <div class="fg"><label>回報人</label><select id="dl-author" data-members onchange="onDailyLogAuthorChange()"></select></div>
-  <div class="fg"><label>任務分類（每項選一種狀態）</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">進行中／今日完成／卡關／明日預計。卡關請在該任務下方填寫原因。</div></div>
+  <div class="fg"><label>任務分類（每項選一種狀態）</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">任務與設計項目皆可分類。卡關請在該項下方填寫原因。</div></div>
   <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="選擇任務後自動產生…"></textarea></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
@@ -2356,7 +2378,9 @@ function paintGantt(key,proj,vs,ve,total,cw){
       var ax=Math.max(0,bx),aw=Math.min(bw,tw-ax);
       var top = 4 + bi * 20;
       var barColor = bar.design ? DESIGN_GANTT_COLOR : (bar.c || proj.color);
-      var clickAttr = bar.id ? ' onclick="openTaskDetail(\'' + bar.id + '\')"' : '';
+      var clickAttr = '';
+      if (bar.id && bar.design) clickAttr = ' onclick="openDesignDetail(\'' + bar.id + '\')"';
+      else if (bar.id) clickAttr = ' onclick="openTaskDetail(\'' + bar.id + '\')"';
       var overdueClass = bar.overdue ? ' overdue' : '';
       var bgStyle = bar.overdue ? '' : 'background:' + barColor + ';';
       bH+='<div class="gbar'+overdueClass+'" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:16px;'+bgStyle+'opacity:'+bar.o+'"'+clickAttr+' title="'+escAttr(bar.l)+'">'+escHtml(bar.l)+'</div>';
@@ -2429,7 +2453,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v9';
+var APP_BUILD = '20260615v10';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -2568,8 +2592,27 @@ var loginAuthInProgress = false;
 var currentUserRole = 'PM';
 var ROLE_PAGES = {
   PM: ['pg-s', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal'],
-  '設計師': ['pg-d']
+  '設計師': ['pg-s', 'pg-d']
 };
+
+function isPMRole() {
+  return currentUserRole !== '設計師';
+}
+
+function applyDetailPopupPermissions(popupId) {
+  var pm = isPMRole();
+  var popup = document.getElementById(popupId);
+  if (!popup) return;
+  popup.querySelectorAll('input, select, textarea').forEach(function(el) {
+    el.disabled = !pm;
+  });
+  popup.querySelectorAll('.btn-report, .bads').forEach(function(el) {
+    el.style.display = pm ? '' : 'none';
+  });
+  popup.querySelectorAll('.td-open-report').forEach(function(el) {
+    el.style.display = pm ? '' : 'none';
+  });
+}
 
 function formatLoginDisplayName(user) {
   if (!user) return '';
@@ -3491,11 +3534,18 @@ function getWiProgressPct(wf, wiId) {
   if (p) return p;
   p = formatPct(wf['任務平均進度']);
   if (p) return p;
+  p = formatPct(wf['設計平均進度']);
+  if (p) return p;
   if (!wiId) return '';
   var sum = 0, count = 0;
   tasksData.forEach(function(t) {
     if (getLinkIds(t.fields['所屬工作項目']).indexOf(wiId) < 0) return;
     sum += parseProgressVal(t.fields['進度狀態'], t.fields['進度數值']);
+    count++;
+  });
+  designsData.forEach(function(d) {
+    if (getLinkIds(d.fields['所屬工作項目']).indexOf(wiId) < 0) return;
+    sum += parseProgressVal(d.fields['進度狀態'], d.fields['進度數值']);
     count++;
   });
   return count ? (Math.round(sum / count) + '%') : '';
@@ -4215,13 +4265,18 @@ function renderGanttFromData() {
         var dName = df['設計項目名稱'] || '設計';
         var range = getDesignBarRange(df);
         if (!range.start || !range.end) return;
+        var dProg = parseProgressVal(df['進度狀態'], df['進度數值']);
+        var dueTs = df['成品交付日'] || df['完稿交付日'] || df['初稿交付日'];
+        var dueDiff = dueTs ? getDueDayDiff(dueTs) : null;
         bars.push({
           s: toDateStr(range.start),
           e: toDateStr(range.end),
           l: dName,
-          o: 0.92,
+          o: dProg >= 100 ? 1 : (dProg > 0 ? 0.92 : 0.55),
           c: DESIGN_GANTT_COLOR,
-          design: true
+          design: true,
+          id: d.record_id,
+          overdue: dProg < 100 && dueDiff !== null && dueDiff < 0
         });
       });
 
@@ -4258,12 +4313,16 @@ function renderGanttFromData() {
     }).join('');
     var card = document.createElement('div');
     card.className = 'gc';
+    var pmActions = isPMRole()
+      ? '<select class="gtb-status" data-prev="'+escAttr(projStatus)+'" onchange="onGanttProjStatusChange(\''+rec.record_id+'\', this)">'+statusOpts+'</select>'
+        +'<button type="button" class="bsm" onclick="openTaskForProject(\''+rec.record_id+'\')">＋ 任務</button>'
+        +'<button type="button" class="bsm" onclick="openDesignForProject(\''+rec.record_id+'\')">＋ 設計</button>'
+      : '<span class="gtb-status-readonly">'+escHtml(projStatus)+'</span>';
     card.innerHTML = '<div class="gtb"><div class="pdot" style="background:'+color+'"></div><h3>'+escHtml(name)+'</h3>'
       +(contractLabel?'<span class="g-contract">'+contractLabel+'</span>':'')
       +'<div class="gtb-actions">'
-      +'<select class="gtb-status" data-prev="'+escAttr(projStatus)+'" onchange="onGanttProjStatusChange(\''+rec.record_id+'\', this)">'+statusOpts+'</select>'
-      +'<span class="pb" style="background:rgba(0,0,0,0.07);color:'+color+'">'+progress+'%</span>'
-      +'<button type="button" class="bsm" onclick="openTaskForProject(\''+rec.record_id+'\')">＋ 任務</button></div></div>'
+      +pmActions
+      +'<span class="pb" style="background:rgba(0,0,0,0.07);color:'+color+'">'+progress+'%</span></div></div>'
       +'<div class="gb" id="gb-'+cardId+'"></div>'
       +'<div class="gsb"><button onclick="scG(\''+cardId+'\',-200)">◀</button>'
       +'<input type="range" min="0" max="100" value="30" id="rng-'+cardId+'" oninput="scR(\''+cardId+'\',this.value)">'
@@ -4303,7 +4362,308 @@ function getTaskContext(taskId) {
 }
 
 var dailyLogTaskExtras = {};
+var dailyLogDesignExtras = {};
 var taskReportCategory = 'doing';
+var designReportCategory = 'doing';
+var currentDesignId = null;
+var dailyLogPreselectKind = 'task';
+
+function getDesignContext(desId) {
+  var rec = designsData.find(function(d) { return d.record_id === desId; });
+  if (!rec) return null;
+  var f = rec.fields;
+  var wiIds = getLinkIds(f['所屬工作項目']);
+  var wiId = wiIds[0] || null;
+  var wi = workitemsData.find(function(w) { return w.record_id === wiId; });
+  var projName = wi ? getProjectNameFromWi(wi) : '';
+  return {
+    rec: rec,
+    f: f,
+    wiId: wiId,
+    wiName: wi ? (wi.fields['工作項目名稱'] || '') : '',
+    projName: projName,
+    color: projColorByName(projName),
+    pm: personName(f['負責PM']),
+    designer: personName(f['設計師']),
+    draftTs: f['初稿交付日'],
+    finalTs: f['完稿交付日'],
+    deliverTs: f['成品交付日'],
+    progress: parseProgressVal(f['進度狀態'], f['進度數值'])
+  };
+}
+
+var DESIGN_CAT_MARKER = '__XIMA_DSG__';
+
+function parseDesignCategories(rec) {
+  var text = journalField(rec, ['備註', '日誌內容', '內容']) || '';
+  var idx = text.indexOf(DESIGN_CAT_MARKER);
+  if (idx < 0) return { doing: [], done: [], block: [], tomorrow: [], blockReasons: {} };
+  try {
+    var data = JSON.parse(text.slice(idx + DESIGN_CAT_MARKER.length));
+    return {
+      doing: data.doing || [],
+      done: data.done || [],
+      block: data.block || [],
+      tomorrow: data.tomorrow || [],
+      blockReasons: data.blockReasons || {}
+    };
+  } catch (e) {
+    return { doing: [], done: [], block: [], tomorrow: [], blockReasons: {} };
+  }
+}
+
+function stripDesignMarker(text) {
+  var idx = String(text || '').indexOf(DESIGN_CAT_MARKER);
+  if (idx < 0) return String(text || '').trim();
+  return String(text).slice(0, idx).trim();
+}
+
+function appendDesignMarker(text, data) {
+  var clean = stripDesignMarker(text);
+  var marker = DESIGN_CAT_MARKER + JSON.stringify(data);
+  return clean ? (clean + '\n' + marker) : marker;
+}
+
+function getExistingDesignCategories(rec) {
+  var cats = parseDesignCategories(rec);
+  var map = {};
+  ['doing', 'done', 'block', 'tomorrow'].forEach(function(k) {
+    cats[k].forEach(function(id) { map[id] = k; });
+  });
+  return map;
+}
+
+function getBlockReasonForDesign(rec, desId) {
+  var cats = parseDesignCategories(rec);
+  if (cats.blockReasons && cats.blockReasons[desId]) return cats.blockReasons[desId];
+  return '';
+}
+
+function getTodayJournalDesignCategory(desId, author) {
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var existing = findDailyJournalRecord(today.getTime(), author);
+  if (!existing) return 'doing';
+  var catMap = getExistingDesignCategories(existing);
+  return catMap[desId] || 'doing';
+}
+
+function mergeDesignIntoJournalCategories(existing, desId, category) {
+  var cats = parseDesignCategories(existing);
+  var merged = {
+    doing: cats.doing.slice(),
+    done: cats.done.slice(),
+    block: cats.block.slice(),
+    tomorrow: cats.tomorrow.slice(),
+    blockReasons: Object.assign({}, cats.blockReasons || {})
+  };
+  ['doing', 'done', 'block', 'tomorrow'].forEach(function(k) {
+    merged[k] = merged[k].filter(function(id) { return id !== desId; });
+  });
+  if (category && merged[category] && merged[category].indexOf(desId) < 0) merged[category].push(desId);
+  return merged;
+}
+
+function pickDesignReportCat(el) {
+  document.querySelectorAll('#dd-cats .td-cat').forEach(function(c) { c.classList.remove('active'); });
+  el.classList.add('active');
+  designReportCategory = el.dataset.cat || 'doing';
+  toggleDdBlockReason();
+}
+
+function toggleDdBlockReason() {
+  var wrap = document.getElementById('dd-block-wrap');
+  if (wrap) wrap.style.display = designReportCategory === 'block' ? '' : 'none';
+}
+
+function openDesignDetail(desId) {
+  var ctx = getDesignContext(desId);
+  if (!ctx) return;
+  currentDesignId = desId;
+  var author = ctx.designer || ctx.pm;
+  designReportCategory = getTodayJournalDesignCategory(desId, author);
+  document.getElementById('dd-title').textContent = ctx.f['設計項目名稱'] || '設計回報';
+  var projTag = document.getElementById('dd-proj-tag');
+  if (projTag) {
+    projTag.textContent = ctx.projName || '';
+    projTag.style.background = ctx.color;
+    projTag.style.display = ctx.projName ? 'inline-block' : 'none';
+  }
+  var draftLabel = ctx.draftTs ? fmtDate(ctx.draftTs) : '';
+  var finalLabel = ctx.finalTs ? fmtDate(ctx.finalTs) : '';
+  var deliverLabel = ctx.deliverTs ? fmtDate(ctx.deliverTs) : '—';
+  var dateRange = draftLabel ? (draftLabel + ' – ' + deliverLabel) : deliverLabel;
+  document.getElementById('dd-meta').innerHTML =
+    '<span style="font-size:11px;background:var(--sf2);padding:2px 8px;border-radius:20px">' + ctx.wiName + '</span>'
+    + '<span class="av ' + avatarClass(ctx.designer) + '">' + personInitial(ctx.designer) + '</span>'
+    + '<span style="font-size:12px;color:var(--t2)">' + ctx.designer + ' · PM ' + ctx.pm + ' · ' + dateRange + '</span>'
+    + '<span style="font-size:11px;color:var(--t3)">' + ctx.progress + '%</span>';
+  var ddDraft = document.getElementById('dd-draft');
+  var ddFinal = document.getElementById('dd-final');
+  var ddDeliver = document.getElementById('dd-deliver');
+  if (ddDraft) ddDraft.value = ctx.draftTs ? tsToDateInput(ctx.draftTs) : '';
+  if (ddFinal) ddFinal.value = ctx.finalTs ? tsToDateInput(ctx.finalTs) : '';
+  if (ddDeliver) ddDeliver.value = ctx.deliverTs ? tsToDateInput(ctx.deliverTs) : '';
+  document.querySelectorAll('#dd-cats .td-cat').forEach(function(c) {
+    c.classList.toggle('active', c.dataset.cat === designReportCategory);
+  });
+  toggleDdBlockReason();
+  var sel = document.getElementById('dd-status');
+  sel.innerHTML = PROGRESS_OPTIONS.map(function(o) {
+    return '<option' + (o === (ctx.f['進度狀態'] || '') ? ' selected' : '') + '>' + o + '</option>';
+  }).join('');
+  document.getElementById('dd-note').value = ctx.f['備註'] || '';
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var existingJournal = findDailyJournalRecord(today.getTime(), author);
+  var blockEl = document.getElementById('dd-block-reason');
+  if (blockEl) blockEl.value = getBlockReasonForDesign(existingJournal, desId);
+  applyDetailPopupPermissions('pp-dd');
+  op('pp-dd');
+}
+
+function confirmDesignReport() {
+  if (!isPMRole()) return;
+  if (!currentDesignId) return;
+  var ctx = getDesignContext(currentDesignId);
+  if (!ctx) return;
+  var status = document.getElementById('dd-status').value;
+  var note = document.getElementById('dd-note').value.trim();
+  var category = designReportCategory;
+  var author = ctx.designer || ctx.pm;
+  var blockReason = document.getElementById('dd-block-reason') ? document.getElementById('dd-block-reason').value.trim() : '';
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var todayStart = today.getTime();
+  var existingJournal = findDailyJournalRecord(todayStart, author);
+  var existingReasons = parseDesignCategories(existingJournal).blockReasons || {};
+
+  if (category === 'block' && !blockReason && !existingReasons[currentDesignId]) {
+    alert('分類為卡關時，請填寫卡關原因');
+    return;
+  }
+
+  var merged = mergeDesignIntoJournalCategories(existingJournal, currentDesignId, category);
+  if (category === 'block' && blockReason) merged.blockReasons[currentDesignId] = blockReason;
+  else if (category !== 'block') delete merged.blockReasons[currentDesignId];
+
+  var journalFields = {};
+  var baseNote = existingJournal ? stripDesignMarker(journalField(existingJournal, ['備註', '日誌內容', '內容'])) : '';
+  if (note) {
+    var catLabels = { doing: '進行中', done: '今日完成', block: '卡關', tomorrow: '明日預計' };
+    var noteLine = '/ [設計] ' + ctx.projName + ' · ' + (ctx.f['設計項目名稱'] || '') + (note ? '：' + note : '');
+    baseNote = baseNote ? (baseNote + '\n' + noteLine) : ('【' + (catLabels[category] || '進行中') + '】\n' + noteLine);
+  }
+  journalFields['備註'] = appendDesignMarker(baseNote, {
+    doing: merged.doing,
+    done: merged.done,
+    block: merged.block,
+    tomorrow: merged.tomorrow,
+    blockReasons: merged.blockReasons
+  });
+  journalFields['日期'] = todayStart;
+
+  var pid = findProjectIdByName(ctx.projName);
+  if (pid) {
+    var projIds = getJournalProjIds(existingJournal).slice();
+    if (projIds.indexOf(pid) < 0) projIds.push(pid);
+    setJournalProjIds(journalFields, projIds);
+  }
+
+  var reporter = larkPerson(author);
+  if (reporter) journalFields['回報人'] = reporter;
+  else if (author && author !== '（未指定）') journalFields['回報人'] = author;
+
+  var designFields = {
+    '進度狀態': status,
+    '進度數值': parseProgressVal(status, null)
+  };
+  var ddDraft = document.getElementById('dd-draft');
+  var ddFinal = document.getElementById('dd-final');
+  var ddDeliver = document.getElementById('dd-deliver');
+  if (ddDraft && ddDraft.value) designFields['初稿交付日'] = dateInputToTs(ddDraft.value);
+  if (ddFinal && ddFinal.value) designFields['完稿交付日'] = dateInputToTs(ddFinal.value);
+  if (ddDeliver && ddDeliver.value) designFields['成品交付日'] = dateInputToTs(ddDeliver.value);
+
+  var btn = document.getElementById('dd-confirm-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '儲存中…'; }
+
+  var oldRec = ctx.rec;
+  var oldFields = {};
+  if (designFields['進度狀態'] !== undefined) oldFields['進度狀態'] = oldRec.fields['進度狀態'] || '';
+  if (designFields['進度數值'] !== undefined) oldFields['進度數值'] = oldRec.fields['進度數值'] || 0;
+  if (designFields['初稿交付日'] !== undefined) oldFields['初稿交付日'] = oldRec.fields['初稿交付日'];
+  if (designFields['完稿交付日'] !== undefined) oldFields['完稿交付日'] = oldRec.fields['完稿交付日'];
+  if (designFields['成品交付日'] !== undefined) oldFields['成品交付日'] = oldRec.fields['成品交付日'];
+  undoStack.push({ type: 'update', table: 'designs', recordId: currentDesignId, data: oldFields });
+
+  var journalPromise = existingJournal
+    ? apiPut('journal', existingJournal.record_id, journalFields)
+    : apiPost('journal', journalFields);
+
+  Promise.all([
+    journalPromise,
+    apiPut('designs', currentDesignId, designFields)
+  ]).then(function() {
+    return reloadJournal();
+  }).then(function() {
+    return fetch(API + '?table=designs').then(function(r) { return r.json(); });
+  }).then(function(data) {
+    if (data && data.records) {
+      designsData = data.records;
+      renderDesigns();
+      renderGanttFromData();
+    }
+    cl('pp-dd');
+    alert('設計回報已儲存！');
+  }).catch(function(err) {
+    console.error(err);
+    alert('儲存失敗：' + (err.message || '請稍後再試'));
+  }).finally(function() {
+    if (btn) { btn.disabled = false; btn.textContent = '確認儲存'; }
+  });
+}
+
+function openDailyLogFromDesign() {
+  if (!currentDesignId) return;
+  dailyLogDesignExtras[currentDesignId] = {
+    note: document.getElementById('dd-note').value.trim(),
+    status: document.getElementById('dd-status').value,
+    category: designReportCategory
+  };
+  var blockEl = document.getElementById('dd-block-reason');
+  if (blockEl && blockEl.value.trim()) {
+    dailyLogDesignExtras[currentDesignId].blockReason = blockEl.value.trim();
+  }
+  openDailyLog(currentDesignId, 'design');
+}
+
+function openNewDesignFromContext() {
+  if (!isPMRole()) return;
+  var wiId = null;
+  if (currentDesignId) {
+    var ctx = getDesignContext(currentDesignId);
+    if (ctx) wiId = ctx.wiId;
+  }
+  preparePopup('pp-des');
+  if (wiId) {
+    var wiSel = document.getElementById('ds-wi');
+    if (wiSel) wiSel.value = wiId;
+  }
+  op('pp-des');
+}
+
+function openDesignForProject(projId) {
+  if (!isPMRole()) return;
+  preparePopup('pp-des');
+  var rec = projectsData.find(function(p) { return p.record_id === projId; });
+  var wiSel = document.getElementById('ds-wi');
+  if (rec && wiSel) {
+    var wis = getWorkitemsForProject(rec);
+    if (wis[0]) wiSel.value = wis[0].record_id;
+  }
+  op('pp-des');
+}
 
 function pickTaskReportCat(el) {
   document.querySelectorAll('#td-cats .td-cat').forEach(function(c) { c.classList.remove('active'); });
@@ -4342,6 +4702,7 @@ function mergeTaskIntoJournalCategories(existing, taskId, category) {
 }
 
 function confirmTaskReport() {
+  if (!isPMRole()) return;
   if (!currentTaskId) return;
   var ctx = getTaskContext(currentTaskId);
   if (!ctx) return;
@@ -4516,6 +4877,7 @@ function openTaskDetail(taskId) {
   var existingJournal = findDailyJournalRecord(today.getTime(), ctx.assignee);
   var blockEl = document.getElementById('td-block-reason');
   if (blockEl) blockEl.value = getBlockReasonForTask(existingJournal, taskId);
+  applyDetailPopupPermissions('pp-td');
   op('pp-td');
 }
 
@@ -4559,6 +4921,45 @@ function getDailyLogTaskItems() {
     return a.taskName.localeCompare(b.taskName, 'zh-Hant');
   });
   return items;
+}
+
+function getDailyLogDesignItems() {
+  var wiMap = {};
+  workitemsData.forEach(function(wi) {
+    wiMap[wi.record_id] = {
+      name: wi.fields['工作項目名稱'] || '',
+      project: getProjectNameFromWi(wi)
+    };
+  });
+  var items = [];
+  designsData.forEach(function(rec) {
+    var f = rec.fields;
+    var wiIds = getLinkIds(f['所屬工作項目']);
+    var wiId = wiIds[0] || null;
+    var wi = wiId ? wiMap[wiId] : null;
+    var projName = wi ? (wi.project || '其他') : '其他';
+    items.push({
+      id: rec.record_id,
+      kind: 'design',
+      taskName: f['設計項目名稱'] || '未命名',
+      projName: projName,
+      wiName: wi ? wi.name : '',
+      assignee: personName(f['設計師']) || personName(f['負責PM']),
+      progress: parseProgressVal(f['進度狀態'], f['進度數值']),
+      status: f['進度狀態'] || '未開始',
+      note: f['備註'] || '',
+      color: projColorByName(projName)
+    });
+  });
+  items.sort(function(a, b) {
+    if (a.projName !== b.projName) return a.projName.localeCompare(b.projName, 'zh-Hant');
+    return a.taskName.localeCompare(b.taskName, 'zh-Hant');
+  });
+  return items;
+}
+
+function getDailyLogAllItems() {
+  return getDailyLogTaskItems().concat(getDailyLogDesignItems());
 }
 
 function formatDailyJournalText(rows) {
@@ -4680,23 +5081,28 @@ function getBlockReasonForTask(rec, taskId) {
   return map.legacy || '';
 }
 
-function formatDailyReportSummary(groups) {
+function formatDailyReportSummary(groups, designGroups) {
   var lines = [];
-  function section(title, rows) {
+  function section(title, rows, designPrefix) {
     if (!rows || !rows.length) return;
     lines.push('【' + title + '】');
     rows.forEach(function(row) {
-      var line = '/ ' + row.projName + ' · ' + row.taskName;
+      var prefix = designPrefix ? '[設計] ' : '';
+      var line = '/ ' + prefix + row.projName + ' · ' + row.taskName;
       if (row.blockReason) line += '（卡關：' + row.blockReason + '）';
       else if (row.note) line += '：' + row.note;
       lines.push(line);
     });
     lines.push('');
   }
-  section('進行中', groups.doing);
-  section('今日完成', groups.done);
-  section('卡關', groups.block);
-  section('明日預計', groups.tomorrow);
+  section('進行中', groups.doing, false);
+  section('進行中', designGroups && designGroups.doing, true);
+  section('今日完成', groups.done, false);
+  section('今日完成', designGroups && designGroups.done, true);
+  section('卡關', groups.block, false);
+  section('卡關', designGroups && designGroups.block, true);
+  section('明日預計', groups.tomorrow, false);
+  section('明日預計', designGroups && designGroups.tomorrow, true);
   return lines.join('\n').trim();
 }
 
@@ -4723,7 +5129,8 @@ function onDailyLogAuthorChange() {
   var existing = findDailyJournalRecord(dailyLogDate.getTime(), author);
   var contentEl = document.getElementById('dl-content');
   if (contentEl) {
-    contentEl.value = existing ? (journalField(existing, ['備註', '日誌內容', '內容']) || '') : '';
+    var rawNote = existing ? (journalField(existing, ['備註', '日誌內容', '內容']) || '') : '';
+    contentEl.value = stripDesignMarker(rawNote);
     dailyLogContentEdited = !!contentEl.value;
   }
   renderDailyLogTasks(dailyLogPreselectId);
@@ -4731,8 +5138,6 @@ function onDailyLogAuthorChange() {
 }
 
 var dailyLogPreselectId = null;
-
-function formatJournalHtml(text) {
   if (!text) return '';
   var safe = escHtml(text);
   return safe.replace(/【([^】]+)】/g, '<b>【$1】</b>');
@@ -4767,20 +5172,26 @@ function renderDailyLogProjFilter(items) {
 function renderDailyLogTasks(preselectId) {
   var area = document.getElementById('dl-task-list');
   if (!area) return;
-  var items = getDailyLogTaskItems();
+  var items = getDailyLogAllItems();
   if (dailyLogProjFilter) items = items.filter(function(it) { return it.projName === dailyLogProjFilter; });
   if (!items.length) {
-    area.innerHTML = '<div style="padding:14px;color:var(--t3);font-size:12px;text-align:center">尚無任務可選</div>';
+    area.innerHTML = '<div style="padding:14px;color:var(--t3);font-size:12px;text-align:center">尚無任務或設計項目可選</div>';
     return;
   }
   var author = document.getElementById('dl-author') ? document.getElementById('dl-author').value : '';
   var existing = findDailyJournalRecord(dailyLogDate.getTime(), author);
   var catMap = getExistingTaskCategories(existing);
-  var reasonMap = parseBlockReasons(existing);
+  var designCatMap = getExistingDesignCategories(existing);
   if (preselectId) {
-    var extraCat = dailyLogTaskExtras[preselectId] && dailyLogTaskExtras[preselectId].category;
-    catMap[preselectId] = extraCat || catMap[preselectId] || 'doing';
+    if (dailyLogPreselectKind === 'design') {
+      var extraDes = dailyLogDesignExtras[preselectId] && dailyLogDesignExtras[preselectId].category;
+      designCatMap[preselectId] = extraDes || designCatMap[preselectId] || 'doing';
+    } else {
+      var extraCat = dailyLogTaskExtras[preselectId] && dailyLogTaskExtras[preselectId].category;
+      catMap[preselectId] = extraCat || catMap[preselectId] || 'doing';
+    }
   }
+  var designReasons = parseDesignCategories(existing).blockReasons || {};
   var byProj = {};
   items.forEach(function(it) {
     if (!byProj[it.projName]) byProj[it.projName] = [];
@@ -4792,19 +5203,23 @@ function renderDailyLogTasks(preselectId) {
     var color = projColorByName(proj);
     html += '<div class="dl-proj-group"><div class="dl-proj-hdr" style="background:' + color + '">' + escHtml(proj) + '</div>';
     byProj[proj].forEach(function(it) {
-      var cat = catMap[it.id] || '';
-      var extra = dailyLogTaskExtras[it.id] || {};
+      var isDesign = it.kind === 'design';
+      var cat = isDesign ? (designCatMap[it.id] || '') : (catMap[it.id] || '');
+      var extra = isDesign ? (dailyLogDesignExtras[it.id] || {}) : (dailyLogTaskExtras[it.id] || {});
       var noteVal = extra.note !== undefined ? extra.note : it.note;
-      var blockVal = extra.blockReason !== undefined ? extra.blockReason : getBlockReasonForTask(existing, it.id);
+      var blockVal = extra.blockReason !== undefined ? extra.blockReason
+        : (isDesign ? (designReasons[it.id] || '') : getBlockReasonForTask(existing, it.id));
       var isBlock = cat === 'block';
-      html += '<div class="dl-row" data-task-id="' + it.id + '">';
+      var rowAttr = isDesign ? 'data-design-id="' + it.id + '" data-kind="design"' : 'data-task-id="' + it.id + '" data-kind="task"';
+      var nameBadge = isDesign ? '<span class="dl-design-badge">設計</span>' : '';
+      html += '<div class="dl-row" ' + rowAttr + '>';
       html += '<div class="dl-row-top">';
       html += buildDailyCatSelect(cat, isBlock);
-      html += '<div class="dl-task-main"><span class="dl-task-name">' + escHtml(it.taskName) + '</span>';
+      html += '<div class="dl-task-main"><span class="dl-task-name">' + nameBadge + escHtml(it.taskName) + '</span>';
       html += '<span class="dl-task-meta">' + escHtml(it.wiName) + ' · ' + escHtml(it.assignee) + '</span>';
       html += '<input type="text" class="dl-note" placeholder="補充說明（選填）" value="' + escAttr(noteVal) + '" onclick="event.stopPropagation()">';
       html += '</div><span class="dl-progress">' + it.progress + '%</span></div>';
-      html += '<textarea class="dl-block-reason" rows="2" placeholder="此任務的卡關原因（必填）" style="display:' + (isBlock ? 'block' : 'none') + '" onclick="event.stopPropagation()">' + String(blockVal).replace(/</g, '&lt;') + '</textarea>';
+      html += '<textarea class="dl-block-reason" rows="2" placeholder="卡關原因（必填）" style="display:' + (isBlock ? 'block' : 'none') + '" onclick="event.stopPropagation()">' + String(blockVal).replace(/</g, '&lt;') + '</textarea>';
       html += '</div>';
     });
     html += '</div>';
@@ -4819,54 +5234,91 @@ function renderDailyLogTasks(preselectId) {
 function collectDailyLogCategories() {
   var groups = { doing: [], done: [], block: [], tomorrow: [] };
   var ids = { doing: [], done: [], block: [], tomorrow: [] };
+  var designGroups = { doing: [], done: [], block: [], tomorrow: [] };
+  var designIds = { doing: [], done: [], block: [], tomorrow: [] };
+  var designBlockReasons = {};
   document.querySelectorAll('#dl-task-list .dl-row').forEach(function(row) {
     var catSel = row.querySelector('.dl-cat');
     if (!catSel || !catSel.value) return;
     var cat = catSel.value;
-    var id = row.dataset.taskId;
-    var ctx = getTaskContext(id);
-    if (!ctx) return;
+    var kind = row.dataset.kind || 'task';
+    var id = kind === 'design' ? row.dataset.designId : row.dataset.taskId;
+    if (!id) return;
     var noteInput = row.querySelector('.dl-note');
     var blockInput = row.querySelector('.dl-block-reason');
-    var item = {
-      id: id,
-      projName: ctx.projName || '其他',
-      taskName: ctx.f['任務名稱'] || '未命名',
-      note: noteInput ? noteInput.value.trim() : '',
-      blockReason: blockInput ? blockInput.value.trim() : '',
-      status: (dailyLogTaskExtras[id] && dailyLogTaskExtras[id].status) || ctx.f['進度狀態'] || '未開始'
-    };
-    groups[cat].push(item);
-    ids[cat].push(id);
+    var blockReason = blockInput ? blockInput.value.trim() : '';
+    if (kind === 'design') {
+      var dctx = getDesignContext(id);
+      if (!dctx) return;
+      var ditem = {
+        id: id,
+        kind: 'design',
+        projName: dctx.projName || '其他',
+        taskName: dctx.f['設計項目名稱'] || '未命名',
+        note: noteInput ? noteInput.value.trim() : '',
+        blockReason: blockReason,
+        status: (dailyLogDesignExtras[id] && dailyLogDesignExtras[id].status) || dctx.f['進度狀態'] || '未開始'
+      };
+      designGroups[cat].push(ditem);
+      designIds[cat].push(id);
+      if (cat === 'block' && blockReason) designBlockReasons[id] = blockReason;
+    } else {
+      var ctx = getTaskContext(id);
+      if (!ctx) return;
+      var item = {
+        id: id,
+        kind: 'task',
+        projName: ctx.projName || '其他',
+        taskName: ctx.f['任務名稱'] || '未命名',
+        note: noteInput ? noteInput.value.trim() : '',
+        blockReason: blockReason,
+        status: (dailyLogTaskExtras[id] && dailyLogTaskExtras[id].status) || ctx.f['進度狀態'] || '未開始'
+      };
+      groups[cat].push(item);
+      ids[cat].push(id);
+    }
   });
-  return { groups: groups, ids: ids };
+  return { groups: groups, ids: ids, designGroups: designGroups, designIds: designIds, designBlockReasons: designBlockReasons };
 }
 
 function collectDailyLogRows() {
   var data = collectDailyLogCategories();
-  return data.groups.doing.concat(data.groups.done, data.groups.block, data.groups.tomorrow);
+  return data.groups.doing.concat(data.groups.done, data.groups.block, data.groups.tomorrow,
+    data.designGroups.doing, data.designGroups.done, data.designGroups.block, data.designGroups.tomorrow);
 }
 
 function refreshDailyLogContent() {
   if (dailyLogContentEdited) return;
   var data = collectDailyLogCategories();
   var ta = document.getElementById('dl-content');
-  if (ta) ta.value = formatDailyReportSummary(data.groups);
+  if (ta) ta.value = formatDailyReportSummary(data.groups, data.designGroups);
 }
 
-function openDailyLog(preselectTaskId) {
+function openDailyLog(preselectId, preselectKind) {
   dailyLogDate = new Date();
   dailyLogDate.setHours(0, 0, 0, 0);
   dailyLogProjFilter = '';
   dailyLogContentEdited = false;
-  dailyLogPreselectId = preselectTaskId || null;
+  dailyLogPreselectId = preselectId || null;
+  dailyLogPreselectKind = preselectKind || 'task';
 
-  if (preselectTaskId) {
+  if (preselectId && preselectKind === 'design') {
+    var ddNote = document.getElementById('dd-note');
+    var ddStatus = document.getElementById('dd-status');
+    var ddBlock = document.getElementById('dd-block-reason');
+    dailyLogDesignExtras = {};
+    dailyLogDesignExtras[preselectId] = {
+      note: ddNote ? ddNote.value.trim() : '',
+      status: ddStatus ? ddStatus.value : '',
+      category: designReportCategory || 'doing',
+      blockReason: ddBlock ? ddBlock.value.trim() : ''
+    };
+  } else if (preselectId) {
     var tdNote = document.getElementById('td-note');
     var tdStatus = document.getElementById('td-status');
     var tdBlock = document.getElementById('td-block-reason');
     dailyLogTaskExtras = {};
-    dailyLogTaskExtras[preselectTaskId] = {
+    dailyLogTaskExtras[preselectId] = {
       note: tdNote ? tdNote.value.trim() : '',
       status: tdStatus ? tdStatus.value : '',
       category: taskReportCategory || 'doing',
@@ -4874,13 +5326,14 @@ function openDailyLog(preselectTaskId) {
     };
   } else {
     dailyLogTaskExtras = {};
+    dailyLogDesignExtras = {};
   }
 
   var d = dailyLogDate;
   var el = document.getElementById('dl-date-display');
   if (el) el.textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日（星期' + weekdayLabel(d) + '）';
 
-  var items = getDailyLogTaskItems();
+  var items = getDailyLogAllItems();
   var authorSel = document.getElementById('dl-author');
   if (authorSel) {
     var authorNames = Object.keys(membersMap);
@@ -4890,9 +5343,14 @@ function openDailyLog(preselectTaskId) {
       authorNames = Object.keys(nameSet);
     }
     fillSelectOptions(authorSel, authorNames.length ? authorNames : ['（未指定）']);
-    if (preselectTaskId) {
-      var ctx = getTaskContext(preselectTaskId);
-      if (ctx && ctx.assignee) authorSel.value = ctx.assignee;
+    if (preselectId) {
+      if (preselectKind === 'design') {
+        var dctx = getDesignContext(preselectId);
+        if (dctx && (dctx.designer || dctx.pm)) authorSel.value = dctx.designer || dctx.pm;
+      } else {
+        var ctx = getTaskContext(preselectId);
+        if (ctx && ctx.assignee) authorSel.value = ctx.assignee;
+      }
     }
   }
 
@@ -4900,17 +5358,32 @@ function openDailyLog(preselectTaskId) {
   var existing = findDailyJournalRecord(d.getTime(), author);
   var contentEl = document.getElementById('dl-content');
   if (contentEl) {
-    contentEl.value = existing ? (journalField(existing, ['備註', '日誌內容', '內容']) || '') : '';
+    var rawNote = existing ? (journalField(existing, ['備註', '日誌內容', '內容']) || '') : '';
+    contentEl.value = stripDesignMarker(rawNote);
     dailyLogContentEdited = !!contentEl.value;
   }
 
   renderDailyLogProjFilter(items);
-  renderDailyLogTasks(preselectTaskId);
+  renderDailyLogTasks(preselectId);
   dailyLogPreselectId = null;
+  dailyLogPreselectKind = 'task';
 
   if (contentEl) contentEl.oninput = function() { dailyLogContentEdited = true; };
-  if (preselectTaskId) cl('pp-td');
+  if (preselectId && preselectKind === 'design') cl('pp-dd');
+  else if (preselectId) cl('pp-td');
+  applyDailyLogPermissions();
   op('pp-daily-log');
+}
+
+function applyDailyLogPermissions() {
+  var pm = isPMRole();
+  var popup = document.getElementById('pp-daily-log');
+  if (!popup) return;
+  popup.querySelectorAll('input, select, textarea').forEach(function(el) {
+    el.disabled = !pm;
+  });
+  var saveBtn = popup.querySelector('.ppf .btn-report');
+  if (saveBtn) saveBtn.style.display = pm ? '' : 'none';
 }
 
 function findDailyJournalRecord(dayStart, authorName) {
@@ -4927,21 +5400,40 @@ function findDailyJournalRecord(dayStart, authorName) {
 }
 
 function saveDailyJournal() {
+  if (!isPMRole()) {
+    alert('僅 PM 可編輯日報');
+    return;
+  }
   var data = collectDailyLogCategories();
   var author = document.getElementById('dl-author').value || '';
-  var content = (document.getElementById('dl-content').value || '').trim();
-  var totalCount = data.groups.doing.length + data.groups.done.length + data.groups.block.length + data.groups.tomorrow.length;
+  var content = stripDesignMarker((document.getElementById('dl-content').value || '').trim());
+  var taskCount = data.groups.doing.length + data.groups.done.length + data.groups.block.length + data.groups.tomorrow.length;
+  var designCount = data.designGroups.doing.length + data.designGroups.done.length + data.designGroups.block.length + data.designGroups.tomorrow.length;
+  var totalCount = taskCount + designCount;
 
   if (!totalCount && !content) {
-    alert('請至少分類一個任務，或填寫備註');
+    alert('請至少分類一個任務或設計項目，或填寫備註');
     return;
   }
   var missingBlock = data.groups.block.filter(function(row) { return !row.blockReason; });
+  var missingDesignBlock = data.designGroups.block.filter(function(row) { return !row.blockReason; });
   if (missingBlock.length) {
-    alert('卡關任務請在該任務下方填寫卡關原因：' + missingBlock.map(function(r) { return r.taskName; }).join('、'));
+    alert('卡關任務請在該項下方填寫卡關原因：' + missingBlock.map(function(r) { return r.taskName; }).join('、'));
     return;
   }
-  if (!content && totalCount) content = formatDailyReportSummary(data.groups);
+  if (missingDesignBlock.length) {
+    alert('卡關設計項目請在該項下方填寫卡關原因：' + missingDesignBlock.map(function(r) { return r.taskName; }).join('、'));
+    return;
+  }
+  if (!content && totalCount) content = formatDailyReportSummary(data.groups, data.designGroups);
+
+  content = appendDesignMarker(content, {
+    doing: data.designIds.doing,
+    done: data.designIds.done,
+    block: data.designIds.block,
+    tomorrow: data.designIds.tomorrow,
+    blockReasons: data.designBlockReasons
+  });
 
   var todayTs = dailyLogDate.getTime();
   var projIds = [];
@@ -4984,7 +5476,7 @@ function saveDailyJournal() {
         body: JSON.stringify(withUserToken(journalFields))
       }).then(function(r) { return r.json(); });
 
-  var taskUpdates = allItems.map(function(row) {
+  var taskUpdates = allItems.filter(function(row) { return row.kind !== 'design'; }).map(function(row) {
     var fields = {};
     if (row.status) {
       fields['進度狀態'] = row.status;
@@ -5005,7 +5497,28 @@ function saveDailyJournal() {
     }).then(function(r) { return r.json(); });
   });
 
-  Promise.all([journalPromise].concat(taskUpdates)).then(function(results) {
+  var designUpdates = allItems.filter(function(row) { return row.kind === 'design'; }).map(function(row) {
+    var fields = {};
+    if (row.status) {
+      fields['進度狀態'] = row.status;
+      fields['進度數值'] = parseProgressVal(row.status, null);
+    }
+    if (!Object.keys(fields).length) return Promise.resolve({ code: 0 });
+    var oldRec = designsData.find(function(r){ return r.record_id === row.id; });
+    if (oldRec) {
+      var oldFields = {};
+      if (fields['進度狀態'] !== undefined) oldFields['進度狀態'] = oldRec.fields['進度狀態'] || '';
+      if (fields['進度數值'] !== undefined) oldFields['進度數值'] = oldRec.fields['進度數值'] || 0;
+      undoStack.push({ type: 'update', table: 'designs', recordId: row.id, data: oldFields });
+    }
+    return fetch(API + '?table=designs&recordId=' + row.id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(withUserToken(fields))
+    }).then(function(r) { return r.json(); });
+  });
+
+  Promise.all([journalPromise].concat(taskUpdates, designUpdates)).then(function(results) {
     var main = results[0];
     if (main && main.code !== undefined && main.code !== 0) {
       throw new Error(main.msg || '日報儲存失敗');
@@ -5019,7 +5532,13 @@ function saveDailyJournal() {
     if (data && data.records) {
       tasksData = data.records;
       renderTasks();
-    renderTeamPanel();
+      renderTeamPanel();
+    }
+    return fetch(API + '?table=designs').then(function(r) { return r.json(); });
+  }).then(function(data) {
+    if (data && data.records) {
+      designsData = data.records;
+      renderDesigns();
       renderGanttFromData();
     }
     alert(existing ? '已更新今日日報！' : '已儲存今日日報！');
@@ -5731,7 +6250,8 @@ function renderDesigns() {
         + '<td>' + d.draft + '</td><td>' + d.final + '</td><td>' + d.deliver + '</td></tr>';
     });
     return '<div class="dc"><div class="dch"><div class="pdot" style="background:' + color + '"></div><h3>' + escHtml(pname) + '</h3>'
-      + '<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-des\')">＋ 新增設計任務單</button></div>'
+      + (isPMRole() ? '<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-des\')">＋ 新增設計任務單</button>' : '')
+      + '</div>'
       + '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>設計項目名稱</th><th>所屬工作項目</th><th>負責PM</th><th>項目</th><th>設計需求</th><th>設計師</th><th>狀態</th><th>預算</th><th>實際花費</th><th>初稿</th><th>完稿</th><th>成品</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }
 
@@ -5964,6 +6484,7 @@ function setProjectWikiUrlField(fields, url) {
 }
 
 function onGanttProjStatusChange(projId, sel) {
+  if (!isPMRole()) return;
   var status = sel.value;
   var rec = projectsData.find(function(p) { return p.record_id === projId; });
   var prev = normalizeProjectStatus(rec ? rec.fields['狀態'] : '');
@@ -6071,6 +6592,7 @@ function confirmArchiveProject() {
 }
 
 function openTaskForProject(projId) {
+  if (!isPMRole()) return;
   preparePopup('pp-task');
   var rec = projectsData.find(function(p) { return p.record_id === projId; });
   var wiSel = document.getElementById('nt-wi');
@@ -6117,10 +6639,21 @@ function openEditDesign(desId) {
   document.getElementById('ed-final').value = f['完稿交付日'] ? tsToDateInput(f['完稿交付日']) : '';
   document.getElementById('ed-deliver').value = f['成品交付日'] ? tsToDateInput(f['成品交付日']) : '';
   document.getElementById('ed-remark').value = f['備註'] || '';
+  applyEditDesignPermissions();
   op('pp-edit-des');
 }
 
+function applyEditDesignPermissions() {
+  var pm = isPMRole();
+  document.querySelectorAll('#pp-edit-des input, #pp-edit-des select, #pp-edit-des textarea').forEach(function(el) {
+    el.disabled = !pm;
+  });
+  var saveBtn = document.querySelector('#pp-edit-des .bpri');
+  if (saveBtn) saveBtn.style.display = pm ? '' : 'none';
+}
+
 function saveEditDesign() {
+  if (!isPMRole()) return;
   if (!editingDesignId) return;
   var name = document.getElementById('ed-name').value.trim();
   var wiId = document.getElementById('ed-wi').value;
