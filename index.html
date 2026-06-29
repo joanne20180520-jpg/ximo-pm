@@ -438,6 +438,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .dc2{display:flex;align-items:center;gap:3px}
 .dc2 button{width:17px;height:17px;border:1px solid var(--border);border-radius:3px;background:#fff;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center}
 .dc2 span{font-size:11px;font-weight:600;min-width:16px;text-align:center}
+.dc2 .wi-days{width:40px;min-width:0;padding:4px 2px;border:1px solid var(--border);border-radius:3px;font-size:11px;font-weight:600;text-align:center;font-family:inherit;background:#fff}
 .bads{width:100%;padding:6px;border:1px dashed var(--border);border-radius:var(--rs);background:none;color:var(--t3);cursor:pointer;font-size:11px;transition:all .12s,transform .08s}
 .bads:hover{border-color:var(--accent);color:var(--accent)}
 .bads:active{border-color:var(--c2)!important;color:var(--c2)!important;background:rgba(26,74,122,.06)!important;transform:scale(0.98)}
@@ -2089,7 +2090,9 @@ function renderProjWorkItems() {
   parsedProjWorkItems.forEach(function(it, idx) {
     html += '<div class="srow" data-idx="' + idx + '">'
       + '<input type="text" value="' + escAttr(it.name) + '" oninput="parsedProjWorkItems[' + idx + '].name=this.value">'
-      + '<div class="dc2"><button type="button" onclick="adjProjWi(this,-1)">−</button><span>' + it.days + '</span><button type="button" onclick="adjProjWi(this,1)">＋</button></div>'
+      + '<div class="dc2"><button type="button" onclick="adjProjWi(this,-1)">−</button>'
+      + '<input type="text" class="wi-days" value="' + it.days + '" oninput="parsedProjWorkItems[' + idx + '].days=Math.max(1,parseInt(this.value,10)||1);this.value=parsedProjWorkItems[' + idx + '].days">'
+      + '<button type="button" onclick="adjProjWi(this,1)">＋</button></div>'
       + '<input type="text" value="' + (it.cost ? 'NT$' + Math.round(it.cost).toLocaleString() : '') + '" placeholder="NT$0" oninput="parsedProjWorkItems[' + idx + '].cost=parseMoney(this.value);calcP()">'
       + '<input type="text" value="' + it.weight + '%" oninput="parsedProjWorkItems[' + idx + '].weight=parseFloat(this.value)||0">'
       + '</div>';
@@ -2100,9 +2103,10 @@ function renderProjWorkItems() {
 function adjProjWi(btn, d) {
   var row = btn.closest('.srow');
   var idx = parseInt(row.getAttribute('data-idx'), 10);
-  var span = row.querySelector('.dc2 span');
-  parsedProjWorkItems[idx].days = Math.max(1, parsedProjWorkItems[idx].days + d);
-  span.textContent = parsedProjWorkItems[idx].days;
+  var input = row.querySelector('.wi-days');
+  var cur = input ? parseInt(input.value, 10) : parsedProjWorkItems[idx].days;
+  parsedProjWorkItems[idx].days = Math.max(1, (cur || 1) + d);
+  if (input) input.value = parsedProjWorkItems[idx].days;
 }
 
 function addProjWorkItem() {
@@ -2247,15 +2251,19 @@ function getExpenseProjIds(f) {
 function setExpenseProjField(fields, projId) {
   if (projId) fields['所數標案'] = [projId];
 }
-function adj(btn,d){var s=btn.parentElement.querySelector('span');s.textContent=Math.max(1,parseInt(s.textContent)+d);}
+function adj(btn,d){
+  var input = btn.parentElement.querySelector('.wi-days');
+  if (!input) return;
+  input.value = Math.max(1, (parseInt(input.value, 10) || 1) + d);
+}
 function addS(){
   var r=document.createElement('div');r.className='srow';
-  r.innerHTML='<input type="text" placeholder="工作項目名稱"><div class="dc2"><button type="button" onclick="adj(this,-1)">−</button><span>5</span><button type="button" onclick="adj(this,1)">＋</button></div><select class="wi-member" data-members></select><input type="text" placeholder="NT$0"><input type="text" placeholder="40%">';
+  r.innerHTML='<input type="text" placeholder="工作項目名稱"><div class="dc2"><button type="button" onclick="adj(this,-1)">−</button><input type="text" class="wi-days" value="5"><button type="button" onclick="adj(this,1)">＋</button></div><select class="wi-member" data-members></select><input type="text" placeholder="NT$0"><input type="text" placeholder="40%">';
   document.getElementById('sl').appendChild(r);
   fillSelectOptions(r.querySelector('.wi-member'), getMemberNames());
 }
 function workRowHtml() {
-  return '<div class="srow"><input type="text" placeholder="工作項目名稱"><div class="dc2"><button type="button" onclick="adj(this,-1)">−</button><span>5</span><button type="button" onclick="adj(this,1)">＋</button></div><select class="wi-member" data-members></select><input type="text" placeholder="NT$0"><input type="text" placeholder="40%"></div>';
+  return '<div class="srow"><input type="text" placeholder="工作項目名稱"><div class="dc2"><button type="button" onclick="adj(this,-1)">−</button><input type="text" class="wi-days" value="5"><button type="button" onclick="adj(this,1)">＋</button></div><select class="wi-member" data-members></select><input type="text" placeholder="NT$0"><input type="text" placeholder="40%"></div>';
 }
 
 // ── 付款預覽 / 列印（元頂集團格式，同 payment-form GitHub Pages）──
@@ -7875,7 +7883,7 @@ function saveWorkItems() {
     var inputs = row.querySelectorAll('input');
     var name = inputs[0] && inputs[0].value.trim();
     if (!name) return;
-    var days = parseInt(row.querySelector('.dc2 span').textContent, 10) || 1;
+    var days = parseInt(row.querySelector('.wi-days').value, 10) || 1;
     var partner = row.querySelector('select').value;
     var cost = parseMoney(inputs[1] && inputs[1].value);
     var weight = parseWeight(inputs[2] && inputs[2].value);
