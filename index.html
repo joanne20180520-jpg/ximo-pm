@@ -825,7 +825,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
       <div class="uz-empty" id="proc-empty-state">
         <div class="uz-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 18v2a1 1 0 001 1h14a1 1 0 001-1v-2"/></svg></div>
         <div class="uz-title">點此上傳服務建議書</div>
-        <div class="uz-formats">支援 PDF、Word (.doc / .docx)</div>
+        <div class="uz-formats">支援 PDF、Word（.docx）、經費表圖片（.jpg / .png）</div>
       </div>
       <div class="proc-file-card" id="proc-file-card" style="display:none">
         <div class="proc-file-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg></div>
@@ -836,7 +836,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <button type="button" class="proc-file-remove" id="proc-clear-btn" title="移除檔案" onclick="event.preventDefault();clearProcUpload()">✕</button>
       </div>
     </label>
-    <input type="file" id="proc-file" class="proc-file-input" accept=".pdf,.docx,.txt,.text,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onchange="onProcFileSelect(this)">
+    <input type="file" id="proc-file" class="proc-file-input" accept=".pdf,.docx,.txt,.text,.jpg,.jpeg,.png,.webp,.gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,image/webp,image/gif" onchange="onProcFileSelect(this)">
   </div>
   <div class="proc-preview" id="proc-preview" style="display:none">
     <div class="ppb2">
@@ -1201,7 +1201,7 @@ function procPickFile() {
 
 function preloadProcLibs() {
   var formatsEl = document.querySelector('#proc-empty-state .uz-formats');
-  var defaultFormats = '支援 PDF、Word（.docx）';
+  var defaultFormats = '支援 PDF、Word（.docx）、經費表圖片（.jpg / .png）';
   var card = document.getElementById('proc-file-card');
   if (formatsEl && (!card || card.style.display === 'none') && formatsEl.textContent === defaultFormats) {
     formatsEl.textContent = '正在準備解析元件…';
@@ -1498,10 +1498,31 @@ function parseBudgetTableFromMarkedText(text) {
   return parseBudgetTableRows(rows);
 }
 
+function isProcImageFile(name) {
+  return /\.(png|jpe?g|gif|webp|bmp)$/i.test(name || '');
+}
+
+function loadAllDocxMediaBlobs(zip) {
+  var entries = [];
+  zip.forEach(function(relPath, file) {
+    if (!/^word\/media\//i.test(relPath)) return;
+    if (!/\.(png|jpe?g|gif|bmp|tiff?|webp)$/i.test(relPath)) return;
+    entries.push(file);
+  });
+  return Promise.all(entries.map(function(f) {
+    return f.async('uint8array').then(function(buf) {
+      return { blob: new Blob([buf]), size: buf.length };
+    });
+  })).then(function(items) {
+    items.sort(function(a, b) { return b.size - a.size; });
+    return items.slice(0, 4).map(function(it) { return it.blob; });
+  });
+}
+
 function findDocxBudgetImageBlobs(zip) {
   var docP = zip.file('word/document.xml');
   var relP = zip.file('word/_rels/document.xml.rels');
-  if (!docP || !relP) return Promise.resolve([]);
+  if (!docP || !relP) return loadAllDocxMediaBlobs(zip);
   return Promise.all([docP.async('text'), relP.async('text')]).then(function(parts) {
     var docXml = parts[0];
     var relMap = buildDocxRelMap(parts[1]);
@@ -1521,20 +1542,21 @@ function findDocxBudgetImageBlobs(zip) {
     }
     var rids = [];
     var seen = {};
-    starts.forEach(function(start) {
-      for (var j = start; j < Math.min(start + 25, paras.length); j++) {
+    function collectEmbedRids(from, to) {
+      for (var j = from; j < to; j++) {
         paras[j].replace(/r:embed="([^"]+)"/g, function(_, id) {
           if (!seen[id]) { seen[id] = 1; rids.push(id); }
         });
       }
+    }
+    starts.forEach(function(start) {
+      collectEmbedRids(start, Math.min(start + 40, paras.length));
     });
     if (!starts.length) {
-      var from = Math.floor(paras.length * 0.6);
-      for (var j = from; j < paras.length; j++) {
-        paras[j].replace(/r:embed="([^"]+)"/g, function(_, id) {
-          if (!seen[id]) { seen[id] = 1; rids.push(id); }
-        });
-      }
+      collectEmbedRids(Math.floor(paras.length * 0.55), paras.length);
+    }
+    if (!rids.length) {
+      collectEmbedRids(0, paras.length);
     }
     var blobs = [];
     rids.forEach(function(rid) {
@@ -1543,8 +1565,35 @@ function findDocxBudgetImageBlobs(zip) {
       var media = zip.file('word/' + target);
       if (media) blobs.push(media.async('blob'));
     });
-    return blobs.length ? Promise.all(blobs) : [];
+    if (blobs.length) return Promise.all(blobs);
+    return loadAllDocxMediaBlobs(zip);
   });
+}
+
+function ocrBudgetImageBlobs(blobs, onProgress) {
+  if (!blobs.length) return Promise.resolve('');
+  var bestText = '';
+  var limit = Math.min(blobs.length, 3);
+  var chain = Promise.resolve();
+  blobs.slice(0, limit).forEach(function(blob, idx) {
+    chain = chain.then(function() {
+      if (parseBudgetWorkItems('===BUDGET_OCR===\n' + bestText).length >= 2) return;
+      if (onProgress) {
+        onProgress(limit > 1 ? '正在掃描經費表圖片…（' + (idx + 1) + '/' + limit + '）' : '正在掃描經費表圖片…');
+      }
+      return promiseWithTimeout(
+        ocrImageToText(blob, onProgress).then(function(t) {
+          if (t && t.replace(/\s/g, '').length > 30) return t;
+          return ocrImageOnServer(blob, onProgress);
+        }),
+        55000,
+        ''
+      ).then(function(t) {
+        if (t) bestText += '\n' + t;
+      });
+    });
+  });
+  return chain.then(function() { return bestText.trim(); });
 }
 
 function extractDocxBudgetData(file, onProgress, opts) {
@@ -1564,17 +1613,8 @@ function extractDocxBudgetData(file, onProgress, opts) {
       if (opts.skipOcr) return { tableText: tableText, ocrText: '' };
       return findDocxBudgetImageBlobs(zip).then(function(blobs) {
         if (!blobs.length) return { tableText: tableText, ocrText: '' };
-        if (onProgress) onProgress('正在辨識經費表圖片…');
-        var blob = blobs[0];
-        return promiseWithTimeout(
-          ocrImageToText(blob, onProgress).then(function(t) {
-            if (t && t.replace(/\s/g, '').length > 30) return t;
-            return ocrImageOnServer(blob, onProgress);
-          }),
-          45000,
-          ''
-        ).then(function(ocrText) {
-          return { tableText: tableText, ocrText: String(ocrText || '').trim() };
+        return ocrBudgetImageBlobs(blobs, onProgress).then(function(ocrText) {
+          return { tableText: tableText, ocrText: ocrText };
         });
       });
     });
@@ -1661,10 +1701,19 @@ function hasParsedBudgetTable(text) {
   return false;
 }
 
+function extractImageProcurementText(file, onProgress) {
+  return ocrBudgetImageBlobs([file], onProgress).then(function(text) {
+    return '===BUDGET_OCR===\n' + (text || '');
+  });
+}
+
 function extractProcurementText(file, onProgress) {
   var name = (file.name || '').toLowerCase();
   if (name.endsWith('.doc') && !name.endsWith('.docx')) {
     return Promise.reject(new Error('舊版 .doc 請在 Word 另存為 .docx 後再上傳'));
+  }
+  if (isProcImageFile(name)) {
+    return extractImageProcurementText(file, onProgress);
   }
   if (name.endsWith('.txt') || name.endsWith('.text')) {
     return file.text();
@@ -1702,9 +1751,7 @@ function extractProcurementText(file, onProgress) {
         return extractDocxBudgetData(file, onProgress, { skipOcr: true }).then(function(data) {
           var combined = appendDocxBudgetExtra(text, data);
           var quick = parseServiceProposalText(combined);
-          if (quick.workItems.length >= 1 || (quick.name && (quick.amount || hasParsedBudgetTable(combined)))) {
-            return combined;
-          }
+          if (quick.workItems.length >= 1) return combined;
           return extractDocxBudgetData(file, onProgress).then(function(data2) {
             return appendDocxBudgetExtra(text, data2);
           });
@@ -1936,8 +1983,12 @@ function parseServiceProposalText(raw) {
     result.workItems = parseBudgetWorkItems(budgetText);
   }
 
-  if (!result.workItems.length && /===BUDGET_(OCR|TABLE)===/.test(text)) {
-    result.workItems = parseBudgetWorkItemsFromOcr(text);
+  if (!result.workItems.length && /===BUDGET_OCR===/.test(text)) {
+    var ocrPart = text.slice(text.indexOf('===BUDGET_OCR===') + 15);
+    result.workItems = parseBudgetWorkItems(ocrPart);
+    if (!result.workItems.length) result.workItems = parseVerticalBudgetTable(ocrPart);
+    if (!result.workItems.length) result.workItems = parseLooseBudgetLines(ocrPart);
+    if (!result.workItems.length) result.workItems = parseBudgetWorkItemsFromOcr(text);
   }
 
   var totalFromTable = 0;
@@ -2571,7 +2622,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v24';
+var APP_BUILD = '20260615v25';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
