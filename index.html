@@ -214,6 +214,9 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .j-proj-card{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff}
 .j-proj-card-hdr{padding:10px 14px;font-size:14px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border);background:var(--sf2)}
 .j-proj-card-body{padding:10px 12px;display:flex;flex-direction:column;gap:10px}
+.j-wi-section{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fff}
+.j-wi-hdr{padding:8px 12px;font-size:12px;font-weight:700;color:var(--t2);background:var(--sf2);border-bottom:1px solid var(--border)}
+.j-wi-section .j-proj-section{border-left:none;border-radius:0;margin:0}
 .j-proj-section{border-radius:8px;padding:10px 12px;border-left:3px solid transparent}
 .j-proj-section-done{background:#F4F8F5;border-left-color:#2d6a4f}
 .j-proj-section-doing{background:#F7F8FA;border-left-color:#6b7c8f}
@@ -2460,7 +2463,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v20';
+var APP_BUILD = '20260615v21';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -5124,16 +5127,22 @@ function journalLinkText(rec, keys) {
   return '';
 }
 
+function journalTaskDisplayName(taskId) {
+  var ctx = getTaskContext(taskId);
+  if (ctx) {
+    return [ctx.projName, ctx.wiName, ctx.f['任務名稱'] || '任務'].filter(Boolean).join(' · ');
+  }
+  var task = tasksData.find(function(t) { return t.record_id === taskId; });
+  return task ? (task.fields['任務名稱'] || '任務') : '任務';
+}
+
 function journalTaskNames(rec, keys) {
   var f = rec.fields || {};
   for (var i = 0; i < keys.length; i++) {
     var field = f[keys[i]];
     var ids = getLinkIds(field);
     if (!ids.length) continue;
-    var names = ids.map(function(id) {
-      var task = tasksData.find(function(t) { return t.record_id === id; });
-      return task ? (task.fields['任務名稱'] || '任務') : '';
-    }).filter(Boolean);
+    var names = ids.map(function(id) { return journalTaskDisplayName(id); }).filter(Boolean);
     if (names.length) return names.join('、');
     if (Array.isArray(field)) {
       var texts = field.map(function(item) { return getLinkText(item); }).filter(Boolean);
@@ -5141,6 +5150,50 @@ function journalTaskNames(rec, keys) {
     }
     var text = getLinkText(field);
     if (text) return text;
+  }
+  return '';
+}
+
+function getMergedTaskCategories(dayStart, author) {
+  var map = {};
+  findDailyJournalRecords(dayStart, author).forEach(function(rec) {
+    var m = getExistingTaskCategories(rec);
+    Object.keys(m).forEach(function(id) { map[id] = m[id]; });
+  });
+  return map;
+}
+
+function getMergedDesignCategoryMaps(dayStart, author) {
+  var catMap = {};
+  var blockReasons = {};
+  findDailyJournalRecords(dayStart, author).forEach(function(rec) {
+    var c = parseDesignCategories(rec);
+    c.doing.forEach(function(id) { catMap[id] = 'doing'; });
+    c.done.forEach(function(id) { catMap[id] = 'done'; });
+    c.block.forEach(function(id) { catMap[id] = 'block'; });
+    c.tomorrow.forEach(function(id) { catMap[id] = 'tomorrow'; });
+    Object.assign(blockReasons, c.blockReasons || {});
+  });
+  return { catMap: catMap, blockReasons: blockReasons };
+}
+
+function getMergedJournalNotes(dayStart, author) {
+  var recs = findDailyJournalRecords(dayStart, author);
+  if (!recs.length) return '';
+  recs.sort(function(a, b) { return (journalTs(a) || 0) - (journalTs(b) || 0); });
+  var notes = [];
+  recs.forEach(function(rec) {
+    var plain = stripDesignMarker(journalField(rec, ['備註', '日誌內容', '內容']) || '');
+    if (plain && notes.indexOf(plain) < 0) notes.push(plain);
+  });
+  return notes.join('\n\n');
+}
+
+function getBlockReasonForTaskFromJournals(dayStart, author, taskId) {
+  var recs = findDailyJournalRecords(dayStart, author);
+  for (var i = 0; i < recs.length; i++) {
+    var reason = getBlockReasonForTask(recs[i], taskId);
+    if (reason) return reason;
   }
   return '';
 }
@@ -5304,11 +5357,9 @@ function renderDailyLogPersonFilter(items) {
 function onDailyLogAuthorChange() {
   var author = document.getElementById('dl-author').value || '';
   dailyLogPersonFilter = author && author !== '（未指定）' ? author : '';
-  var existing = findDailyJournalRecord(dailyLogDate.getTime(), author);
   var contentEl = document.getElementById('dl-content');
   if (contentEl) {
-    var rawNote = existing ? (journalField(existing, ['備註', '日誌內容', '內容']) || '') : '';
-    contentEl.value = stripDesignMarker(rawNote);
+    contentEl.value = getMergedJournalNotes(dailyLogDate.getTime(), author);
     dailyLogContentEdited = false;
   }
   renderDailyLogPersonFilter(getDailyLogAllItems());
@@ -5368,9 +5419,11 @@ function renderDailyLogTasks(preselectId) {
     return;
   }
   var author = document.getElementById('dl-author') ? document.getElementById('dl-author').value : '';
-  var existing = findDailyJournalRecord(dailyLogDate.getTime(), author);
-  var catMap = getExistingTaskCategories(existing);
-  var designCatMap = getExistingDesignCategories(existing);
+  var dayTs = dailyLogDate.getTime();
+  var catMap = getMergedTaskCategories(dayTs, author);
+  var designMaps = getMergedDesignCategoryMaps(dayTs, author);
+  var designCatMap = designMaps.catMap;
+  var designReasons = designMaps.blockReasons;
   if (preselectId) {
     if (dailyLogPreselectKind === 'design') {
       var extraDes = dailyLogDesignExtras[preselectId] && dailyLogDesignExtras[preselectId].category;
@@ -5380,7 +5433,6 @@ function renderDailyLogTasks(preselectId) {
       catMap[preselectId] = extraCat || catMap[preselectId] || 'doing';
     }
   }
-  var designReasons = parseDesignCategories(existing).blockReasons || {};
   var byProj = {};
   items.forEach(function(it) {
     if (!byProj[it.projName]) byProj[it.projName] = [];
@@ -5397,7 +5449,7 @@ function renderDailyLogTasks(preselectId) {
       var extra = isDesign ? (dailyLogDesignExtras[it.id] || {}) : (dailyLogTaskExtras[it.id] || {});
       var noteVal = extra.note !== undefined ? extra.note : it.note;
       var blockVal = extra.blockReason !== undefined ? extra.blockReason
-        : (isDesign ? (designReasons[it.id] || '') : getBlockReasonForTask(existing, it.id));
+        : (isDesign ? (designReasons[it.id] || '') : getBlockReasonForTaskFromJournals(dayTs, author, it.id));
       var isBlock = cat === 'block';
       var rowAttr = isDesign ? 'data-design-id="' + it.id + '" data-kind="design"' : 'data-task-id="' + it.id + '" data-kind="task"';
       var nameBadge = isDesign ? '<span class="dl-design-badge">設計</span>' : '';
@@ -5579,11 +5631,9 @@ function openDailyLog(preselectId, preselectKind) {
   }
   dailyLogPersonFilter = author && author !== '（未指定）' ? author : (getMyPersonName() || '');
 
-  var existing = findDailyJournalRecord(d.getTime(), author);
   var contentEl = document.getElementById('dl-content');
   if (contentEl) {
-    var rawNote = existing ? (journalField(existing, ['備註', '日誌內容', '內容']) || '') : '';
-    contentEl.value = stripDesignMarker(rawNote);
+    contentEl.value = getMergedJournalNotes(d.getTime(), author);
     dailyLogContentEdited = false;
   }
 
@@ -5709,9 +5759,14 @@ function saveDailyJournal() {
   if (reporter) journalFields['回報人'] = reporter;
   else if (author && author !== '（未指定）') journalFields['回報人'] = author;
 
-  var existing = findDailyJournalRecord(todayTs, author);
-  var journalPromise = existing
-    ? fetch(API + '?table=journal&recordId=' + existing.record_id, {
+  var existingRecs = findDailyJournalRecords(todayTs, author);
+  var targetRec = null;
+  if (existingRecs.length) {
+    existingRecs.sort(function(a, b) { return (journalTs(b) || 0) - (journalTs(a) || 0); });
+    targetRec = existingRecs[0];
+  }
+  var journalPromise = targetRec
+    ? fetch(API + '?table=journal&recordId=' + targetRec.record_id, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(withUserToken(journalFields))
@@ -5910,8 +5965,7 @@ function journalCardBlockedTasks(rec) {
   var reasonMap = parseBlockReasons(rec);
   var html = '';
   blockIds.forEach(function(taskId) {
-    var ctx = getTaskContext(taskId);
-    var name = ctx ? (ctx.f['任務名稱'] || '任務') : '任務';
+    var name = journalTaskDisplayName(taskId);
     var reason = reasonMap.byId[taskId] || reasonMap.legacy || '';
     html += '<div class="jc-row block">';
     html += '<span class="jc-lbl block">卡關</span>';
@@ -6210,44 +6264,74 @@ function mergePersonJournalRecords(recs) {
     if (m.legacy && !Object.keys(reasonById).length) legacy = m.legacy;
   });
   fields['卡關原因'] = encodeBlockReasons(reasonById) || legacy;
-  if (base.fields['所屬標案']) fields['所屬標案'] = base.fields['所屬標案'];
+  var projIds = [];
+  recs.forEach(function(rec) {
+    getJournalProjIds(rec).forEach(function(id) {
+      if (projIds.indexOf(id) < 0) projIds.push(id);
+    });
+  });
+  if (projIds.length) setJournalProjIds(fields, projIds);
+  else if (base.fields['所屬標案']) fields['所屬標案'] = base.fields['所屬標案'];
   else if (base.fields['所屬專案']) fields['所屬專案'] = base.fields['所屬專案'];
+  var designMerged = { doing: [], done: [], block: [], tomorrow: [], blockReasons: {} };
+  var notes = [];
+  recs.forEach(function(rec) {
+    var c = parseDesignCategories(rec);
+    ['doing', 'done', 'block', 'tomorrow'].forEach(function(k) {
+      c[k].forEach(function(id) {
+        if (designMerged[k].indexOf(id) < 0) designMerged[k].push(id);
+      });
+    });
+    Object.assign(designMerged.blockReasons, c.blockReasons || {});
+    var plain = stripDesignMarker(journalField(rec, ['備註', '日誌內容', '內容']) || '');
+    if (plain && notes.indexOf(plain) < 0) notes.push(plain);
+  });
+  fields['備註'] = appendDesignMarker(notes.join('\n\n'), designMerged);
   return { record_id: base.record_id, fields: fields };
 }
 
 function groupJournalTasksByProject(done, doing, blocks, tomorrow) {
-  var map = {};
-  function ensure(projName) {
-    var key = (projName || '').trim() || '其他';
-    if (!map[key]) {
-      map[key] = {
-        name: key,
-        color: projColorByName(key),
-        done: [],
-        doing: [],
-        blocks: [],
-        tomorrow: []
+  var wiMap = {};
+  function ensure(projName, wiName) {
+    var p = (projName || '').trim() || '其他';
+    var w = (wiName || '').trim() || '其他';
+    var key = p + '|||' + w;
+    if (!wiMap[key]) wiMap[key] = { projName: p, wiName: w, done: [], doing: [], blocks: [], tomorrow: [] };
+    return wiMap[key];
+  }
+  function push(list, cat) {
+    list.forEach(function(t) {
+      var ctx = getTaskContext(t.id);
+      ensure(ctx ? ctx.projName : '', ctx ? ctx.wiName : '')[cat].push(t);
+    });
+  }
+  push(done, 'done');
+  push(doing, 'doing');
+  push(blocks, 'blocks');
+  push(tomorrow, 'tomorrow');
+  var projMap = {};
+  Object.keys(wiMap).forEach(function(key) {
+    var cell = wiMap[key];
+    if (!projMap[cell.projName]) {
+      projMap[cell.projName] = {
+        name: cell.projName,
+        color: projColorByName(cell.projName),
+        workitems: []
       };
     }
-    return map[key];
-  }
-  done.forEach(function(t) {
-    var ctx = getTaskContext(t.id);
-    ensure(ctx ? ctx.projName : '').done.push(t);
+    projMap[cell.projName].workitems.push({
+      name: cell.wiName,
+      done: cell.done,
+      doing: cell.doing,
+      blocks: cell.blocks,
+      tomorrow: cell.tomorrow
+    });
   });
-  doing.forEach(function(t) {
-    var ctx = getTaskContext(t.id);
-    ensure(ctx ? ctx.projName : '').doing.push(t);
+  return Object.keys(projMap).sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); }).map(function(k) {
+    var proj = projMap[k];
+    proj.workitems.sort(function(a, b) { return a.name.localeCompare(b.name, 'zh-Hant'); });
+    return proj;
   });
-  blocks.forEach(function(b) {
-    var ctx = getTaskContext(b.id);
-    ensure(ctx ? ctx.projName : '').blocks.push(b);
-  });
-  tomorrow.forEach(function(t) {
-    var ctx = getTaskContext(t.id);
-    ensure(ctx ? ctx.projName : '').tomorrow.push(t);
-  });
-  return Object.keys(map).sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); }).map(function(k) { return map[k]; });
 }
 
 function collectJournalPersonData(rec, personName, opts) {
@@ -6266,7 +6350,11 @@ function collectJournalPersonData(rec, personName, opts) {
   function mapTasks(fieldKey) {
     return getLinkIds(rec.fields[fieldKey]).map(function(id) {
       var ctx = getTaskContext(id);
-      return { id: id, name: ctx ? (ctx.f['任務名稱'] || '任務') : '任務' };
+      return {
+        id: id,
+        name: ctx ? (ctx.f['任務名稱'] || '任務') : '任務',
+        wiName: ctx ? (ctx.wiName || '') : ''
+      };
     });
   }
   var done = mapTasks('已完成今日任務');
@@ -6277,6 +6365,7 @@ function collectJournalPersonData(rec, personName, opts) {
     return {
       id: id,
       name: ctx ? (ctx.f['任務名稱'] || '任務') : '任務',
+      wiName: ctx ? (ctx.wiName || '') : '',
       reason: reasonMap.byId[id] || reasonMap.legacy || '',
       journalRecId: rec.record_id
     };
@@ -6321,10 +6410,17 @@ function renderJournalProjCard(proj) {
   var html = '<div class="j-proj-card">';
   html += '<div class="j-proj-card-hdr">' + escHtml(proj.name) + '</div>';
   html += '<div class="j-proj-card-body">';
-  html += renderJournalProjSection('done', '已完成', proj.done);
-  html += renderJournalProjSection('doing', '進行中', proj.doing);
-  html += renderJournalProjSection('block', '需要處理', proj.blocks);
-  html += renderJournalProjSection('tomorrow', '明日預計任務', proj.tomorrow);
+  (proj.workitems || []).forEach(function(wi) {
+    var hasTasks = wi.done.length || wi.doing.length || wi.blocks.length || wi.tomorrow.length;
+    if (!hasTasks) return;
+    html += '<div class="j-wi-section">';
+    html += '<div class="j-wi-hdr">' + escHtml(wi.name) + '</div>';
+    html += renderJournalProjSection('done', '已完成', wi.done);
+    html += renderJournalProjSection('doing', '進行中', wi.doing);
+    html += renderJournalProjSection('block', '需要處理', wi.blocks);
+    html += renderJournalProjSection('tomorrow', '明日預計任務', wi.tomorrow);
+    html += '</div>';
+  });
   html += '</div></div>';
   return html;
 }
