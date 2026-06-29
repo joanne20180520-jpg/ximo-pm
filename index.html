@@ -253,6 +253,8 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .pp-daily{width:580px}
 .dl-date{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text)}
 .dl-proj-filter{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+.dl-person-filter{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+.dl-person-label{font-size:10px;color:var(--t3);margin-right:2px;flex-shrink:0}
 .dl-ptag{padding:3px 9px;border-radius:14px;font-size:10px;cursor:pointer;border:1px solid var(--border);background:var(--sf2);color:var(--t2)}
 .dl-ptag.active{color:#fff;border-color:transparent}
 .dl-task-list{max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:12px}
@@ -262,6 +264,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .dl-row{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:8px 10px;border-bottom:1px solid var(--border)}
 .dl-row:last-child{border-bottom:none}
 .dl-row:hover{background:var(--sf2)}
+.dl-row-excluded{display:none}
 .dl-row-top{display:flex;align-items:center;gap:8px}
 .dl-row input[type=checkbox]{width:15px;height:15px;flex-shrink:0;cursor:pointer}
 .dl-proj-tag{font-size:10px;padding:2px 7px;border-radius:8px;color:#fff;font-weight:600;flex-shrink:0;max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -907,7 +910,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
 <div class="po" id="pp-daily-log"><div class="pp pp-daily"><div class="pph pph-report"><h3>每日工作回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-daily-log')">✕</button></div><div class="ppb">
   <div class="dl-date" id="dl-date-display"></div>
   <div class="fg"><label>回報人</label><select id="dl-author" data-members onchange="onDailyLogAuthorChange()"></select></div>
-  <div class="fg"><label>任務分類（每項選一種狀態）</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">任務與設計項目皆可分類。卡關請在該項下方填寫原因。</div></div>
+  <div class="fg"><label>任務分類（每項選一種狀態）</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-person-filter" id="dl-person-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">預設只顯示目前回報人負責的任務／設計。選「不列入」的項目不會寫進日報摘要。</div></div>
   <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="選擇任務後自動產生…"></textarea></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
@@ -2453,7 +2456,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v13';
+var APP_BUILD = '20260615v14';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -2942,6 +2945,7 @@ var currentTaskId = null;
 var journalViewDate = new Date(); journalViewDate.setHours(0,0,0,0);
 var dailyLogDate = new Date(); dailyLogDate.setHours(0,0,0,0);
 var dailyLogProjFilter = '';
+var dailyLogPersonFilter = '';
 var dailyLogContentEdited = false;
 var dailyLogTaskExtras = {};
 var PROGRESS_OPTIONS = ['未開始','進行中10%','進行中20%','進行中30%','進行中40%','進行中50%','進行中60%','進行中70%','進行中80%','進行中90%','已完成'];
@@ -5132,19 +5136,52 @@ function onDailyLogCatChange(sel) {
   if (row) {
     var blockInput = row.querySelector('.dl-block-reason');
     if (blockInput) blockInput.style.display = sel.value === 'block' ? 'block' : 'none';
+    row.classList.toggle('dl-row-excluded', !sel.value);
   }
+  dailyLogContentEdited = false;
   refreshDailyLogContent();
+}
+
+function dailyLogItemMatchesPerson(it, personName) {
+  if (!personName) return true;
+  return namesMatch(it.assignee || '', personName);
+}
+
+function renderDailyLogPersonFilter(items) {
+  var area = document.getElementById('dl-person-filter');
+  if (!area) return;
+  var people = [];
+  items.forEach(function(it) {
+    var n = (it.assignee || '').trim();
+    if (n && people.indexOf(n) < 0) people.push(n);
+  });
+  people.sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
+  var html = '<span class="dl-person-label">負責人</span>';
+  html += '<span class="dl-ptag' + (!dailyLogPersonFilter ? ' active' : '') + '" data-person="" style="background:var(--accent);color:#fff">全部</span>';
+  people.forEach(function(name) {
+    var active = dailyLogPersonFilter === name ? ' active' : '';
+    html += '<span class="dl-ptag' + active + '" data-person="' + escAttr(name) + '">' + escHtml(name) + '</span>';
+  });
+  area.innerHTML = html;
+  area.querySelectorAll('.dl-ptag').forEach(function(tag) {
+    tag.addEventListener('click', function() {
+      dailyLogPersonFilter = tag.dataset.person || '';
+      renderDailyLogTasks();
+    });
+  });
 }
 
 function onDailyLogAuthorChange() {
   var author = document.getElementById('dl-author').value || '';
+  dailyLogPersonFilter = author && author !== '（未指定）' ? author : '';
   var existing = findDailyJournalRecord(dailyLogDate.getTime(), author);
   var contentEl = document.getElementById('dl-content');
   if (contentEl) {
     var rawNote = existing ? (journalField(existing, ['備註', '日誌內容', '內容']) || '') : '';
     contentEl.value = stripDesignMarker(rawNote);
-    dailyLogContentEdited = !!contentEl.value;
+    dailyLogContentEdited = false;
   }
+  renderDailyLogPersonFilter(getDailyLogAllItems());
   renderDailyLogTasks(dailyLogPreselectId);
   dailyLogPreselectId = null;
 }
@@ -5188,8 +5225,10 @@ function renderDailyLogTasks(preselectId) {
   if (!area) return;
   var items = getDailyLogAllItems();
   if (dailyLogProjFilter) items = items.filter(function(it) { return it.projName === dailyLogProjFilter; });
+  if (dailyLogPersonFilter) items = items.filter(function(it) { return dailyLogItemMatchesPerson(it, dailyLogPersonFilter); });
   if (!items.length) {
-    area.innerHTML = '<div style="padding:14px;color:var(--t3);font-size:12px;text-align:center">尚無任務或設計項目可選</div>';
+    area.innerHTML = '<div style="padding:14px;color:var(--t3);font-size:12px;text-align:center">尚無符合篩選的任務或設計項目</div>';
+    if (!dailyLogContentEdited) refreshDailyLogContent();
     return;
   }
   var author = document.getElementById('dl-author') ? document.getElementById('dl-author').value : '';
@@ -5226,7 +5265,8 @@ function renderDailyLogTasks(preselectId) {
       var isBlock = cat === 'block';
       var rowAttr = isDesign ? 'data-design-id="' + it.id + '" data-kind="design"' : 'data-task-id="' + it.id + '" data-kind="task"';
       var nameBadge = isDesign ? '<span class="dl-design-badge">設計</span>' : '';
-      html += '<div class="dl-row" ' + rowAttr + '>';
+      var excludedClass = cat ? '' : ' dl-row-excluded';
+      html += '<div class="dl-row' + excludedClass + '" ' + rowAttr + '>';
       html += '<div class="dl-row-top">';
       html += buildDailyCatSelect(cat, isBlock);
       html += '<div class="dl-task-main"><span class="dl-task-name">' + nameBadge + escHtml(it.taskName) + '</span>';
@@ -5305,13 +5345,18 @@ function refreshDailyLogContent() {
   if (dailyLogContentEdited) return;
   var data = collectDailyLogCategories();
   var ta = document.getElementById('dl-content');
-  if (ta) ta.value = formatDailyReportSummary(data.groups, data.designGroups);
+  if (!ta) return;
+  var n = data.groups.doing.length + data.groups.done.length + data.groups.block.length + data.groups.tomorrow.length
+    + data.designGroups.doing.length + data.designGroups.done.length + data.designGroups.block.length + data.designGroups.tomorrow.length;
+  if (n) ta.value = formatDailyReportSummary(data.groups, data.designGroups);
+  else ta.value = '';
 }
 
 function openDailyLog(preselectId, preselectKind) {
   dailyLogDate = new Date();
   dailyLogDate.setHours(0, 0, 0, 0);
   dailyLogProjFilter = '';
+  dailyLogPersonFilter = '';
   dailyLogContentEdited = false;
   dailyLogPreselectId = preselectId || null;
   dailyLogPreselectKind = preselectKind || 'task';
@@ -5369,15 +5414,30 @@ function openDailyLog(preselectId, preselectKind) {
   }
 
   var author = authorSel ? authorSel.value : '';
+  if (!author || author === '（未指定）') {
+    var myName = getMyPersonName();
+    if (myName && authorSel) {
+      for (var ai = 0; ai < authorSel.options.length; ai++) {
+        if (namesMatch(authorSel.options[ai].text, myName)) {
+          authorSel.selectedIndex = ai;
+          author = authorSel.value;
+          break;
+        }
+      }
+    }
+  }
+  dailyLogPersonFilter = author && author !== '（未指定）' ? author : (getMyPersonName() || '');
+
   var existing = findDailyJournalRecord(d.getTime(), author);
   var contentEl = document.getElementById('dl-content');
   if (contentEl) {
     var rawNote = existing ? (journalField(existing, ['備註', '日誌內容', '內容']) || '') : '';
     contentEl.value = stripDesignMarker(rawNote);
-    dailyLogContentEdited = !!contentEl.value;
+    dailyLogContentEdited = false;
   }
 
-  renderDailyLogProjFilter(items);
+  renderDailyLogProjFilter(getDailyLogAllItems());
+  renderDailyLogPersonFilter(getDailyLogAllItems());
   renderDailyLogTasks(preselectId);
   dailyLogPreselectId = null;
   dailyLogPreselectKind = 'task';
@@ -5439,7 +5499,7 @@ function saveDailyJournal() {
     alert('卡關設計項目請在該項下方填寫卡關原因：' + missingDesignBlock.map(function(r) { return r.taskName; }).join('、'));
     return;
   }
-  if (!content && totalCount) content = formatDailyReportSummary(data.groups, data.designGroups);
+  if (totalCount) content = formatDailyReportSummary(data.groups, data.designGroups);
 
   content = appendDesignMarker(content, {
     doing: data.designIds.doing,
