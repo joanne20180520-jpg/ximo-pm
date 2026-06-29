@@ -2663,7 +2663,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v32';
+var APP_BUILD = '20260615v33';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -3917,11 +3917,23 @@ function formatWeight(val) {
   return formatPct(val);
 }
 
-// Lark 公式：IF([設計平均進度], ([任務平均進度]+[設計平均進度])/200, [任務平均進度]/100)
-function parseLarkProgressPct(val) {
+// Lark 工作項目公式：IF([設計平均進度], ([任務平均進度]+[設計平均進度])/200, [任務平均進度]/100)
+// rollup 欄位為 0–100 刻度（100 = 100%）；公式結果為 0–1，顯示時 ×100
+function parseLarkRollupNum(val) {
   if (val === '' || val == null) return null;
+  if (typeof val === 'object' && val != null) {
+    if (val.value != null) return parseLarkRollupNum(val.value);
+    if (val.text != null) return parseLarkRollupNum(val.text);
+  }
   var n = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.-]/g, ''));
   if (isNaN(n)) return null;
+  return n;
+}
+
+function parseLarkProgressPct(val) {
+  if (val === '' || val == null) return null;
+  var n = parseLarkRollupNum(val);
+  if (n == null) return null;
   if (n > 0 && n <= 1) return Math.min(100, Math.round(n * 100));
   if (n <= 100) return Math.min(100, Math.round(n));
   return Math.min(100, Math.round(n / 100));
@@ -3933,6 +3945,26 @@ function parseAvgProgressField(val) {
   if (isNaN(n)) return null;
   if (n > 0 && n <= 1) return n * 100;
   return n;
+}
+
+function calcWiProgressFromLarkFields(wf) {
+  if (!wf) return null;
+  var taskRaw = parseLarkRollupNum(wf['任務平均進度']);
+  var designRaw = parseLarkRollupNum(wf['設計平均進度']);
+  if (designRaw != null && designRaw > 0) {
+    var t = taskRaw != null ? taskRaw : 0;
+    return Math.min(100, Math.round((t + designRaw) / 200 * 100));
+  }
+  if (taskRaw != null) {
+    if (taskRaw <= 1) return Math.min(100, Math.round(taskRaw * 100));
+    if (taskRaw <= 100) return Math.min(100, Math.round(taskRaw));
+    return Math.min(100, Math.round(taskRaw / 100));
+  }
+  return null;
+}
+
+function getWiWeightedContribPct(wf) {
+  return parseLarkProgressPct(wf && wf['加權進度']);
 }
 
 function calcWiProgressFromLinked(wiId) {
@@ -3986,31 +4018,13 @@ function calcWiProgressFromLinked(wiId) {
 }
 
 function calcWeightedProgressPct(wf) {
-  if (!wf) return null;
-  var weighted = parseLarkProgressPct(wf['加權進度']);
-  if (weighted != null) return weighted;
-  var taskRaw = wf['任務平均進度'];
-  var designRaw = wf['設計平均進度'];
-  var hasDesign = designRaw !== '' && designRaw != null
-    && !isNaN(parseFloat(String(designRaw).replace(/[^0-9.-]/g, '')))
-    && parseFloat(String(designRaw).replace(/[^0-9.-]/g, '')) > 0;
-  if (hasDesign) {
-    var t = parseFloat(String(taskRaw).replace(/[^0-9.-]/g, '')) || 0;
-    var d = parseFloat(String(designRaw).replace(/[^0-9.-]/g, '')) || 0;
-    if (t <= 100 && d <= 100) return Math.min(100, Math.round((t + d) / 2));
-    return Math.min(100, Math.round((t + d) / 200));
-  }
-  if (taskRaw !== '' && taskRaw != null) return parseLarkProgressPct(taskRaw);
-  return null;
+  return calcWiProgressFromLarkFields(wf);
 }
 
 function getWiProgressNum(wf, wiId) {
-  if (!wf) return null;
-  var fromLinked = calcWiProgressFromLinked(wiId);
-  if (fromLinked != null) return fromLinked;
-  var computed = calcWeightedProgressPct(wf);
-  if (computed != null) return computed;
-  return null;
+  var fromLark = calcWiProgressFromLarkFields(wf);
+  if (fromLark != null) return fromLark;
+  return calcWiProgressFromLinked(wiId);
 }
 
 function parseWeightNum(wf) {
@@ -4022,9 +4036,15 @@ function parseWeightNum(wf) {
 function calcProjectProgressPct(projRec) {
   var workitems = getWorkitemsForProject(projRec);
   if (!workitems.length) return null;
+  var sumContrib = 0, hasContrib = false;
   var totalW = 0, weightedSum = 0, plainSum = 0, plainCount = 0;
   workitems.forEach(function(wi) {
     var wf = wi.fields;
+    var contrib = getWiWeightedContribPct(wf);
+    if (contrib != null) {
+      sumContrib += contrib;
+      hasContrib = true;
+    }
     var w = parseWeightNum(wf);
     var p = getWiProgressNum(wf, wi.record_id);
     if (p == null) return;
@@ -4036,6 +4056,7 @@ function calcProjectProgressPct(projRec) {
       plainCount++;
     }
   });
+  if (hasContrib) return Math.min(100, Math.round(sumContrib));
   if (totalW > 0) return Math.min(100, Math.round(weightedSum / totalW));
   if (plainCount > 0) return Math.min(100, Math.round(plainSum / plainCount));
   return null;
@@ -4209,6 +4230,7 @@ function loadExtraData() {
     try {
       renderDesigns();
       renderJournalPage();
+      renderProjects();
       renderGanttFromData();
       buildMembersMap();
       fillMemberSelects();
