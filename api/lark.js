@@ -1692,6 +1692,8 @@ async function loginWithOAuthCode(code, redirectUri, opts) {
   opts = opts || {};
   let accessToken = null;
   let expiresIn = 7200;
+  let refreshToken = '';
+  let refreshExpiresIn = 0;
   let lastErr = '';
 
   async function exchangeOnce(useRedirect) {
@@ -1710,7 +1712,9 @@ async function loginWithOAuthCode(code, redirectUri, opts) {
     if (tokenData.code === 0 && tokenData.data && tokenData.data.access_token) {
       return {
         accessToken: tokenData.data.access_token,
-        expiresIn: Number(tokenData.data.expires_in) || 7200
+        expiresIn: Number(tokenData.data.expires_in) || 7200,
+        refreshToken: tokenData.data.refresh_token || '',
+        refreshExpiresIn: Number(tokenData.data.refresh_expires_in) || 0
       };
     }
     throw new Error(tokenData.msg || tokenData.message || JSON.stringify(tokenData));
@@ -1729,6 +1733,8 @@ async function loginWithOAuthCode(code, redirectUri, opts) {
       const hit = await exchangeOnce(attempts[i]);
       accessToken = hit.accessToken;
       expiresIn = hit.expiresIn;
+      refreshToken = hit.refreshToken || '';
+      refreshExpiresIn = hit.refreshExpiresIn || 0;
       break;
     } catch (e) {
       lastErr = e.message || lastErr;
@@ -1752,7 +1758,37 @@ async function loginWithOAuthCode(code, redirectUri, opts) {
     openId: u.open_id || '',
     userId: u.user_id || '',
     accessToken: accessToken,
-    expiresIn: expiresIn
+    expiresIn: expiresIn,
+    refreshToken: refreshToken,
+    refreshExpiresIn: refreshExpiresIn
+  };
+}
+
+async function refreshUserAccessToken(refreshToken) {
+  const token = String(refreshToken || '').trim();
+  if (!token) throw new Error('缺少 refresh_token');
+  const appToken = await getAppAccessToken();
+  const res = await fetch(BASE_URL + '/authen/v1/refresh_access_token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + appToken
+    },
+    body: JSON.stringify({
+      grant_type: 'refresh_token',
+      refresh_token: token
+    })
+  });
+  const data = await res.json();
+  if (data.code !== 0 || !data.data || !data.data.access_token) {
+    throw new Error(data.msg || data.message || '無法刷新登入狀態');
+  }
+  const d = data.data;
+  return {
+    accessToken: d.access_token,
+    expiresIn: Number(d.expires_in) || 7200,
+    refreshToken: d.refresh_token || token,
+    refreshExpiresIn: Number(d.refresh_expires_in) || 0
   };
 }
 
@@ -1760,7 +1796,8 @@ function buildAuthUrl(redirectUri) {
   const q = new URLSearchParams({
     app_id: APP_ID,
     redirect_uri: redirectUri,
-    state: 'ximo_pm'
+    state: 'ximo_pm',
+    scope: 'offline_access'
   });
   return BASE_URL + '/authen/v1/index?' + q.toString();
 }
@@ -2042,6 +2079,17 @@ export default async function handler(req, res) {
       const userAccessToken = extractUserAccessToken(req);
       const result = await checkMemberAuthorization(userAccessToken);
       return res.status(200).json(result);
+    }
+
+    if (action === 'auth-refresh' && req.method === 'POST') {
+      const refreshToken = String((req.body && req.body.refreshToken) || '').trim();
+      if (!refreshToken) return res.status(400).json({ ok: false, error: 'missing refreshToken' });
+      try {
+        const tokens = await refreshUserAccessToken(refreshToken);
+        return res.status(200).json({ ok: true, ...tokens });
+      } catch (refreshErr) {
+        return res.status(400).json({ ok: false, error: refreshErr.message || '刷新失敗' });
+      }
     }
 
     if (action === 'tables-check' && req.method === 'GET') {

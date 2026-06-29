@@ -2622,7 +2622,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v25';
+var APP_BUILD = '20260615v26';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -2758,6 +2758,10 @@ var authReady = false;
 var lastLoginError = '';
 var loginUserConfirmed = false;
 var loginAuthInProgress = false;
+var LOGIN_STORAGE_KEY = 'ximo-login-user';
+var SESSION_MAX_MS = 10 * 60 * 60 * 1000;
+var TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
+var loginRefreshPromise = null;
 var currentUserRole = 'PM';
 var ROLE_PAGES = {
   PM: ['pg-s', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal'],
@@ -2924,11 +2928,79 @@ function hideAuthGate() {
   if (gate) gate.classList.add('hidden');
 }
 
-function logoutAndShowGate() {
-  authReady = false;
+function clearLoginStorage() {
   currentLoginUser = null;
   loginUserReady = false;
-  try { sessionStorage.removeItem('ximo-login-user'); } catch (e) {}
+  try {
+    localStorage.removeItem(LOGIN_STORAGE_KEY);
+    sessionStorage.removeItem(LOGIN_STORAGE_KEY);
+  } catch (e) {}
+}
+
+function isSessionExpired(user) {
+  if (!user) return true;
+  var started = Number(user.sessionStartedAt || 0);
+  if (!started) return true;
+  return Date.now() - started > SESSION_MAX_MS;
+}
+
+function applyTokenFields(user, tokenData) {
+  if (!user || !tokenData) return user;
+  if (tokenData.accessToken) user.accessToken = tokenData.accessToken;
+  if (tokenData.expiresIn) user.expiresIn = tokenData.expiresIn;
+  if (tokenData.accessToken) {
+    user.tokenExpiresAt = Date.now() + (Number(tokenData.expiresIn) || 7200) * 1000;
+  }
+  if (tokenData.refreshToken) {
+    user.refreshToken = tokenData.refreshToken;
+    if (tokenData.refreshExpiresIn) {
+      user.refreshExpiresIn = tokenData.refreshExpiresIn;
+      user.refreshExpiresAt = Date.now() + Number(tokenData.refreshExpiresIn) * 1000;
+    }
+  }
+  return user;
+}
+
+function refreshLoginTokenIfNeeded() {
+  var u = getCurrentLoginUser();
+  if (!u || isSessionExpired(u)) {
+    clearLoginStorage();
+    return Promise.resolve(null);
+  }
+  var exp = Number(u.tokenExpiresAt || 0);
+  var tokenFresh = u.accessToken && exp && Date.now() < exp - TOKEN_REFRESH_BUFFER_MS;
+  if (tokenFresh) return Promise.resolve(u);
+  if (!u.refreshToken) return Promise.resolve(u.accessToken ? u : null);
+  if (u.refreshExpiresAt && Date.now() > u.refreshExpiresAt) {
+    clearLoginStorage();
+    return Promise.resolve(null);
+  }
+  if (loginRefreshPromise) return loginRefreshPromise;
+  loginRefreshPromise = fetch(API + '?action=auth-refresh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken: u.refreshToken })
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    if (!res || !res.ok || !res.accessToken) {
+      if (u.accessToken && exp && Date.now() < exp) return u;
+      clearLoginStorage();
+      return null;
+    }
+    applyTokenFields(u, res);
+    storeLoginUser(u);
+    return u;
+  }).catch(function() {
+    if (u.accessToken && exp && Date.now() < exp) return u;
+    return null;
+  }).finally(function() {
+    loginRefreshPromise = null;
+  });
+  return loginRefreshPromise;
+}
+
+function logoutAndShowGate() {
+  authReady = false;
+  clearLoginStorage();
   document.body.classList.remove('role-designer');
   autoLoginAttempted = false;
   attemptAutoLogin(true);
@@ -2996,7 +3068,9 @@ function applyRolePermissions() {
 
 function completeAuthAfterLogin(opts) {
   opts = opts || {};
-  return checkMemberAuthorization().then(function(result) {
+  return refreshLoginTokenIfNeeded().then(function() {
+    return checkMemberAuthorization();
+  }).then(function(result) {
     if (!result.authorized) {
       if (result.configError) {
         showAuthGate('login', '後台設定錯誤', result.configError, result.loginUser || null);
@@ -3008,12 +3082,56 @@ function completeAuthAfterLogin(opts) {
         return false;
       }
       if (result.needLogin) {
-        if (getUserAccessToken()) {
-          try { sessionStorage.removeItem('ximo-login-user'); } catch (e) {}
-          currentLoginUser = null;
-          loginUserReady = false;
-        }
-        showAuthGateLogin(opts.loginMsg, opts.loginSub || result.authError || lastLoginError);
+        return refreshLoginTokenIfNeeded().then(function(refreshed) {
+          if (refreshed && refreshed.accessToken) {
+            return checkMemberAuthorization().then(function(retry) {
+              if (retry.authorized) {
+                result = retry;
+                return null;
+              }
+              if (getUserAccessToken()) {
+                clearLoginStorage();
+                currentLoginUser = null;
+                loginUserReady = false;
+              }
+              showAuthGateLogin(opts.loginMsg, opts.loginSub || retry.authError || result.authError || lastLoginError);
+              return false;
+            });
+          }
+          if (getUserAccessToken()) {
+            clearLoginStorage();
+            currentLoginUser = null;
+            loginUserReady = false;
+          }
+          showAuthGateLogin(opts.loginMsg, opts.loginSub || result.authError || lastLoginError);
+          return false;
+        }).then(function(early) {
+          if (early === false) return false;
+          if (!result.authorized) return false;
+          currentUserRole = result.role || 'PM';
+          hideAuthGate();
+          applyRolePermissions();
+          if (result.loginUser || result.memberName) {
+            var merged = Object.assign({}, getCurrentLoginUser() || {}, result.loginUser || {});
+            if (result.memberName) {
+              if (!merged.name) merged.name = result.memberName;
+              if (!merged.enName) merged.enName = result.memberName;
+            }
+            var tok = getUserAccessToken();
+            if (tok) merged.accessToken = tok;
+            if (merged.name || merged.accessToken) finalizeLoginUser(merged);
+          }
+          if (!authReady) {
+            authReady = true;
+            loadData();
+          } else {
+            updateTodoLoginLabel();
+            renderTeamPanel();
+          }
+          initPayFormDefaults();
+          applyLoginUserToForms();
+          return true;
+        });
       } else {
         var sub = '此人員尚未加入授權名單。\n請在「人員資料」表登記 Lark 帳號（帳號或姓名欄位）。';
         if (result.memberCount === 0) sub = '系統讀不到人員資料，請確認 Vercel 的 LARK_APP_TOKEN 是否正確。';
@@ -3050,7 +3168,7 @@ function completeAuthAfterLogin(opts) {
 function runAuthGate() {
   return loadLarkAppConfig().then(function() {
     var hasOAuthCode = !!new URLSearchParams(window.location.search).get('code');
-    if (hasOAuthCode || getUserAccessToken()) {
+    if (hasOAuthCode || getCurrentLoginUser()) {
       showAuthGate('loading', '正在登入 Lark…', '', null);
       return resolveLoginUser().then(function(user) {
         if (!user && !getUserAccessToken()) {
@@ -3188,15 +3306,31 @@ function getPersonOpenId(field) {
 function getUserAccessToken() {
   var u = getCurrentLoginUser();
   if (!u || !u.accessToken) return '';
+  if (isSessionExpired(u)) return '';
   var exp = Number(u.tokenExpiresAt || 0);
   if (exp && Date.now() > exp - 60000) return '';
   return u.accessToken;
 }
 function getCurrentLoginUser() {
-  if (currentLoginUser) return currentLoginUser;
+  if (currentLoginUser && !isSessionExpired(currentLoginUser)) return currentLoginUser;
+  if (currentLoginUser && isSessionExpired(currentLoginUser)) {
+    clearLoginStorage();
+    return null;
+  }
   try {
-    var raw = sessionStorage.getItem('ximo-login-user');
-    if (raw) currentLoginUser = JSON.parse(raw);
+    var raw = localStorage.getItem(LOGIN_STORAGE_KEY);
+    if (!raw) raw = sessionStorage.getItem(LOGIN_STORAGE_KEY);
+    if (raw) {
+      currentLoginUser = JSON.parse(raw);
+      if (isSessionExpired(currentLoginUser)) {
+        clearLoginStorage();
+        return null;
+      }
+      try {
+        localStorage.setItem(LOGIN_STORAGE_KEY, raw);
+        sessionStorage.removeItem(LOGIN_STORAGE_KEY);
+      } catch (e) {}
+    }
   } catch (e) {}
   return currentLoginUser;
 }
@@ -3250,11 +3384,18 @@ function applyLoginUserToForms() {
 }
 function storeLoginUser(user) {
   if (!user) return;
+  if (!user.sessionStartedAt) user.sessionStartedAt = Date.now();
   if (user.accessToken) {
-    user.tokenExpiresAt = Date.now() + (Number(user.expiresIn) || 7200) * 1000;
+    applyTokenFields(user, {
+      accessToken: user.accessToken,
+      expiresIn: user.expiresIn,
+      refreshToken: user.refreshToken,
+      refreshExpiresIn: user.refreshExpiresIn
+    });
   }
   currentLoginUser = user;
-  try { sessionStorage.setItem('ximo-login-user', JSON.stringify(user)); } catch (e) {}
+  try { localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify(user)); } catch (e) {}
+  try { sessionStorage.removeItem(LOGIN_STORAGE_KEY); } catch (e) {}
   updateTodoLoginLabel();
   applyLoginUserToForms();
   renderTeamPanel();
@@ -3600,9 +3741,11 @@ function resolveLoginUser() {
       });
     }
     var cached = getCurrentLoginUser();
-    if (cached && getUserAccessToken()) {
-      loginUserReady = true;
-      return Promise.resolve(cached);
+    if (cached && !isSessionExpired(cached)) {
+      return refreshLoginTokenIfNeeded().then(function(user) {
+        loginUserReady = true;
+        return user || cached;
+      });
     }
     return loadLarkAppConfig().then(function(cfg) {
       if (!cfg.appId) {
