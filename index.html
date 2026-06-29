@@ -2663,7 +2663,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v33';
+var APP_BUILD = '20260615v34';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -4081,12 +4081,8 @@ function getWiProgressPct(wf, wiId) {
 }
 
 function formatWeightProgress(wf, wiId) {
-  var w = formatPct(wf && wf['權重']);
-  var p = getWiProgressPct(wf, wiId);
-  if (w && p) return w + '/' + p;
-  if (w) return w + '/—';
-  if (p) return '—/' + p;
-  return '';
+  var n = getWiWeightedContribPct(wf);
+  return n != null ? (n + '%') : '';
 }
 
 function getProjectNameFromWi(wi) {
