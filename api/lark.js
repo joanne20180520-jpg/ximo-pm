@@ -2448,12 +2448,21 @@ async function refreshUserAccessToken(refreshToken) {
 
 function buildAuthUrl(redirectUri) {
   const q = new URLSearchParams({
-    app_id: APP_ID,
+    client_id: APP_ID,
     redirect_uri: redirectUri,
     state: 'ximo_pm',
     scope: 'offline_access'
   });
-  return BASE_URL + '/authen/v1/index?' + q.toString();
+  return 'https://accounts.larksuite.com/open-apis/authen/v1/authorize?' + q.toString();
+}
+
+function getOAuthSetupHint(redirectUri) {
+  return [
+    '1. 请用国际版开发者后台：https://open.larksuite.com/app（不是 open.feishu.cn 飞书）',
+    '2. 打开 App ID 为 ' + (APP_ID || '（未设定）') + ' 的应用 → 凭证与基础信息核对',
+    '3. 开发配置 → 安全设置 → 重定向 URL 须包含：' + redirectUri,
+    '4. 版本管理与发布 → 创建版本并发布（仅保存 URL 不会生效）'
+  ].join('\n');
 }
 
 function fieldTextValue(raw) {
@@ -2739,7 +2748,9 @@ export default async function handler(req, res) {
       return res.status(200).json({
         appId: APP_ID,
         redirectUri: redirectUri,
-        redirectAllowlist: getRedirectAllowlist()
+        redirectAllowlist: getRedirectAllowlist(),
+        developerConsole: 'https://open.larksuite.com/app',
+        oauthSetupHint: getOAuthSetupHint(redirectUri)
       });
     }
 
@@ -2756,7 +2767,9 @@ export default async function handler(req, res) {
       return res.status(200).json({
         url: buildAuthUrl(redirect),
         appId: APP_ID,
-        redirectUri: redirect
+        redirectUri: redirect,
+        developerConsole: 'https://open.larksuite.com/app',
+        oauthSetupHint: getOAuthSetupHint(redirect)
       });
     }
 

@@ -2893,7 +2893,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v54';
+var APP_BUILD = '20260615v56';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -3095,7 +3095,12 @@ function updateAuthRedirectHint() {
   var el = document.getElementById('auth-gate-redirect-hint');
   if (!el) return;
   var uri = larkAppConfig.redirectUri || getLoginRedirectUri();
-  el.textContent = '若出現錯誤 20029，請在 Lark 開發者後台「安全設定 → 重定向 URL」加入：' + uri;
+  var appId = larkAppConfig.appId || '';
+  el.innerHTML = '若出現 20029：<br>'
+    + '① 请用 <b>open.larksuite.com</b> 开发者后台（不是飞书 feishu.cn）<br>'
+    + '② 确认 App ID 为 <b>' + escHtml(appId || '（载入中）') + '</b> 的应用已加入重定向 URL：<br>'
+    + '<code style="word-break:break-all">' + escHtml(uri) + '</code><br>'
+    + '③ 版本管理与发布 → 创建版本并发布';
   el.style.display = uri ? 'block' : 'none';
 }
 
@@ -3505,10 +3510,7 @@ function loadLarkAppConfig() {
 }
 function getLoginRedirectUri() {
   if (larkAppConfig.redirectUri) return larkAppConfig.redirectUri;
-  var origin = window.location.origin;
-  var path = window.location.pathname;
-  if (path === '/' || path === '/index.html') return origin;
-  return origin + path.replace(/\/$/, '');
+  return window.location.origin;
 }
 var currentTaskId = null;
 var journalViewDate = new Date(); journalViewDate.setHours(0,0,0,0);
