@@ -2893,7 +2893,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v57';
+var APP_BUILD = '20260615v58';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -3096,11 +3096,14 @@ function updateAuthRedirectHint() {
   if (!el) return;
   var uri = larkAppConfig.redirectUri || getLoginRedirectUri();
   var appId = larkAppConfig.appId || '';
+  var alt = uri ? [uri, uri.replace(/\/$/, ''), uri.replace(/\/$/, '') + '/'] : [];
+  alt = alt.filter(function(v, i) { return v && alt.indexOf(v) === i; });
   el.innerHTML = '若出現 20029：<br>'
     + '① 请用 <b>open.larksuite.com</b> 开发者后台（不是飞书 feishu.cn）<br>'
-    + '② 确认 App ID 为 <b>' + escHtml(appId || '（载入中）') + '</b> 的应用已加入重定向 URL：<br>'
-    + '<code style="word-break:break-all">' + escHtml(uri) + '</code><br>'
-    + '③ 版本管理与发布 → 创建版本并发布';
+    + '② 确认 App ID 为 <b>' + escHtml(appId || '（载入中）') + '</b> 的应用<br>'
+    + '③ 安全设置 → 重定向 URL 建议都加入：<br>'
+    + alt.map(function(u) { return '<code style="word-break:break-all;display:block;margin:2px 0">' + escHtml(u) + '</code>'; }).join('')
+    + '④ 版本管理与发布 → 创建版本并发布';
   el.style.display = uri ? 'block' : 'none';
 }
 
@@ -3826,7 +3829,6 @@ function tryLarkInAppLogin(appId) {
         }
         tt.requestAuthCode({
           appId: appId,
-          redirectUri: getStablePageRedirectUri(),
           success: function(res) {
             var code = res && res.code;
             if (!code) {

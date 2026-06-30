@@ -14,11 +14,27 @@ function normalizeRedirectUri(raw) {
   try {
     const u = new URL(s);
     let path = u.pathname || '/';
-    if (path === '/' || path === '/index.html') return u.origin;
+    if (path === '/' || path === '/index.html') return u.origin + '/';
     return u.origin + path.replace(/\/$/, '');
   } catch {
-    return s.replace(/\/$/, '');
+    const trimmed = s.replace(/\/$/, '');
+    return trimmed ? trimmed + '/' : '';
   }
+}
+
+function redirectUriVariants(raw) {
+  const list = [];
+  const add = function(v) {
+    const n = String(v || '').trim();
+    if (n && list.indexOf(n) < 0) list.push(n);
+  };
+  const canonical = normalizeRedirectUri(raw);
+  add(canonical);
+  if (canonical) {
+    add(canonical.replace(/\/$/, ''));
+    add(canonical.replace(/\/$/, '') + '/');
+  }
+  return list;
 }
 
 function getCanonicalRedirectUri() {
@@ -27,11 +43,15 @@ function getCanonicalRedirectUri() {
 }
 
 function getRedirectAllowlist() {
-  const list = [getCanonicalRedirectUri()];
+  const list = [];
+  redirectUriVariants(getCanonicalRedirectUri()).forEach(function(v) {
+    if (list.indexOf(v) < 0) list.push(v);
+  });
   const extra = (process.env.LARK_REDIRECT_URI_ALLOWLIST || '').split(',');
   extra.forEach(function(item) {
-    const n = normalizeRedirectUri(item.trim());
-    if (n && list.indexOf(n) < 0) list.push(n);
+    redirectUriVariants(item.trim()).forEach(function(v) {
+      if (list.indexOf(v) < 0) list.push(v);
+    });
   });
   return list;
 }
@@ -2350,10 +2370,10 @@ async function loginWithOAuthCode(code, redirectUri, opts) {
   let refreshExpiresIn = 0;
   let lastErr = '';
 
-  async function exchangeOnce(useRedirect) {
+  async function exchangeOnce(useRedirect, useRedirectUri) {
     const appToken = await getAppAccessToken();
     const v1Body = { grant_type: 'authorization_code', code: code };
-    if (useRedirect && redirectUri) v1Body.redirect_uri = redirectUri;
+    if (useRedirect && useRedirectUri) v1Body.redirect_uri = useRedirectUri;
     const v1Res = await fetch(BASE_URL + '/authen/v1/access_token', {
       method: 'POST',
       headers: {
@@ -2376,15 +2396,18 @@ async function loginWithOAuthCode(code, redirectUri, opts) {
 
   const attempts = [];
   if (opts.fromLarkJsapi) {
-    attempts.push(false);
+    attempts.push({ useRedirect: false, redirect: '' });
   } else {
-    if (redirectUri) attempts.push(true);
-    attempts.push(false);
+    const redirects = redirectUri ? redirectUriVariants(redirectUri) : [''];
+    redirects.forEach(function(r) {
+      attempts.push({ useRedirect: !!r, redirect: r });
+    });
+    attempts.push({ useRedirect: false, redirect: '' });
   }
 
   for (let i = 0; i < attempts.length; i++) {
     try {
-      const hit = await exchangeOnce(attempts[i]);
+      const hit = await exchangeOnce(attempts[i].useRedirect, attempts[i].redirect);
       accessToken = hit.accessToken;
       expiresIn = hit.expiresIn;
       refreshToken = hit.refreshToken || '';
@@ -2457,11 +2480,13 @@ function buildAuthUrl(redirectUri) {
 }
 
 function getOAuthSetupHint(redirectUri) {
+  const variants = redirectUriVariants(redirectUri);
   return [
     '1. 请用国际版开发者后台：https://open.larksuite.com/app（不是 open.feishu.cn 飞书）',
     '2. 打开 App ID 为 ' + (APP_ID || '（未设定）') + ' 的应用 → 凭证与基础信息核对',
-    '3. 开发配置 → 安全设置 → 重定向 URL 须包含：' + redirectUri,
-    '4. 版本管理与发布 → 创建版本并发布（仅保存 URL 不会生效）'
+    '3. 开发配置 → 安全设置 → 重定向 URL 须包含（建议两条都加）：' + variants.join(' 或 '),
+    '4. 版本管理与发布 → 创建版本并发布（仅保存 URL 不会生效）',
+    '5. 群机器人 webhook 与 OAuth 是不同设置；webhook 不影响登入'
   ].join('\n');
 }
 
@@ -2768,6 +2793,7 @@ export default async function handler(req, res) {
         url: buildAuthUrl(redirect),
         appId: APP_ID,
         redirectUri: redirect,
+        redirectUriAlternatives: redirectUriVariants(redirect),
         developerConsole: 'https://open.larksuite.com/app',
         oauthSetupHint: getOAuthSetupHint(redirect)
       });
