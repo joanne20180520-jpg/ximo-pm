@@ -279,44 +279,6 @@ function formatBitableWriteError(cfg, err) {
   return label + '資料庫：' + msg;
 }
 
-async function resolveTableMapForApp(token, appToken, configuredTables) {
-  let listed;
-  try {
-    listed = await listBitableTables(token, appToken);
-  } catch (err) {
-    const msg = err.message || String(err);
-    if (msg.indexOf('NOTEXIST') >= 0) {
-      throw new Error('找不到 Base 或 Lark 應用無權限（NOTEXIST）。請確認 app_token 正確且應用已加入該多維表格');
-    }
-    throw err;
-  }
-  const ids = listed.map(function(t) { return t.table_id || t.id || ''; });
-  const out = {};
-  Object.keys(configuredTables || {}).forEach(function(key) {
-    const configuredId = (configuredTables[key] || '').trim();
-    if (configuredId && ids.indexOf(configuredId) >= 0) {
-      out[key] = configuredId;
-      return;
-    }
-    const keywords = TABLE_NAME_KEYWORDS[key];
-    if (keywords) {
-      const matched = matchArchiveTableByKeywords(listed, keywords);
-      if (matched) {
-        out[key] = matched.table_id || matched.id || '';
-        return;
-      }
-    }
-    if (configuredId) out[key] = configuredId;
-  });
-  return out;
-}
-
-async function resolveBitableConfig(token, cfg) {
-  if (!cfg || !cfg.appToken) return cfg;
-  const tables = await resolveTableMapForApp(token, cfg.appToken, cfg.tables);
-  return { appToken: cfg.appToken, tables: tables };
-}
-
 function extractRecordId(res) {
   if (!res || !res.data) return null;
   const d = res.data;
@@ -500,7 +462,16 @@ const OPERATIONAL_TABLE_KEYWORDS = Object.assign({}, ARCHIVE_TABLE_KEYWORDS, {
 const bitableConfigResolveCache = {};
 
 async function resolveTableMapForApp(token, appToken, configuredTables) {
-  const listed = await listBitableTables(token, appToken);
+  let listed;
+  try {
+    listed = await listBitableTables(token, appToken);
+  } catch (err) {
+    const msg = err.message || String(err);
+    if (msg.indexOf('NOTEXIST') >= 0) {
+      throw new Error('找不到 Base 或 Lark 應用無權限（NOTEXIST）。請確認 app_token 正確且應用已加入該多維表格');
+    }
+    throw err;
+  }
   const idSet = {};
   listed.forEach(function(t) {
     const id = t.table_id || t.id || '';
