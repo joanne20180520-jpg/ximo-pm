@@ -53,12 +53,13 @@ function appTokenForTable(tableKey) {
 }
  
 // 讀取表格資料（自動翻頁取回全部記錄）
-async function getRecords(token, tableId, appToken) {
+async function getRecords(token, tableId, appToken, opts) {
   const targetAppToken = appToken || APP_TOKEN;
   var items = [];
   var pageToken = '';
   do {
     var url = BASE_URL + '/bitable/v1/apps/' + targetAppToken + '/tables/' + tableId + '/records?page_size=500';
+    if (opts && opts.userIdType) url += '&user_id_type=' + encodeURIComponent(opts.userIdType);
     if (pageToken) url += '&page_token=' + encodeURIComponent(pageToken);
     const res = await fetch(url, {
       headers: { 'Authorization': 'Bearer ' + token }
@@ -336,11 +337,8 @@ async function enrichPersonFieldsForWrite(tenantToken, cfg, rawFields) {
       out[key] = norm;
       continue;
     }
-    let nameHint = '';
-    if (typeof out[key] === 'string') nameHint = out[key].trim();
-    else if (Array.isArray(out[key]) && out[key][0]) {
-      nameHint = String(out[key][0].name || out[key][0].en_name || '').trim();
-    }
+    let nameHint = personDisplayName(out[key]);
+    if (!nameHint && typeof out[key] === 'string') nameHint = out[key].trim();
     if (nameHint) {
       const list = await loadMembers();
       for (let j = 0; j < list.length; j++) {
@@ -1117,11 +1115,18 @@ async function listBitableFields(accessToken, appToken, tableId) {
 const ARCHIVE_FIELD_ALIASES = {
   '所數標案': ['所屬標案'],
   '所屬標案': ['所數標案'],
+  '主PM': ['負責PM', 'PM'],
+  '負責PM': ['主PM', 'PM'],
+  '負責夥伴': ['負責人'],
+  '負責人': ['負責夥伴'],
+  '設計師': ['Designer'],
   'Wiki存放位置': ['Wiki連結', '知識庫連結', '封存連結'],
   'Wiki連結': ['Wiki存放位置', '知識庫連結', '封存連結'],
   '知識庫連結': ['Wiki連結', 'Wiki存放位置', '封存連結'],
   '封存連結': ['Wiki連結', 'Wiki存放位置', '知識庫連結']
 };
+
+const ARCHIVE_PERSON_KEYS = ['主PM', '負責PM', '負責夥伴', '負責人', '設計師', '申請人'];
 
 const BITABLE_LINK_FIELD_TYPES = { 18: 1, 21: 1 };
 const BITABLE_SKIP_FIELD_TYPES = { 22: 1, 23: 1, 1001: 1, 1002: 1, 1003: 1, 1004: 1 };
@@ -1307,10 +1312,98 @@ function buildArchiveRecordFields(rawFields, allowedSet, fieldMeta, overrides) {
   return out;
 }
 
-async function buildEnrichedArchiveFields(tenantToken, rawFields, allowedSet, fieldMeta, overrides) {
+function personDisplayName(field) {
+  if (!field) return '';
+  if (typeof field === 'string') return field.trim();
+  const items = Array.isArray(field) ? field : [field];
+  for (let i = 0; i < items.length; i++) {
+    const x = items[i];
+    if (!x) continue;
+    if (typeof x === 'string' && x.trim()) return x.trim();
+    if (x.name) return String(x.name).trim();
+    if (x.en_name) return String(x.en_name).trim();
+    if (x.enName) return String(x.enName).trim();
+    if (x.text) return String(x.text).trim();
+  }
+  return fieldTextValue(field);
+}
+
+async function resolvePersonOpenIdFromMembers(tenantToken, rawName) {
+  const name = String(rawName || '').trim();
+  if (!name) return '';
   const cfg = getOperationalBitableConfig();
-  const enriched = await enrichPersonFieldsForWrite(tenantToken, cfg, cloneFields(rawFields));
-  return buildArchiveRecordFields(enriched, allowedSet, fieldMeta, overrides || {});
+  const membersTableId = cfg.tables.members;
+  if (!membersTableId) return '';
+  let members = [];
+  try {
+    members = await getRecords(tenantToken, membersTableId, cfg.appToken, { userIdType: 'open_id' });
+  } catch (e) {
+    return '';
+  }
+  for (let i = 0; i < members.length; i++) {
+    const mf = members[i].fields || {};
+    const mn = getMemberName(mf);
+    if (mn && namesMatch(mn, name)) {
+      const openId = getMemberPersonOpenId(mf);
+      if (isValidPersonOpenId(openId)) return openId;
+    }
+  }
+  return '';
+}
+
+async function enrichArchivePersonFields(tenantToken, rawFields) {
+  const cfg = getOperationalBitableConfig();
+  const source = cloneFields(rawFields);
+  let out = await enrichPersonFieldsForWrite(tenantToken, cfg, source);
+  for (let i = 0; i < ARCHIVE_PERSON_KEYS.length; i++) {
+    const key = ARCHIVE_PERSON_KEYS[i];
+    const norm = normalizePersonFieldValue(out[key]);
+    if (norm && norm[0] && isValidPersonOpenId(norm[0].id)) continue;
+    const nameHint = personDisplayName(source[key]);
+    if (!nameHint) continue;
+    const openId = await resolvePersonOpenIdFromMembers(tenantToken, nameHint);
+    if (openId) out[key] = [{ id: openId }];
+    else delete out[key];
+  }
+  return out;
+}
+
+async function buildEnrichedArchiveFields(tenantToken, rawFields, allowedSet, fieldMeta, overrides) {
+  const enriched = await enrichArchivePersonFields(tenantToken, rawFields);
+  const fields = buildArchiveRecordFields(enriched, allowedSet, fieldMeta, overrides || {});
+  const personPatch = extractArchivePersonPatch(enriched, allowedSet, fieldMeta);
+  return { fields: fields, personPatch: personPatch };
+}
+
+function extractArchivePersonPatch(enriched, allowedSet, fieldMeta) {
+  const remapped = remapFieldsForTarget(enriched, allowedSet);
+  const out = {};
+  Object.keys(remapped).forEach(function(name) {
+    const meta = fieldMeta[name];
+    if (!meta || meta.type !== 11) return;
+    const norm = normalizePersonFieldValue(remapped[name]);
+    if (norm) out[name] = norm;
+  });
+  return out;
+}
+
+async function patchArchivePersonFields(token, appToken, tableId, recordId, personPatch) {
+  if (!personPatch || !Object.keys(personPatch).length || !recordId) return false;
+  try {
+    await updateBitableRecord(token, appToken, tableId, recordId, personPatch);
+    return true;
+  } catch (err) {
+    if (!isRetryableWriteError(err)) return false;
+    let any = false;
+    const names = Object.keys(personPatch);
+    for (let i = 0; i < names.length; i++) {
+      try {
+        await updateBitableRecord(token, appToken, tableId, recordId, { [names[i]]: personPatch[names[i]] });
+        any = true;
+      } catch (e) {}
+    }
+    return any;
+  }
 }
 
 function remapFieldsForTarget(fields, allowedSet) {
@@ -1658,14 +1751,15 @@ function makeWikiLink(url) {
 
 async function gatherProjectRelated(token, projectId) {
   const cfg = getOperationalBitableConfig();
-  const projects = await getRecords(token, cfg.tables.projects, cfg.appToken);
+  const readOpts = { userIdType: 'open_id' };
+  const projects = await getRecords(token, cfg.tables.projects, cfg.appToken, readOpts);
   const proj = projects.find(function(p) { return p.record_id === projectId; });
   if (!proj) throw new Error('找不到標案');
 
-  const workitems = await getRecords(token, cfg.tables.workitems, cfg.appToken);
-  const tasks = await getRecords(token, cfg.tables.tasks, cfg.appToken);
-  const expenses = await getRecords(token, cfg.tables.expenses, cfg.appToken);
-  const designs = await getRecords(token, cfg.tables.designs, cfg.appToken);
+  const workitems = await getRecords(token, cfg.tables.workitems, cfg.appToken, readOpts);
+  const tasks = await getRecords(token, cfg.tables.tasks, cfg.appToken, readOpts);
+  const expenses = await getRecords(token, cfg.tables.expenses, cfg.appToken, readOpts);
+  const designs = await getRecords(token, cfg.tables.designs, cfg.appToken, readOpts);
 
   const workitemsRel = gatherWorkitemsForProject(proj, workitems, projects);
   const wiIdSet = {};
@@ -1727,7 +1821,10 @@ function stripArchiveFieldsByTypes(fields, fieldMeta, typeMap) {
 function softenArchiveFieldsList(fieldsList, fieldMeta, level) {
   return fieldsList.map(function(fields) {
     if (level === 1) {
-      return stripArchiveFieldsByTypes(fields, fieldMeta, { 11: 1, 3: 1, 4: 1, 15: 1 });
+      return stripArchiveFieldsByTypes(fields, fieldMeta, { 3: 1, 4: 1 });
+    }
+    if (level === 2) {
+      return stripArchiveFieldsByTypes(fields, fieldMeta, { 3: 1, 4: 1, 11: 1, 15: 1 });
     }
     const out = {};
     const keepKeys = ['標案名稱', '工作項目名稱', '任務名稱', '支出細項', '設計項目名稱', '標題', '名稱'];
@@ -1745,8 +1842,9 @@ function softenArchiveFieldsList(fieldsList, fieldMeta, level) {
 async function batchCreateArchiveRecords(token, appToken, tableId, fieldsList, tableLabel, fieldMeta) {
   const attempts = [
     { fieldsList: fieldsList, note: '' },
-    { fieldsList: softenArchiveFieldsList(fieldsList, fieldMeta, 1), note: '略過人員/選項/連結欄位' },
-    { fieldsList: softenArchiveFieldsList(fieldsList, fieldMeta, 2), note: '僅保留名稱與關聯' }
+    { fieldsList: softenArchiveFieldsList(fieldsList, fieldMeta, 1), note: '略過選項欄位' },
+    { fieldsList: softenArchiveFieldsList(fieldsList, fieldMeta, 2), note: '略過人員/連結欄位' },
+    { fieldsList: softenArchiveFieldsList(fieldsList, fieldMeta, 3), note: '僅保留名稱與關聯' }
   ];
   const errors = [];
   for (let i = 0; i < attempts.length; i++) {
@@ -1781,27 +1879,36 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
     if (stMeta && (stMeta.type === 1 || stMeta.type === 13)) projOverrides['狀態'] = '封存';
   }
   if (finalWikiUrl) applyWikiUrlOverrides(projOverrides, projAllowed, projMeta, finalWikiUrl);
-  const projFields = await buildEnrichedArchiveFields(token, bundle.project.fields, projAllowed, projMeta, projOverrides);
-  const projCreated = await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.projects, [projFields], '標案', projMeta);
+  const projBuilt = await buildEnrichedArchiveFields(token, bundle.project.fields, projAllowed, projMeta, projOverrides);
+  const projCreated = await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.projects, [projBuilt.fields], '標案', projMeta);
   const newProjId = projCreated[0] && projCreated[0].record_id;
   if (!newProjId) throw new Error('複製標案至知識庫失敗');
+  await patchArchivePersonFields(wikiToken, targetApp, tableMap.projects, newProjId, projBuilt.personPatch);
 
   const wiSchemas = await getTableFieldSchemas(wikiToken, targetApp, tableMap.workitems, fieldCache);
   const wiAllowed = wiSchemas.allowedSet;
   const wiMeta = wiSchemas.fieldMeta;
   const wiLinkField = pickProjectLinkFieldName(wiAllowed) || '所屬標案';
   const wiMap = {};
+  const wiBuiltList = [];
   const wiFieldsList = [];
   for (let wiIdx = 0; wiIdx < bundle.workitems.length; wiIdx++) {
     const wi = bundle.workitems[wiIdx];
     const overrides = {};
     if (wiAllowed[wiLinkField]) overrides[wiLinkField] = [newProjId];
-    wiFieldsList.push(await buildEnrichedArchiveFields(token, wi.fields, wiAllowed, wiMeta, overrides));
+    const built = await buildEnrichedArchiveFields(token, wi.fields, wiAllowed, wiMeta, overrides);
+    wiBuiltList.push(built);
+    wiFieldsList.push(built.fields);
   }
   const wiCreated = await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.workitems, wiFieldsList, '工作項目', wiMeta);
   bundle.workitems.forEach(function(wi, i) {
     if (wiCreated[i]) wiMap[wi.record_id] = wiCreated[i].record_id;
   });
+  for (let wiPatchIdx = 0; wiPatchIdx < wiCreated.length; wiPatchIdx++) {
+    if (wiCreated[wiPatchIdx] && wiBuiltList[wiPatchIdx]) {
+      await patchArchivePersonFields(wikiToken, targetApp, tableMap.workitems, wiCreated[wiPatchIdx].record_id, wiBuiltList[wiPatchIdx].personPatch);
+    }
+  }
 
   if (projAllowed['工作項目'] && wiCreated.length) {
     const newWiIds = wiCreated.map(function(r) { return r.record_id; }).filter(Boolean);
@@ -1815,20 +1922,29 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
   const taskSchemas = await getTableFieldSchemas(wikiToken, targetApp, tableMap.tasks, fieldCache);
   const taskAllowed = taskSchemas.allowedSet;
   const taskMeta = taskSchemas.fieldMeta;
+  const taskBuiltList = [];
   const taskFieldsList = [];
   for (let ti = 0; ti < bundle.tasks.length; ti++) {
     const t = bundle.tasks[ti];
     const overrides = {};
     const oldWi = getLinkIds(t.fields['所屬工作項目'])[0];
     if (oldWi && wiMap[oldWi] && taskAllowed['所屬工作項目']) overrides['所屬工作項目'] = [wiMap[oldWi]];
-    taskFieldsList.push(await buildEnrichedArchiveFields(token, t.fields, taskAllowed, taskMeta, overrides));
+    const built = await buildEnrichedArchiveFields(token, t.fields, taskAllowed, taskMeta, overrides);
+    taskBuiltList.push(built);
+    taskFieldsList.push(built.fields);
   }
-  await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.tasks, taskFieldsList, '任務', taskMeta);
+  const taskCreated = await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.tasks, taskFieldsList, '任務', taskMeta);
+  for (let tpi = 0; tpi < taskCreated.length; tpi++) {
+    if (taskCreated[tpi] && taskBuiltList[tpi]) {
+      await patchArchivePersonFields(wikiToken, targetApp, tableMap.tasks, taskCreated[tpi].record_id, taskBuiltList[tpi].personPatch);
+    }
+  }
 
   const expSchemas = await getTableFieldSchemas(wikiToken, targetApp, tableMap.expenses, fieldCache);
   const expAllowed = expSchemas.allowedSet;
   const expMeta = expSchemas.fieldMeta;
   const expProjField = pickProjectLinkFieldName(expAllowed);
+  const expBuiltList = [];
   const expFieldsList = [];
   for (let ei = 0; ei < bundle.expenses.length; ei++) {
     const e = bundle.expenses[ei];
@@ -1836,22 +1952,37 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
     const oldWi = getLinkIds(e.fields['所屬工作項目'])[0];
     if (oldWi && wiMap[oldWi] && expAllowed['所屬工作項目']) overrides['所屬工作項目'] = [wiMap[oldWi]];
     if (expProjField) overrides[expProjField] = [newProjId];
-    expFieldsList.push(await buildEnrichedArchiveFields(token, e.fields, expAllowed, expMeta, overrides));
+    const built = await buildEnrichedArchiveFields(token, e.fields, expAllowed, expMeta, overrides);
+    expBuiltList.push(built);
+    expFieldsList.push(built.fields);
   }
-  await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.expenses, expFieldsList, '支出', expMeta);
+  const expCreated = await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.expenses, expFieldsList, '支出', expMeta);
+  for (let epi = 0; epi < expCreated.length; epi++) {
+    if (expCreated[epi] && expBuiltList[epi]) {
+      await patchArchivePersonFields(wikiToken, targetApp, tableMap.expenses, expCreated[epi].record_id, expBuiltList[epi].personPatch);
+    }
+  }
 
   const desSchemas = await getTableFieldSchemas(wikiToken, targetApp, tableMap.designs, fieldCache);
   const desAllowed = desSchemas.allowedSet;
   const desMeta = desSchemas.fieldMeta;
+  const desBuiltList = [];
   const desFieldsList = [];
   for (let di = 0; di < bundle.designs.length; di++) {
     const d = bundle.designs[di];
     const overrides = {};
     const oldWi = getLinkIds(d.fields['所屬工作項目'])[0];
     if (oldWi && wiMap[oldWi] && desAllowed['所屬工作項目']) overrides['所屬工作項目'] = [wiMap[oldWi]];
-    desFieldsList.push(await buildEnrichedArchiveFields(token, d.fields, desAllowed, desMeta, overrides));
+    const built = await buildEnrichedArchiveFields(token, d.fields, desAllowed, desMeta, overrides);
+    desBuiltList.push(built);
+    desFieldsList.push(built.fields);
   }
-  await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.designs, desFieldsList, '設計', desMeta);
+  const desCreated = await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.designs, desFieldsList, '設計', desMeta);
+  for (let dpi = 0; dpi < desCreated.length; dpi++) {
+    if (desCreated[dpi] && desBuiltList[dpi]) {
+      await patchArchivePersonFields(wikiToken, targetApp, tableMap.designs, desCreated[dpi].record_id, desBuiltList[dpi].personPatch);
+    }
+  }
 
   return { copied: true, newProjectId: newProjId, targetAppToken: targetApp, wikiUrl: finalWikiUrl, wikiFolderUrl: target.wikiFolderUrl || wikiUrl };
 }
@@ -2375,7 +2506,10 @@ function listMemberPersonNames(fields) {
 
 function getMemberPersonOpenId(fields) {
   const ids = listMemberPersonIds(fields);
-  return ids[0] || '';
+  for (let i = 0; i < ids.length; i++) {
+    if (isValidPersonOpenId(ids[i])) return ids[i];
+  }
+  return '';
 }
 
 function getMemberName(fields) {
