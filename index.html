@@ -2927,7 +2927,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v62';
+var APP_BUILD = '20260615v63';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -4817,7 +4817,7 @@ function renderTasks() {
     if (!isProjectVisible(rec)) return;
     if (!grouped[pname] || !grouped[pname].length) return;
     var color = projColors[pname] || '#888';
-    html += '<div class="tgl" data-proj="' + escAttr(pname) + '"><div class="tgd" style="background:' + color + '"></div>' + pname + '<span class="tc">' + grouped[pname].length + '</span></div>';
+    html += '<div class="tgl" data-proj="' + escAttr(pname) + '"><div class="tgd" style="background:' + color + '"></div><span title="' + escAttr(pname) + '">' + escHtml(shortProjLabel(pname)) + '</span><span class="tc">' + grouped[pname].length + '</span></div>';
     renderGroup(pname, color);
     delete grouped[pname];
   });
@@ -4826,7 +4826,7 @@ function renderTasks() {
     if (!grouped[pname].length) return;
     var projRec = projectsData.find(function(p) { return (p.fields['標案名稱'] || '') === pname; });
     if (projRec && !isProjectVisible(projRec)) return;
-    html += '<div class="tgl" data-proj="' + escAttr(pname) + '"><div class="tgd" style="background:#888"></div>' + pname + '<span class="tc">' + grouped[pname].length + '</span></div>';
+    html += '<div class="tgl" data-proj="' + escAttr(pname) + '"><div class="tgd" style="background:#888"></div><span title="' + escAttr(pname) + '">' + escHtml(shortProjLabel(pname)) + '</span><span class="tc">' + grouped[pname].length + '</span></div>';
     renderGroup(pname, '#888');
   });
 
@@ -4939,7 +4939,7 @@ function updateFilterTags(projColors) {
     if (!isProjectVisible(rec)) return;
     var pname = rec.fields['標案名稱'] || '';
     var color = projColors[pname] || '#888';
-    html += '<span class="ftag" data-proj="' + escAttr(pname) + '" style="border-color:' + color + ';color:' + color + '">' + pname + '</span>';
+    html += '<span class="ftag" data-proj="' + escAttr(pname) + '" title="' + escAttr(pname) + '" style="border-color:' + color + ';color:' + color + '">' + escHtml(shortProjLabel(pname)) + '</span>';
   });
   ft.innerHTML = html;
   initTaskFilters();
@@ -6110,6 +6110,15 @@ function escHtml(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function shortProjLabel(name) {
+  var s = String(name || '').trim();
+  if (!s) return '';
+  var m = s.match(/^(\d{2,4}年(?:度)?)/);
+  if (m) return m[1];
+  if (s.length <= 8) return s;
+  return s.slice(0, 8) + '…';
+}
+
 function renderDailyLogProjFilter(items) {
   var area = document.getElementById('dl-proj-filter');
   if (!area) return;
@@ -6126,7 +6135,7 @@ function renderDailyLogProjFilter(items) {
     var style = isActive
       ? 'background:' + color + ';color:#fff;border-color:' + color
       : 'border-color:' + color + ';color:' + color;
-    html += '<span class="dl-ptag' + active + '" data-proj="' + escAttr(proj) + '" style="' + style + '">' + proj + '</span>';
+    html += '<span class="dl-ptag' + active + '" data-proj="' + escAttr(proj) + '" title="' + escAttr(proj) + '" style="' + style + '">' + escHtml(shortProjLabel(proj)) + '</span>';
   });
   area.innerHTML = html;
   area.querySelectorAll('.dl-ptag').forEach(function(tag) {
