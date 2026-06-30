@@ -644,6 +644,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
         </div>
       </div>
       <div class="auth-gate-sub" id="auth-gate-sub" style="display:none"></div>
+      <div class="auth-gate-sub" id="auth-gate-redirect-hint" style="display:none;font-size:11px;color:#9e9b96;line-height:1.5;margin-top:8px;text-align:center;max-width:320px"></div>
       <div class="auth-gate-actions">
         <button type="button" class="bpri auth-gate-login-btn" id="auth-gate-login" style="display:none" onclick="startBrowserLarkLogin()">使用 Lark 登入</button>
         <button type="button" class="bcan" id="auth-gate-logout" style="display:none" onclick="logoutAndShowGate()">登出並重新登入</button>
@@ -2892,7 +2893,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v53';
+var APP_BUILD = '20260615v54';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -3081,11 +3082,21 @@ function setAuthLoginButtonLoading(loading) {
 
 function preloadAuthUrl() {
   if (cachedAuthUrl) return Promise.resolve(cachedAuthUrl);
-  return fetch(apiUrl('?action=auth-url')).then(function(r) { return r.json(); }).then(function(res) {
+  var q = '?action=auth-url&origin=' + encodeURIComponent(window.location.origin);
+  return fetch(apiUrl(q)).then(function(r) { return r.json(); }).then(function(res) {
     if (res && res.redirectUri) larkAppConfig.redirectUri = res.redirectUri;
     if (res && res.url) cachedAuthUrl = res.url;
+    updateAuthRedirectHint();
     return cachedAuthUrl;
   }).catch(function() { return null; });
+}
+
+function updateAuthRedirectHint() {
+  var el = document.getElementById('auth-gate-redirect-hint');
+  if (!el) return;
+  var uri = larkAppConfig.redirectUri || getLoginRedirectUri();
+  el.textContent = '若出現錯誤 20029，請在 Lark 開發者後台「安全設定 → 重定向 URL」加入：' + uri;
+  el.style.display = uri ? 'block' : 'none';
 }
 
 function redirectToLarkOAuth() {
@@ -3484,9 +3495,11 @@ function takeOAuthCodeFromUrl() {
   return code;
 }
 function loadLarkAppConfig() {
-  return fetch(API + '?action=appid').then(function(r) { return r.json(); }).then(function(cfg) {
+  var q = '?action=appid&origin=' + encodeURIComponent(window.location.origin);
+  return fetch(apiUrl(q)).then(function(r) { return r.json(); }).then(function(cfg) {
     if (cfg.appId) larkAppConfig.appId = cfg.appId;
     if (cfg.redirectUri) larkAppConfig.redirectUri = cfg.redirectUri;
+    updateAuthRedirectHint();
     return larkAppConfig;
   }).catch(function() { return larkAppConfig; });
 }

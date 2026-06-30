@@ -8,15 +8,42 @@ const APP_TOKEN_PAYMENTS = (process.env.LARK_APP_TOKEN_PAYMENTS || '').trim();
 const BASE_URL = 'https://open.larksuite.com/open-apis';
 
 /** OAuth 重定向 URL — 須與 Lark 開發者後台「安全設定 > 重定向 URL」完全一致 */
+function normalizeRedirectUri(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  try {
+    const u = new URL(s);
+    let path = u.pathname || '/';
+    if (path === '/' || path === '/index.html') return u.origin;
+    return u.origin + path.replace(/\/$/, '');
+  } catch {
+    return s.replace(/\/$/, '');
+  }
+}
+
 function getCanonicalRedirectUri() {
   const raw = (process.env.LARK_REDIRECT_URI || process.env.SITE_URL || 'https://ximo-pm.vercel.app').trim();
-  try {
-    const u = new URL(raw);
-    if (!u.pathname || u.pathname === '/') return u.origin;
-    return u.origin + u.pathname.replace(/\/$/, '');
-  } catch {
-    return raw.replace(/\/$/, '');
+  return normalizeRedirectUri(raw);
+}
+
+function getRedirectAllowlist() {
+  const list = [getCanonicalRedirectUri()];
+  const extra = (process.env.LARK_REDIRECT_URI_ALLOWLIST || '').split(',');
+  extra.forEach(function(item) {
+    const n = normalizeRedirectUri(item.trim());
+    if (n && list.indexOf(n) < 0) list.push(n);
+  });
+  return list;
+}
+
+function getRedirectUriForRequest(req) {
+  const canonical = getCanonicalRedirectUri();
+  const fromQuery = req && req.query && req.query.origin ? String(req.query.origin).trim() : '';
+  if (fromQuery) {
+    const normalized = normalizeRedirectUri(fromQuery);
+    if (getRedirectAllowlist().indexOf(normalized) >= 0) return normalized;
   }
+  return canonical;
 }
  
 // 取得 tenant_access_token
@@ -2708,8 +2735,12 @@ export default async function handler(req, res) {
 
   try {
     if (action === 'appid' && req.method === 'GET') {
-      const redirectUri = getCanonicalRedirectUri();
-      return res.status(200).json({ appId: APP_ID, redirectUri: redirectUri });
+      const redirectUri = getRedirectUriForRequest(req);
+      return res.status(200).json({
+        appId: APP_ID,
+        redirectUri: redirectUri,
+        redirectAllowlist: getRedirectAllowlist()
+      });
     }
 
     if (action === 'jssdk-config' && req.method === 'GET') {
@@ -2721,7 +2752,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'auth-url' && req.method === 'GET') {
-      const redirect = getCanonicalRedirectUri();
+      const redirect = getRedirectUriForRequest(req);
       return res.status(200).json({
         url: buildAuthUrl(redirect),
         appId: APP_ID,
