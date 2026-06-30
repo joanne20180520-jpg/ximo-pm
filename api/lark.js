@@ -288,16 +288,118 @@ function extractRecordId(res) {
   return null;
 }
 
+function isValidPersonOpenId(id) {
+  const s = String(id || '').trim();
+  return /^ou_/i.test(s) || /^on_/i.test(s);
+}
+
+function stripPersonTypeFields(body, fieldMeta) {
+  const out = Object.assign({}, body || {});
+  Object.keys(out).forEach(function(name) {
+    const meta = fieldMeta[name];
+    if (meta && meta.type === 11) delete out[name];
+  });
+  return out;
+}
+
+function isRetryableWriteError(err) {
+  const msg = (err && err.message) || String(err || '');
+  return /forbidden/i.test(msg)
+    || /UserFieldConvFail/i.test(msg)
+    || /1254066/i.test(msg)
+    || /91403/i.test(msg)
+    || /Field types do not match|ConvFail/i.test(msg);
+}
+
+async function enrichPersonFieldsForWrite(tenantToken, cfg, rawFields) {
+  const out = Object.assign({}, rawFields || {});
+  const personKeys = ['主PM', '負責夥伴', '負責人', '申請人'];
+  let members = null;
+
+  async function loadMembers() {
+    if (members) return members;
+    const membersTableId = cfg.tables.members;
+    if (!membersTableId) return [];
+    try {
+      members = await getRecords(tenantToken, membersTableId, cfg.appToken);
+    } catch (e) {
+      members = [];
+    }
+    return members;
+  }
+
+  for (let i = 0; i < personKeys.length; i++) {
+    const key = personKeys[i];
+    if (out[key] === undefined || out[key] === null || out[key] === '') continue;
+    const norm = normalizePersonFieldValue(out[key]);
+    if (norm && norm[0] && isValidPersonOpenId(norm[0].id)) {
+      out[key] = norm;
+      continue;
+    }
+    let nameHint = '';
+    if (typeof out[key] === 'string') nameHint = out[key].trim();
+    else if (Array.isArray(out[key]) && out[key][0]) {
+      nameHint = String(out[key][0].name || out[key][0].en_name || '').trim();
+    }
+    if (nameHint) {
+      const list = await loadMembers();
+      for (let j = 0; j < list.length; j++) {
+        const mf = list[j].fields || {};
+        const mn = getMemberName(mf);
+        if (mn && namesMatch(mn, nameHint)) {
+          const openId = getMemberPersonOpenId(mf);
+          if (isValidPersonOpenId(openId)) {
+            out[key] = [{ id: openId }];
+            break;
+          }
+        }
+      }
+    }
+    const again = normalizePersonFieldValue(out[key]);
+    if (!again || !again[0] || !isValidPersonOpenId(again[0].id)) delete out[key];
+  }
+  return out;
+}
+
 async function createNormalizedRecord(tenantToken, userToken, cfg, tableKey, rawFields) {
   const tableId = cfg.tables[tableKey];
   if (!tableId) throw new Error('找不到資料表：' + tableKey);
-  const body = await normalizeWriteFields(tenantToken, tableId, rawFields, cfg.appToken);
-  const result = await writeWithUserFallback(tenantToken, userToken, function(tok, asUser) {
-    return createRecord(tok, tableId, body, cfg.appToken, asUser);
-  });
-  const id = extractRecordId(result);
-  if (!id) throw new Error('建立記錄失敗：' + tableKey);
-  return { id: id, result: result };
+  const enriched = await enrichPersonFieldsForWrite(tenantToken, cfg, rawFields);
+  const schemaCache = {};
+  const schemas = await getTableFieldSchemas(tenantToken, cfg.appToken, tableId, schemaCache);
+  const body = await normalizeWriteFields(tenantToken, tableId, enriched, cfg.appToken);
+  const bodyNoPerson = stripPersonTypeFields(body, schemas.fieldMeta);
+
+  const attempts = [];
+  if (Object.keys(body).length) {
+    attempts.push({ token: tenantToken, asUser: false, fields: body, label: '應用' });
+  }
+  if (Object.keys(bodyNoPerson).length && JSON.stringify(bodyNoPerson) !== JSON.stringify(body)) {
+    attempts.push({ token: tenantToken, asUser: false, fields: bodyNoPerson, label: '應用(略過人員欄位)' });
+  }
+  if (userToken) {
+    if (Object.keys(body).length) {
+      attempts.push({ token: userToken, asUser: true, fields: body, label: '使用者' });
+    }
+    if (Object.keys(bodyNoPerson).length) {
+      attempts.push({ token: userToken, asUser: true, fields: bodyNoPerson, label: '使用者(略過人員欄位)' });
+    }
+  }
+
+  const errors = [];
+  for (let i = 0; i < attempts.length; i++) {
+    const att = attempts[i];
+    try {
+      const result = await createRecord(att.token, tableId, att.fields, cfg.appToken, att.asUser);
+      const id = extractRecordId(result);
+      if (!id) throw new Error('建立記錄失敗：' + tableKey);
+      return { id: id, result: result, personOmitted: att.fields !== body };
+    } catch (err) {
+      if (!isRetryableWriteError(err)) throw err;
+      errors.push(att.label + '：' + (err.message || String(err)));
+    }
+  }
+  throw new Error(errors.join('；') || '寫入失敗');
 }
 
 async function updateNormalizedRecord(tenantToken, userToken, cfg, tableKey, recordId, rawFields) {
@@ -1055,12 +1157,11 @@ function normalizePersonFieldValue(val) {
   items.forEach(function(x) {
     if (!x) return;
     if (typeof x === 'string' && x) {
-      if (/^ou_/i.test(x) || /^on_/i.test(x)) out.push({ id: String(x) });
+      if (isValidPersonOpenId(x)) out.push({ id: String(x) });
       return;
     }
-    if (x && x.id) out.push({ id: String(x.id) });
-    else if (x && x.open_id) out.push({ id: String(x.open_id) });
-    else if (x && x.user_id) out.push({ id: String(x.user_id) });
+    if (x && x.id && isValidPersonOpenId(x.id)) out.push({ id: String(x.id) });
+    else if (x && x.open_id && isValidPersonOpenId(x.open_id)) out.push({ id: String(x.open_id) });
   });
   return out.length ? out : null;
 }
