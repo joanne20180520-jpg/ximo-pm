@@ -770,7 +770,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
             <div class="fg"><label>支付方式</label><select id="p-method"><option>現金</option><option>匯款</option><option>支票</option></select></div>
             <div class="fg"><label>事由</label><input type="text" id="p-reason" placeholder="填寫付款事由"></div>
             <div class="fg"><label>備註</label><input type="text" id="p-remark" placeholder="備註說明"></div>
-            <div class="fg"><label>付款總金額</label><input type="text" id="p-total" placeholder="NT$0" oninput="updatePayUpper()"><div class="p-upper" id="p-upper"></div></div>
+            <div class="fg"><label>付款總金額</label><input type="text" class="money-input" id="p-total" placeholder="NT$0" oninput="updatePayUpper()"><div class="p-upper" id="p-upper"></div></div>
             <div class="bss">
               <button class="bsm" onclick="savePaymentOnly()">僅存檔（不列印）</button>
               <button class="bsub" onclick="prevPay()">確認資料預覽</button>
@@ -855,7 +855,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <div class="fg"><label>主PM</label><select id="np-pm" data-members></select></div>
         <div class="fg"><label>合約開始日</label><input type="date" id="np-start"></div>
         <div class="fg"><label>合約結束日</label><input type="date" id="np-end"></div>
-        <div class="fg"><label>合約金額</label><input type="text" placeholder="NT$0" id="ca" oninput="calcP()"></div>
+        <div class="fg"><label>合約金額</label><input type="text" class="money-input" placeholder="NT$0" id="ca" oninput="calcP()"></div>
         <div class="fg"><label>Wiki 封存位置（選填）</label><input type="url" id="np-wiki-folder" placeholder="https://.../wiki/...（知識庫首頁連結）"></div>
       </div>
       <div>
@@ -874,7 +874,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="ppb2" style="margin-top:8px">
       <div><div class="fg"><label>標案名稱</label><input type="text" id="np-name-manual" placeholder="115花蓮山茶"></div>
       <div class="fg"><label>Wiki 封存位置（選填）</label><input type="url" id="np-wiki-folder-manual" placeholder="https://.../wiki/..."></div></div>
-      <div><div class="fg"><label>合約金額</label><input type="text" id="ca-manual" placeholder="NT$0"></div></div>
+      <div><div class="fg"><label>合約金額</label><input type="text" class="money-input" id="ca-manual" placeholder="NT$0"></div></div>
     </div>
     <button type="button" class="bads" onclick="applyManualProject()">套用到上方欄位</button>
   </details>
@@ -930,12 +930,12 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="選擇任務後自動產生…"></textarea></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
-<div class="po" id="pp-exp"><div class="pp"><div class="pph"><h3>新增支出明細</h3><button class="ppc" onclick="cl('pp-exp')">✕</button></div><div class="ppb"><div class="fg"><label>支出細項</label><input type="text" id="ex-name" placeholder="茶葉5斤"></div><div class="fg"><label>所屬標案</label><select id="ex-proj" onchange="onExpenseProjChange()"></select></div><div class="fg"><label>所屬工作項目</label><select id="ex-wi"></select></div><div class="fg"><label>負責人</label><select id="ex-assignee" data-members></select></div><div class="fg"><label>預估花費</label><input type="text" id="ex-est" placeholder="NT$0"></div><div class="fg"><label>日期</label><input type="date" id="ex-date"></div><div class="fg"><label>實際金額</label><input type="text" placeholder="NT$0" id="aa" oninput="calcE()"></div><div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ua" readonly style="background:#f0f0f0;color:var(--t3)"></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-exp')">取消</button><button class="bpri" onclick="saveExpense()">新增</button></div></div></div>
+<div class="po" id="pp-exp"><div class="pp"><div class="pph"><h3>新增支出明細</h3><button class="ppc" onclick="cl('pp-exp')">✕</button></div><div class="ppb"><div class="fg"><label>支出細項</label><input type="text" id="ex-name" placeholder="茶葉5斤"></div><div class="fg"><label>所屬標案</label><select id="ex-proj" onchange="onExpenseProjChange()"></select></div><div class="fg"><label>所屬工作項目</label><select id="ex-wi"></select></div><div class="fg"><label>負責人</label><select id="ex-assignee" data-members></select></div><div class="fg"><label>預估花費</label><input type="text" class="money-input" id="ex-est" placeholder="NT$0"></div><div class="fg"><label>日期</label><input type="date" id="ex-date"></div><div class="fg"><label>實際金額</label><input type="text" class="money-input" placeholder="NT$0" id="aa" oninput="calcE()"></div><div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ua" readonly style="background:#f0f0f0;color:var(--t3)"></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-exp')">取消</button><button class="bpri" onclick="saveExpense()">新增</button></div></div></div>
 
-<div class="po" id="pp-des"><div class="pp ppw"><div class="pph"><h3>建立新設計任務</h3><button class="ppc" onclick="cl('pp-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ds-name" placeholder="Logo"></div><div class="fg"><label>所屬工作項目</label><select id="ds-wi"></select></div><div class="fg"><label>負責PM</label><select id="ds-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ds-item" placeholder="A"></div><div class="fg"><label>設計需求</label><input type="text" id="ds-req" placeholder="AA"></div><div class="fg"><label>設計師</label><select id="ds-designer" data-members></select></div><div class="fg"><label>進度狀態</label><select id="ds-status"></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" id="ds-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" id="ds-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ds-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ds-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ds-deliver"></div><div class="fg"><label>備註</label><textarea id="ds-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-des')">取消</button><button class="bpri" onclick="saveDesign()">新增</button></div></div></div>
+<div class="po" id="pp-des"><div class="pp ppw"><div class="pph"><h3>建立新設計任務</h3><button class="ppc" onclick="cl('pp-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ds-name" placeholder="Logo"></div><div class="fg"><label>所屬工作項目</label><select id="ds-wi"></select></div><div class="fg"><label>負責PM</label><select id="ds-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ds-item" placeholder="A"></div><div class="fg"><label>設計需求</label><input type="text" id="ds-req" placeholder="AA"></div><div class="fg"><label>設計師</label><select id="ds-designer" data-members></select></div><div class="fg"><label>進度狀態</label><select id="ds-status"></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" class="money-input" id="ds-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" class="money-input" id="ds-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ds-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ds-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ds-deliver"></div><div class="fg"><label>備註</label><textarea id="ds-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-des')">取消</button><button class="bpri" onclick="saveDesign()">新增</button></div></div></div>
 
 <!-- 修改設計任務單 -->
-<div class="po" id="pp-edit-des"><div class="pp ppw"><div class="pph"><h3>修改設計任務單</h3><button class="ppc" onclick="cl('pp-edit-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ed-name"></div><div class="fg"><label>所屬工作項目</label><select id="ed-wi"></select></div><div class="fg"><label>負責PM</label><select id="ed-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ed-item"></div><div class="fg"><label>設計需求</label><input type="text" id="ed-req"></div><div class="fg"><label>設計師</label><select id="ed-designer" data-members></select></div><div class="fg"><label>進度狀態</label><select id="ed-status"></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" id="ed-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" id="ed-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ed-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ed-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ed-deliver"></div><div class="fg"><label>備註</label><textarea id="ed-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-des')">取消</button><button class="bpri" onclick="saveEditDesign()">儲存</button></div></div></div>
+<div class="po" id="pp-edit-des"><div class="pp ppw"><div class="pph"><h3>修改設計任務單</h3><button class="ppc" onclick="cl('pp-edit-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ed-name"></div><div class="fg"><label>所屬工作項目</label><select id="ed-wi"></select></div><div class="fg"><label>負責PM</label><select id="ed-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ed-item"></div><div class="fg"><label>設計需求</label><input type="text" id="ed-req"></div><div class="fg"><label>設計師</label><select id="ed-designer" data-members></select></div><div class="fg"><label>進度狀態</label><select id="ed-status"></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" class="money-input" id="ed-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" class="money-input" id="ed-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ed-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ed-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ed-deliver"></div><div class="fg"><label>備註</label><textarea id="ed-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-des')">取消</button><button class="bpri" onclick="saveEditDesign()">儲存</button></div></div></div>
 
 <!-- 付款預覽（元頂集團格式） -->
 <div class="po" id="pp-prev" style="align-items:flex-start;padding-top:20px">
@@ -973,7 +973,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>負責人</label><select id="ew-assignee" data-members></select></div>
   <div class="fg"><label>起始日（合約）</label><div id="ew-start-hint" class="fg-hint" style="padding:8px 10px;background:var(--sf2);border-radius:var(--rs);font-size:12px;color:var(--t2)">依標案合約開始日</div></div>
   <div class="fg"><label>截止日</label><input type="date" id="ew-end"></div>
-  <div class="fg"><label>可用成本</label><input type="text" id="ew-cost" placeholder="NT$0"></div>
+  <div class="fg"><label>可用成本</label><input type="text" class="money-input" id="ew-cost" placeholder="NT$0"></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-wi')">取消</button><button class="bpri" onclick="saveEditWorkItem()">儲存</button></div></div></div>
 
 <!-- 修改標案 -->
@@ -982,7 +982,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>主PM</label><select id="ep-pm" data-members></select></div>
   <div class="fg"><label>合約開始日</label><input type="date" id="ep-start"></div>
   <div class="fg"><label>合約結束日</label><input type="date" id="ep-end"></div>
-  <div class="fg"><label>合約金額</label><input type="text" id="ep-amount" placeholder="NT$0"></div>
+  <div class="fg"><label>合約金額</label><input type="text" class="money-input" id="ep-amount" placeholder="NT$0"></div>
   <div class="fg"><label>Wiki 封存位置</label><input type="url" id="ep-wiki-folder" placeholder="https://ajpfe1xdus5o.jp.larksuite.com/wiki/...（須含 https://）">
     <div class="fg-hint" style="font-size:10px;color:var(--t3);margin-top:4px">可貼知識庫首頁（wiki/space/…）或任一目錄頁連結。封存成功後會出現在該知識庫內（不是「與我分享」雲端文件）</div>
   </div>
@@ -1001,7 +1001,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>所屬工作項目</label><select id="ee-wi"></select></div>
   <div class="fg"><label>負責人</label><select id="ee-assignee" data-members></select></div>
   <div class="fg"><label>日期</label><input type="date" id="ee-date"></div>
-  <div class="fg"><label>實際金額</label><input type="text" placeholder="NT$0" id="ee-actual" oninput="calcEditExpense()"></div>
+  <div class="fg"><label>實際金額</label><input type="text" class="money-input" placeholder="NT$0" id="ee-actual" oninput="calcEditExpense()"></div>
   <div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ee-untax" readonly style="background:#f0f0f0;color:var(--t3)"></div>
   <div class="fg"><label>狀態</label><select id="ee-status"><option value="未合銷">待核銷</option><option value="已合銷">已核銷</option></select></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-exp')">取消</button><button class="bpri" onclick="saveEditExpense()">儲存</button></div></div></div>
@@ -1186,7 +1186,7 @@ function closeProcProjPopup(e) {
     e.stopPropagation();
   }
   procUploadSeq++;
-  resetProcUploadZone();
+  resetProcProjModal();
   cl('pp-proj');
 }
 document.addEventListener('keydown', function(e) {
@@ -1197,8 +1197,17 @@ document.addEventListener('keydown', function(e) {
 document.querySelectorAll('.po').forEach(function(o){
   o.addEventListener('click',function(e){if(e.target===o)o.classList.remove('open');});
 });
+document.addEventListener('blur', function(e) {
+  var t = e.target;
+  if (!t || !t.classList || !t.classList.contains('money-input')) return;
+  formatMoneyField(t);
+  if (t.id === 'p-total') updatePayUpper();
+  else if (t.id === 'aa') calcE();
+  else if (t.id === 'ee-actual') calcEditExpense();
+  else if (t.id === 'ca') calcP();
+}, true);
 function calcP(){
-  var v=parseInt(document.getElementById('ca').value.replace(/\D/g,''))||0;
+  var v=parseMoney(document.getElementById('ca').value);
   var u=Math.round(v/1.05),c=Math.round(u/2);
   var f=function(n){return n?'NT$'+n.toLocaleString():'—';};
   document.getElementById('fu').textContent=f(u);
@@ -1301,26 +1310,10 @@ function clearProcUpload(e) {
 }
 
 function resetProcFormForNewUpload() {
-  parsedProjWorkItems = [];
-  document.getElementById('proc-preview').style.display = 'none';
+  resetProcProjModal();
+  var prev = document.getElementById('proc-preview');
+  if (prev) prev.style.display = 'none';
   document.getElementById('np-save-btn').disabled = true;
-  ['np-name', 'ca', 'np-wiki-folder', 'np-wiki-folder-manual'].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  ['np-start', 'np-end'].forEach(function(id) {
-    var el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  var pmSel = document.getElementById('np-pm');
-  if (pmSel && pmSel.options.length) pmSel.selectedIndex = 0;
-  var box = document.getElementById('np-workitems');
-  if (box) box.innerHTML = '';
-  document.getElementById('fu').textContent = '—';
-  document.getElementById('fc').textContent = '—';
-  document.getElementById('fr').textContent = '—';
-  var sp = document.getElementById('np-spent');
-  if (sp) sp.textContent = 'NT$0';
 }
 
 function onProcFileSelect(input, droppedFile) {
@@ -2085,7 +2078,7 @@ function normalizeRocDate(s) {
 
 function applyProcurementParse(parsed) {
   document.getElementById('np-name').value = parsed.name || '';
-  document.getElementById('ca').value = parsed.amount ? 'NT$' + Math.round(parsed.amount).toLocaleString() : '';
+  document.getElementById('ca').value = parsed.amount ? ntf(parsed.amount) : '';
   document.getElementById('np-start').value = '';
   document.getElementById('np-end').value = '';
   var pmSel = document.getElementById('np-pm');
@@ -2321,6 +2314,7 @@ function distributeProjWorkItemCosts(availCost) {
 
 function applyManualProject() {
   var n = document.getElementById('np-name-manual').value.trim();
+  formatMoneyField(document.getElementById('ca-manual'));
   var a = document.getElementById('ca-manual').value.trim();
   if (n) document.getElementById('np-name').value = n;
   if (a) document.getElementById('ca').value = a;
@@ -2332,7 +2326,8 @@ function applyManualProject() {
   setProcStatus('已套用手動填寫內容');
 }
 
-function resetProcForm() {
+function resetProcProjModal() {
+  projectImportSaving = false;
   parsedProjWorkItems = [];
   resetProcUploadZone();
   var prev = document.getElementById('proc-preview');
@@ -2345,7 +2340,7 @@ function resetProcForm() {
   }
   var cancel = document.querySelector('.pp-proj-foot .proc-btn-cancel');
   if (cancel) cancel.disabled = false;
-  ['np-name', 'ca', 'np-wiki-folder', 'np-wiki-folder-manual'].forEach(function(id) {
+  ['np-name', 'ca', 'np-wiki-folder', 'np-wiki-folder-manual', 'np-name-manual', 'ca-manual'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -2357,11 +2352,21 @@ function resetProcForm() {
   if (pmSel && pmSel.options.length) pmSel.selectedIndex = 0;
   var box = document.getElementById('np-workitems');
   if (box) box.innerHTML = '';
-  document.getElementById('fu').textContent = '—';
-  document.getElementById('fc').textContent = '—';
-  document.getElementById('fr').textContent = '—';
+  var fu = document.getElementById('fu');
+  var fc = document.getElementById('fc');
+  var fr = document.getElementById('fr');
+  if (fu) fu.textContent = '—';
+  if (fc) fc.textContent = '—';
+  if (fr) fr.textContent = '—';
   var sp = document.getElementById('np-spent');
   if (sp) sp.textContent = 'NT$0';
+  var manual = document.querySelector('#pp-proj .proc-manual-link');
+  if (manual) manual.removeAttribute('open');
+  setProcStatus('');
+}
+
+function resetProcForm() {
+  resetProcProjModal();
 }
 
 function getProjectRecordId(res) {
@@ -2460,15 +2465,15 @@ function calcE(){
   var el = document.getElementById('aa');
   var ua = document.getElementById('ua');
   if (!el || !ua) return;
-  var v=parseInt(el.value.replace(/\D/g,''))||0;
-  ua.value=v?'NT$'+Math.round(v/1.05).toLocaleString():'';
+  var v=parseMoney(el.value);
+  ua.value=v?ntf(Math.round(v/1.05)):'';
 }
 function calcEditExpense(){
   var el = document.getElementById('ee-actual');
   var ua = document.getElementById('ee-untax');
   if (!el || !ua) return;
-  var v=parseInt(el.value.replace(/\D/g,''))||0;
-  ua.value=v?'NT$'+Math.round(v/1.05).toLocaleString():'';
+  var v=parseMoney(el.value);
+  ua.value=v?ntf(Math.round(v/1.05)):'';
 }
 function getExpenseProjIds(f) {
   if (!f) return [];
@@ -2486,14 +2491,14 @@ function addS(){
   var start = getNwProjStartDate();
   var end = getNwProjEndDate() || (start ? tsToDateInput(dateInputToTs(start) + 6 * 86400000) : '');
   var r=document.createElement('div');r.className='srow';
-  r.innerHTML='<input type="text" class="wi-name" placeholder="工作項目名稱"><input type="date" class="wi-start" value="' + escAttr(start) + '"><input type="date" class="wi-end" value="' + escAttr(end) + '"><select class="wi-member" data-members></select><input type="text" class="wi-cost" placeholder="NT$0"><input type="text" class="wi-weight" placeholder="0%">';
+  r.innerHTML='<input type="text" class="wi-name" placeholder="工作項目名稱"><input type="date" class="wi-start" value="' + escAttr(start) + '"><input type="date" class="wi-end" value="' + escAttr(end) + '"><select class="wi-member" data-members></select><input type="text" class="wi-cost money-input" placeholder="NT$0"><input type="text" class="wi-weight" placeholder="0%">';
   document.getElementById('sl').appendChild(r);
   fillSelectOptions(r.querySelector('.wi-member'), getMemberNames());
 }
 function workRowHtml() {
   var start = getNwProjStartDate();
   var end = getNwProjEndDate() || (start ? tsToDateInput(dateInputToTs(start) + 6 * 86400000) : '');
-  return '<div class="srow"><input type="text" class="wi-name" placeholder="工作項目名稱"><input type="date" class="wi-start" value="' + escAttr(start) + '"><input type="date" class="wi-end" value="' + escAttr(end) + '"><select class="wi-member" data-members></select><input type="text" class="wi-cost" placeholder="NT$0"><input type="text" class="wi-weight" placeholder="0%"></div>';
+  return '<div class="srow"><input type="text" class="wi-name" placeholder="工作項目名稱"><input type="date" class="wi-start" value="' + escAttr(start) + '"><input type="date" class="wi-end" value="' + escAttr(end) + '"><select class="wi-member" data-members></select><input type="text" class="wi-cost money-input" placeholder="NT$0"><input type="text" class="wi-weight" placeholder="0%"></div>';
 }
 
 // ── 付款預覽 / 列印（元頂集團格式，同 payment-form GitHub Pages）──
@@ -2887,7 +2892,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v47';
+var APP_BUILD = '20260615v49';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -4522,6 +4527,16 @@ function showDataHint(msg) {
 }
 
 function ntf(n) { return 'NT$' + Math.round(n).toLocaleString(); }
+function formatMoneyField(el) {
+  if (!el || el.readOnly) return;
+  var v = parseMoney(el.value);
+  el.value = v ? ntf(v) : '';
+}
+function fmtMoneyVal(val) {
+  if (val === null || val === undefined || val === '' || val === '—') return '—';
+  var n = typeof val === 'number' ? val : parseMoney(String(val));
+  return n ? ntf(n) : '—';
+}
 function fmt2(d) {
   var s = String(d.getFullYear()).slice(2) + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0');
   return s;
@@ -7287,8 +7302,8 @@ function renderDesigns() {
     var rows = '';
     list.forEach(function(d) {
       rows += '<tr class="erow" onclick="openEditDesign(\'' + d.id + '\')" title="點擊編輯"><td style="font-weight:500">' + escHtml(d.name) + '</td><td>' + escHtml(d.wiName) + '</td><td>' + escHtml(d.pm) + '</td><td>' + escHtml(d.item) + '</td><td>' + escHtml(d.req) + '</td><td>' + escHtml(d.designer) + '</td>'
-        + '<td>' + buildProgressStatusBadge(d.progressStatus || d.status, d.progressNum) + '</td><td>' + (typeof d.budget === 'number' ? ntf(d.budget) : escHtml(String(d.budget))) + '</td>'
-        + '<td>' + (typeof d.spent === 'number' ? ntf(d.spent) : escHtml(String(d.spent))) + '</td>'
+        + '<td>' + buildProgressStatusBadge(d.progressStatus || d.status, d.progressNum) + '</td><td>' + fmtMoneyVal(d.budget) + '</td>'
+        + '<td>' + fmtMoneyVal(d.spent) + '</td>'
         + '<td>' + d.draft + '</td><td>' + d.final + '</td><td>' + d.deliver + '</td></tr>';
     });
     return '<div class="dc"><div class="dch"><div class="pdot" style="background:' + color + '"></div><h3>' + escHtml(pname) + '</h3>'
@@ -8102,6 +8117,7 @@ function deleteTask(id, name) {
 function preparePopup(id) {
   refreshFormSelects();
   if (id === 'pp-proj') {
+    resetProcProjModal();
     initProcUpload();
     preloadProcLibs();
     refreshFormSelects();
