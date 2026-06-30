@@ -2237,11 +2237,20 @@ function buildWiFieldsForImport(item, pmFallback) {
 }
 
 function apiProjectImport(projectFields, workItemFieldsList) {
+  var headers = { 'Content-Type': 'application/json' };
+  var tok = getUserAccessToken();
+  if (tok) headers['X-User-Access-Token'] = tok;
   return fetch(API + '?action=project-import', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: headers,
     body: JSON.stringify(withUserToken({ project: projectFields, workitems: workItemFieldsList }))
-  }).then(function(r) { return r.json(); }).then(function(res) {
+  }).then(function(r) {
+    return r.json().then(function(res) {
+      if (!r.ok && res && res.error) throw new Error(res.error);
+      if (!r.ok) throw new Error('HTTP ' + r.status + (res && res.error ? '：' + res.error : ''));
+      return res;
+    });
+  }).then(function(res) {
     if (res.error) throw new Error(res.error);
     if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '儲存失敗');
     return res;
@@ -2822,7 +2831,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v39';
+var APP_BUILD = '20260615v44';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 

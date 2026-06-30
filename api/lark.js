@@ -36,9 +36,20 @@ async function getToken() {
   return data.tenant_access_token;
 }
 
-// 各資料表所屬的 app_token：預設為主 Base
+// 各資料表所屬的 app_token：有 LARK_APP_TOKEN_BACKEND 時，讀寫皆以後台 Base 為準（與 Lark 手動編輯同源）
+function getOperationalBitableConfig() {
+  const backend = getBackendBitableConfig();
+  if (backend && backend.appToken) return backend;
+  return getFrontBitableConfig();
+}
+
+function tableIdFor(tableKey) {
+  const cfg = getOperationalBitableConfig();
+  return cfg.tables[tableKey] || TABLES[tableKey] || '';
+}
+
 function appTokenForTable(tableKey) {
-  return APP_TOKEN;
+  return getOperationalBitableConfig().appToken;
 }
  
 // 讀取表格資料（自動翻頁取回全部記錄）
@@ -69,6 +80,15 @@ function buildMainRecordUrl(tableId, recordId, appToken, asUser) {
   return BASE_URL + path;
 }
 
+function formatLarkWriteError(action, data) {
+  const msg = (data && data.msg) || action + ' failed';
+  const code = data && data.code;
+  if (/forbidden/i.test(msg)) {
+    return 'Forbidden（Lark 拒絕寫入）。請確認：① 多維表格已「添加文件應用」且為可管理；② 若開啟「高级权限／進階權限」，需允許應用或你的帳號新增記錄；③ 開發者後台 bitable:app 已發布。' + (code ? ' code:' + code : '');
+  }
+  return msg + (code ? ' (code:' + code + ')' : '');
+}
+
 async function createRecord(token, tableId, fields, appToken, asUser) {
   const url = buildMainRecordUrl(tableId, null, appToken, asUser);
   const res = await fetch(url, {
@@ -80,7 +100,7 @@ async function createRecord(token, tableId, fields, appToken, asUser) {
     body: JSON.stringify({ fields: fields })
   });
   const data = await res.json();
-  if (data.code !== 0) throw new Error(data.msg || 'create failed');
+  if (data.code !== 0) throw new Error(formatLarkWriteError('create', data));
   return data;
 }
 
@@ -96,7 +116,7 @@ async function updateRecord(token, tableId, recordId, fields, appToken, asUser) 
     body: JSON.stringify({ fields: fields })
   });
   const data = await res.json();
-  if (data.code !== 0) throw new Error(data.msg || 'update failed');
+  if (data.code !== 0) throw new Error(formatLarkWriteError('update', data));
   return data;
 }
 
@@ -112,16 +132,22 @@ async function deleteRecord(token, tableId, recordId, appToken, asUser) {
   return data;
 }
 
+// 多維表格寫入：優先用應用 tenant token（已添加文件應用），失敗再試登入者 user token
 async function writeWithUserFallback(tenantToken, userToken, writeFn) {
+  const errors = [];
+  try {
+    return await writeFn(tenantToken, false);
+  } catch (tenantErr) {
+    errors.push('應用：' + (tenantErr.message || String(tenantErr)));
+  }
   if (userToken) {
     try {
-      const data = await writeFn(userToken, true);
-      return data;
-    } catch (err) {
-      console.warn('User token write failed, fallback to tenant:', err.message || err);
+      return await writeFn(userToken, true);
+    } catch (userErr) {
+      errors.push('使用者：' + (userErr.message || String(userErr)));
     }
   }
-  return writeFn(tenantToken, false);
+  throw new Error(errors.join('；') || '寫入失敗');
 }
 
 async function updateBitableRecord(token, appToken, tableId, recordId, fields) {
@@ -202,6 +228,95 @@ function getBackendBitableConfig() {
   return { appToken: appToken, tables: tables };
 }
 
+/** 寫入目標：primary = 前台讀取來源；mirrors = 另一套 Base（需設 LARK_APP_TOKEN_BACKEND） */
+function getBitableWriteTargets() {
+  const primary = getOperationalBitableConfig();
+  const front = getFrontBitableConfig();
+  const backend = getBackendBitableConfig();
+  const mirrors = [];
+  const seen = {};
+  if (primary && primary.appToken) seen[primary.appToken] = true;
+  if (front.appToken && !seen[front.appToken]) {
+    mirrors.push(front);
+    seen[front.appToken] = true;
+  }
+  if (backend && backend.appToken && !seen[backend.appToken]) {
+    mirrors.push(backend);
+    seen[backend.appToken] = true;
+  }
+  return { primary: primary, mirrors: mirrors };
+}
+
+function cfgDataLabel(cfg) {
+  const backend = getBackendBitableConfig();
+  const front = getFrontBitableConfig();
+  if (backend && cfg.appToken === backend.appToken) return '後台';
+  if (cfg.appToken === front.appToken) return '前台';
+  return '資料庫';
+}
+
+const TABLE_NAME_KEYWORDS = {
+  projects: ['標案', '專案', 'project'],
+  workitems: ['工作項目', 'workitem'],
+  tasks: ['任務', 'task'],
+  expenses: ['支出', 'expense', '費用'],
+  designs: ['設計', 'design'],
+  members: ['人員', '成員', 'member'],
+  journal: ['日誌', 'journal', '工作日誌'],
+  payments: ['付款', '金費']
+};
+
+function formatBitableWriteError(cfg, err) {
+  const label = cfgDataLabel(cfg);
+  const msg = (err && err.message) || String(err || '');
+  const envName = label === '後台' ? 'LARK_APP_TOKEN_BACKEND' : 'LARK_APP_TOKEN';
+  if (msg.indexOf('NOTEXIST') >= 0) {
+    return label + '資料庫：找不到 Base 或無權限（NOTEXIST）。請確認 ' + envName + ' 是多維表格網址 /base/ 後面那段 app_token（不是 table_id），且 Lark 應用已加入該 Base。';
+  }
+  if (msg.indexOf('TableIdNotFound') >= 0 || msg.indexOf('1254041') >= 0) {
+    return label + '資料庫：表格 ID 不符（TableIdNotFound）。請設 LARK_TABLE_PROFILE' + (label === '後台' ? '_BACKEND' : '') + '。';
+  }
+  return label + '資料庫：' + msg;
+}
+
+async function resolveTableMapForApp(token, appToken, configuredTables) {
+  let listed;
+  try {
+    listed = await listBitableTables(token, appToken);
+  } catch (err) {
+    const msg = err.message || String(err);
+    if (msg.indexOf('NOTEXIST') >= 0) {
+      throw new Error('找不到 Base 或 Lark 應用無權限（NOTEXIST）。請確認 app_token 正確且應用已加入該多維表格');
+    }
+    throw err;
+  }
+  const ids = listed.map(function(t) { return t.table_id || t.id || ''; });
+  const out = {};
+  Object.keys(configuredTables || {}).forEach(function(key) {
+    const configuredId = (configuredTables[key] || '').trim();
+    if (configuredId && ids.indexOf(configuredId) >= 0) {
+      out[key] = configuredId;
+      return;
+    }
+    const keywords = TABLE_NAME_KEYWORDS[key];
+    if (keywords) {
+      const matched = matchArchiveTableByKeywords(listed, keywords);
+      if (matched) {
+        out[key] = matched.table_id || matched.id || '';
+        return;
+      }
+    }
+    if (configuredId) out[key] = configuredId;
+  });
+  return out;
+}
+
+async function resolveBitableConfig(token, cfg) {
+  if (!cfg || !cfg.appToken) return cfg;
+  const tables = await resolveTableMapForApp(token, cfg.appToken, cfg.tables);
+  return { appToken: cfg.appToken, tables: tables };
+}
+
 function extractRecordId(res) {
   if (!res || !res.data) return null;
   const d = res.data;
@@ -244,93 +359,100 @@ async function findProjectIdByName(token, cfg, name) {
   return hit ? hit.record_id : null;
 }
 
+async function appendWorkItemsToProject(tenantToken, userToken, cfg, projId, workItemFieldsList) {
+  const projRecords = await getRecords(tenantToken, cfg.tables.projects, cfg.appToken);
+  const projRec = projRecords.find(function(r) { return r.record_id === projId; });
+  if (!projRec) throw new Error('找不到標案');
+
+  const wiIds = [];
+  for (let i = 0; i < workItemFieldsList.length; i++) {
+    const linked = Object.assign({}, workItemFieldsList[i]);
+    linked['所屬標案'] = [projId];
+    const wi = await createNormalizedRecord(tenantToken, userToken, cfg, 'workitems', linked);
+    wiIds.push(wi.id);
+  }
+  if (wiIds.length) {
+    const existingIds = getLinkIds((projRec.fields || {})['工作項目']);
+    const merged = existingIds.slice();
+    wiIds.forEach(function(id) { if (merged.indexOf(id) < 0) merged.push(id); });
+    await updateNormalizedRecord(tenantToken, userToken, cfg, 'projects', projId, { '工作項目': merged });
+  }
+  return wiIds;
+}
+
+async function mirrorProjectBundleToCfg(tenantToken, userToken, cfg, projectFields, workItemFieldsList) {
+  const proj = await createNormalizedRecord(tenantToken, userToken, cfg, 'projects', projectFields);
+  const wiIds = [];
+  for (let i = 0; i < workItemFieldsList.length; i++) {
+    const linked = Object.assign({}, workItemFieldsList[i]);
+    linked['所屬標案'] = [proj.id];
+    const wi = await createNormalizedRecord(tenantToken, userToken, cfg, 'workitems', linked);
+    wiIds.push(wi.id);
+  }
+  if (wiIds.length) {
+    await updateNormalizedRecord(tenantToken, userToken, cfg, 'projects', proj.id, { '工作項目': wiIds });
+  }
+  return { id: proj.id, result: proj.result, workItemIds: wiIds };
+}
+
 async function createProjectImportBundle(tenantToken, userToken, projectFields, workItemFieldsList) {
-  const front = getFrontBitableConfig();
+  const targets = getBitableWriteTargets();
   const mirrorErrors = [];
 
-  const frontProj = await createNormalizedRecord(tenantToken, userToken, front, 'projects', projectFields);
-  const frontWiIds = [];
-  for (let i = 0; i < workItemFieldsList.length; i++) {
-    const wi = await createNormalizedRecord(tenantToken, userToken, front, 'workitems', workItemFieldsList[i]);
-    frontWiIds.push(wi.id);
-  }
-  if (frontWiIds.length) {
-    await updateNormalizedRecord(tenantToken, userToken, front, 'projects', frontProj.id, { '工作項目': frontWiIds });
-  }
+  const primary = await resolveBitableConfig(tenantToken, targets.primary);
+  const primaryBundle = await mirrorProjectBundleToCfg(
+    tenantToken, userToken, primary, projectFields, workItemFieldsList
+  );
 
-  const backend = getBackendBitableConfig();
-  if (backend && backend.appToken !== front.appToken) {
+  for (let i = 0; i < targets.mirrors.length; i++) {
+    let cfg = targets.mirrors[i];
     try {
-      const backProj = await createNormalizedRecord(tenantToken, userToken, backend, 'projects', projectFields);
-      const backWiIds = [];
-      for (let j = 0; j < workItemFieldsList.length; j++) {
-        const linked = Object.assign({}, workItemFieldsList[j]);
-        linked['所屬標案'] = [backProj.id];
-        const wi = await createNormalizedRecord(tenantToken, userToken, backend, 'workitems', linked);
-        backWiIds.push(wi.id);
-      }
-      if (backWiIds.length) {
-        await updateNormalizedRecord(tenantToken, userToken, backend, 'projects', backProj.id, { '工作項目': backWiIds });
-      }
+      cfg = await resolveBitableConfig(tenantToken, cfg);
+      await mirrorProjectBundleToCfg(tenantToken, userToken, cfg, projectFields, workItemFieldsList);
     } catch (err) {
-      mirrorErrors.push('後台資料庫：' + (err.message || String(err)));
+      mirrorErrors.push(formatBitableWriteError(cfg, err));
     }
   }
 
-  const out = Object.assign({}, frontProj.result);
-  out.projectId = frontProj.id;
-  out.workItemIds = frontWiIds;
+  const out = Object.assign({}, primaryBundle.result || {});
+  out.projectId = primaryBundle.id;
+  out.workItemIds = primaryBundle.workItemIds;
   if (mirrorErrors.length) out.partialErrors = mirrorErrors;
   return out;
 }
 
-async function createWorkItemsBundle(tenantToken, userToken, frontProjId, workItemFieldsList) {
-  const front = getFrontBitableConfig();
+async function createWorkItemsBundle(tenantToken, userToken, primaryProjId, workItemFieldsList) {
+  const targets = getBitableWriteTargets();
   const mirrorErrors = [];
-  const frontRecords = await getRecords(tenantToken, front.tables.projects, front.appToken);
-  const projRec = frontRecords.find(function(r) { return r.record_id === frontProjId; });
-  const projName = projRec ? String((projRec.fields || {})['標案名稱'] || '').trim() : '';
 
-  const frontWiIds = [];
-  for (let i = 0; i < workItemFieldsList.length; i++) {
-    const linked = Object.assign({}, workItemFieldsList[i]);
-    linked['所屬標案'] = [frontProjId];
-    const wi = await createNormalizedRecord(tenantToken, userToken, front, 'workitems', linked);
-    frontWiIds.push(wi.id);
-  }
-  if (frontWiIds.length && projRec) {
-    const existingIds = getLinkIds((projRec.fields || {})['工作項目']);
-    const merged = existingIds.slice();
-    frontWiIds.forEach(function(id) { if (merged.indexOf(id) < 0) merged.push(id); });
-    await updateNormalizedRecord(tenantToken, userToken, front, 'projects', frontProjId, { '工作項目': merged });
-  }
+  const primary = await resolveBitableConfig(tenantToken, targets.primary);
+  const projRecords = await getRecords(tenantToken, primary.tables.projects, primary.appToken);
+  const projRec = projRecords.find(function(r) { return r.record_id === primaryProjId; });
+  if (!projRec) throw new Error('找不到標案');
+  const projName = String((projRec.fields || {})['標案名稱'] || '').trim();
 
-  const backend = getBackendBitableConfig();
-  if (backend && backend.appToken !== front.appToken && projName) {
+  const wiIds = await appendWorkItemsToProject(
+    tenantToken, userToken, primary, primaryProjId, workItemFieldsList
+  );
+
+  for (let i = 0; i < targets.mirrors.length; i++) {
+    let cfg = targets.mirrors[i];
     try {
-      const backProjId = await findProjectIdByName(tenantToken, backend, projName);
-      if (!backProjId) throw new Error('後台找不到標案「' + projName + '」');
-      const backRecords = await getRecords(tenantToken, backend.tables.projects, backend.appToken);
-      const backProj = backRecords.find(function(r) { return r.record_id === backProjId; });
-      const backWiIds = [];
-      for (let j = 0; j < workItemFieldsList.length; j++) {
-        const linked = Object.assign({}, workItemFieldsList[j]);
-        linked['所屬標案'] = [backProjId];
-        const wi = await createNormalizedRecord(tenantToken, userToken, backend, 'workitems', linked);
-        backWiIds.push(wi.id);
+      cfg = await resolveBitableConfig(tenantToken, cfg);
+      let mirrorProjId = primaryProjId;
+      if (cfg.appToken !== primary.appToken) {
+        mirrorProjId = await findProjectIdByName(tenantToken, cfg, projName);
+        if (!mirrorProjId) throw new Error('找不到標案「' + projName + '」');
       }
-      if (backWiIds.length && backProj) {
-        const backExisting = getLinkIds((backProj.fields || {})['工作項目']);
-        const backMerged = backExisting.slice();
-        backWiIds.forEach(function(id) { if (backMerged.indexOf(id) < 0) backMerged.push(id); });
-        await updateNormalizedRecord(tenantToken, userToken, backend, 'projects', backProjId, { '工作項目': backMerged });
-      }
+      await appendWorkItemsToProject(tenantToken, userToken, cfg, mirrorProjId, workItemFieldsList);
     } catch (err) {
-      mirrorErrors.push('後台資料庫：' + (err.message || String(err)));
+      mirrorErrors.push(formatBitableWriteError(cfg, err));
     }
   }
 
-  return { code: 0, workItemIds: frontWiIds, partialErrors: mirrorErrors };
+  const out = { code: 0, workItemIds: wiIds };
+  if (mirrorErrors.length) out.partialErrors = mirrorErrors;
+  return out;
 }
 
 function parseBitableShareUrl(url) {
@@ -368,6 +490,67 @@ const ARCHIVE_TABLE_KEYWORDS = {
   expenses: ['支出', 'expense', '費用'],
   designs: ['設計', 'design']
 };
+
+const OPERATIONAL_TABLE_KEYWORDS = Object.assign({}, ARCHIVE_TABLE_KEYWORDS, {
+  members: ['人員', '成員', 'member', '用戶', '員工'],
+  journal: ['日誌', 'journal', '工作日誌'],
+  payments: ['付款', '金費']
+});
+
+const bitableConfigResolveCache = {};
+
+async function resolveTableMapForApp(token, appToken, configuredTables) {
+  const listed = await listBitableTables(token, appToken);
+  const idSet = {};
+  listed.forEach(function(t) {
+    const id = t.table_id || t.id || '';
+    if (id) idSet[id] = true;
+  });
+  const out = {};
+  const keys = Object.keys(configuredTables || {});
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const configuredId = String(configuredTables[key] || '').trim();
+    if (configuredId && idSet[configuredId]) {
+      out[key] = configuredId;
+      continue;
+    }
+    const profileKeys = Object.keys(TABLE_PROFILES);
+    for (let p = 0; p < profileKeys.length; p++) {
+      const altId = (TABLE_PROFILES[profileKeys[p]][key] || '').trim();
+      if (altId && idSet[altId]) {
+        out[key] = altId;
+        break;
+      }
+    }
+    if (out[key]) continue;
+    const keywords = OPERATIONAL_TABLE_KEYWORDS[key];
+    if (keywords) {
+      const matched = matchArchiveTableByKeywords(listed, keywords);
+      if (matched) {
+        out[key] = matched.table_id || matched.id || '';
+        continue;
+      }
+    }
+    if (configuredId) out[key] = configuredId;
+  }
+  return out;
+}
+
+async function resolveBitableConfig(token, cfg) {
+  if (!cfg || !cfg.appToken) return cfg;
+  const tables = await resolveTableMapForApp(token, cfg.appToken, cfg.tables);
+  return { appToken: cfg.appToken, tables: tables };
+}
+
+async function resolveBitableConfigCached(token, cfg) {
+  if (!cfg || !cfg.appToken) return cfg;
+  const key = cfg.appToken;
+  if (bitableConfigResolveCache[key]) return bitableConfigResolveCache[key];
+  const resolved = await resolveBitableConfig(token, cfg);
+  bitableConfigResolveCache[key] = resolved;
+  return resolved;
+}
 
 function requireWikiUserToken(userAccessToken) {
   const t = String(userAccessToken || '').trim();
@@ -1394,14 +1577,15 @@ function makeWikiLink(url) {
 }
 
 async function gatherProjectRelated(token, projectId) {
-  const projects = await getRecords(token, TABLES.projects);
+  const cfg = getOperationalBitableConfig();
+  const projects = await getRecords(token, cfg.tables.projects, cfg.appToken);
   const proj = projects.find(function(p) { return p.record_id === projectId; });
   if (!proj) throw new Error('找不到標案');
 
-  const workitems = await getRecords(token, TABLES.workitems);
-  const tasks = await getRecords(token, TABLES.tasks);
-  const expenses = await getRecords(token, TABLES.expenses);
-  const designs = await getRecords(token, TABLES.designs);
+  const workitems = await getRecords(token, cfg.tables.workitems, cfg.appToken);
+  const tasks = await getRecords(token, cfg.tables.tasks, cfg.appToken);
+  const expenses = await getRecords(token, cfg.tables.expenses, cfg.appToken);
+  const designs = await getRecords(token, cfg.tables.designs, cfg.appToken);
 
   const workitemsRel = gatherWorkitemsForProject(proj, workitems, projects);
   const wiIdSet = {};
@@ -1581,9 +1765,10 @@ async function archiveProject(token, projectId, wikiUrl, userAccessToken) {
 
   let statusWarning = '';
   let srcAllowed = null;
+  const cfg = getOperationalBitableConfig();
   try {
     const srcFieldCache = {};
-    const srcSchemas = await getTableFieldSchemas(token, APP_TOKEN, TABLES.projects, srcFieldCache);
+    const srcSchemas = await getTableFieldSchemas(token, cfg.appToken, cfg.tables.projects, srcFieldCache);
     srcAllowed = srcSchemas.allowedSet;
     const srcMeta = srcSchemas.fieldMeta;
     const safeUpdate = { '狀態': '封存', '封存摘要': summary };
@@ -1593,17 +1778,17 @@ async function archiveProject(token, projectId, wikiUrl, userAccessToken) {
     if (wikiUrl) {
       applyWikiUrlOverrides(safeUpdate, srcAllowed, srcMeta, normalizeWikiInputUrl(wikiUrl), ['Wiki存放位置']);
     }
-    const normalizedUpdate = await normalizeWriteFields(token, TABLES.projects, safeUpdate);
+    const normalizedUpdate = await normalizeWriteFields(token, cfg.tables.projects, safeUpdate, cfg.appToken);
     if (Object.keys(normalizedUpdate).length) {
-      await updateRecord(token, TABLES.projects, projectId, normalizedUpdate);
+      await updateRecord(token, cfg.tables.projects, projectId, normalizedUpdate, cfg.appToken);
     } else if (srcAllowed['狀態']) {
-      await updateRecord(token, TABLES.projects, projectId, { '狀態': '封存' });
+      await updateRecord(token, cfg.tables.projects, projectId, { '狀態': '封存' }, cfg.appToken);
     }
   } catch (err) {
     statusWarning = formatArchiveCopyError(err.message || String(err));
     if (srcAllowed && srcAllowed['狀態']) {
       try {
-        await updateRecord(token, TABLES.projects, projectId, { '狀態': '封存' });
+        await updateRecord(token, cfg.tables.projects, projectId, { '狀態': '封存' }, cfg.appToken);
         statusWarning = '';
       } catch (retryErr) {
         statusWarning = formatArchiveCopyError(retryErr.message || String(retryErr));
@@ -1700,7 +1885,7 @@ async function resolveApplicantOpenId(tenantToken, userToken, rawName, hintOpenI
     }
   }
   if (rawName) {
-    const members = await getRecords(tenantToken, TABLES.members, appTokenForTable('members'));
+    const members = await getRecords(tenantToken, tableIdFor('members'), appTokenForTable('members'));
     for (let i = 0; i < members.length; i++) {
       const mf = members[i].fields || {};
       const mn = getMemberName(mf);
@@ -2118,34 +2303,70 @@ function isTableConfigError(err) {
 }
 
 function tableConfigErrorMessage() {
+  const backend = (process.env.LARK_APP_TOKEN_BACKEND || '').trim();
+  if (backend) {
+    return 'LARK_APP_TOKEN_BACKEND 與程式設定的表格 ID 不符（TableIdNotFound）。請確認 LARK_TABLE_PROFILE_BACKEND 或 LARK_TABLE_PROFILE 與該 Base 的表格 ID 一致，或開啟 /api/lark?action=tables-check 查看診斷。';
+  }
   return 'LARK_APP_TOKEN 與程式設定的表格 ID 不符（TableIdNotFound）。請在 Vercel 將 LARK_APP_TOKEN 改成與正式多維表格相同的 Base app_token，或開啟 /api/lark?action=tables-check 查看診斷。';
 }
 
+async function buildTablesCheckReportForCfg(token, cfg, label) {
+  if (!cfg || !cfg.appToken) {
+    return { label: label, ok: false, error: '缺少 app_token' };
+  }
+  try {
+    const resolved = await resolveBitableConfig(token, cfg);
+    const listed = await listBitableTables(token, cfg.appToken);
+    const ids = listed.map(function(t) { return t.table_id || t.id || ''; });
+    const report = Object.keys(resolved.tables).map(function(key) {
+      const resolvedId = resolved.tables[key];
+      return {
+        key: key,
+        configuredId: cfg.tables[key],
+        resolvedId: resolvedId,
+        found: ids.indexOf(resolvedId) >= 0
+      };
+    });
+    const missing = report.filter(function(r) { return !r.found; });
+    return {
+      label: label,
+      ok: missing.length === 0,
+      appTokenSuffix: cfg.appToken.slice(-6),
+      tableCount: listed.length,
+      tables: listed.map(function(t) {
+        return { id: t.table_id || t.id, name: t.name || '' };
+      }),
+      report: report,
+      missingKeys: missing.map(function(m) { return m.key; })
+    };
+  } catch (err) {
+    return {
+      label: label,
+      ok: false,
+      appTokenSuffix: cfg.appToken.slice(-6),
+      error: err.message || String(err)
+    };
+  }
+}
+
 async function buildTablesCheckReport() {
-  if (!APP_TOKEN) {
+  const token = await getToken();
+  const front = getFrontBitableConfig();
+  const backend = getBackendBitableConfig();
+  const bases = [];
+  if (front.appToken) bases.push(buildTablesCheckReportForCfg(token, front, 'front'));
+  if (backend && backend.appToken && backend.appToken !== front.appToken) {
+    bases.push(buildTablesCheckReportForCfg(token, backend, 'backend'));
+  }
+  if (!bases.length) {
     return { ok: false, error: '缺少 LARK_APP_TOKEN 環境變數' };
   }
-  const token = await getToken();
-  const listed = await listBitableTables(token, APP_TOKEN);
-  const ids = listed.map(function(t) { return t.table_id || t.id || ''; });
-  const report = Object.keys(TABLES).map(function(key) {
-    return {
-      key: key,
-      configuredId: TABLES[key],
-      found: ids.indexOf(TABLES[key]) >= 0
-    };
-  });
-  const missing = report.filter(function(r) { return !r.found; });
+  const results = await Promise.all(bases);
   return {
-    ok: missing.length === 0,
+    ok: results.every(function(r) { return r.ok; }),
     tableProfile: resolveTableProfileKey(),
-    appTokenSuffix: APP_TOKEN.slice(-6),
-    tableCount: listed.length,
-    tables: listed.map(function(t) {
-      return { id: t.table_id || t.id, name: t.name || '' };
-    }),
-    report: report,
-    missingKeys: missing.map(function(m) { return m.key; })
+    tableProfileBackend: (process.env.LARK_TABLE_PROFILE_BACKEND || resolveTableProfileKey()).trim(),
+    bases: results
   };
 }
 
@@ -2160,7 +2381,8 @@ async function checkMemberAuthorization(userAccessToken) {
   const tenantToken = await getToken();
   let members;
   try {
-    members = await getRecords(tenantToken, TABLES.members);
+    const cfg = getOperationalBitableConfig();
+    members = await getRecords(tenantToken, tableIdFor('members'), cfg.appToken);
   } catch (err) {
     if (isTableConfigError(err)) {
       return {
@@ -2274,6 +2496,9 @@ export default async function handler(req, res) {
         },
         env: {
           tableProfile: resolveTableProfileKey(),
+          operationalDataSource: (process.env.LARK_APP_TOKEN_BACKEND || '').trim() ? 'backend' : 'front',
+          operationalAppTokenSuffix: getOperationalBitableConfig().appToken.slice(-6),
+          writeMirrorCount: getBitableWriteTargets().mirrors.length,
           hasAppId: !!APP_ID,
           hasAppSecret: !!APP_SECRET,
           hasAppToken: !!APP_TOKEN,
@@ -2325,6 +2550,61 @@ export default async function handler(req, res) {
       });
     }
 
+    if (action === 'write-test' && req.method === 'GET') {
+      const tenantToken = await getToken();
+      const cfg = await resolveBitableConfig(tenantToken, getOperationalBitableConfig());
+      const tableId = cfg.tables.projects;
+      const testName = '寫入測試' + Date.now();
+      const out = {
+        appTokenSuffix: cfg.appToken.slice(-6),
+        tableId: tableId,
+        tests: []
+      };
+      async function tryCreate(label, authToken, asUser) {
+        const body = await normalizeWriteFields(tenantToken, tableId, { '標案名稱': testName }, cfg.appToken);
+        const url = buildMainRecordUrl(tableId, null, cfg.appToken, asUser);
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: body })
+        });
+        const data = await res.json();
+        const entry = { label: label, httpStatus: res.status, code: data.code, msg: data.msg || '' };
+        if (data.code === 0) {
+          const rid = extractRecordId(data);
+          entry.recordId = rid;
+          if (rid) {
+            try {
+              await deleteRecord(tenantToken, tableId, rid, cfg.appToken, asUser);
+              entry.cleaned = true;
+            } catch (delErr) {
+              entry.cleaned = false;
+              entry.cleanError = delErr.message || String(delErr);
+            }
+          }
+        }
+        out.tests.push(entry);
+        return data.code === 0;
+      }
+      try {
+        await tryCreate('tenant_app', tenantToken, false);
+      } catch (e) {
+        out.tests.push({ label: 'tenant_app', error: e.message || String(e) });
+      }
+      const userTok = extractUserAccessToken(req);
+      if (userTok) {
+        try {
+          await tryCreate('user_token', userTok, true);
+        } catch (e) {
+          out.tests.push({ label: 'user_token', error: e.message || String(e) });
+        }
+      } else {
+        out.note = '加上 ?userAccessToken=… 或登入後帶 X-User-Access-Token 可測使用者寫入';
+      }
+      out.ok = out.tests.some(function(t) { return t.code === 0; });
+      return res.status(200).json(out);
+    }
+
     if (action === 'project-import' && req.method === 'POST') {
       const tenantToken = await getToken();
       const userAccessToken = extractUserAccessToken(req);
@@ -2358,11 +2638,11 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'GET') {
-      if (!TABLES[table]) return res.status(400).json({ error: 'Invalid table: ' + table });
+      if (!tableIdFor(table)) return res.status(400).json({ error: 'Invalid table: ' + table });
       try {
         const token = await getToken();
         const tableAppToken = appTokenForTable(table);
-        const records = await getRecords(token, TABLES[table], tableAppToken);
+        const records = await getRecords(token, tableIdFor(table), tableAppToken);
         return res.status(200).json({ records: records });
       } catch (err) {
         console.error('GET ' + table, err);
@@ -2388,7 +2668,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      if (!TABLES[table]) return res.status(400).json({ error: 'Invalid table' });
+      if (!tableIdFor(table)) return res.status(400).json({ error: 'Invalid table' });
       const applicantHint = extractApplicantOpenIdHint(req.body);
       const cleanBody = stripAuthFromBody(req.body || {});
       if (table === 'payments') {
@@ -2402,29 +2682,31 @@ export default async function handler(req, res) {
         return res.status(200).json(result);
       }
       const tableAppToken = appTokenForTable(table);
-      const body = await normalizeWriteFields(tenantToken, TABLES[table], cleanBody, tableAppToken);
+      const tid = tableIdFor(table);
+      const body = await normalizeWriteFields(tenantToken, tid, cleanBody, tableAppToken);
       const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
-        return createRecord(tok, TABLES[table], body, tableAppToken, asUser);
+        return createRecord(tok, tid, body, tableAppToken, asUser);
       });
       return res.status(200).json(result);
     }
 
     if (req.method === 'PUT') {
-      if (!TABLES[table] || !recordId) return res.status(400).json({ error: 'Invalid params' });
+      if (!tableIdFor(table) || !recordId) return res.status(400).json({ error: 'Invalid params' });
       const tableAppToken = appTokenForTable(table);
+      const tid = tableIdFor(table);
       const cleanBody = stripAuthFromBody(req.body || {});
-      const body = await normalizeWriteFields(tenantToken, TABLES[table], cleanBody, tableAppToken);
+      const body = await normalizeWriteFields(tenantToken, tid, cleanBody, tableAppToken);
       const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
-        return updateRecord(tok, TABLES[table], recordId, body, tableAppToken, asUser);
+        return updateRecord(tok, tid, recordId, body, tableAppToken, asUser);
       });
       return res.status(200).json(result);
     }
 
     if (req.method === 'DELETE') {
-      if (!TABLES[table] || !recordId) return res.status(400).json({ error: 'Invalid params' });
+      if (!tableIdFor(table) || !recordId) return res.status(400).json({ error: 'Invalid params' });
       const tableAppToken = appTokenForTable(table);
       const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
-        return deleteRecord(tok, TABLES[table], recordId, tableAppToken, asUser);
+        return deleteRecord(tok, tableIdFor(table), recordId, tableAppToken, asUser);
       });
       return res.status(200).json(result);
     }
@@ -2433,6 +2715,8 @@ export default async function handler(req, res) {
  
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: err.message });
+    const msg = err.message || String(err);
+    const status = /forbidden/i.test(msg) ? 403 : 500;
+    return res.status(status).json({ error: msg });
   }
 }
