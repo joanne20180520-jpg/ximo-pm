@@ -313,7 +313,7 @@ function isRetryableWriteError(err) {
 
 async function enrichPersonFieldsForWrite(tenantToken, cfg, rawFields) {
   const out = Object.assign({}, rawFields || {});
-  const personKeys = ['主PM', '負責夥伴', '負責人', '申請人'];
+  const personKeys = ['主PM', '負責PM', '負責夥伴', '負責人', '設計師', '申請人'];
   let members = null;
 
   async function loadMembers() {
@@ -1278,8 +1278,8 @@ function buildArchiveRecordFields(rawFields, allowedSet, fieldMeta, overrides) {
     if (overrides[name] !== undefined) return;
     const meta = fieldMeta[name];
     if (!meta) return;
-    // Person / select values from PM base often fail in wiki archive tables.
-    if (meta.type === 11 || meta.type === 3 || meta.type === 4) return;
+    // Select options differ between PM and wiki tables; person fields need valid open_id.
+    if (meta.type === 3 || meta.type === 4) return;
     const normalized = normalizeArchiveFieldValue(meta, remapped[name]);
     if (normalized !== null && normalized !== undefined) out[name] = normalized;
   });
@@ -1305,6 +1305,12 @@ function buildArchiveRecordFields(rawFields, allowedSet, fieldMeta, overrides) {
     out[name] = val;
   });
   return out;
+}
+
+async function buildEnrichedArchiveFields(tenantToken, rawFields, allowedSet, fieldMeta, overrides) {
+  const cfg = getOperationalBitableConfig();
+  const enriched = await enrichPersonFieldsForWrite(tenantToken, cfg, cloneFields(rawFields));
+  return buildArchiveRecordFields(enriched, allowedSet, fieldMeta, overrides || {});
 }
 
 function remapFieldsForTarget(fields, allowedSet) {
@@ -1775,7 +1781,7 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
     if (stMeta && (stMeta.type === 1 || stMeta.type === 13)) projOverrides['狀態'] = '封存';
   }
   if (finalWikiUrl) applyWikiUrlOverrides(projOverrides, projAllowed, projMeta, finalWikiUrl);
-  const projFields = buildArchiveRecordFields(cloneFields(bundle.project.fields), projAllowed, projMeta, projOverrides);
+  const projFields = await buildEnrichedArchiveFields(token, bundle.project.fields, projAllowed, projMeta, projOverrides);
   const projCreated = await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.projects, [projFields], '標案', projMeta);
   const newProjId = projCreated[0] && projCreated[0].record_id;
   if (!newProjId) throw new Error('複製標案至知識庫失敗');
@@ -1785,11 +1791,13 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
   const wiMeta = wiSchemas.fieldMeta;
   const wiLinkField = pickProjectLinkFieldName(wiAllowed) || '所屬標案';
   const wiMap = {};
-  const wiFieldsList = bundle.workitems.map(function(wi) {
+  const wiFieldsList = [];
+  for (let wiIdx = 0; wiIdx < bundle.workitems.length; wiIdx++) {
+    const wi = bundle.workitems[wiIdx];
     const overrides = {};
     if (wiAllowed[wiLinkField]) overrides[wiLinkField] = [newProjId];
-    return buildArchiveRecordFields(cloneFields(wi.fields), wiAllowed, wiMeta, overrides);
-  });
+    wiFieldsList.push(await buildEnrichedArchiveFields(token, wi.fields, wiAllowed, wiMeta, overrides));
+  }
   const wiCreated = await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.workitems, wiFieldsList, '工作項目', wiMeta);
   bundle.workitems.forEach(function(wi, i) {
     if (wiCreated[i]) wiMap[wi.record_id] = wiCreated[i].record_id;
@@ -1807,36 +1815,42 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
   const taskSchemas = await getTableFieldSchemas(wikiToken, targetApp, tableMap.tasks, fieldCache);
   const taskAllowed = taskSchemas.allowedSet;
   const taskMeta = taskSchemas.fieldMeta;
-  const taskFieldsList = bundle.tasks.map(function(t) {
+  const taskFieldsList = [];
+  for (let ti = 0; ti < bundle.tasks.length; ti++) {
+    const t = bundle.tasks[ti];
     const overrides = {};
     const oldWi = getLinkIds(t.fields['所屬工作項目'])[0];
     if (oldWi && wiMap[oldWi] && taskAllowed['所屬工作項目']) overrides['所屬工作項目'] = [wiMap[oldWi]];
-    return buildArchiveRecordFields(cloneFields(t.fields), taskAllowed, taskMeta, overrides);
-  });
+    taskFieldsList.push(await buildEnrichedArchiveFields(token, t.fields, taskAllowed, taskMeta, overrides));
+  }
   await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.tasks, taskFieldsList, '任務', taskMeta);
 
   const expSchemas = await getTableFieldSchemas(wikiToken, targetApp, tableMap.expenses, fieldCache);
   const expAllowed = expSchemas.allowedSet;
   const expMeta = expSchemas.fieldMeta;
   const expProjField = pickProjectLinkFieldName(expAllowed);
-  const expFieldsList = bundle.expenses.map(function(e) {
+  const expFieldsList = [];
+  for (let ei = 0; ei < bundle.expenses.length; ei++) {
+    const e = bundle.expenses[ei];
     const overrides = {};
     const oldWi = getLinkIds(e.fields['所屬工作項目'])[0];
     if (oldWi && wiMap[oldWi] && expAllowed['所屬工作項目']) overrides['所屬工作項目'] = [wiMap[oldWi]];
     if (expProjField) overrides[expProjField] = [newProjId];
-    return buildArchiveRecordFields(cloneFields(e.fields), expAllowed, expMeta, overrides);
-  });
+    expFieldsList.push(await buildEnrichedArchiveFields(token, e.fields, expAllowed, expMeta, overrides));
+  }
   await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.expenses, expFieldsList, '支出', expMeta);
 
   const desSchemas = await getTableFieldSchemas(wikiToken, targetApp, tableMap.designs, fieldCache);
   const desAllowed = desSchemas.allowedSet;
   const desMeta = desSchemas.fieldMeta;
-  const desFieldsList = bundle.designs.map(function(d) {
+  const desFieldsList = [];
+  for (let di = 0; di < bundle.designs.length; di++) {
+    const d = bundle.designs[di];
     const overrides = {};
     const oldWi = getLinkIds(d.fields['所屬工作項目'])[0];
     if (oldWi && wiMap[oldWi] && desAllowed['所屬工作項目']) overrides['所屬工作項目'] = [wiMap[oldWi]];
-    return buildArchiveRecordFields(cloneFields(d.fields), desAllowed, desMeta, overrides);
-  });
+    desFieldsList.push(await buildEnrichedArchiveFields(token, d.fields, desAllowed, desMeta, overrides));
+  }
   await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.designs, desFieldsList, '設計', desMeta);
 
   return { copied: true, newProjectId: newProjId, targetAppToken: targetApp, wikiUrl: finalWikiUrl, wikiFolderUrl: target.wikiFolderUrl || wikiUrl };
