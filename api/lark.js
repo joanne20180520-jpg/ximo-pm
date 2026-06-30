@@ -1281,7 +1281,8 @@ function normalizeArchiveMultiSelectValue(val) {
 }
 
 function normalizeArchiveFieldValue(meta, val) {
-  if (val === undefined || val === null || val === '') return null;
+  if (val === undefined || val === null) return null;
+  if (val === '' && (!meta || meta.type !== 1)) return null;
   if (!meta) return null;
   const t = meta.type;
 
@@ -1532,8 +1533,7 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
       return;
     }
     if (BITABLE_LINK_FIELD_TYPES[m.type]) {
-      const ids = normalizeLinkFieldValue(val);
-      if (ids.length) out[name] = ids;
+      out[name] = normalizeLinkFieldValue(val);
       return;
     }
     if (m.type === 11) {

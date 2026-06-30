@@ -58,15 +58,16 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .badd:active{background:var(--c1)!important;color:#fff!important;border-color:var(--c1)!important;transform:scale(0.96);box-shadow:0 0 0 3px rgba(45,106,79,.22)}
 .pl{overflow-y:auto;padding:2px 8px 8px;flex-shrink:1;min-height:0}
 .pi{margin-bottom:4px;border-radius:var(--rs);overflow:hidden}
-.pr{display:flex;align-items:center;gap:6px;padding:7px 9px;cursor:pointer;color:#fff;font-size:12px;font-weight:500;user-select:none;border-radius:var(--rs)}
-.pr .dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.5);flex-shrink:0}
+.pr{display:flex;align-items:flex-start;gap:6px;padding:7px 9px;cursor:pointer;color:#fff;font-size:12px;font-weight:500;user-select:none;border-radius:var(--rs)}
+.pr .dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.5);flex-shrink:0;margin-top:4px}
 .pr .arr{font-size:9px;opacity:.8;transition:transform .2s;flex-shrink:0;margin-left:2px}
 .pr.open .arr{transform:rotate(90deg)}
 .pr-main{flex:1;min-width:0}
-.pr-name{display:block;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr-name{display:-webkit-box;font-size:12px;font-weight:600;line-height:1.35;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;word-break:break-word}
 .pr-meta{font-size:9px;opacity:.88;margin-top:2px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pr-pct{font-size:10px;font-weight:700;background:rgba(255,255,255,.22);padding:2px 6px;border-radius:10px;flex-shrink:0}
-.bdel{width:18px;height:18px;border:none;border-radius:3px;background:rgba(0,0,0,.18);color:#fff;font-size:11px;line-height:18px;cursor:pointer;flex-shrink:0;opacity:0;transition:opacity .15s,background .15s;padding:0}
+.pr-pct{font-size:10px;font-weight:700;background:rgba(255,255,255,.22);padding:2px 6px;border-radius:10px;flex-shrink:0;align-self:center}
+.bdel{width:18px;height:18px;border:none;border-radius:3px;background:rgba(0,0,0,.18);color:#fff;font-size:11px;line-height:18px;cursor:pointer;flex-shrink:0;opacity:0;transition:opacity .15s,background .15s;padding:0;align-self:center}
+.pr .arr{align-self:center}
 .pr:hover .bdel{opacity:1}
 .bdel:hover{background:rgba(180,40,40,.9)}
 .sl2{display:none;margin:2px 0 3px 4px}
@@ -428,6 +429,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .ppb{padding:16px}
 .ppb2{padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px 16px}
 .ppf{padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:7px}
+.ppf .bdel-action{margin-right:auto;color:#c0392b;border-color:#f0c7c7;background:#fff5f5}
 .bcan{padding:6px 13px;border-radius:var(--rs);border:1px solid var(--border);background:var(--sf2);font-size:12px;cursor:pointer;color:var(--t2);transition:background .12s,color .12s,border-color .12s,transform .08s,box-shadow .12s}
 .bpri{padding:6px 16px;border-radius:var(--rs);border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer;transition:background .12s,color .12s,border-color .12s,transform .08s,box-shadow .12s}
 .fbox{background:var(--sf2);border-radius:var(--rs);padding:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
@@ -945,7 +947,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
 <div class="po" id="pp-des"><div class="pp ppw"><div class="pph"><h3>建立新設計任務</h3><button class="ppc" onclick="cl('pp-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ds-name" placeholder="Logo"></div><div class="fg"><label>所屬工作項目</label><select id="ds-wi"></select></div><div class="fg"><label>負責PM</label><select id="ds-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ds-item" placeholder="A"></div><div class="fg"><label>設計需求</label><input type="text" id="ds-req" placeholder="AA"></div><div class="fg"><label>設計師</label><select id="ds-designer" data-members></select></div><div class="fg"><label>進度狀態</label><select id="ds-status"></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" class="money-input" id="ds-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" class="money-input" id="ds-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ds-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ds-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ds-deliver"></div><div class="fg"><label>備註</label><textarea id="ds-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-des')">取消</button><button class="bpri" onclick="saveDesign()">新增</button></div></div></div>
 
 <!-- 修改設計任務單 -->
-<div class="po" id="pp-edit-des"><div class="pp ppw"><div class="pph"><h3>修改設計任務單</h3><button class="ppc" onclick="cl('pp-edit-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ed-name"></div><div class="fg"><label>所屬工作項目</label><select id="ed-wi"></select></div><div class="fg"><label>負責PM</label><select id="ed-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ed-item"></div><div class="fg"><label>設計需求</label><input type="text" id="ed-req"></div><div class="fg"><label>設計師</label><select id="ed-designer" data-members></select></div><div class="fg"><label>進度狀態</label><select id="ed-status"></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" class="money-input" id="ed-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" class="money-input" id="ed-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ed-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ed-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ed-deliver"></div><div class="fg"><label>備註</label><textarea id="ed-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-des')">取消</button><button class="bpri" onclick="saveEditDesign()">儲存</button></div></div></div>
+<div class="po" id="pp-edit-des"><div class="pp ppw"><div class="pph"><h3>修改設計任務單</h3><button class="ppc" onclick="cl('pp-edit-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ed-name"></div><div class="fg"><label>所屬工作項目</label><select id="ed-wi"></select></div><div class="fg"><label>負責PM</label><select id="ed-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ed-item"></div><div class="fg"><label>設計需求</label><input type="text" id="ed-req"></div><div class="fg"><label>設計師</label><select id="ed-designer" data-members></select></div><div class="fg"><label>進度狀態</label><select id="ed-status"></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" class="money-input" id="ed-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" class="money-input" id="ed-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ed-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ed-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ed-deliver"></div><div class="fg"><label>備註</label><textarea id="ed-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan bdel-action" id="ed-del-btn" onclick="deleteDesignFromEdit()">刪除</button><button class="bcan" onclick="cl('pp-edit-des')">取消</button><button class="bpri" onclick="saveEditDesign()">儲存</button></div></div></div>
 
 <!-- 付款預覽（元頂集團格式） -->
 <div class="po" id="pp-prev" style="align-items:flex-start;padding-top:20px">
@@ -1015,7 +1017,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>實際金額</label><input type="text" class="money-input" placeholder="NT$0" id="ee-actual" oninput="calcEditExpense()"></div>
   <div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ee-untax" readonly style="background:#f0f0f0;color:var(--t3)"></div>
   <div class="fg"><label>狀態</label><select id="ee-status"><option value="未合銷">待核銷</option><option value="已合銷">已核銷</option></select></div>
-</div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-exp')">取消</button><button class="bpri" onclick="saveEditExpense()">儲存</button></div></div></div>
+</div><div class="ppf"><button class="bcan bdel-action" onclick="deleteExpenseFromEdit()">刪除</button><button class="bcan" onclick="cl('pp-edit-exp')">取消</button><button class="bpri" onclick="saveEditExpense()">儲存</button></div></div></div>
 
 <!-- 確認對話框 -->
 <div id="confirm-overlay" class="confirm-overlay" style="display:none">
@@ -1033,7 +1035,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
 </div>
 <!-- 復原提示條 -->
 <div class="undo-toast" id="undo-toast">
-  <span id="undo-toast-msg">已刪除</span>
+  <span id="undo-toast-msg">已刪除（5 秒內可復原）</span>
   <button class="undo-btn" onclick="undoLast()">↩ 復原</button>
 </div>
 </div>
@@ -2928,7 +2930,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v64';
+var APP_BUILD = '20260615v67';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -4518,6 +4520,8 @@ function safeRenderAfterLoad() {
     renderGanttFromData();
     renderBudget();
     renderExpenses();
+    buildMembersMap();
+    fillMemberSelects();
   } catch (renderErr) {
     console.error('畫面渲染失敗', renderErr);
     var pl = document.getElementById('pl-projects');
@@ -4705,8 +4709,12 @@ function renderExpenses() {
   });
   var html = '';
   function renderProjectBlock(pname, color) {
-    var items = byProject[pname];
-    if (!items || !items.length) return '';
+    var items = byProject[pname] || [];
+    var header = '<div class="dc"><div class="dch"><div class="pdot" style="background:'+color+'"></div><h3>'+escHtml(pname)+'</h3>'
+      +'<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-exp\')">＋ 新增支出明細</button></div>';
+    if (!items.length) {
+      return header + '<div style="padding:12px 16px;color:var(--t3);font-size:12px">此標案尚無支出明細，點右上角新增第一筆</div></div>';
+    }
     var byAssignee = {};
     items.forEach(function(item) {
       var key = item.assignee || '未指定';
@@ -4719,30 +4727,35 @@ function renderExpenses() {
       byAssignee[aname].forEach(function(item) {
         var stClass = (item.status === '已合銷' || item.status === '已核銷') ? 'std' : 'stp';
         var stLabel = (item.status === '已合銷' || item.status === '已核銷') ? '已核銷' : '待核銷';
-        rows += '<tr class="erow" onclick="openEditExpense(\'' + item.id + '\')" title="點擊編輯"><td>'+item.name+'</td><td>'+aname+'</td><td>'+item.wiName+'</td>'
+        rows += '<tr class="erow" onclick="openEditExpense(\'' + item.id + '\')" title="點擊編輯"><td>'+escHtml(item.name)+'</td><td>'+escHtml(aname)+'</td><td>'+escHtml(item.wiName)+'</td>'
           +'<td>'+item.date+'</td>'
           +'<td style="font-weight:600">'+ntf(item.actual)+'</td>'
           +'<td>'+ntf(item.untax)+'</td>'
           +'<td><span class="st '+stClass+'">'+stLabel+'</span></td></tr>';
       });
     });
-    return '<div class="dc"><div class="dch"><div class="pdot" style="background:'+color+'"></div><h3>'+pname+'</h3>'
-      +'<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-exp\')">＋ 新增支出明細</button></div>'
-      +'<div style="overflow-x:auto"><table class="dt"><thead><tr>'
+    return header + '<div style="overflow-x:auto"><table class="dt"><thead><tr>'
       +'<th>支出細項</th><th>負責人</th><th>所屬工作項目</th><th>日期</th><th>實際金額</th><th>未稅金額</th><th>狀態</th>'
       +'</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
   }
   projectsData.forEach(function(rec, i) {
     var pname = rec.fields['標案名稱'] || '';
+    if (!pname) return;
     html += renderProjectBlock(pname, PROJECT_COLORS[i % PROJECT_COLORS.length]);
   });
   if (byProject['其他'] && byProject['其他'].length) {
     html += renderProjectBlock('其他', '#888');
   }
-  area.innerHTML = html || '<div style="padding:20px;color:var(--t3)">尚無支出明細</div>';
+  area.innerHTML = html || '<div style="padding:20px;color:var(--t3);text-align:center">尚無標案，請先在左側建立標案後再新增支出明細</div>';
 }
 
 // ── 渲染 A 區標案列表 ──
+function syncTruncatedTitle(el, fullText) {
+  if (!el) return;
+  var full = fullText != null ? fullText : (el.getAttribute('data-full') || el.textContent || '');
+  if (el.scrollHeight > el.clientHeight + 1) el.title = full;
+  else el.removeAttribute('title');
+}
 function renderProjects() {
   var html = '';
   var visibleIdx = 0;
@@ -4779,7 +4792,7 @@ function renderProjects() {
     });
     html += '<div class="pi">';
     html += '<div class="pr" style="background:' + color + '" onclick="tgp(this)">';
-    html += '<div class="dot"></div><div class="pr-main"><span class="pr-name">' + name + '</span>';
+    html += '<div class="dot"></div><div class="pr-main"><span class="pr-name" data-full="' + escAttr(name) + '">' + escHtml(name) + '</span>';
     if (meta) html += '<div class="pr-meta">' + meta + '</div>';
     html += '</div><span class="pr-pct">' + progress + '%</span>';
     html += '<button type="button" class="bdel" title="修改標案" style="margin-right:2px" onclick="event.stopPropagation();openEditProject(\'' + rec.record_id + '\')">✎</button>';
@@ -4788,6 +4801,9 @@ function renderProjects() {
     html += '<div class="sl2">' + subHTML + '</div></div>';
   });
   document.getElementById('pl-projects').innerHTML = html || '<div style="padding:12px;color:var(--t3);font-size:11px">尚無標案</div>';
+  document.querySelectorAll('#pl-projects .pr-name').forEach(function(el) {
+    syncTruncatedTitle(el);
+  });
 }
 
 // ── 渲染 B 區任務清單 ──
@@ -6807,32 +6823,57 @@ function renderBlockTaskCard(item) {
 }
 
 function applyBlockStatusChange(btn) {
-  var card = btn.closest('.jc-block-item') || btn.closest('.j-block-alert') || btn.closest('.j-proj-section-block');
-  var sel = card ? card.querySelector('.jc-block-status') : null;
+  var actions = btn.closest('.jc-block-actions') || btn.closest('.j-proj-block-actions');
+  var sel = actions ? actions.querySelector('.jc-block-status') : null;
   if (!sel) {
-    var actions = btn.closest('.jc-block-actions');
-    sel = actions ? actions.querySelector('.jc-block-status') : null;
+    var card = btn.closest('.jc-block-item') || btn.closest('.j-block-alert') || btn.closest('li') || btn.closest('.j-proj-section-block');
+    sel = card ? card.querySelector('.jc-block-status') : null;
   }
   var newCat = sel ? sel.value : '';
   if (!newCat) { alert('請選擇要調整的狀態'); return; }
   resolveBlockedTask(btn.dataset.taskId, btn.dataset.journalId, newCat, btn);
 }
 
+function findJournalRecordsWithBlockedTask(journalRecId, taskId) {
+  var recs = [];
+  var primary = journalData.find(function(r) { return r.record_id === journalRecId; });
+  if (primary) {
+    var dayStart = journalTs(primary);
+    var author = journalPersonName(primary);
+    journalData.forEach(function(r) {
+      if (dayStart != null && journalTs(r) !== dayStart) return;
+      if (author && author !== '（未指定）' && journalPersonName(r) !== author) return;
+      if (getLinkIds(r.fields['卡關任務']).indexOf(taskId) >= 0) recs.push(r);
+    });
+  }
+  if (!recs.length) {
+    journalData.forEach(function(r) {
+      if (getLinkIds(r.fields['卡關任務']).indexOf(taskId) >= 0) recs.push(r);
+    });
+  }
+  if (!recs.length && primary) recs.push(primary);
+  return recs;
+}
+
 function resolveBlockedTask(taskId, journalRecId, newCat, btn) {
-  var journalRec = journalData.find(function(r) { return r.record_id === journalRecId; });
-  if (!journalRec) { alert('找不到對應日誌'); return; }
+  var journalRecs = findJournalRecordsWithBlockedTask(journalRecId, taskId);
+  if (!journalRecs.length) { alert('找不到對應日誌'); return; }
   if (btn) { btn.disabled = true; btn.textContent = '更新中…'; }
-  var merged = mergeTaskIntoJournalCategories(journalRec, taskId, newCat);
-  var reasonMap = parseBlockReasons(journalRec);
-  delete reasonMap.byId[taskId];
-  var journalFields = {
-    '進行中任務': merged.doing,
-    '已完成今日任務': merged.done,
-    '卡關任務': merged.block,
-    '明日預計任務': merged.tomorrow,
-    '卡關原因': encodeBlockReasons(reasonMap.byId)
-  };
-  if (!merged.block.length) journalFields['卡關原因'] = '';
+
+  var journalUpdates = journalRecs.map(function(journalRec) {
+    var merged = mergeTaskIntoJournalCategories(journalRec, taskId, newCat);
+    var reasonMap = parseBlockReasons(journalRec);
+    delete reasonMap.byId[taskId];
+    var journalFields = {
+      '進行中任務': merged.doing,
+      '已完成今日任務': merged.done,
+      '卡關任務': merged.block,
+      '明日預計任務': merged.tomorrow,
+      '卡關原因': encodeBlockReasons(reasonMap.byId)
+    };
+    if (!merged.block.length && !journalFields['卡關原因']) journalFields['卡關原因'] = '';
+    return apiPut('journal', journalRec.record_id, journalFields);
+  });
 
   var taskUpdate = Promise.resolve({ code: 0 });
   if (newCat === 'done') {
@@ -6853,7 +6894,7 @@ function resolveBlockedTask(taskId, journalRecId, newCat, btn) {
     }
   }
 
-  Promise.all([apiPut('journal', journalRecId, journalFields), taskUpdate])
+  Promise.all(journalUpdates.concat([taskUpdate]))
     .then(function() { return reloadJournal(); })
     .then(function() { return fetch(API + '?table=tasks').then(function(r) { return r.json(); }); })
     .then(function(data) {
@@ -7116,6 +7157,7 @@ function groupJournalTasksByProject(done, doing, blocks, tomorrow) {
 
 function collectJournalPersonData(rec, personName, opts) {
   opts = opts || {};
+  var sourceRecs = opts.sourceRecs || (rec ? [rec] : []);
   if (!rec) {
     return {
       name: personName,
@@ -7127,6 +7169,14 @@ function collectJournalPersonData(rec, personName, opts) {
     };
   }
   var reasonMap = parseBlockReasons(rec);
+  function findBlockSourceJournalId(taskId) {
+    for (var i = 0; i < sourceRecs.length; i++) {
+      if (getLinkIds(sourceRecs[i].fields['卡關任務']).indexOf(taskId) >= 0) {
+        return sourceRecs[i].record_id;
+      }
+    }
+    return rec.record_id;
+  }
   function mapTasks(fieldKey) {
     return getLinkIds(rec.fields[fieldKey]).map(function(id) {
       var ctx = getTaskContext(id);
@@ -7147,7 +7197,7 @@ function collectJournalPersonData(rec, personName, opts) {
       name: ctx ? (ctx.f['任務名稱'] || '任務') : '任務',
       wiName: ctx ? (ctx.wiName || '') : '',
       reason: reasonMap.byId[id] || reasonMap.legacy || '',
-      journalRecId: rec.record_id
+      journalRecId: findBlockSourceJournalId(id)
     };
   });
   var total = done.length + doing.length + blocks.length + tomorrow.length;
@@ -7255,7 +7305,7 @@ function renderJournalDashboard(area) {
   var persons = names.map(function(name) {
     var recs = findDailyJournalRecords(dayStart, name);
     var rec = mergePersonJournalRecords(recs);
-    return collectJournalPersonData(rec, name, { noDataAtAll: noDataAtAll });
+    return collectJournalPersonData(rec, name, { noDataAtAll: noDataAtAll, sourceRecs: recs });
   }).sort(function(a, b) {
     if (a.empty !== b.empty) return a.empty ? 1 : -1;
     return a.name.localeCompare(b.name, 'zh-Hant');
@@ -7372,8 +7422,12 @@ function renderDesigns() {
   });
 
   function renderProjectBlock(pname, color) {
-    var list = byProject[pname];
-    if (!list || !list.length) return '';
+    var list = byProject[pname] || [];
+    var addBtn = isPMRole() ? '<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-des\')">＋ 新增設計任務單</button>' : '';
+    var header = '<div class="dc"><div class="dch"><div class="pdot" style="background:' + color + '"></div><h3>' + escHtml(pname) + '</h3>' + addBtn + '</div>';
+    if (!list.length) {
+      return header + '<div style="padding:12px 16px;color:var(--t3);font-size:12px">' + (isPMRole() ? '此標案尚無設計任務，點右上角新增第一筆' : '此標案尚無設計任務') + '</div></div>';
+    }
     var rows = '';
     list.forEach(function(d) {
       rows += '<tr class="erow" onclick="openEditDesign(\'' + d.id + '\')" title="點擊編輯"><td style="font-weight:500">' + escHtml(d.name) + '</td><td>' + escHtml(d.wiName) + '</td><td>' + escHtml(d.pm) + '</td><td>' + escHtml(d.item) + '</td><td>' + escHtml(d.req) + '</td><td>' + escHtml(d.designer) + '</td>'
@@ -7381,9 +7435,7 @@ function renderDesigns() {
         + '<td>' + fmtMoneyVal(d.spent) + '</td>'
         + '<td>' + d.draft + '</td><td>' + d.final + '</td><td>' + d.deliver + '</td></tr>';
     });
-    return '<div class="dc"><div class="dch"><div class="pdot" style="background:' + color + '"></div><h3>' + escHtml(pname) + '</h3>'
-      + (isPMRole() ? '<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-des\')">＋ 新增設計任務單</button>' : '')
-      + '</div>'
+    return header
       + '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>設計項目名稱</th><th>所屬工作項目</th><th>負責PM</th><th>項目</th><th>設計需求</th><th>設計師</th><th>進度狀態</th><th>預算</th><th>實際花費</th><th>初稿</th><th>完稿</th><th>成品</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }
 
@@ -7391,6 +7443,7 @@ function renderDesigns() {
   projectsData.forEach(function(rec, i) {
     if (!isProjectVisible(rec)) return;
     var pname = rec.fields['標案名稱'] || '';
+    if (!pname) return;
     html += renderProjectBlock(pname, PROJECT_COLORS[i % PROJECT_COLORS.length]);
     delete byProject[pname];
   });
@@ -7401,35 +7454,44 @@ function renderDesigns() {
   Object.keys(byProject).forEach(function(pname) {
     if (byProject[pname] && byProject[pname].length) html += renderProjectBlock(pname, '#888');
   });
-  area.innerHTML = html || '<div style="padding:20px;color:var(--t3)">尚無設計任務單</div>';
+  area.innerHTML = html || '<div style="padding:20px;color:var(--t3);text-align:center">尚無標案，請先在左側建立標案後再新增設計任務</div>';
 }
 
 function buildMembersMap() {
   membersMap = {};
+  function addMember(name, id, role) {
+    if (!name || name === '—') return;
+    if (!membersMap[name]) {
+      membersMap[name] = { id: id || '', name: name, role: role || 'PM' };
+    } else if (id && !membersMap[name].id) {
+      membersMap[name].id = id;
+    }
+  }
   membersData.forEach(function(m) {
     var f = m.fields || {};
-    var name = memberLabel(f['姓名'] || f['名稱'] || f['成員']);
-    var id = getPersonOpenId(f['帳號']) || getPersonOpenId(f['成員']) || getPersonOpenId(f['姓名'])
-      || (f['open_id'] && String(f['open_id']).trim())
-      || (f['user_id'] && String(f['user_id']).trim())
-      || (f['User ID'] && String(f['User ID']).trim());
-    if (name) membersMap[name] = {
-      id: id,
-      name: name,
-      role: fieldTextValue(f['角色'] || f['Role']) || 'PM'
-    };
+    var ids = memberFieldPersonIds(f);
+    var id = ids[0] || '';
+    var name = '';
+    var nameKeys = ['帳號', '成員', '姓名', '名稱', '人員', 'Member', 'Account', '顯示名稱'];
+    for (var i = 0; i < nameKeys.length; i++) {
+      name = memberLabel(f[nameKeys[i]]) || personName(f[nameKeys[i]]);
+      if (name) break;
+    }
+    if (name) addMember(name, id, fieldTextValue(f['角色'] || f['Role']) || 'PM');
   });
   tasksData.forEach(function(t) {
     var p = t.fields['負責人'];
-    if (p && p[0] && p[0].name && !membersMap[p[0].name]) {
-      membersMap[p[0].name] = { id: p[0].id || p[0].open_id, name: p[0].name };
-    }
+    if (p && p[0] && p[0].name) addMember(p[0].name, p[0].id || p[0].open_id);
+  });
+  workitemsData.forEach(function(wi) {
+    ['負責夥伴', '執行夥伴'].forEach(function(key) {
+      var p = wi.fields[key];
+      if (p && p[0] && p[0].name) addMember(p[0].name, p[0].id || p[0].open_id);
+    });
   });
   projectsData.forEach(function(p) {
     var pm = p.fields['主PM'];
-    if (pm && pm[0] && pm[0].name && !membersMap[pm[0].name]) {
-      membersMap[pm[0].name] = { id: pm[0].id || pm[0].open_id, name: pm[0].name };
-    }
+    if (pm && pm[0] && pm[0].name) addMember(pm[0].name, pm[0].id || pm[0].open_id);
   });
 }
 
@@ -7791,6 +7853,8 @@ function applyEditDesignPermissions() {
   });
   var saveBtn = document.querySelector('#pp-edit-des .bpri');
   if (saveBtn) saveBtn.style.display = pm ? '' : 'none';
+  var delBtn = document.getElementById('ed-del-btn');
+  if (delBtn) delBtn.style.display = pm ? '' : 'none';
 }
 
 function saveEditDesign() {
@@ -8153,14 +8217,14 @@ function deleteProject(id, name) {
   showConfirm({
     type: 'del',
     title: '刪除標案',
-    body: '確定要刪除這個標案嗎？<br><span class="confirm-name">「' + name + '」</span>刪除後可透過復原按鈕還原。',
+    body: '確定要刪除這個標案嗎？<br><span class="confirm-name">「' + name + '」</span>刪除後 5 秒內可點「復原」還原。',
     okText: '刪除',
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
       apiDelete('projects', id).then(function() {
         if (savedData) undoStack.push({ type: 'delete', table: 'projects', data: savedData });
         loadData();
-        showUndoToast('標案「' + name + '」已刪除');
+        showUndoToast('標案「' + name + '」已刪除（5 秒內可復原）');
       }).catch(function(err) { alert('刪除失敗：' + err.message); });
     }
   });
@@ -8171,14 +8235,14 @@ function deleteWorkItem(id, name) {
   showConfirm({
     type: 'del',
     title: '刪除工作項目',
-    body: '確定要刪除這個工作項目嗎？<br><span class="confirm-name">「' + name + '」</span>刪除後可透過復原按鈕還原。',
+    body: '確定要刪除這個工作項目嗎？<br><span class="confirm-name">「' + name + '」</span>刪除後 5 秒內可點「復原」還原。',
     okText: '刪除',
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
       apiDelete('workitems', id).then(function() {
         if (savedData) undoStack.push({ type: 'delete', table: 'workitems', data: savedData });
         loadData();
-        showUndoToast('工作項目「' + name + '」已刪除');
+        showUndoToast('工作項目「' + name + '」已刪除（5 秒內可復原）');
       }).catch(function(err) { alert('刪除失敗：' + err.message); });
     }
   });
@@ -8189,17 +8253,70 @@ function deleteTask(id, name) {
   showConfirm({
     type: 'del',
     title: '刪除任務',
-    body: '確定要刪除這個任務嗎？<br><span class="confirm-name">「' + name + '」</span>刪除後可透過復原按鈕還原。',
+    body: '確定要刪除這個任務嗎？<br><span class="confirm-name">「' + name + '」</span>刪除後 5 秒內可點「復原」還原。',
     okText: '刪除',
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
       apiDelete('tasks', id).then(function() {
         if (savedData) undoStack.push({ type: 'delete', table: 'tasks', data: savedData });
         loadData();
-        showUndoToast('任務「' + name + '」已刪除');
+        showUndoToast('任務「' + name + '」已刪除（5 秒內可復原）');
       }).catch(function(err) { alert('刪除失敗：' + err.message); });
     }
   });
+}
+
+function deleteExpense(id, name) {
+  var rec = expensesData.find(function(r) { return r.record_id === id; });
+  showConfirm({
+    type: 'del',
+    title: '刪除支出明細',
+    body: '確定要刪除這筆支出嗎？<br><span class="confirm-name">「' + escHtml(name) + '」</span>刪除後 5 秒內可點「復原」還原。',
+    okText: '刪除',
+    onOk: function() {
+      var savedData = rec ? Object.assign({}, rec.fields) : null;
+      apiDelete('expenses', id).then(function() {
+        if (savedData) undoStack.push({ type: 'delete', table: 'expenses', data: savedData });
+        cl('pp-edit-exp');
+        editingExpenseId = null;
+        loadData();
+        showUndoToast('支出「' + name + '」已刪除（5 秒內可復原）');
+      }).catch(function(err) { alert('刪除失敗：' + err.message); });
+    }
+  });
+}
+
+function deleteExpenseFromEdit() {
+  if (!editingExpenseId) return;
+  var name = (document.getElementById('ee-name').value || '').trim() || '支出明細';
+  deleteExpense(editingExpenseId, name);
+}
+
+function deleteDesign(id, name) {
+  if (!isPMRole()) return;
+  var rec = designsData.find(function(r) { return r.record_id === id; });
+  showConfirm({
+    type: 'del',
+    title: '刪除設計任務單',
+    body: '確定要刪除這筆設計任務嗎？<br><span class="confirm-name">「' + escHtml(name) + '」</span>刪除後 5 秒內可點「復原」還原。',
+    okText: '刪除',
+    onOk: function() {
+      var savedData = rec ? Object.assign({}, rec.fields) : null;
+      apiDelete('designs', id).then(function() {
+        if (savedData) undoStack.push({ type: 'delete', table: 'designs', data: savedData });
+        cl('pp-edit-des');
+        editingDesignId = null;
+        loadExtraData();
+        showUndoToast('設計任務「' + name + '」已刪除（5 秒內可復原）');
+      }).catch(function(err) { alert('刪除失敗：' + err.message); });
+    }
+  });
+}
+
+function deleteDesignFromEdit() {
+  if (!isPMRole() || !editingDesignId) return;
+  var name = (document.getElementById('ed-name').value || '').trim() || '設計任務';
+  deleteDesign(editingDesignId, name);
 }
 
 function preparePopup(id) {
