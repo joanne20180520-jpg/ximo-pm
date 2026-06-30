@@ -105,6 +105,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .tr2{text-align:right;flex-shrink:0}
 .td2{font-size:11px;font-weight:600}
 .tds{font-size:10px;color:var(--warn);font-weight:700}
+.tds-done{color:var(--report)!important}
 .tpb{height:2px;background:var(--border);border-radius:1px;margin-top:5px;overflow:hidden}
 .tpf{height:100%;border-radius:1px}
 .ftag{padding:2px 7px;border-radius:20px;font-size:10px;cursor:pointer;border:1px solid var(--border);white-space:nowrap;color:var(--t2);background:var(--sf2);transition:all .15s;flex-shrink:0}
@@ -2927,7 +2928,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v63';
+var APP_BUILD = '20260615v64';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -3587,6 +3588,40 @@ function daysRemaining(val) {
   if (diff < 0) return Math.abs(diff) + 'D 逾期';
   if (diff === 0) return '今天';
   return diff + 'Ds';
+}
+function formatTaskDueBadge(dueTs, progress, status) {
+  var prog = typeof progress === 'number' ? progress : 0;
+  if (prog >= 100 || status === '已完成') {
+    return { text: '已完成', color: 'var(--report)', done: true };
+  }
+  var remain = daysRemaining(dueTs);
+  if (!remain) return { text: '', color: '', done: false };
+  return {
+    text: remain,
+    color: remain.indexOf('逾期') >= 0 ? 'var(--warn)' : 'var(--t2)',
+    done: false
+  };
+}
+function taskDueBadgeHtml(dueTs, progress, status) {
+  var badge = formatTaskDueBadge(dueTs, progress, status);
+  if (!badge.text) return '';
+  return '<span class="td-due-badge" style="font-size:11px;color:' + badge.color + ';font-weight:600">' + escHtml(badge.text) + '</span>';
+}
+function taskRemainLabel(dueTs, progress, status) {
+  return formatTaskDueBadge(dueTs, progress, status).text;
+}
+function updateTaskDetailDueBadge() {
+  if (!currentTaskId) return;
+  var ctx = getTaskContext(currentTaskId);
+  if (!ctx) return;
+  var statusEl = document.getElementById('td-status');
+  var status = statusEl ? statusEl.value : (ctx.f['進度狀態'] || '');
+  var prog = parseProgressVal(status, ctx.f['進度數值']);
+  var el = document.querySelector('#td-meta .td-due-badge');
+  if (!el) return;
+  var badge = formatTaskDueBadge(ctx.dueTs, prog, status);
+  el.textContent = badge.text;
+  el.style.color = badge.color;
 }
 function getDueDayDiff(val) {
   var due = parseTs(val);
@@ -4783,7 +4818,7 @@ function renderTasks() {
       wiName: wi ? wi.name : '',
       dueTs: f['預計完成日'],
       dueFull: f['預計完成日'] ? fmtDate(f['預計完成日']) : '—',
-      remain: daysRemaining(f['預計完成日']),
+      remain: taskRemainLabel(f['預計完成日'], progress, f['進度狀態']),
       progress: progress,
       status: f['進度狀態'] || '未開始',
       wiId: wiId
@@ -4807,7 +4842,9 @@ function renderTasks() {
       html += '<button type="button" class="bdel" title="刪除任務" onclick="event.stopPropagation();deleteTask(\'' + task.id + '\',\'' + escAttr(task.name).replace(/'/g, "\\'") + '\')">×</button>';
       html += '<div class="tit"><div><div class="tn">' + task.name + '</div>';
       html += '<div class="tm">' + task.wiName + ' · ' + task.assignee + '</div></div>';
-      html += '<div class="tr2"><div class="td2">' + task.dueFull + '</div><div class="tds">' + task.remain + '</div></div></div>';
+      var remainDone = task.progress >= 100 || task.status === '已完成';
+      var remainCls = remainDone ? ' tds-done' : '';
+      html += '<div class="tr2"><div class="td2">' + task.dueFull + '</div><div class="tds' + remainCls + '">' + escHtml(task.remain) + '</div></div></div>';
       html += '</div>';
     });
   }
@@ -5498,6 +5535,7 @@ function setTaskReportCategory(cat) {
   });
   syncReportStatusSelect('td-status', taskReportCategory);
   toggleTdBlockReason();
+  updateTaskDetailDueBadge();
 }
 
 function onTaskReportStatusChange() {
@@ -5505,6 +5543,7 @@ function onTaskReportStatusChange() {
   if (!sel) return;
   if (sel.value === '已完成') setTaskReportCategory('done');
   else if (taskReportCategory === 'done') setTaskReportCategory('doing');
+  updateTaskDetailDueBadge();
 }
 
 function normalizeReportStatusForCategory(status, category) {
@@ -5710,7 +5749,7 @@ function openTaskDetail(taskId) {
     projTag.style.background = ctx.color;
     projTag.style.display = ctx.projName ? 'inline-block' : 'none';
   }
-  var remain = daysRemaining(ctx.dueTs);
+  var remain = taskDueBadgeHtml(ctx.dueTs, ctx.progress, ctx.f['進度狀態'] || '');
   var startLabel = ctx.startTs ? fmtDate(ctx.startTs) : '';
   var dueLabel = ctx.dueTs ? fmtDate(ctx.dueTs) : '—';
   var dateRange = startLabel ? (startLabel + ' – ' + dueLabel) : dueLabel;
@@ -5718,7 +5757,7 @@ function openTaskDetail(taskId) {
     '<span style="font-size:11px;background:var(--sf2);padding:2px 8px;border-radius:20px">' + ctx.wiName + '</span>'
     + '<span class="av ' + avatarClass(ctx.assignee) + '">' + personInitial(ctx.assignee) + '</span>'
     + '<span style="font-size:12px;color:var(--t2)">' + ctx.assignee + ' · ' + dateRange + '</span>'
-    + '<span style="font-size:11px;color:var(--warn);font-weight:600">' + remain + '</span>'
+    + remain
     + '<span style="font-size:11px;color:var(--t3)">' + ctx.progress + '%</span>';
   var tdStartEl = document.getElementById('td-start');
   var tdDueEl = document.getElementById('td-due');
@@ -5739,6 +5778,7 @@ function openTaskDetail(taskId) {
   var existingJournal = findDailyJournalRecord(today.getTime(), ctx.assignee);
   var blockEl = document.getElementById('td-block-reason');
   if (blockEl) blockEl.value = getBlockReasonForTask(existingJournal, taskId);
+  updateTaskDetailDueBadge();
   applyDetailPopupPermissions('pp-td');
   op('pp-td');
 }
