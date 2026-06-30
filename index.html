@@ -7536,7 +7536,7 @@ function setProjectWikiUrlField(fields, url) {
   if (!url) return;
   var linkObj = makeBitableUrlValue(url);
   fields['知識庫連結'] = linkObj;
-  fields['封存連結'] = url;
+  fields['封存連結'] = linkObj;
   fields['Wiki存放位置'] = linkObj;
   fields['Wiki連結'] = linkObj;
 }

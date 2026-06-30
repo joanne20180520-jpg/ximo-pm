@@ -1278,6 +1278,8 @@ function buildArchiveRecordFields(rawFields, allowedSet, fieldMeta, overrides) {
     if (overrides[name] !== undefined) return;
     const meta = fieldMeta[name];
     if (!meta) return;
+    // Person / select values from PM base often fail in wiki archive tables.
+    if (meta.type === 11 || meta.type === 3 || meta.type === 4) return;
     const normalized = normalizeArchiveFieldValue(meta, remapped[name]);
     if (normalized !== null && normalized !== undefined) out[name] = normalized;
   });
@@ -1691,7 +1693,7 @@ async function batchCreateRecords(token, appToken, tableId, fieldsList, tableLab
   const label = tableLabel || tableId;
   for (let i = 0; i < fieldsList.length; i += chunkSize) {
     const chunk = fieldsList.slice(i, i + chunkSize);
-    const url = BASE_URL + '/bitable/v1/apps/' + appToken + '/tables/' + tableId + '/records/batch_create?user_id_type=open_id';
+    const url = BASE_URL + '/bitable/v1/apps/' + encodeURIComponent(appToken) + '/tables/' + encodeURIComponent(tableId) + '/records/batch_create?user_id_type=open_id';
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -1707,6 +1709,55 @@ async function batchCreateRecords(token, appToken, tableId, fieldsList, tableLab
   return created;
 }
 
+function stripArchiveFieldsByTypes(fields, fieldMeta, typeMap) {
+  const out = Object.assign({}, fields || {});
+  Object.keys(out).forEach(function(name) {
+    const meta = fieldMeta[name];
+    if (meta && typeMap[meta.type]) delete out[name];
+  });
+  return out;
+}
+
+function softenArchiveFieldsList(fieldsList, fieldMeta, level) {
+  return fieldsList.map(function(fields) {
+    if (level === 1) {
+      return stripArchiveFieldsByTypes(fields, fieldMeta, { 11: 1, 3: 1, 4: 1, 15: 1 });
+    }
+    const out = {};
+    const keepKeys = ['標案名稱', '工作項目名稱', '任務名稱', '支出細項', '設計項目名稱', '標題', '名稱'];
+    keepKeys.forEach(function(k) {
+      if (fields[k] !== undefined && fields[k] !== null && fields[k] !== '') out[k] = fields[k];
+    });
+    Object.keys(fields).forEach(function(name) {
+      const meta = fieldMeta[name];
+      if (meta && BITABLE_LINK_FIELD_TYPES[meta.type] && fields[name]) out[name] = fields[name];
+    });
+    return out;
+  });
+}
+
+async function batchCreateArchiveRecords(token, appToken, tableId, fieldsList, tableLabel, fieldMeta) {
+  const attempts = [
+    { fieldsList: fieldsList, note: '' },
+    { fieldsList: softenArchiveFieldsList(fieldsList, fieldMeta, 1), note: '略過人員/選項/連結欄位' },
+    { fieldsList: softenArchiveFieldsList(fieldsList, fieldMeta, 2), note: '僅保留名稱與關聯' }
+  ];
+  const errors = [];
+  for (let i = 0; i < attempts.length; i++) {
+    const att = attempts[i];
+    if (!att.fieldsList.length) continue;
+    const hasPayload = att.fieldsList.some(function(f) { return f && Object.keys(f).length; });
+    if (!hasPayload) continue;
+    try {
+      return await batchCreateRecords(token, appToken, tableId, att.fieldsList, tableLabel);
+    } catch (err) {
+      if (!isRetryableWriteError(err)) throw err;
+      errors.push((att.note || '重試') + '：' + (err.message || String(err)));
+    }
+  }
+  throw new Error(errors.join('；') || (tableLabel || tableId) + '：寫入失敗');
+}
+
 async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
   const projectName = bundle.project.fields['標案名稱'] || '封存標案';
   const target = await resolveOrCreateWikiBitableTarget(token, wikiUrl, projectName, wikiToken);
@@ -1718,10 +1769,14 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
   const projSchemas = await getTableFieldSchemas(wikiToken, targetApp, tableMap.projects, fieldCache);
   const projAllowed = projSchemas.allowedSet;
   const projMeta = projSchemas.fieldMeta;
-  const projOverrides = { '狀態': '封存' };
+  const projOverrides = {};
+  if (projAllowed['狀態']) {
+    const stMeta = projMeta['狀態'];
+    if (stMeta && (stMeta.type === 1 || stMeta.type === 13)) projOverrides['狀態'] = '封存';
+  }
   if (finalWikiUrl) applyWikiUrlOverrides(projOverrides, projAllowed, projMeta, finalWikiUrl);
   const projFields = buildArchiveRecordFields(cloneFields(bundle.project.fields), projAllowed, projMeta, projOverrides);
-  const projCreated = await batchCreateRecords(wikiToken, targetApp, tableMap.projects, [projFields], '標案');
+  const projCreated = await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.projects, [projFields], '標案', projMeta);
   const newProjId = projCreated[0] && projCreated[0].record_id;
   if (!newProjId) throw new Error('複製標案至知識庫失敗');
 
@@ -1735,7 +1790,7 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
     if (wiAllowed[wiLinkField]) overrides[wiLinkField] = [newProjId];
     return buildArchiveRecordFields(cloneFields(wi.fields), wiAllowed, wiMeta, overrides);
   });
-  const wiCreated = await batchCreateRecords(wikiToken, targetApp, tableMap.workitems, wiFieldsList, '工作項目');
+  const wiCreated = await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.workitems, wiFieldsList, '工作項目', wiMeta);
   bundle.workitems.forEach(function(wi, i) {
     if (wiCreated[i]) wiMap[wi.record_id] = wiCreated[i].record_id;
   });
@@ -1758,7 +1813,7 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
     if (oldWi && wiMap[oldWi] && taskAllowed['所屬工作項目']) overrides['所屬工作項目'] = [wiMap[oldWi]];
     return buildArchiveRecordFields(cloneFields(t.fields), taskAllowed, taskMeta, overrides);
   });
-  await batchCreateRecords(wikiToken, targetApp, tableMap.tasks, taskFieldsList, '任務');
+  await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.tasks, taskFieldsList, '任務', taskMeta);
 
   const expSchemas = await getTableFieldSchemas(wikiToken, targetApp, tableMap.expenses, fieldCache);
   const expAllowed = expSchemas.allowedSet;
@@ -1771,7 +1826,7 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
     if (expProjField) overrides[expProjField] = [newProjId];
     return buildArchiveRecordFields(cloneFields(e.fields), expAllowed, expMeta, overrides);
   });
-  await batchCreateRecords(wikiToken, targetApp, tableMap.expenses, expFieldsList, '支出');
+  await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.expenses, expFieldsList, '支出', expMeta);
 
   const desSchemas = await getTableFieldSchemas(wikiToken, targetApp, tableMap.designs, fieldCache);
   const desAllowed = desSchemas.allowedSet;
@@ -1782,7 +1837,7 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
     if (oldWi && wiMap[oldWi] && desAllowed['所屬工作項目']) overrides['所屬工作項目'] = [wiMap[oldWi]];
     return buildArchiveRecordFields(cloneFields(d.fields), desAllowed, desMeta, overrides);
   });
-  await batchCreateRecords(wikiToken, targetApp, tableMap.designs, desFieldsList, '設計');
+  await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.designs, desFieldsList, '設計', desMeta);
 
   return { copied: true, newProjectId: newProjId, targetAppToken: targetApp, wikiUrl: finalWikiUrl, wikiFolderUrl: target.wikiFolderUrl || wikiUrl };
 }
