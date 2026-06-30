@@ -3793,9 +3793,16 @@ function ensureLarkBridge() {
     });
   });
 }
+function getStablePageRedirectUri() {
+  if (larkAppConfig.redirectUri) return larkAppConfig.redirectUri;
+  return window.location.origin;
+}
+
 function tryLarkInAppLogin(appId) {
   if (!isLikelyLarkClient() || !loginUserConfirmed) return Promise.resolve(null);
-  return ensureLarkBridge().then(function(ready) {
+  return loadLarkAppConfig().then(function() {
+    return ensureLarkBridge();
+  }).then(function(ready) {
     if (!ready) {
       lastLoginError = 'Lark SDK 未就緒';
       return null;
@@ -3817,6 +3824,7 @@ function tryLarkInAppLogin(appId) {
         }
         tt.requestAuthCode({
           appId: appId,
+          redirectUri: getStablePageRedirectUri(),
           success: function(res) {
             var code = res && res.code;
             if (!code) {
