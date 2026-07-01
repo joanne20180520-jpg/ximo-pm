@@ -6229,8 +6229,8 @@ function escHtml(s) {
 function shortProjLabel(name) {
   var s = String(name || '').trim();
   if (!s) return '';
-  var m = s.match(/^(\d{2,4}年(?:度)?)/);
-  if (m) return m[1];
+  var m = s.match(/^(\d{2,4})(?:\s*年(?:度)?)?/);
+  if (m) return m[1] + '年';
   if (s.length <= 8) return s;
   return s.slice(0, 8) + '…';
 }
