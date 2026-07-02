@@ -356,7 +356,8 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .gtr:last-child{border-bottom:none}
 .gbar{position:absolute;height:22px;top:50%;transform:translateY(-50%);border-radius:6px;display:flex;align-items:center;padding:0 8px;font-size:10px;color:rgba(255,255,255,.98);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;cursor:pointer;min-width:4px;box-shadow:0 1px 3px rgba(0,0,0,.1);pointer-events:auto;z-index:1}
 .gbar.overdue{background:var(--danger)!important}
-.gbar.gbar-mine{z-index:3}
+.gbar.gbar-mine{z-index:3;border:2.5px solid #111!important;box-sizing:border-box;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.28)}
+.gbar.gbar-mine.overdue{background:var(--danger)!important;border-color:#111!important}
 .gbar.gbar-dim{z-index:2}
 .gbar:hover{z-index:4;filter:brightness(1.08)}
 .tline{position:absolute;top:0;bottom:0;width:2px;background:var(--report);z-index:5;pointer-events:none}
@@ -2854,12 +2855,25 @@ function paintGantt(key,proj,vs,ve,total,cw){
     var b = parseInt(h.slice(4, 6), 16);
     return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
   }
+  function hexDarken(hex, factor) {
+    var h = String(hex || '').replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    if (h.length !== 6) return '#333';
+    var r = Math.max(0, Math.round(parseInt(h.slice(0, 2), 16) * factor));
+    var g = Math.max(0, Math.round(parseInt(h.slice(2, 4), 16) * factor));
+    var b = Math.max(0, Math.round(parseInt(h.slice(4, 6), 16) * factor));
+    return '#' + [r, g, b].map(function(n) { return n.toString(16).padStart(2, '0'); }).join('');
+  }
   function ganttBarPaintStyle(bar, projColor) {
-    if (bar.overdue) return { bgStyle: '', extraClass: ' gbar-dim' };
-    var base = bar.design ? DESIGN_GANTT_COLOR : (bar.c || projColor);
     var mine = isRecordMine(bar.taskFields || {}, bar.design ? 'design' : 'task');
-    if (mine) return { bgStyle: 'background:' + base + ';', extraClass: ' gbar-mine' };
-    return { bgStyle: 'background:' + hexToRgba(base, 0.42) + ';', extraClass: ' gbar-dim' };
+    if (mine) {
+      if (bar.overdue) return { bgStyle: '', extraClass: ' gbar-mine' };
+      var base = bar.design ? DESIGN_GANTT_COLOR : (bar.c || projColor);
+      return { bgStyle: 'background:' + hexDarken(base, 0.62) + ';', extraClass: ' gbar-mine' };
+    }
+    if (bar.overdue) return { bgStyle: '', extraClass: ' gbar-dim' };
+    var base2 = bar.design ? DESIGN_GANTT_COLOR : (bar.c || projColor);
+    return { bgStyle: 'background:' + hexToRgba(base2, 0.42) + ';', extraClass: ' gbar-dim' };
   }
 
   // months
@@ -2914,8 +2928,9 @@ function paintGantt(key,proj,vs,ve,total,cw){
       else if (bar.id) clickAttr = ' onclick="openTaskDetail(\'' + bar.id + '\')"';
       var overdueClass = bar.overdue ? ' overdue' : '';
       var paint = ganttBarPaintStyle(bar, proj.color);
-      var mine = paint.extraClass.indexOf('gbar-mine') >= 0;
-      var borderStyle = mine ? 'border:2px solid #0891b2;box-sizing:border-box;' : (bar.design ? 'border:1px dashed rgba(255,255,255,.55);box-sizing:border-box;' : '');
+      var borderStyle = paint.extraClass.indexOf('gbar-mine') >= 0
+        ? ''
+        : (bar.design ? 'border:1px dashed rgba(255,255,255,.55);box-sizing:border-box;' : '');
       var barLabel = bar.design ? ('設計·' + bar.l) : bar.l;
       bH+='<div class="gbar'+overdueClass+paint.extraClass+'" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:16px;'+paint.bgStyle+borderStyle+'"'+clickAttr+' title="'+escAttr(barLabel)+'">'+escHtml(barLabel)+'</div>';
     });
@@ -2987,7 +3002,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v74';
+var APP_BUILD = '20260615v75';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
