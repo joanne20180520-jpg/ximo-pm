@@ -1280,6 +1280,64 @@ function normalizeArchiveMultiSelectValue(val) {
   return out.length ? out : null;
 }
 
+function normalizeAttachmentFieldValue(val) {
+  if (!val) return null;
+  if (!Array.isArray(val)) return null;
+  const out = [];
+  val.forEach(function(item) {
+    if (!item) return;
+    if (typeof item === 'string' && item.trim()) out.push({ file_token: item.trim() });
+    else if (item.file_token) out.push({ file_token: String(item.file_token).trim() });
+  });
+  return out.length ? out : null;
+}
+
+async function uploadBitableMedia(token, appToken, fileName, buffer) {
+  const form = new FormData();
+  form.append('file_name', fileName);
+  form.append('parent_type', 'bitable_file');
+  form.append('parent_node', appToken);
+  form.append('size', String(buffer.length));
+  form.append('file', new Blob([buffer]), fileName);
+  const res = await fetch(BASE_URL + '/drive/v1/medias/upload_all', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + token },
+    body: form
+  });
+  const data = await res.json();
+  if (data.code !== 0) throw new Error(data.msg || 'upload failed');
+  return {
+    file_token: data.data && data.data.file_token,
+    name: fileName,
+    size: buffer.length
+  };
+}
+
+async function getMediaDownloadUrl(token, fileToken) {
+  const res = await fetch(BASE_URL + '/drive/v1/medias/' + encodeURIComponent(fileToken) + '/download', {
+    method: 'GET',
+    headers: { 'Authorization': 'Bearer ' + token },
+    redirect: 'manual'
+  });
+  if (res.status >= 300 && res.status < 400) {
+    const loc = res.headers.get('location');
+    if (loc) return loc;
+  }
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (data && data.code === 0 && data.data) {
+    return data.data.download_url || data.data.tmp_download_url || '';
+  }
+  const tmpRes = await fetch(BASE_URL + '/drive/v1/medias/batch_get_tmp_download_url?file_tokens=' + encodeURIComponent(fileToken), {
+    headers: { 'Authorization': 'Bearer ' + token }
+  });
+  const tmpData = await tmpRes.json();
+  if (tmpData.code === 0 && tmpData.data && tmpData.data.tmp_download_urls && tmpData.data.tmp_download_urls[0]) {
+    return tmpData.data.tmp_download_urls[0].tmp_download_url || '';
+  }
+  throw new Error((data && data.msg) || 'download failed');
+}
+
 function normalizeArchiveFieldValue(meta, val) {
   if (val === undefined || val === null) return null;
   if (val === '' && (!meta || meta.type !== 1)) return null;
@@ -1538,6 +1596,11 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
     }
     if (m.type === 11) {
       const normalized = normalizePersonFieldValue(val);
+      if (normalized) out[name] = normalized;
+      return;
+    }
+    if (m.type === 17) {
+      const normalized = normalizeAttachmentFieldValue(val);
       if (normalized) out[name] = normalized;
       return;
     }
@@ -2904,6 +2967,31 @@ export default async function handler(req, res) {
     if (action === 'tables-check' && req.method === 'GET') {
       const report = await buildTablesCheckReport();
       return res.status(200).json(report);
+    }
+
+    if (action === 'upload-attachment' && req.method === 'POST') {
+      const b = stripAuthFromBody(req.body || {});
+      const fileName = String(b.fileName || b.file_name || 'file').trim() || 'file';
+      const contentBase64 = String(b.contentBase64 || b.data || '').trim();
+      const tableKey = String(b.table || 'tasks').trim();
+      if (!contentBase64) return res.status(400).json({ error: 'missing file data' });
+      const buffer = Buffer.from(contentBase64, 'base64');
+      if (!buffer.length) return res.status(400).json({ error: 'empty file' });
+      if (buffer.length > 20 * 1024 * 1024) return res.status(400).json({ error: 'file too large (max 20MB)' });
+      const token = await getToken();
+      const appToken = appTokenForTable(tableKey);
+      if (!appToken) return res.status(400).json({ error: 'missing app token for table' });
+      const uploaded = await uploadBitableMedia(token, appToken, fileName, buffer);
+      return res.status(200).json(uploaded);
+    }
+
+    if (action === 'download-attachment' && req.method === 'GET') {
+      const fileToken = String(req.query.fileToken || '').trim();
+      if (!fileToken) return res.status(400).json({ error: 'missing fileToken' });
+      const token = await getToken();
+      const url = await getMediaDownloadUrl(token, fileToken);
+      if (!url) return res.status(404).json({ error: 'download url not found' });
+      return res.status(200).json({ ok: true, url: url });
     }
 
     if (action === 'ping' && req.method === 'GET') {

@@ -57,6 +57,29 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .badd:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
 .badd:active{background:var(--c1)!important;color:#fff!important;border-color:var(--c1)!important;transform:scale(0.96);box-shadow:0 0 0 3px rgba(45,106,79,.22)}
 .pl{overflow-y:auto;padding:2px 8px 8px;flex-shrink:1;min-height:0}
+#pl-projects{display:flex;flex-direction:column;overflow:hidden}
+.proj-picker{position:relative;margin:0 0 8px;flex-shrink:0}
+.proj-picker-btn{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs);background:var(--sf2);font-size:11px;cursor:pointer;text-align:left;display:flex;align-items:center;justify-content:space-between;color:var(--text);font-family:inherit}
+.proj-picker-btn:hover{background:#fff;border-color:var(--t3)}
+.proj-picker-panel{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:120;background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);box-shadow:var(--shadow);max-height:240px;display:flex;flex-direction:column;overflow:hidden}
+.proj-picker-panel.hidden{display:none}
+.proj-picker-search{padding:6px 8px;border-bottom:1px solid var(--border);flex-shrink:0}
+.proj-picker-search input{width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:var(--rs);font-size:11px;font-family:inherit}
+.proj-picker-actions{display:flex;gap:4px;padding:4px 8px;border-bottom:1px solid var(--border);flex-shrink:0}
+.proj-picker-actions button{flex:1;padding:3px 6px;font-size:10px;border:1px solid var(--border);border-radius:var(--rs);background:var(--sf2);cursor:pointer;color:var(--t2);font-family:inherit}
+.proj-picker-actions button:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.proj-picker-list{overflow-y:auto;flex:1;padding:4px 0;min-height:0}
+.proj-picker-item{display:flex;align-items:center;gap:6px;padding:5px 10px;font-size:11px;cursor:pointer;user-select:none}
+.proj-picker-item:hover{background:var(--sf2)}
+.proj-picker-item input{flex-shrink:0;margin:0}
+.proj-picker-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.pl-cards{flex:1;min-height:0;overflow-y:auto}
+.attach-dropzone{border:2px dashed var(--border);border-radius:var(--rs);padding:14px 10px;text-align:center;font-size:11px;color:var(--t3);cursor:pointer;transition:border-color .15s,background .15s}
+.attach-dropzone:hover,.attach-dropzone.dragover{border-color:#0891b2;background:#f0fdfa;color:var(--t2)}
+.attach-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px;margin-top:4px;background:var(--sf2);border-radius:var(--rs);font-size:11px}
+.attach-item-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.attach-item-link{border:none;background:none;color:var(--c2);cursor:pointer;font-size:10px;padding:0;text-decoration:underline;flex-shrink:0}
+.attach-item-remove{border:none;background:none;color:var(--danger);cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0;line-height:1}
 .pi{margin-bottom:4px;border-radius:var(--rs);overflow:hidden}
 .pr{display:flex;align-items:flex-start;padding:7px 9px;cursor:pointer;color:#fff;font-size:12px;font-weight:500;user-select:none;border-radius:var(--rs)}
 .pr .arr{font-size:9px;opacity:.85;transition:transform .2s;flex-shrink:0;line-height:18px;padding:0 2px}
@@ -910,6 +933,14 @@ button.btn-loading::after{content:'…';margin-left:2px}
   </div></div>
   <div class="fg"><label>進度狀態</label><select id="td-status" onchange="onTaskReportStatusChange()"></select></div>
   <div class="fg"><label>補充說明</label><textarea id="td-note" rows="3" placeholder="寫進今日回報的補充說明…"></textarea></div>
+  <div class="fg">
+    <label>附件</label>
+    <div class="attach-dropzone" id="td-attach-zone" onclick="if(event.target.id!=='td-attach-file')document.getElementById('td-attach-file').click()" ondragover="onTaskAttachDragOver(event)" ondragleave="onTaskAttachDragLeave(event)" ondrop="onTaskAttachDrop(event)">
+      <input type="file" id="td-attach-file" multiple style="display:none" onchange="onTaskAttachSelect(this.files)">
+      <span>點此上傳，或拖曳檔案到這裡</span>
+    </div>
+    <div id="td-attach-list"></div>
+  </div>
   <div class="fg td-block-box" id="td-block-wrap" style="display:none"><label>卡關原因</label><textarea id="td-block-reason" rows="2" placeholder="說明卡在哪、需要誰協助…"></textarea></div>
   <button class="bads" style="margin-top:4px" onclick="openNewTaskFromContext()">＋ 建立新任務</button>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-td')">取消</button><button class="bpri btn-report" id="td-confirm-btn" onclick="confirmTaskReport()">確認儲存</button></div></div></div>
@@ -2858,8 +2889,10 @@ function paintGantt(key,proj,vs,ve,total,cw){
       else if (bar.id) clickAttr = ' onclick="openTaskDetail(\'' + bar.id + '\')"';
       var overdueClass = bar.overdue ? ' overdue' : '';
       var bgStyle = bar.overdue ? '' : ('background:' + barColor + ';');
-      var op = bar.o != null ? bar.o : 1;
-      bH+='<div class="gbar'+overdueClass+'" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:16px;'+bgStyle+'opacity:'+op+'"'+clickAttr+' title="'+escAttr(bar.l)+'">'+escHtml(bar.l)+'</div>';
+      var mine = isRecordMine(bar.taskFields || {}, bar.design ? 'design' : 'task');
+      var opacityVal = mine ? 1 : 0.4;
+      var borderStyle = mine ? 'border:2px solid #0891b2;box-sizing:border-box;' : '';
+      bH+='<div class="gbar'+overdueClass+'" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:16px;'+bgStyle+borderStyle+'opacity:'+opacityVal+'"'+clickAttr+' title="'+escAttr(bar.l)+'">'+escHtml(bar.l)+'</div>';
     });
     tmH+='<div class="gtr" style="width:'+tw+'px;height:'+rowH+'px">'+bH+'</div>';
   });
@@ -2929,7 +2962,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v70';
+var APP_BUILD = '20260615v72';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
@@ -3030,6 +3063,14 @@ document.addEventListener('DOMContentLoaded', function() {
   if (overlay) overlay.addEventListener('click', function(e) {
     if (e.target === overlay) confirmCancel();
   });
+  document.addEventListener('click', function(e) {
+    if (!projectPickerOpen) return;
+    var root = document.getElementById('proj-picker-root');
+    if (root && !root.contains(e.target)) {
+      projectPickerOpen = false;
+      renderProjects();
+    }
+  });
 });
 
 // ── 時間進度計算 ──
@@ -3044,6 +3085,23 @@ function calcTimeProgress(startTs, endTs) {
   if (today >= end) return 100;
   return Math.round((today - start) / (end - start) * 100);
 }
+
+var PROJECT_SELECT_STORAGE_KEY = 'ximo-selected-projects';
+var selectedProjectIds = new Set();
+var projectPickerOpen = false;
+var projectPickerSearchQuery = '';
+var taskPendingAttachments = {};
+
+(function initSelectedProjects() {
+  try {
+    var saved = JSON.parse(localStorage.getItem(PROJECT_SELECT_STORAGE_KEY) || '[]');
+    if (Array.isArray(saved)) {
+      saved.forEach(function(id) {
+        if (id) selectedProjectIds.add(String(id));
+      });
+    }
+  } catch (e) {}
+})();
 
 var projectsData = [];
 var workitemsData = [];
@@ -3751,6 +3809,21 @@ function namesMatch(a, b) {
   if (!a || !b) return false;
   if (a === b) return true;
   return a.indexOf(b) >= 0 || b.indexOf(a) >= 0;
+}
+function isRecordMine(fields, kind) {
+  var u = getCurrentLoginUser();
+  if (!u || !fields) return false;
+  var candidates = kind === 'design'
+    ? [fields['負責PM'], fields['設計師']].filter(Boolean)
+    : [fields['負責人']].filter(Boolean);
+  for (var i = 0; i < candidates.length; i++) {
+    var field = candidates[i];
+    var openId = getPersonOpenId(field);
+    if (u.openId && openId && u.openId === openId) return true;
+    var name = personName(field);
+    if (name && (namesMatch(u.name, name) || namesMatch(u.enName, name))) return true;
+  }
+  return false;
 }
 function isTaskAssignedToMe(assigneeField) {
   var u = getCurrentLoginUser();
@@ -4540,6 +4613,7 @@ function applyBootstrapPayload(payload) {
   designsData = (payload.designs && payload.designs.records) || [];
   journalData = (payload.journal && payload.journal.records) || [];
   membersData = (payload.members && payload.members.records) || [];
+  pruneSelectedProjects();
 }
 
 function renderAllFromBootstrap() {
@@ -4696,6 +4770,7 @@ function renderBudget() {
   var html = '';
   projectsData.forEach(function(rec, i) {
     if (!isProjectVisible(rec)) return;
+    if (!isProjectSelected(rec)) return;
     var f = rec.fields;
     var name = f['標案名稱'] || '未命名';
     var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
@@ -4732,7 +4807,7 @@ function renderBudget() {
       +'<div class="bbt"><div class="bbf" style="width:'+pct+'%;background:'+color+'"></div></div></div>'
       +wiRows+'</div>';
   });
-  area.innerHTML = html || '<div style="padding:20px;color:var(--t3)">尚無費用資料</div>';
+  area.innerHTML = html || '<div style="padding:20px;color:var(--t3)">' + (selectedProjectIds.size ? '所選標案尚無費用資料' : '請從左側選擇要顯示的標案') + '</div>';
 }
 
 // ── 支出明細 ──
@@ -4801,15 +4876,126 @@ function renderExpenses() {
   projectsData.forEach(function(rec, i) {
     var pname = rec.fields['標案名稱'] || '';
     if (!pname) return;
+    if (!isProjectVisible(rec)) return;
+    if (!isProjectSelected(rec)) return;
     html += renderProjectBlock(pname, PROJECT_COLORS[i % PROJECT_COLORS.length]);
   });
-  if (byProject['其他'] && byProject['其他'].length) {
-    html += renderProjectBlock('其他', '#888');
-  }
-  area.innerHTML = html || '<div style="padding:20px;color:var(--t3);text-align:center">尚無標案，請先在左側建立標案後再新增支出明細</div>';
+  var emptyMsg = selectedProjectIds.size
+    ? '所選標案尚無支出明細'
+    : '請從左側選擇要顯示的標案';
+  area.innerHTML = html || '<div style="padding:20px;color:var(--t3);text-align:center">' + emptyMsg + '</div>';
 }
 
 // ── 渲染 A 區標案列表 ──
+function saveSelectedProjects() {
+  try {
+    var ids = [];
+    selectedProjectIds.forEach(function(id) { ids.push(id); });
+    localStorage.setItem(PROJECT_SELECT_STORAGE_KEY, JSON.stringify(ids));
+  } catch (e) {}
+}
+function pruneSelectedProjects() {
+  if (!selectedProjectIds.size || !projectsData.length) return;
+  var valid = {};
+  projectsData.forEach(function(p) { valid[p.record_id] = true; });
+  var changed = false;
+  selectedProjectIds.forEach(function(id) {
+    if (!valid[id]) { selectedProjectIds.delete(id); changed = true; }
+  });
+  if (changed) saveSelectedProjects();
+}
+function isProjectSelected(rec) {
+  if (!selectedProjectIds.size) return false;
+  return selectedProjectIds.has(rec.record_id);
+}
+function getProjectColor(rec) {
+  for (var i = 0; i < projectsData.length; i++) {
+    if (projectsData[i].record_id === rec.record_id) {
+      return PROJECT_COLORS[i % PROJECT_COLORS.length];
+    }
+  }
+  return PROJECT_COLORS[0];
+}
+function toggleProjectSelection(projId) {
+  if (selectedProjectIds.has(projId)) selectedProjectIds.delete(projId);
+  else selectedProjectIds.add(projId);
+  saveSelectedProjects();
+  refreshAllFilteredViews();
+}
+function refreshAllFilteredViews() {
+  renderProjects();
+  renderGanttFromData();
+  renderBudget();
+  renderExpenses();
+  renderDesigns();
+}
+function toggleProjectPicker(ev) {
+  if (ev) ev.stopPropagation();
+  projectPickerOpen = !projectPickerOpen;
+  renderProjects();
+}
+function onProjectPickerSearch(val) {
+  projectPickerSearchQuery = String(val || '').trim();
+  renderProjects();
+  projectPickerOpen = true;
+}
+function selectAllVisibleProjects() {
+  var q = projectPickerSearchQuery;
+  projectsData.forEach(function(rec) {
+    if (!isProjectVisible(rec)) return;
+    var name = rec.fields['標案名稱'] || '';
+    if (q && name.indexOf(q) < 0) return;
+    selectedProjectIds.add(rec.record_id);
+  });
+  saveSelectedProjects();
+  refreshAllFilteredViews();
+}
+function clearProjectSelection() {
+  selectedProjectIds.clear();
+  saveSelectedProjects();
+  refreshAllFilteredViews();
+}
+function buildProjectCardHtml(rec, color) {
+  var f = rec.fields;
+  var name = f['標案名稱'] || '未命名';
+  var pmName = personName(f['主PM']);
+  var progress = getProjectProgressPct(rec);
+  var meta = pmName || '';
+  var workitems = getWorkitemsForProject(rec);
+  var subHTML = '';
+  workitems.forEach(function(wi) {
+    var wf = wi.fields;
+    var wName = wf['工作項目名稱'] || '';
+    var wiStart = getWorkItemStartTs(wi);
+    var wiEnd = parseTs(wf['截止日']);
+    var weightStr = formatWeightProgress(wf, wi.record_id);
+    var dateStr = '';
+    var daysStr = wiEnd ? daysRemaining(wf['截止日']) : '';
+    if (wiStart && wiEnd) dateStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
+    else if (wiEnd) dateStr = fmt(wiEnd.getTime());
+    else if (wiStart) dateStr = fmt(wiStart.getTime()) + '–';
+    subHTML += '<div class="si">'
+      + '<div class="si-row"><span class="si-name">' + escHtml(wName) + '</span>'
+      + (weightStr ? '<span class="si-weight">' + weightStr + '</span>' : '')
+      + '<button type="button" class="bdel" title="修改工作項目" style="margin-right:2px" onclick="event.stopPropagation();openEditWorkItem(\'' + wi.record_id + '\')">✎</button>'
+      + '<button type="button" class="bdel" title="刪除工作項目" onclick="deleteWorkItem(\'' + wi.record_id + '\',\'' + escAttr(wName).replace(/'/g, "\\'") + '\')">×</button></div>'
+      + '<div class="si-meta"><span class="si-date">' + dateStr + '</span>'
+      + (daysStr ? '<span class="si-remain">' + daysStr + '</span>' : '')
+      + '</div></div>';
+  });
+  return '<div class="pi">'
+    + '<div class="pr" style="background:' + color + '" onclick="tgp(this)">'
+    + '<div class="pr-main">'
+    + '<div class="pr-name">' + escHtml(name) + '</div>'
+    + '<div class="pr-sub">'
+    + '<span class="pr-meta">' + escHtml(meta || '—') + '</span>'
+    + '<span class="pr-pct">' + progress + '%</span>'
+    + '<button type="button" class="bdel" title="修改標案" onclick="event.stopPropagation();openEditProject(\'' + rec.record_id + '\')">✎</button>'
+    + '<button type="button" class="bdel" title="刪除標案" onclick="event.stopPropagation();deleteProject(\'' + rec.record_id + '\',\'' + escAttr(name).replace(/'/g, "\\'") + '\')">×</button>'
+    + '<span class="arr" title="展開工作項目">▶</span>'
+    + '</div></div></div>'
+    + '<div class="sl2">' + subHTML + '</div></div>';
+}
 function syncTruncatedTitle(el, fullText) {
   if (!el) return;
   var full = fullText != null ? fullText : (el.getAttribute('data-full') || el.textContent || '');
@@ -4817,53 +5003,45 @@ function syncTruncatedTitle(el, fullText) {
   else el.removeAttribute('title');
 }
 function renderProjects() {
-  var html = '';
-  var visibleIdx = 0;
+  var container = document.getElementById('pl-projects');
+  if (!container) return;
+  var selectedCount = selectedProjectIds.size;
+  var btnLabel = selectedCount ? ('已選 ' + selectedCount + ' 個標案') : '請選擇標案';
+  var panelHidden = projectPickerOpen ? '' : ' hidden';
+  var searchVal = projectPickerSearchQuery || '';
+  var listHTML = '';
+  var pickerIdx = 0;
   projectsData.forEach(function(rec) {
     if (!isProjectVisible(rec)) return;
     var f = rec.fields;
     var name = f['標案名稱'] || '未命名';
-    var color = PROJECT_COLORS[visibleIdx % PROJECT_COLORS.length];
-    visibleIdx++;
-    var pmName = personName(f['主PM']);
-    var progress = getProjectProgressPct(rec);
-    var meta = pmName || '';
-    var workitems = getWorkitemsForProject(rec);
-    var subHTML = '';
-    workitems.forEach(function(wi) {
-      var wf = wi.fields;
-      var wName = wf['工作項目名稱'] || '';
-      var wiStart = getWorkItemStartTs(wi);
-      var wiEnd = parseTs(wf['截止日']);
-      var weightStr = formatWeightProgress(wf, wi.record_id);
-      var dateStr = '';
-      var daysStr = wiEnd ? daysRemaining(wf['截止日']) : '';
-      if (wiStart && wiEnd) dateStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
-      else if (wiEnd) dateStr = fmt(wiEnd.getTime());
-      else if (wiStart) dateStr = fmt(wiStart.getTime()) + '–';
-      subHTML += '<div class="si">'
-        + '<div class="si-row"><span class="si-name">' + escHtml(wName) + '</span>'
-        + (weightStr ? '<span class="si-weight">' + weightStr + '</span>' : '')
-        + '<button type="button" class="bdel" title="修改工作項目" style="margin-right:2px" onclick="event.stopPropagation();openEditWorkItem(\'' + wi.record_id + '\')">✎</button>'
-        + '<button type="button" class="bdel" title="刪除工作項目" onclick="deleteWorkItem(\'' + wi.record_id + '\',\'' + escAttr(wName).replace(/'/g, "\\'") + '\')">×</button></div>'
-        + '<div class="si-meta"><span class="si-date">' + dateStr + '</span>'
-        + (daysStr ? '<span class="si-remain">' + daysStr + '</span>' : '')
-        + '</div></div>';
-    });
-    html += '<div class="pi">';
-    html += '<div class="pr" style="background:' + color + '" onclick="tgp(this)">';
-    html += '<div class="pr-main">';
-    html += '<div class="pr-name">' + escHtml(name) + '</div>';
-    html += '<div class="pr-sub">';
-    html += '<span class="pr-meta">' + escHtml(meta || '—') + '</span>';
-    html += '<span class="pr-pct">' + progress + '%</span>';
-    html += '<button type="button" class="bdel" title="修改標案" onclick="event.stopPropagation();openEditProject(\'' + rec.record_id + '\')">✎</button>';
-    html += '<button type="button" class="bdel" title="刪除標案" onclick="event.stopPropagation();deleteProject(\'' + rec.record_id + '\',\'' + escAttr(name).replace(/'/g, "\\'") + '\')">×</button>';
-    html += '<span class="arr" title="展開工作項目">▶</span>';
-    html += '</div></div></div>';
-    html += '<div class="sl2">' + subHTML + '</div></div>';
+    var color = PROJECT_COLORS[pickerIdx % PROJECT_COLORS.length];
+    pickerIdx++;
+    if (searchVal && name.indexOf(searchVal) < 0) return;
+    var checked = selectedProjectIds.has(rec.record_id) ? ' checked' : '';
+    listHTML += '<label class="proj-picker-item" onclick="event.stopPropagation()">'
+      + '<input type="checkbox"' + checked + ' onchange="toggleProjectSelection(\'' + rec.record_id + '\')">'
+      + '<span class="proj-picker-dot" style="background:' + color + '"></span>'
+      + '<span>' + escHtml(name) + '</span></label>';
   });
-  document.getElementById('pl-projects').innerHTML = html || '<div style="padding:12px;color:var(--t3);font-size:11px">尚無標案</div>';
+  var dropdownHTML = '<div class="proj-picker" id="proj-picker-root">'
+    + '<button type="button" class="proj-picker-btn" onclick="toggleProjectPicker(event)">'
+    + '<span>' + escHtml(btnLabel) + '</span><span style="font-size:9px;opacity:.7">' + (projectPickerOpen ? '▲' : '▼') + '</span></button>'
+    + '<div class="proj-picker-panel' + panelHidden + '" id="proj-picker-panel" onclick="event.stopPropagation()">'
+    + '<div class="proj-picker-search"><input type="text" placeholder="搜尋標案…" value="' + escAttr(searchVal) + '" oninput="onProjectPickerSearch(this.value)"></div>'
+    + '<div class="proj-picker-actions"><button type="button" onclick="selectAllVisibleProjects()">全選</button><button type="button" onclick="clearProjectSelection()">清除</button></div>'
+    + '<div class="proj-picker-list">' + (listHTML || '<div style="padding:8px 10px;color:var(--t3);font-size:11px">無符合的標案</div>') + '</div>'
+    + '</div></div>';
+  var cardsHTML = '';
+  projectsData.forEach(function(rec) {
+    if (!isProjectVisible(rec)) return;
+    if (!isProjectSelected(rec)) return;
+    cardsHTML += buildProjectCardHtml(rec, getProjectColor(rec));
+  });
+  var cardsBlock = cardsHTML
+    ? ('<div class="pl-cards">' + cardsHTML + '</div>')
+    : '<div style="padding:8px 10px;color:var(--t3);font-size:11px">' + (selectedCount ? '所選標案無工作項目' : '請從上方選擇要顯示的標案') + '</div>';
+  container.innerHTML = dropdownHTML + cardsBlock;
 }
 
 // ── 渲染 B 區任務清單 ──
@@ -5131,15 +5309,21 @@ function renderGanttFromData() {
     return;
   }
 
-  var hasVisibleProj = projectsData.some(isProjectVisible);
+  var hasVisibleProj = projectsData.some(function(rec) {
+    return isProjectVisible(rec) && isProjectSelected(rec);
+  });
   if (!hasVisibleProj) {
-    ganttArea.innerHTML = '<div style="padding:20px;color:var(--t3);font-size:12px;text-align:center;line-height:1.6">尚無進行中的標案<br><span style="font-size:11px">封存標案請至知識庫多維表格管理</span></div>';
+    var ganttEmpty = selectedProjectIds.size
+      ? '所選標案尚無可顯示的時程'
+      : '請從左側選擇要顯示的標案';
+    ganttArea.innerHTML = '<div style="padding:20px;color:var(--t3);font-size:12px;text-align:center;line-height:1.6">' + ganttEmpty + '</div>';
     return;
   }
 
   var visibleIdx = 0;
   projectsData.forEach(function(rec) {
     if (!isProjectVisible(rec)) return;
+    if (!isProjectSelected(rec)) return;
     var f = rec.fields;
     var name = f['標案名稱'] || '未命名';
     var color = PROJECT_COLORS[visibleIdx % PROJECT_COLORS.length];
@@ -5183,7 +5367,8 @@ function renderGanttFromData() {
           o: 1,
           c: color,
           id: t.record_id,
-          overdue: tProg < 100 && dueDiff !== null && dueDiff < 0
+          overdue: tProg < 100 && dueDiff !== null && dueDiff < 0,
+          taskFields: tf
         });
       });
 
@@ -5204,7 +5389,8 @@ function renderGanttFromData() {
           c: DESIGN_GANTT_COLOR,
           design: true,
           id: d.record_id,
-          overdue: dProg < 100 && dueDiff !== null && dueDiff < 0
+          overdue: dProg < 100 && dueDiff !== null && dueDiff < 0,
+          taskFields: df
         });
       });
 
@@ -5653,6 +5839,117 @@ function getTodayJournalCategory(taskId, author) {
   return catMap[taskId] || 'doing';
 }
 
+function normalizeTaskAttachments(field) {
+  if (!field || !Array.isArray(field)) return [];
+  return field.map(function(a) {
+    if (!a) return null;
+    if (typeof a === 'string') return { file_token: a, name: a, existing: true };
+    return {
+      file_token: a.file_token || '',
+      name: a.name || a.file_token || '附件',
+      size: a.size || 0,
+      existing: true
+    };
+  }).filter(function(a) { return a && a.file_token; });
+}
+function renderTaskAttachList() {
+  var listEl = document.getElementById('td-attach-list');
+  if (!listEl || !currentTaskId) return;
+  var items = taskPendingAttachments[currentTaskId] || [];
+  if (!items.length) {
+    listEl.innerHTML = '';
+    return;
+  }
+  var html = '';
+  items.forEach(function(item, idx) {
+    var name = escHtml(item.name || '附件');
+    var dlBtn = item.file_token
+      ? '<button type="button" class="attach-item-link" onclick="event.stopPropagation();downloadTaskAttachment(\'' + escAttr(item.file_token) + '\')">下載</button>'
+      : '';
+    var rmBtn = isPMRole()
+      ? '<button type="button" class="attach-item-remove" title="移除" onclick="event.stopPropagation();removeTaskAttachment(' + idx + ')">×</button>'
+      : '';
+    html += '<div class="attach-item"><span class="attach-item-name">' + name + '</span>' + dlBtn + rmBtn + '</div>';
+  });
+  listEl.innerHTML = html;
+}
+function onTaskAttachSelect(fileList) {
+  if (!isPMRole() || !currentTaskId || !fileList || !fileList.length) return;
+  for (var i = 0; i < fileList.length; i++) uploadTaskAttachment(fileList[i]);
+  var input = document.getElementById('td-attach-file');
+  if (input) input.value = '';
+}
+function onTaskAttachDragOver(ev) {
+  ev.preventDefault();
+  var zone = document.getElementById('td-attach-zone');
+  if (zone) zone.classList.add('dragover');
+}
+function onTaskAttachDragLeave(ev) {
+  ev.preventDefault();
+  var zone = document.getElementById('td-attach-zone');
+  if (zone) zone.classList.remove('dragover');
+}
+function onTaskAttachDrop(ev) {
+  ev.preventDefault();
+  onTaskAttachDragLeave(ev);
+  if (ev.dataTransfer && ev.dataTransfer.files) onTaskAttachSelect(ev.dataTransfer.files);
+}
+function uploadTaskAttachment(file) {
+  if (!file || !currentTaskId) return;
+  if (file.size > 20 * 1024 * 1024) {
+    alert('檔案過大（上限 20MB）：' + file.name);
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function() {
+    var result = String(reader.result || '');
+    var base64 = result.indexOf(',') >= 0 ? result.split(',')[1] : result;
+    var headers = { 'Content-Type': 'application/json' };
+    var tok = getUserAccessToken();
+    if (tok) headers['X-User-Access-Token'] = tok;
+    fetch(apiUrl('action=upload-attachment'), {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(withUserToken({
+        fileName: file.name,
+        contentBase64: base64,
+        table: 'tasks'
+      }))
+    }).then(function(r) { return r.json(); }).then(function(res) {
+      if (res.error) throw new Error(res.error);
+      if (!res.file_token) throw new Error('未取得 file_token');
+      if (!taskPendingAttachments[currentTaskId]) taskPendingAttachments[currentTaskId] = [];
+      taskPendingAttachments[currentTaskId].push({
+        file_token: res.file_token,
+        name: file.name,
+        size: file.size
+      });
+      renderTaskAttachList();
+    }).catch(function(err) {
+      alert('附件上傳失敗：' + (err.message || '請稍後再試'));
+    });
+  };
+  reader.onerror = function() { alert('讀取檔案失敗'); };
+  reader.readAsDataURL(file);
+}
+function removeTaskAttachment(index) {
+  if (!currentTaskId || !taskPendingAttachments[currentTaskId]) return;
+  taskPendingAttachments[currentTaskId].splice(index, 1);
+  renderTaskAttachList();
+}
+function downloadTaskAttachment(fileToken) {
+  if (!fileToken) return;
+  var q = 'action=download-attachment&fileToken=' + encodeURIComponent(fileToken) + '&table=tasks';
+  if (currentTaskId) q += '&recordId=' + encodeURIComponent(currentTaskId);
+  fetch(apiUrl(q)).then(function(r) { return r.json(); }).then(function(res) {
+    if (res.error) throw new Error(res.error);
+    if (res.url) window.open(res.url, '_blank');
+    else throw new Error('無法取得下載連結');
+  }).catch(function(err) {
+    alert('下載失敗：' + (err.message || '請稍後再試'));
+  });
+}
+
 function mergeTaskIntoJournalCategories(existing, taskId, category) {
   var f = existing ? existing.fields : {};
   var cats = {
@@ -5742,6 +6039,12 @@ function confirmTaskReport() {
   var tdDue = document.getElementById('td-due');
   if (tdStart && tdStart.value) taskFields['開始日期'] = dateInputToTs(tdStart.value);
   if (tdDue && tdDue.value) taskFields['預計完成日'] = dateInputToTs(tdDue.value);
+  var pendingAttach = taskPendingAttachments[currentTaskId] || [];
+  if (pendingAttach.length) {
+    taskFields['附件'] = pendingAttach.map(function(a) {
+      return { file_token: a.file_token };
+    });
+  }
 
   var btn = document.getElementById('td-confirm-btn');
   if (btn) { btn.disabled = true; btn.textContent = '儲存中…'; }
@@ -5849,6 +6152,8 @@ function openTaskDetail(taskId) {
   }).join('');
   syncReportStatusSelect('td-status', taskReportCategory);
   document.getElementById('td-note').value = ctx.f['備註'] || '';
+  taskPendingAttachments[taskId] = normalizeTaskAttachments(ctx.f['附件']);
+  renderTaskAttachList();
   var today = new Date();
   today.setHours(0, 0, 0, 0);
   var existingJournal = findDailyJournalRecord(today.getTime(), ctx.assignee);
@@ -7477,7 +7782,8 @@ function renderDesigns() {
       spent: f['實際花費'] || '—',
       draft: f['初稿交付日'] ? fmtDate(f['初稿交付日']) : '—',
       final: f['完稿交付日'] ? fmtDate(f['完稿交付日']) : '—',
-      deliver: f['成品交付日'] ? fmtDate(f['成品交付日']) : '—'
+      deliver: f['成品交付日'] ? fmtDate(f['成品交付日']) : '—',
+      deliverFiles: f['成品附件'] || []
     });
   });
 
@@ -7490,31 +7796,31 @@ function renderDesigns() {
     }
     var rows = '';
     list.forEach(function(d) {
+      var fileCell = d.deliverFiles.length
+        ? '<span style="color:var(--report);font-size:11px">📎 ' + d.deliverFiles.length + ' 個檔案</span>'
+        : '<span style="color:var(--t3)">—</span>';
       rows += '<tr class="erow" onclick="openEditDesign(\'' + d.id + '\')" title="點擊編輯"><td style="font-weight:500">' + escHtml(d.name) + '</td><td>' + escHtml(d.wiName) + '</td><td>' + escHtml(d.pm) + '</td><td>' + escHtml(d.item) + '</td><td>' + escHtml(d.req) + '</td><td>' + escHtml(d.designer) + '</td>'
         + '<td>' + buildProgressStatusBadge(d.progressStatus || d.status, d.progressNum) + '</td><td>' + fmtMoneyVal(d.budget) + '</td>'
         + '<td>' + fmtMoneyVal(d.spent) + '</td>'
-        + '<td>' + d.draft + '</td><td>' + d.final + '</td><td>' + d.deliver + '</td></tr>';
+        + '<td>' + d.draft + '</td><td>' + d.final + '</td><td>' + d.deliver + '</td><td>' + fileCell + '</td></tr>';
     });
     return header
-      + '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>設計項目名稱</th><th>所屬工作項目</th><th>負責PM</th><th>項目</th><th>設計需求</th><th>設計師</th><th>進度狀態</th><th>預算</th><th>實際花費</th><th>初稿</th><th>完稿</th><th>成品</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+      + '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>設計項目名稱</th><th>所屬工作項目</th><th>負責PM</th><th>項目</th><th>設計需求</th><th>設計師</th><th>進度狀態</th><th>預算</th><th>實際花費</th><th>初稿日期</th><th>完稿日期</th><th>成品日期</th><th>成品附件</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }
 
   var html = '';
   projectsData.forEach(function(rec, i) {
     if (!isProjectVisible(rec)) return;
+    if (!isProjectSelected(rec)) return;
     var pname = rec.fields['標案名稱'] || '';
     if (!pname) return;
     html += renderProjectBlock(pname, PROJECT_COLORS[i % PROJECT_COLORS.length]);
     delete byProject[pname];
   });
-  if (byProject['其他'] && byProject['其他'].length) {
-    html += renderProjectBlock('其他', '#888');
-    delete byProject['其他'];
-  }
-  Object.keys(byProject).forEach(function(pname) {
-    if (byProject[pname] && byProject[pname].length) html += renderProjectBlock(pname, '#888');
-  });
-  area.innerHTML = html || '<div style="padding:20px;color:var(--t3);text-align:center">尚無標案，請先在左側建立標案後再新增設計任務</div>';
+  var designEmpty = selectedProjectIds.size
+    ? '所選標案尚無設計任務'
+    : '請從左側選擇要顯示的標案';
+  area.innerHTML = html || '<div style="padding:20px;color:var(--t3);text-align:center">' + designEmpty + '</div>';
 }
 
 function buildMembersMap() {
