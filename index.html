@@ -386,10 +386,15 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .gbar.gbar-mine{z-index:3;border:2.5px solid #111!important;box-sizing:border-box;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.28)}
 .gbar.gbar-mine.overdue{background:var(--danger)!important;border-color:#111!important}
 .gbar.gbar-dim{z-index:2}
-.gbar.gbar-done{background:#b8b8b8!important;color:#888!important;opacity:.72;border:none!important;box-shadow:none!important;text-decoration:line-through;font-weight:400!important;filter:grayscale(1)}
-.gbar.gbar-done.gbar-mine{background:#a8a8a8!important;color:#777!important;border:1.5px solid #bbb!important;opacity:.75}
+.gbar.gbar-dim:not(.overdue):not(.gbar-mine){color:#57534e!important;font-weight:500;text-shadow:none;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.gbar.gbar-dim.gbar-design:not(.overdue):not(.gbar-mine){border:1px dashed rgba(90,88,84,.45)!important;box-sizing:border-box}
+.gbar.gbar-done{background:#b8b8b8!important;color:#666!important;opacity:.72;border:none!important;box-shadow:none!important;font-weight:400!important;filter:grayscale(1)}
+.gbar.gbar-done span{color:#666!important;text-decoration-color:#888}
+.gbar.gbar-done.gbar-mine{background:#a8a8a8!important;color:#555!important;border:1.5px solid #bbb!important;opacity:.75}
+.gbar.gbar-done.gbar-mine span{color:#555!important}
 .gbar.gbar-done:hover{filter:grayscale(1);opacity:.82}
 .gbar-done-icon{flex-shrink:0;margin-right:4px;font-size:10px;font-weight:700;text-decoration:none;color:#666}
+.gbar-done-label{text-decoration:line-through}
 .gbar:hover:not(.gbar-done){z-index:4;filter:brightness(1.08)}
 .gbar.gbar-done:hover{z-index:2}
 .tline{position:absolute;top:0;bottom:0;width:2px;background:var(--report);z-index:5;pointer-events:none}
@@ -3032,14 +3037,14 @@ function paintGantt(key,proj,vs,ve,total,cw){
       else if (bar.id) clickAttr = ' onclick="openTaskDetail(\'' + bar.id + '\')"';
       var overdueClass = bar.overdue && !bar.done ? ' overdue' : '';
       var paint = ganttBarPaintStyle(bar, proj.color);
-      var borderStyle = bar.done ? '' : (paint.extraClass.indexOf('gbar-mine') >= 0
-        ? ''
-        : (bar.design ? 'border:1px dashed rgba(255,255,255,.55);box-sizing:border-box;' : ''));
+      var isMine = paint.extraClass.indexOf('gbar-mine') >= 0;
+      var designClass = bar.design && !isMine ? ' gbar-design' : '';
+      var borderStyle = '';
       var barLabel = bar.design ? ('設計·' + bar.l) : bar.l;
       var labelHtml = bar.done
-        ? ('<span class="gbar-done-icon">✓</span><span style="text-decoration:line-through">' + escHtml(barLabel) + '</span>')
+        ? ('<span class="gbar-done-icon">✓</span><span class="gbar-done-label">' + escHtml(barLabel) + '</span>')
         : escHtml(barLabel);
-      bH+='<div class="gbar'+overdueClass+paint.extraClass+'" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:'+GANTT_BAR_H+'px;'+paint.bgStyle+borderStyle+'"'+clickAttr+' title="'+escAttr(barLabel)+'">'+labelHtml+'</div>';
+      bH+='<div class="gbar'+overdueClass+paint.extraClass+designClass+'" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:'+GANTT_BAR_H+'px;'+paint.bgStyle+borderStyle+'"'+clickAttr+' title="'+escAttr(barLabel)+'">'+labelHtml+'</div>';
     });
     tmH+='<div class="gtr" style="width:'+tw+'px;height:'+rowH+'px">'+bH+'</div>';
   });
@@ -3109,7 +3114,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v80';
+var APP_BUILD = '20260615v81';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var BOOTSTRAP_TABLE_KEYS = ['projects', 'workitems', 'tasks', 'expenses', 'designs', 'journal', 'members'];
 var SYNC_EXPAND = {
