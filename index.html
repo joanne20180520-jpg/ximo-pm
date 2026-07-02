@@ -59,7 +59,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .pl{overflow-y:auto;padding:2px 8px 8px;flex-shrink:1;min-height:0}
 #pl-projects{display:flex;flex-direction:column;overflow:hidden}
 .proj-picker{position:relative;margin:0 0 8px;flex-shrink:0}
-.proj-picker-btn{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs);background:var(--sf2);font-size:11px;cursor:pointer;text-align:left;display:flex;align-items:center;justify-content:space-between;color:var(--text);font-family:inherit}
+.proj-picker-btn{width:100%;padding:8px 10px;border:1px solid var(--c2);border-radius:var(--rs);background:#eef4fc;font-size:11px;font-weight:600;cursor:pointer;text-align:left;display:flex;align-items:center;justify-content:space-between;color:var(--text);font-family:inherit;box-shadow:0 1px 3px rgba(26,74,122,.12)}
 .proj-picker-btn:hover{background:#fff;border-color:var(--t3)}
 .proj-picker-panel{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:120;background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);box-shadow:var(--shadow);max-height:240px;display:flex;flex-direction:column;overflow:hidden}
 .proj-picker-panel.hidden{display:none}
@@ -729,6 +729,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <button class="badd" onclick="openPopup('pp-proj')">＋上傳服務建議書</button>
         <button class="badd" onclick="openPopup('pp-work')">＋工作項目</button>
       </div>
+      <div id="proj-picker-mount"></div>
     </div>
     <div class="pl" id="pl-projects">
       <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
@@ -2962,7 +2963,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v72';
+var APP_BUILD = '20260615v73';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
@@ -3091,10 +3092,16 @@ var selectedProjectIds = new Set();
 var projectPickerOpen = false;
 var projectPickerSearchQuery = '';
 var taskPendingAttachments = {};
+var projectSelectNeedsDefault = false;
 
 (function initSelectedProjects() {
   try {
-    var saved = JSON.parse(localStorage.getItem(PROJECT_SELECT_STORAGE_KEY) || '[]');
+    var raw = localStorage.getItem(PROJECT_SELECT_STORAGE_KEY);
+    if (raw === null) {
+      projectSelectNeedsDefault = true;
+      return;
+    }
+    var saved = JSON.parse(raw || '[]');
     if (Array.isArray(saved)) {
       saved.forEach(function(id) {
         if (id) selectedProjectIds.add(String(id));
@@ -4587,6 +4594,7 @@ function fetchJsonWithTimeout(url, ms) {
 
 function safeRenderAfterLoad() {
   try {
+    ensureDefaultProjectSelection();
     renderProjects();
     renderTasks();
     renderTeamPanel();
@@ -4904,6 +4912,16 @@ function pruneSelectedProjects() {
   });
   if (changed) saveSelectedProjects();
 }
+function ensureDefaultProjectSelection() {
+  if (!projectSelectNeedsDefault || selectedProjectIds.size || !projectsData.length) return;
+  projectsData.forEach(function(rec) {
+    if (isProjectVisible(rec)) selectedProjectIds.add(rec.record_id);
+  });
+  if (selectedProjectIds.size) {
+    projectSelectNeedsDefault = false;
+    saveSelectedProjects();
+  }
+}
 function isProjectSelected(rec) {
   if (!selectedProjectIds.size) return false;
   return selectedProjectIds.has(rec.record_id);
@@ -4917,6 +4935,7 @@ function getProjectColor(rec) {
   return PROJECT_COLORS[0];
 }
 function toggleProjectSelection(projId) {
+  projectSelectNeedsDefault = false;
   if (selectedProjectIds.has(projId)) selectedProjectIds.delete(projId);
   else selectedProjectIds.add(projId);
   saveSelectedProjects();
@@ -4951,6 +4970,7 @@ function selectAllVisibleProjects() {
   refreshAllFilteredViews();
 }
 function clearProjectSelection() {
+  projectSelectNeedsDefault = false;
   selectedProjectIds.clear();
   saveSelectedProjects();
   refreshAllFilteredViews();
@@ -5003,10 +5023,11 @@ function syncTruncatedTitle(el, fullText) {
   else el.removeAttribute('title');
 }
 function renderProjects() {
+  var pickerMount = document.getElementById('proj-picker-mount');
   var container = document.getElementById('pl-projects');
-  if (!container) return;
+  if (!container && !pickerMount) return;
   var selectedCount = selectedProjectIds.size;
-  var btnLabel = selectedCount ? ('已選 ' + selectedCount + ' 個標案') : '請選擇標案';
+  var btnLabel = selectedCount ? ('已選 ' + selectedCount + ' 個標案 ▼') : '請選擇標案 ▼';
   var panelHidden = projectPickerOpen ? '' : ' hidden';
   var searchVal = projectPickerSearchQuery || '';
   var listHTML = '';
@@ -5040,8 +5061,9 @@ function renderProjects() {
   });
   var cardsBlock = cardsHTML
     ? ('<div class="pl-cards">' + cardsHTML + '</div>')
-    : '<div style="padding:8px 10px;color:var(--t3);font-size:11px">' + (selectedCount ? '所選標案無工作項目' : '請從上方選擇要顯示的標案') + '</div>';
-  container.innerHTML = dropdownHTML + cardsBlock;
+    : '<div style="padding:8px 10px;color:var(--t3);font-size:11px">' + (selectedCount ? '所選標案無工作項目' : '請點上方藍色按鈕選擇標案') + '</div>';
+  if (pickerMount) pickerMount.innerHTML = dropdownHTML;
+  if (container) container.innerHTML = cardsBlock;
 }
 
 // ── 渲染 B 區任務清單 ──
