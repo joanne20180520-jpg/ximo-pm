@@ -382,11 +382,10 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .gtr{height:40px;border-bottom:1px solid var(--border);position:relative}
 .gtr:last-child{border-bottom:none}
 .gbar{position:absolute;height:24px;top:50%;transform:translateY(-50%);border-radius:6px;display:flex;align-items:center;padding:0 8px;font-size:11px;color:rgba(255,255,255,.98);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;cursor:pointer;min-width:4px;box-shadow:0 1px 3px rgba(0,0,0,.1);pointer-events:auto;z-index:1}
-.gbar.overdue{background:var(--danger)!important}
 .gbar.gbar-mine{z-index:3;border:2.5px solid #111!important;box-sizing:border-box;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.28)}
 .gbar.gbar-mine.overdue{background:var(--danger)!important;border-color:#111!important}
 .gbar.gbar-dim{z-index:2}
-.gbar.gbar-dim:not(.overdue):not(.gbar-mine){color:#57534e!important}
+.gbar.gbar-dim:not(.gbar-mine){color:#57534e!important}
 .gbar.gbar-done{background:#b8b8b8!important;color:#888!important;opacity:.72;border:none!important;box-shadow:none!important;text-decoration:line-through;font-weight:400!important;filter:grayscale(1)}
 .gbar.gbar-done.gbar-mine{background:#a8a8a8!important;color:#777!important;border:1.5px solid #bbb!important;opacity:.75}
 .gbar.gbar-done:hover{filter:grayscale(1);opacity:.82}
@@ -2970,9 +2969,11 @@ function paintGantt(key,proj,vs,ve,total,cw){
       var base = bar.design ? DESIGN_GANTT_COLOR : (bar.c || projColor);
       return { bgStyle: 'background:' + hexDarken(base, 0.62) + ';', extraClass: ' gbar-mine' };
     }
-    if (bar.overdue) return { bgStyle: '', extraClass: ' gbar-dim' };
+    if (bar.overdue) {
+      return { bgStyle: 'background:' + hexToRgba(GANTT_OVERDUE_COLOR, GANTT_DIM_ALPHA) + ';', extraClass: ' gbar-dim' };
+    }
     var base2 = bar.design ? DESIGN_GANTT_COLOR : (bar.c || projColor);
-    return { bgStyle: 'background:' + hexToRgba(base2, 0.42) + ';', extraClass: ' gbar-dim' };
+    return { bgStyle: 'background:' + hexToRgba(base2, GANTT_DIM_ALPHA) + ';', extraClass: ' gbar-dim' };
   }
 
   // months
@@ -3108,7 +3109,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v82';
+var APP_BUILD = '20260615v83';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var BOOTSTRAP_TABLE_KEYS = ['projects', 'workitems', 'tasks', 'expenses', 'designs', 'journal', 'members'];
 var SYNC_EXPAND = {
@@ -4111,7 +4112,7 @@ function isRecordMine(fields, kind) {
   var u = getCurrentLoginUser();
   if (!u || !fields) return false;
   var candidates = kind === 'design'
-    ? [fields['負責PM'], fields['設計師']].filter(Boolean)
+    ? [fields['負責PM']].filter(Boolean)
     : [fields['負責人']].filter(Boolean);
   for (var i = 0; i < candidates.length; i++) {
     var field = candidates[i];
@@ -5747,6 +5748,8 @@ function filterTasks(el, proj) {
 }
 
 var DESIGN_GANTT_COLOR = '#d4a017';
+var GANTT_DIM_ALPHA = 0.42;
+var GANTT_OVERDUE_COLOR = '#b42318';
 
 function getDesignBarRange(f) {
   var draft = parseTs(f['初稿交付日']);
