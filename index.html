@@ -1238,9 +1238,11 @@ function sw(btn,id){
   if(id==='pg-journal') {
     journalViewDate = new Date();
     journalViewDate.setHours(0, 0, 0, 0);
-    reloadJournal().then(function(){ renderJournalPage(); });
+    syncJournalDateInput();
+    updateJournalDateLabel();
+    renderJournalPage();
   }
-  if(id==='pg-e') reloadExpenses().then(function(){ renderExpenses(); });
+  if(id==='pg-e') renderExpenses();
   if(id==='pg-b') renderBudget();
   if(id==='pg-d') renderDesigns();
   if(id==='pg-p') applyLoginUserToForms();
@@ -3100,8 +3102,11 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260708v86';
+var APP_BUILD = '20260708v87';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
+var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
+var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
+var AUTH_CACHE_MAX_AGE = 10 * 60 * 1000;
 var BOOTSTRAP_TABLE_KEYS = ['projects', 'workitems', 'tasks', 'expenses', 'designs', 'journal', 'members'];
 var SYNC_EXPAND = {
   projects: ['projects'],
@@ -3587,6 +3592,7 @@ function hideAuthGate() {
 function clearLoginStorage() {
   currentLoginUser = null;
   loginUserReady = false;
+  clearAuthCache();
   try {
     localStorage.removeItem(LOGIN_STORAGE_KEY);
     sessionStorage.removeItem(LOGIN_STORAGE_KEY);
@@ -3722,11 +3728,93 @@ function applyRolePermissions() {
   }
 }
 
+function readAuthCache() {
+  try {
+    var raw = sessionStorage.getItem(AUTH_CACHE_KEY);
+    if (!raw) return null;
+    var parsed = JSON.parse(raw);
+    if (!parsed || !parsed.ts || Date.now() - parsed.ts > AUTH_CACHE_MAX_AGE) return null;
+    var u = getCurrentLoginUser();
+    if (!u) return null;
+    var openId = u.openId || '';
+    if (openId && parsed.openId && parsed.openId !== openId) return null;
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
+function writeAuthCache(result) {
+  if (!result || !result.authorized) return;
+  var u = getCurrentLoginUser();
+  if (!u) return;
+  try {
+    sessionStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({
+      ts: Date.now(),
+      openId: u.openId || '',
+      role: result.role || 'PM',
+      memberName: result.memberName || ''
+    }));
+  } catch (e) {}
+}
+
+function clearAuthCache() {
+  try { sessionStorage.removeItem(AUTH_CACHE_KEY); } catch (e) {}
+}
+
+function applyAuthorizedSession(result, opts) {
+  opts = opts || {};
+  currentUserRole = result.role || 'PM';
+  hideAuthGate();
+  applyRolePermissions();
+  if (result.loginUser || result.memberName) {
+    var merged = Object.assign({}, getCurrentLoginUser() || {}, result.loginUser || {});
+    if (result.memberName) {
+      if (!merged.name) merged.name = result.memberName;
+      if (!merged.enName) merged.enName = result.memberName;
+    }
+    var tok = getUserAccessToken();
+    if (tok) merged.accessToken = tok;
+    if (merged.name || merged.accessToken) finalizeLoginUser(merged);
+  }
+  if (!authReady) {
+    authReady = true;
+    loadData();
+  } else if (!opts.silent) {
+    updateTodoLoginLabel();
+    renderTeamPanel();
+  }
+  initPayFormDefaults();
+  applyLoginUserToForms();
+}
+
 function completeAuthAfterLogin(opts) {
   opts = opts || {};
   return refreshLoginTokenIfNeeded().then(function() {
+    var cachedAuth = readAuthCache();
+    if (cachedAuth && getUserAccessToken()) {
+      applyAuthorizedSession({
+        authorized: true,
+        role: cachedAuth.role,
+        memberName: cachedAuth.memberName
+      }, { silent: false });
+      checkMemberAuthorization().then(function(result) {
+        if (!result.authorized) {
+          clearAuthCache();
+          if (result.needLogin) logoutAndShowGate();
+          else if (result.configError) showAuthGate('login', '後台設定錯誤', result.configError, result.loginUser || null);
+          else showAuthGate('denied', '無法進入系統', '此人員尚未加入授權名單。', result.loginUser);
+          return;
+        }
+        writeAuthCache(result);
+        currentUserRole = result.role || currentUserRole;
+        applyRolePermissions();
+      });
+      return true;
+    }
     return checkMemberAuthorization();
   }).then(function(result) {
+    if (result === true) return true;
     if (!result.authorized) {
       if (result.configError) {
         showAuthGate('login', '後台設定錯誤', result.configError, result.loginUser || null);
@@ -3764,28 +3852,8 @@ function completeAuthAfterLogin(opts) {
         }).then(function(early) {
           if (early === false) return false;
           if (!result.authorized) return false;
-          currentUserRole = result.role || 'PM';
-          hideAuthGate();
-          applyRolePermissions();
-          if (result.loginUser || result.memberName) {
-            var merged = Object.assign({}, getCurrentLoginUser() || {}, result.loginUser || {});
-            if (result.memberName) {
-              if (!merged.name) merged.name = result.memberName;
-              if (!merged.enName) merged.enName = result.memberName;
-            }
-            var tok = getUserAccessToken();
-            if (tok) merged.accessToken = tok;
-            if (merged.name || merged.accessToken) finalizeLoginUser(merged);
-          }
-          if (!authReady) {
-            authReady = true;
-            loadData();
-          } else {
-            updateTodoLoginLabel();
-            renderTeamPanel();
-          }
-          initPayFormDefaults();
-          applyLoginUserToForms();
+          writeAuthCache(result);
+          applyAuthorizedSession(result);
           return true;
         });
       } else {
@@ -3795,28 +3863,8 @@ function completeAuthAfterLogin(opts) {
       }
       return false;
     }
-    currentUserRole = result.role || 'PM';
-    hideAuthGate();
-    applyRolePermissions();
-    if (result.loginUser || result.memberName) {
-      var merged = Object.assign({}, getCurrentLoginUser() || {}, result.loginUser || {});
-      if (result.memberName) {
-        if (!merged.name) merged.name = result.memberName;
-        if (!merged.enName) merged.enName = result.memberName;
-      }
-      var tok = getUserAccessToken();
-      if (tok) merged.accessToken = tok;
-      if (merged.name || merged.accessToken) finalizeLoginUser(merged);
-    }
-    if (!authReady) {
-      authReady = true;
-      loadData();
-    } else {
-      updateTodoLoginLabel();
-      renderTeamPanel();
-    }
-    initPayFormDefaults();
-    applyLoginUserToForms();
+    writeAuthCache(result);
+    applyAuthorizedSession(result);
     return true;
   });
 }
@@ -4984,10 +5032,12 @@ function loadExtraData() {
 function loadData(opts) {
   opts = opts || {};
   var hadCache = false;
+  var cacheFresh = false;
   if (!opts.skipCache) {
     var cached = readBootstrapCache();
     if (cached && cached.payload) {
       hadCache = true;
+      cacheFresh = !!(cached.ts && (Date.now() - cached.ts < DATA_CACHE_MAX_AGE));
       applyBootstrapPayload(cached.payload);
       renderAllFromBootstrap();
     }
@@ -4997,7 +5047,12 @@ function loadData(opts) {
     document.getElementById('task-list-body').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
   }
 
-  fetchBootstrapPayloadRemote().then(function(payload) {
+  if (cacheFresh && !opts.forceRefresh) {
+    setBootStatus('');
+    return Promise.resolve();
+  }
+
+  return fetchBootstrapPayloadRemote().then(function(payload) {
     applyBootstrapPayload(payload);
     writeBootstrapCache(payload);
     renderAllFromBootstrap();
@@ -6208,16 +6263,8 @@ function confirmDesignReport() {
     journalPromise,
     apiPut('designs', currentDesignId, designFields)
   ]).then(function() {
-    return reloadJournal();
-  }).then(function() {
-    return fetch(API + '?table=designs').then(function(r) { return r.json(); });
-  }).then(function(data) {
-    if (data && data.records) {
-      designsData = data.records;
-      renderDesigns();
-      renderGanttFromData();
-    }
     cl('pp-dd');
+    return syncTables(['journal', 'designs']);
   }).catch(function(err) {
     console.error(err);
     alert('儲存失敗：' + (err.message || '請稍後再試'));
@@ -6558,11 +6605,8 @@ function confirmTaskReport() {
     journalPromise,
     apiPut('tasks', currentTaskId, taskFields)
   ]).then(function() {
-    return reloadJournal();
-  }).then(function() {
-    return syncTables(['tasks']);
-  }).then(function() {
     cl('pp-td');
+    return syncTables(['journal', 'tasks']);
   }).catch(function(err) {
     console.error(err);
     alert('儲存失敗：' + (err.message || '請確認 Lark 欄位設定'));
@@ -7616,22 +7660,7 @@ function saveDailyJournal() {
     }
     cl('pp-daily-log');
     journalViewDate = new Date(dailyLogDate.getTime());
-    return reloadJournal();
-  }).then(function() {
-    return fetch(API + '?table=tasks').then(function(r) { return r.json(); });
-  }).then(function(data) {
-    if (data && data.records) {
-      tasksData = data.records;
-      renderTasks();
-      renderTeamPanel();
-    }
-    return fetch(API + '?table=designs').then(function(r) { return r.json(); });
-  }).then(function(data) {
-    if (data && data.records) {
-      designsData = data.records;
-      renderDesigns();
-      renderGanttFromData();
-    }
+    return syncTables(['journal', 'tasks', 'designs']);
   }).catch(function(err) {
     console.error(err);
     alert('儲存失敗：' + (err.message || '請確認 Lark 日報表欄位名稱與類型是否正確'));
@@ -7639,16 +7668,11 @@ function saveDailyJournal() {
 }
 
 function reloadJournal() {
-  return fetch(API + '?table=journal').then(function(r) { return r.json(); })
-    .then(function(data) {
-      journalData = data.records || [];
-      renderJournalPage();
-      return journalData;
-    })
-    .catch(function(err) {
-      console.error('日誌載入失敗', err);
-      return journalData;
-    });
+  return syncTables(['journal']);
+}
+
+function reloadExpenses() {
+  return syncTables(['expenses']);
 }
 
 function journalTs(rec) {
@@ -7686,18 +7710,6 @@ function getJournalItemsInRange(days) {
   }).sort(function(a, b) {
     return (journalTs(b) || 0) - (journalTs(a) || 0);
   });
-}
-
-function reloadExpenses() {
-  return fetch(API + '?table=expenses').then(function(r) { return r.json(); })
-    .then(function(data) {
-      expensesData = data.records || [];
-      return expensesData;
-    })
-    .catch(function(err) {
-      console.error('reloadExpenses', err);
-      return expensesData;
-    });
 }
 
 function journalField(rec, keys) {
@@ -7888,16 +7900,8 @@ function resolveBlockedTask(taskId, journalRecId, newCat, btn) {
   }
 
   Promise.all(journalUpdates.concat([taskUpdate]))
-    .then(function() { return reloadJournal(); })
-    .then(function() { return fetch(API + '?table=tasks').then(function(r) { return r.json(); }); })
-    .then(function(data) {
-      if (data && data.records) {
-        tasksData = data.records;
-        renderTasks();
-        renderTeamPanel();
-        renderGanttFromData();
-      }
-      renderJournalPage();
+    .then(function() {
+      return syncTables(['journal', 'tasks']);
     })
     .catch(function(err) {
       alert('更新失敗：' + (err.message || '請稍後再試'));

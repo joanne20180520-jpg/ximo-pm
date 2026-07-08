@@ -68,6 +68,8 @@ function getRedirectUriForRequest(req) {
  
 // 取得 tenant_access_token（模組內快取，避免同次請求重複換 token）
 let _tenantTokenCache = null;
+let _membersRecordsCache = null;
+const MEMBERS_CACHE_TTL_MS = 3 * 60 * 1000;
 
 async function getToken() {
   const now = Date.now();
@@ -2831,6 +2833,20 @@ async function buildTablesCheckReport() {
   };
 }
 
+async function getMembersRecords(token) {
+  const now = Date.now();
+  if (_membersRecordsCache && _membersRecordsCache.expiresAt > now) {
+    return _membersRecordsCache.records;
+  }
+  const cfg = getOperationalBitableConfig();
+  const members = await getRecords(token, tableIdFor('members'), cfg.appToken);
+  _membersRecordsCache = {
+    records: members,
+    expiresAt: now + MEMBERS_CACHE_TTL_MS
+  };
+  return members;
+}
+
 async function checkMemberAuthorization(userAccessToken) {
   if (!userAccessToken) return { ok: true, needLogin: true, authorized: false };
   let user;
@@ -2842,8 +2858,7 @@ async function checkMemberAuthorization(userAccessToken) {
   const tenantToken = await getToken();
   let members;
   try {
-    const cfg = getOperationalBitableConfig();
-    members = await getRecords(tenantToken, tableIdFor('members'), cfg.appToken);
+    members = await getMembersRecords(tenantToken);
   } catch (err) {
     if (isTableConfigError(err)) {
       return {
