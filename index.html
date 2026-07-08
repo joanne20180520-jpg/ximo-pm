@@ -1012,9 +1012,9 @@ button.btn-loading::after{content:'…';margin-left:2px}
 <div class="po" id="pp-daily-log"><div class="pp pp-daily"><div class="pph pph-report"><h3>每日工作回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-daily-log')">✕</button></div><div class="ppb">
   <div class="dl-date" id="dl-date-display"></div>
   <div class="fg"><label>回報人</label><select id="dl-author" data-members onchange="onDailyLogAuthorChange()"></select></div>
-  <div class="fg"><label>任務分類</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-person-filter" id="dl-person-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">預設只顯示目前回報人負責的項目。選擇狀態後會即時出現在下方備註；「不列入」不會寫進日報。</div></div>
+  <div class="fg"><label>任務分類</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-person-filter" id="dl-person-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">預設只顯示目前回報人負責的項目；若今日已填過日報，會自動帶入先前分類。選「不列入」可從日報移除該項；誤填可點左下「刪除今日日報」。</div></div>
   <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="選擇任務後自動產生…"></textarea></div>
-</div><div class="ppf"><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
+</div><div class="ppf"><button class="bcan bdel-action" id="dl-delete-btn" onclick="deleteDailyJournal()" style="display:none">刪除今日日報</button><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
 <div class="po" id="pp-exp"><div class="pp"><div class="pph"><h3>新增支出明細</h3><button class="ppc" onclick="cl('pp-exp')">✕</button></div><div class="ppb"><div class="fg"><label>支出細項</label><input type="text" id="ex-name" placeholder="茶葉5斤"></div><div class="fg"><label>所屬標案</label><select id="ex-proj" onchange="onExpenseProjChange()"></select></div><div class="fg"><label>所屬工作項目</label><select id="ex-wi"></select></div><div class="fg"><label>負責人</label><select id="ex-assignee" data-members></select></div><div class="fg"><label>預估花費</label><input type="text" class="money-input" id="ex-est" placeholder="NT$0"></div><div class="fg"><label>日期</label><input type="date" id="ex-date"></div><div class="fg"><label>實際金額</label><input type="text" class="money-input" placeholder="NT$0" id="aa" oninput="calcE()"></div><div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ua" readonly style="background:#f0f0f0;color:var(--t3)"></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-exp')">取消</button><button class="bpri" onclick="saveExpense()">新增</button></div></div></div>
 
@@ -3100,7 +3100,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260615v85';
+var APP_BUILD = '20260708v86';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var BOOTSTRAP_TABLE_KEYS = ['projects', 'workitems', 'tasks', 'expenses', 'designs', 'journal', 'members'];
 var SYNC_EXPAND = {
@@ -3892,7 +3892,12 @@ var PROGRESS_OPTIONS = ['未開始','進行中10%','進行中20%','進行中30%'
 
 function personName(field) {
   if (!field) return '';
-  if (Array.isArray(field) && field[0]) return field[0].name || field[0].en_name || '';
+  if (typeof field === 'string') return field.trim();
+  if (Array.isArray(field) && field[0]) {
+    if (typeof field[0] === 'string') return field[0].trim();
+    return field[0].name || field[0].en_name || field[0].text || '';
+  }
+  if (typeof field === 'object') return field.name || field.en_name || field.text || '';
   return '';
 }
 function personInitial(name) { return name ? name.charAt(0).toUpperCase() : '?'; }
@@ -6760,7 +6765,16 @@ var DAILY_CAT_OPTIONS = [
 
 function journalPersonName(rec) {
   var f = rec.fields || {};
-  return personName(f['回報人']) || journalField(rec, ['撰寫人', '成員', '姓名']) || '';
+  var fromPerson = personName(f['回報人']);
+  if (fromPerson) return fromPerson;
+  var alt = journalField(rec, ['撰寫人', '成員', '姓名']);
+  if (typeof alt === 'string') return alt.trim();
+  return personName(alt) || '';
+}
+
+function journalPersonMatches(rec, authorName) {
+  if (!authorName || authorName === '（未指定）') return true;
+  return namesMatch(journalPersonName(rec), authorName);
 }
 
 function journalLinkText(rec, keys) {
@@ -6979,6 +6993,116 @@ function dailyLogItemMatchesPerson(it, personName) {
   return namesMatch(it.assignee || '', personName);
 }
 
+function getDailyLogJournalItemIds(dayStart, author) {
+  var taskIds = {};
+  var designIds = {};
+  findDailyJournalRecords(dayStart, author).forEach(function(rec) {
+    ['進行中任務', '已完成今日任務', '卡關任務', '明日預計任務'].forEach(function(key) {
+      getLinkIds(rec.fields[key]).forEach(function(id) { taskIds[id] = 1; });
+    });
+    var designCats = parseDesignCategories(rec);
+    ['doing', 'done', 'block', 'tomorrow'].forEach(function(k) {
+      (designCats[k] || []).forEach(function(id) { designIds[id] = 1; });
+    });
+  });
+  return { taskIds: taskIds, designIds: designIds };
+}
+
+function getDailyLogVisibleItems() {
+  var items = getDailyLogAllItems();
+  var author = document.getElementById('dl-author') ? document.getElementById('dl-author').value : '';
+  var journalIds = getDailyLogJournalItemIds(dailyLogDate.getTime(), author);
+  if (dailyLogProjFilter) items = items.filter(function(it) { return it.projName === dailyLogProjFilter; });
+  if (dailyLogPersonFilter) {
+    items = items.filter(function(it) {
+      if (dailyLogItemMatchesPerson(it, dailyLogPersonFilter)) return true;
+      if (it.kind === 'design') return !!journalIds.designIds[it.id];
+      return !!journalIds.taskIds[it.id];
+    });
+  }
+  return items;
+}
+
+function pickDailyLogAuthorOnOpen(preselectId, preselectKind) {
+  var authorSel = document.getElementById('dl-author');
+  if (!authorSel) return '';
+  if (preselectId) return authorSel.value || '';
+
+  var todayStart = dailyLogDate.getTime();
+  var todayRecs = journalData.filter(function(rec) {
+    var ts = journalTs(rec);
+    return ts && ts >= todayStart && ts < todayStart + 86400000;
+  });
+  if (!todayRecs.length) return authorSel.value || '';
+
+  function selectAuthorName(name) {
+    if (!name) return false;
+    for (var i = 0; i < authorSel.options.length; i++) {
+      if (namesMatch(authorSel.options[i].text, name) || namesMatch(authorSel.options[i].value, name)) {
+        authorSel.selectedIndex = i;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  var myName = getMyPersonName();
+  if (myName && todayRecs.some(function(rec) { return journalPersonMatches(rec, myName); })) {
+    selectAuthorName(myName);
+    return authorSel.value || '';
+  }
+
+  var reporters = [];
+  todayRecs.forEach(function(rec) {
+    var n = journalPersonName(rec);
+    if (!n) return;
+    if (!reporters.some(function(r) { return namesMatch(r, n); })) reporters.push(n);
+  });
+  if (reporters.length === 1) selectAuthorName(reporters[0]);
+  return authorSel.value || '';
+}
+
+function updateDailyLogDeleteButton() {
+  var btn = document.getElementById('dl-delete-btn');
+  if (!btn) return;
+  var author = document.getElementById('dl-author') ? document.getElementById('dl-author').value : '';
+  var hasJournal = !!findDailyJournalRecords(dailyLogDate.getTime(), author).length;
+  btn.style.display = (isPMRole() && hasJournal) ? '' : 'none';
+}
+
+function deleteDailyJournal() {
+  if (!isPMRole()) {
+    alert('僅 PM 可刪除日報');
+    return;
+  }
+  var author = document.getElementById('dl-author').value || '';
+  var recs = findDailyJournalRecords(dailyLogDate.getTime(), author);
+  if (!recs.length) {
+    alert('此日尚無日報可刪除');
+    return;
+  }
+  var d = dailyLogDate;
+  var label = (author && author !== '（未指定）' ? author + ' ' : '') + (d.getMonth() + 1) + '/' + d.getDate();
+  if (!confirm('確定刪除「' + label + '」的日報？刪除後墨日誌看板也會一併移除。')) return;
+
+  var btn = document.getElementById('dl-delete-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '刪除中…'; }
+
+  Promise.all(recs.map(function(rec) { return apiDelete('journal', rec.record_id); }))
+    .then(function() {
+      cl('pp-daily-log');
+      journalViewDate = new Date(dailyLogDate.getTime());
+      return reloadJournal();
+    })
+    .catch(function(err) {
+      console.error(err);
+      alert('刪除失敗：' + (err.message || '請稍後再試'));
+    })
+    .finally(function() {
+      if (btn) { btn.disabled = false; btn.textContent = '刪除今日日報'; }
+    });
+}
+
 function renderDailyLogPersonFilter(items) {
   var area = document.getElementById('dl-person-filter');
   if (!area) return;
@@ -7017,6 +7141,7 @@ function onDailyLogAuthorChange() {
   }
   renderDailyLogPersonFilter(getDailyLogAllItems());
   renderDailyLogTasks(dailyLogPreselectId);
+  updateDailyLogDeleteButton();
   dailyLogPreselectId = null;
 }
 
@@ -7072,9 +7197,7 @@ function renderDailyLogProjFilter(items) {
 function renderDailyLogTasks(preselectId) {
   var area = document.getElementById('dl-task-list');
   if (!area) return;
-  var items = getDailyLogAllItems();
-  if (dailyLogProjFilter) items = items.filter(function(it) { return it.projName === dailyLogProjFilter; });
-  if (dailyLogPersonFilter) items = items.filter(function(it) { return dailyLogItemMatchesPerson(it, dailyLogPersonFilter); });
+  var items = getDailyLogVisibleItems();
   if (!items.length) {
     area.innerHTML = '<div style="padding:14px;color:var(--t3);font-size:12px;text-align:center">尚無符合篩選的任務或設計項目</div>';
     if (!dailyLogContentEdited) refreshDailyLogContent();
@@ -7279,6 +7402,9 @@ function openDailyLog(preselectId, preselectKind) {
   }
 
   var author = authorSel ? authorSel.value : '';
+  if (!preselectId) {
+    author = pickDailyLogAuthorOnOpen(preselectId, preselectKind) || author;
+  }
   if (!author || author === '（未指定）') {
     var myName = getMyPersonName();
     if (myName && authorSel) {
@@ -7309,6 +7435,7 @@ function openDailyLog(preselectId, preselectKind) {
   if (preselectId && preselectKind === 'design') cl('pp-dd');
   else if (preselectId) cl('pp-td');
   applyDailyLogPermissions();
+  updateDailyLogDeleteButton();
   op('pp-daily-log');
 }
 
@@ -7321,6 +7448,7 @@ function applyDailyLogPermissions() {
   });
   var saveBtn = popup.querySelector('.ppf .btn-report');
   if (saveBtn) saveBtn.style.display = pm ? '' : 'none';
+  updateDailyLogDeleteButton();
 }
 
 function journalContainsTask(rec, taskId) {
@@ -7345,7 +7473,7 @@ function findDailyJournalRecord(dayStart, authorName, itemId, itemKind) {
   var matches = journalData.filter(function(rec) {
     var ts = journalTs(rec);
     if (!ts || ts < dayStart || ts >= dayEnd) return false;
-    if (authorName && authorName !== '（未指定）' && journalPersonName(rec) !== authorName) return false;
+    if (!journalPersonMatches(rec, authorName)) return false;
     return true;
   });
   if (itemId && matches.length) {
@@ -7921,8 +8049,7 @@ function findDailyJournalRecords(dayStart, authorName) {
   return journalData.filter(function(rec) {
     var ts = journalTs(rec);
     if (!ts || ts < dayStart || ts >= dayEnd) return false;
-    if (!authorName || authorName === '（未指定）') return true;
-    return journalPersonName(rec) === authorName;
+    return journalPersonMatches(rec, authorName);
   });
 }
 
