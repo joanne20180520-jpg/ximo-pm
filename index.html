@@ -3102,7 +3102,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260708v87';
+var APP_BUILD = '20260708v88';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -7067,43 +7067,30 @@ function getDailyLogVisibleItems() {
   return items;
 }
 
-function pickDailyLogAuthorOnOpen(preselectId, preselectKind) {
+function selectDailyLogAuthor(name) {
   var authorSel = document.getElementById('dl-author');
-  if (!authorSel) return '';
-  if (preselectId) return authorSel.value || '';
-
-  var todayStart = dailyLogDate.getTime();
-  var todayRecs = journalData.filter(function(rec) {
-    var ts = journalTs(rec);
-    return ts && ts >= todayStart && ts < todayStart + 86400000;
-  });
-  if (!todayRecs.length) return authorSel.value || '';
-
-  function selectAuthorName(name) {
-    if (!name) return false;
-    for (var i = 0; i < authorSel.options.length; i++) {
-      if (namesMatch(authorSel.options[i].text, name) || namesMatch(authorSel.options[i].value, name)) {
-        authorSel.selectedIndex = i;
-        return true;
-      }
+  if (!authorSel || !name) return '';
+  for (var i = 0; i < authorSel.options.length; i++) {
+    if (namesMatch(authorSel.options[i].text, name) || namesMatch(authorSel.options[i].value, name)) {
+      authorSel.selectedIndex = i;
+      return authorSel.value;
     }
-    return false;
   }
-
-  var myName = getMyPersonName();
-  if (myName && todayRecs.some(function(rec) { return journalPersonMatches(rec, myName); })) {
-    selectAuthorName(myName);
-    return authorSel.value || '';
-  }
-
-  var reporters = [];
-  todayRecs.forEach(function(rec) {
-    var n = journalPersonName(rec);
-    if (!n) return;
-    if (!reporters.some(function(r) { return namesMatch(r, n); })) reporters.push(n);
-  });
-  if (reporters.length === 1) selectAuthorName(reporters[0]);
   return authorSel.value || '';
+}
+
+function buildDailyLogAuthorNames(items) {
+  var names = Object.keys(membersMap);
+  if (!names.length) {
+    var nameSet = {};
+    (items || []).forEach(function(it) { if (it.assignee) nameSet[it.assignee] = 1; });
+    names = Object.keys(nameSet);
+  }
+  var myName = getMyPersonName();
+  if (myName && !names.some(function(n) { return namesMatch(n, myName); })) {
+    names.unshift(myName);
+  }
+  return names.length ? names : ['（未指定）'];
 }
 
 function updateDailyLogDeleteButton() {
@@ -7427,40 +7414,10 @@ function openDailyLog(preselectId, preselectKind) {
   var items = getDailyLogAllItems();
   var authorSel = document.getElementById('dl-author');
   if (authorSel) {
-    var authorNames = Object.keys(membersMap);
-    if (!authorNames.length) {
-      var nameSet = {};
-      items.forEach(function(it) { if (it.assignee) nameSet[it.assignee] = 1; });
-      authorNames = Object.keys(nameSet);
-    }
-    fillSelectOptions(authorSel, authorNames.length ? authorNames : ['（未指定）']);
-    if (preselectId) {
-      if (preselectKind === 'design') {
-        var dctx = getDesignContext(preselectId);
-        if (dctx && (dctx.designer || dctx.pm)) authorSel.value = dctx.designer || dctx.pm;
-      } else {
-        var ctx = getTaskContext(preselectId);
-        if (ctx && ctx.assignee) authorSel.value = ctx.assignee;
-      }
-    }
+    fillSelectOptions(authorSel, buildDailyLogAuthorNames(items));
   }
 
-  var author = authorSel ? authorSel.value : '';
-  if (!preselectId) {
-    author = pickDailyLogAuthorOnOpen(preselectId, preselectKind) || author;
-  }
-  if (!author || author === '（未指定）') {
-    var myName = getMyPersonName();
-    if (myName && authorSel) {
-      for (var ai = 0; ai < authorSel.options.length; ai++) {
-        if (namesMatch(authorSel.options[ai].text, myName)) {
-          authorSel.selectedIndex = ai;
-          author = authorSel.value;
-          break;
-        }
-      }
-    }
-  }
+  var author = selectDailyLogAuthor(getMyPersonName()) || (authorSel ? authorSel.value : '');
   dailyLogPersonFilter = author && author !== '（未指定）' ? author : (getMyPersonName() || '');
 
   var contentEl = document.getElementById('dl-content');
