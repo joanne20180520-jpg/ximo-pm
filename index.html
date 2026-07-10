@@ -948,7 +948,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
           <div class="ai-composer-card">
             <textarea id="ai-followup-input" rows="3" placeholder="繼續追問，例如：跟上週比，這個專案有進步嗎？"></textarea>
             <div class="ai-composer-bar">
-              <span class="ai-composer-hint">Enter 換行 · 再按 Enter 送出</span>
+              <span class="ai-composer-hint">Enter 兩下送出 · Shift+Enter 換行</span>
               <button type="button" class="bpri bsm" onclick="sendAiFollowup()">送出</button>
             </div>
           </div>
@@ -3179,7 +3179,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v101';
+var APP_BUILD = '20260710v102';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8425,6 +8425,7 @@ var aiLastMetrics = null;
 var aiConversationHistory = { firstAnalysis: null, followUps: [] };
 var AI_PROJECT_STORAGE_KEY = 'ximo-ai-selected-project';
 var AI_LOADING_TICKER = '讀取標案資料 · 整理任務與支出 · 彙整日報紀錄 · AI 分析中 · ';
+var aiLastEnterAt = 0;
 
 function showAiLoading() {
   var body = document.getElementById('ai-body');
@@ -8490,13 +8491,15 @@ function showAiComposer(show) {
     if (input && !input._aiBound) {
       input._aiBound = true;
       input.addEventListener('keydown', function(e) {
-        if (e.key !== 'Enter' || e.shiftKey) return;
-        var val = input.value;
-        var pos = input.selectionStart;
-        var atEnd = pos === val.length;
-        if (atEnd && /\n\s*$/.test(val)) {
-          e.preventDefault();
+        if (e.key !== 'Enter') return;
+        if (e.shiftKey) return;
+        e.preventDefault();
+        var now = Date.now();
+        if (now - aiLastEnterAt < 450) {
+          aiLastEnterAt = 0;
           sendAiFollowup();
+        } else {
+          aiLastEnterAt = now;
         }
       });
     }
