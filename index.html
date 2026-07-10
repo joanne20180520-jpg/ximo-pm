@@ -728,6 +728,12 @@ button.btn-loading::after{content:'…';margin-left:2px}
 .ai-report-sec-body{font-size:12px;line-height:1.75;color:var(--t2);white-space:pre-wrap}
 .ai-hist-block{margin-bottom:14px}
 .ai-hist-head{font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px}
+.ai-snap-box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.75;color:var(--t2)}
+.ai-snap-title{font-size:13px;font-weight:700;color:var(--t1);margin-bottom:8px}
+.ai-snap-row{margin-bottom:6px}
+.ai-snap-row:last-child{margin-bottom:0}
+.ai-snap-label{font-weight:600;color:var(--t1)}
+.ai-snap-items{color:var(--t2)}
 .ai-hist-row{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--t2)}
 .ai-hist-row:last-child{border-bottom:none}
 .ai-hist-date{color:var(--t3);min-width:42px;flex-shrink:0}
@@ -3183,7 +3189,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v104';
+var APP_BUILD = '20260710v105';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8692,6 +8698,24 @@ function buildAiReportText(fields, analysis) {
   }).join('\n\n');
 }
 
+function formatAiSnapshotList(names) {
+  if (!names || !names.length) return '—';
+  return names.join('、');
+}
+
+function buildAiJournalSnapshotHtml(snapshot) {
+  if (!snapshot) return '';
+  var html = '<div class="ai-hist-block"><div class="ai-hist-head">🕐 日報快照（依資料庫）</div><div class="ai-snap-box">';
+  html += '<div class="ai-snap-title">' + escHtml(snapshot.monthLabel || '') + '任務</div>';
+  html += '<div class="ai-snap-row"><span class="ai-snap-label">已經完成：</span><span class="ai-snap-items">' + escHtml(formatAiSnapshotList(snapshot.done)) + '</span></div>';
+  html += '<div class="ai-snap-row"><span class="ai-snap-label">進行中：</span><span class="ai-snap-items">' + escHtml(formatAiSnapshotList(snapshot.doing)) + '</span></div>';
+  html += '<div class="ai-snap-row"><span class="ai-snap-label">卡關：</span><span class="ai-snap-items">' + escHtml(formatAiSnapshotList(snapshot.block)) + '</span></div>';
+  html += '<div class="ai-snap-row"><span class="ai-snap-label">尚未開始執行：</span><span class="ai-snap-items">' + escHtml(formatAiSnapshotList(snapshot.notStarted)) + '</span></div>';
+  html += '<div class="ai-snap-row"><span class="ai-snap-label">整體說明狀況：</span><span class="ai-snap-items">' + escHtml(snapshot.overallSummary || '—') + '</span></div>';
+  html += '</div></div>';
+  return html;
+}
+
 function renderAiAnalysisView(fields, metrics) {
   var body = document.getElementById('ai-body');
   if (!body) return;
@@ -8713,14 +8737,7 @@ function renderAiAnalysisView(fields, metrics) {
   html += '</div>';
   html += '<div class="ai-section-title"><span>📈 本次分析</span><span class="ai-section-date">' + escHtml(metrics.analysisDate || '') + '</span></div>';
   html += '<div class="ai-report-box">' + buildAiReportHtml(fields, aiConversationHistory.firstAnalysis) + '</div>';
-  var hist = metrics.journalHistory || [];
-  if (hist.length) {
-    html += '<div class="ai-hist-block"><div class="ai-hist-head">🕐 日報快照（依資料庫）</div>';
-    hist.forEach(function(row) {
-      html += '<div class="ai-hist-row"><span class="ai-hist-date">' + escHtml(row.label || '') + '</span><span>' + escHtml(row.summary || '') + '</span></div>';
-    });
-    html += '</div>';
-  }
+  html += buildAiJournalSnapshotHtml(metrics.journalSnapshot);
   html += '<div class="ai-chat"><div class="ai-chat-msgs" id="ai-chat-msgs"></div></div>';
   body.innerHTML = html;
   showAiComposer(true);

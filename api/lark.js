@@ -2189,7 +2189,7 @@ function countOverdueTasks(tasks) {
   return summarizeTasksForPrompt(tasks || []).filter(function(t) { return t.overdueDays > 0; }).length;
 }
 
-function buildJournalHistoryPoints(journalRecords, taskMap, maxPoints) {
+function getLatestJournalDayMerge(journalRecords, taskMap) {
   const byDay = {};
   (journalRecords || []).forEach(function(r) {
     const ts = journalRecordTs(r);
@@ -2199,27 +2199,87 @@ function buildJournalHistoryPoints(journalRecords, taskMap, maxPoints) {
     if (!byDay[key]) byDay[key] = [];
     byDay[key].push(r);
   });
-  const todayKey = (function() {
-    const d = new Date();
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  })();
-  const points = [];
-  Object.keys(byDay).sort().reverse().forEach(function(key) {
-    if (points.length >= (maxPoints || 3)) return;
-    if (key === todayKey) return;
-    const merged = mergeJournalSummaries(byDay[key], taskMap);
-    const total = merged.doing.length + merged.done.length + merged.block.length + merged.tomorrow.length;
-    const completionPct = total ? Math.round((merged.done.length / total) * 100) : null;
-    const parts = key.split('-');
-    points.push({
-      date: key,
-      label: parts[1] + '/' + parts[2],
-      completionPct: completionPct,
-      overdueCount: merged.block.length,
-      summary: '完成度 ' + (completionPct != null ? completionPct : '—') + '% · 逾期 ' + merged.block.length + ' 件'
-    });
+  const keys = Object.keys(byDay).sort().reverse();
+  if (!keys.length) return { recs: [], merge: null, dateKey: '' };
+  const recs = byDay[keys[0]];
+  return { recs: recs, merge: mergeJournalSummaries(recs, taskMap), dateKey: keys[0] };
+}
+
+function categorizeTasksByStatus(tasks) {
+  const result = { done: [], doing: [], block: [], notStarted: [] };
+  (tasks || []).forEach(function(t) {
+    const f = t.fields || {};
+    const name = f['任務名稱'] || '未命名';
+    const status = f['進度狀態'] || '';
+    const p = parseFloat(f['進度數值']) || 0;
+    if (status === '已完成' || p >= 100) result.done.push(name);
+    else if (/卡關|阻塞/.test(status)) result.block.push(name);
+    else if (p > 0 || /進行|持續/.test(status)) result.doing.push(name);
+    else result.notStarted.push(name);
   });
-  return points;
+  return result;
+}
+
+function formatJournalSummaryText(text) {
+  let s = String(text || '').replace(/\s+/g, ' ').trim();
+  s = s.replace(/^【.+?】\s*/g, '');
+  const slash = s.match(/：(.+)$/);
+  if (slash && slash[1]) s = slash[1].trim();
+  return s.slice(0, 30);
+}
+
+function buildOverallSummaryFromJournal(latestRecs, merged, cats) {
+  if (merged && merged.notes && merged.notes.length) {
+    const excerpt = formatJournalSummaryText(merged.notes.join(' '));
+    if (excerpt) return excerpt;
+  }
+  const parts = [];
+  if (cats.done.length) parts.push('已完成' + cats.done.length + '項');
+  if (cats.doing.length) parts.push('進行' + cats.doing.length + '項');
+  if (cats.block.length) parts.push('卡關' + cats.block.length + '項');
+  if (cats.notStarted.length) parts.push('未開始' + cats.notStarted.length + '項');
+  let fallback = parts.join('，');
+  if (!fallback) fallback = latestRecs && latestRecs.length ? '已取最近日報' : '本月尚無日報紀錄';
+  return fallback.slice(0, 30);
+}
+
+function buildJournalSnapshot(journalRecords, tasks, taskMap) {
+  const d = new Date();
+  const monthLabel = (d.getMonth() + 1) + '月';
+  const latest = getLatestJournalDayMerge(journalRecords, taskMap);
+  let cats = { done: [], doing: [], block: [], notStarted: [] };
+  const allTaskNames = (tasks || []).map(function(t) {
+    return (t.fields && t.fields['任務名稱']) || '未命名';
+  });
+
+  if (latest.merge) {
+    cats.done = latest.merge.done.slice();
+    cats.doing = latest.merge.doing.slice();
+    cats.block = latest.merge.block.slice();
+    const listed = {};
+    function mark(arr) { arr.forEach(function(n) { listed[n] = 1; }); }
+    mark(cats.done);
+    mark(cats.doing);
+    mark(cats.block);
+    latest.merge.tomorrow.forEach(function(n) {
+      if (!listed[n]) { cats.doing.push(n); listed[n] = 1; }
+    });
+    allTaskNames.forEach(function(name) {
+      if (!listed[name]) cats.notStarted.push(name);
+    });
+  } else {
+    cats = categorizeTasksByStatus(tasks);
+  }
+
+  return {
+    monthLabel: monthLabel,
+    done: cats.done,
+    doing: cats.doing,
+    block: cats.block,
+    notStarted: cats.notStarted,
+    overallSummary: buildOverallSummaryFromJournal(latest.recs, latest.merge, cats),
+    snapshotDate: latest.dateKey || ''
+  };
 }
 
 function computeProjectMetrics(bundle, journalRecords) {
@@ -2245,7 +2305,7 @@ function computeProjectMetrics(bundle, journalRecords) {
     weekAgoCompletionPct: weekAgoCompletionPct,
     weekAgoOverdueCount: weekAgoOverdueCount,
     analysisDate: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'),
-    journalHistory: buildJournalHistoryPoints(journalRecords, taskMap, 3)
+    journalSnapshot: buildJournalSnapshot(journalRecords, bundle.tasks, taskMap)
   };
 }
 
