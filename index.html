@@ -3142,7 +3142,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v93';
+var APP_BUILD = '20260710v94';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8381,25 +8381,17 @@ function renderJournalPage() {
 // ══════════════════════════════════════════════════════
 // AI 分析頁
 // ══════════════════════════════════════════════════════
-var aiAnalysisData = [];
 var aiSelectedProjectId = null;
 var aiCurrentAnalysisRecordId = null;
+var aiLastAnalysisFields = null;
 var aiConversationHistory = { firstAnalysis: null, followUps: [] };
 var AI_PROJECT_STORAGE_KEY = 'ximo-ai-selected-project';
-var AI_AUTO_RESTORE_KEY = 'ximo-ai-auto-restore';
 
 // 這個下拉選單獨立於左側「已選N個標案」的複選狀態，一次只分析一個專案
 function saveAiProjectSelection(projectId) {
   try {
     if (projectId) localStorage.setItem(AI_PROJECT_STORAGE_KEY, projectId);
     else localStorage.removeItem(AI_PROJECT_STORAGE_KEY);
-  } catch (e) {}
-}
-
-function saveAiAutoRestore(on) {
-  try {
-    if (on) localStorage.setItem(AI_AUTO_RESTORE_KEY, '1');
-    else localStorage.removeItem(AI_AUTO_RESTORE_KEY);
   } catch (e) {}
 }
 
@@ -8451,9 +8443,8 @@ function showAiReadyState() {
   var sel = document.getElementById('ai-proj-select');
   var name = sel && sel.selectedIndex > 0 ? sel.options[sel.selectedIndex].text : '此專案';
   if (body) {
-    body.innerHTML = '<div class="ai-empty">已選「' + escHtml(name) + '」，點「開始分析」執行新的 AI 分析'
-      + '<br><span style="font-size:11px;color:var(--t3);margin-top:6px;display:inline-block">「載入上次分析」會讀取 Lark「AI分析」表裡此專案最近一次紀錄，不會重新呼叫 AI</span>'
-      + '<br><button type="button" class="bsm" style="margin-top:10px" onclick="loadAiHistoryAndRenderLatest()">載入上次分析</button></div>';
+    body.innerHTML = '<div class="ai-empty">已選「' + escHtml(name) + '」，點「開始分析」執行 AI 分析'
+      + '<br><span style="font-size:11px;color:var(--t3);margin-top:6px;display:inline-block">追問時會即時查詢日報、任務、支出等資料庫，不讀取過往 AI 分析紀錄</span></div>';
   }
   updateAiRunButton(true, false);
 }
@@ -8464,8 +8455,7 @@ function onAiProjectChange() {
   saveAiProjectSelection(aiSelectedProjectId || '');
   aiConversationHistory = { firstAnalysis: null, followUps: [] };
   aiCurrentAnalysisRecordId = null;
-  aiAnalysisData = [];
-  saveAiAutoRestore(false);
+  aiLastAnalysisFields = null;
   if (aiSelectedProjectId) showAiReadyState();
   else showAiIdleState();
 }
@@ -8476,53 +8466,11 @@ function renderAiPage() {
     showAiIdleState();
     return;
   }
-  var shouldRestore = false;
-  try { shouldRestore = localStorage.getItem(AI_AUTO_RESTORE_KEY) === '1'; } catch (e) {}
-  if (shouldRestore) loadAiHistoryAndRenderLatest(true);
-  else showAiReadyState();
-}
-
-// 讀取這個專案過去的分析紀錄（Lark「AI分析」表）
-function loadAiHistoryAndRenderLatest(silent) {
-  var body = document.getElementById('ai-body');
-  if (!aiSelectedProjectId) {
-    showAiIdleState();
+  if (aiConversationHistory && aiConversationHistory.firstAnalysis && aiLastAnalysisFields) {
+    updateAiRunButton(true, true);
     return;
   }
-  body.innerHTML = '<div class="ai-loading">載入歷史分析紀錄…</div>';
-  fetchJsonWithTimeout('?table=ai_analysis', 20000).then(function(res) {
-    var all = (res && res.records) || [];
-    aiAnalysisData = all.filter(function(r) {
-      return getLinkIds(r.fields['專案']).indexOf(aiSelectedProjectId) >= 0;
-    }).sort(function(a, b) {
-      var ta = a.fields['分析時間'] ? new Date(a.fields['分析時間']).getTime() : 0;
-      var tb = b.fields['分析時間'] ? new Date(b.fields['分析時間']).getTime() : 0;
-      return tb - ta;
-    });
-    if (aiAnalysisData.length) {
-      var latest = aiAnalysisData[0];
-      aiCurrentAnalysisRecordId = latest.record_id;
-      aiConversationHistory.firstAnalysis = {
-        progress_summary: latest.fields['進度概況'] || '',
-        risk_alert: latest.fields['風險與逾期'] || '',
-        cost_analysis: latest.fields['成本分析'] || '',
-        team_allocation: latest.fields['人力分工'] || '',
-        next_actions: latest.fields['下一步建議'] || ''
-      };
-      renderAiAnalysisCards(latest.fields);
-      renderAiHistoryList();
-      renderAiChatFromRecord(latest.fields['追問紀錄'] || '');
-      updateAiRunButton(true, true);
-      saveAiAutoRestore(true);
-    } else {
-      showAiReadyState();
-      if (!silent) alert('此專案尚無分析紀錄，請點「開始分析」產生第一筆');
-    }
-  }).catch(function(err) {
-    body.innerHTML = '<div class="ai-empty" style="color:var(--danger)">載入失敗：' + escHtml(err.message || '請稍後再試') + '</div>'
-      + '<div style="text-align:center;margin-top:8px"><button type="button" class="bsm" onclick="showAiReadyState()">返回</button></div>';
-    updateAiRunButton(true, false);
-  });
+  showAiReadyState();
 }
 
 function aiCardHtml(title, content, tone) {
@@ -8543,32 +8491,7 @@ function renderAiAnalysisCards(fields) {
   html += aiCardHtml('人力分工', fields['人力分工'], 'default');
   html += aiCardHtml('下一步建議', fields['下一步建議'], 'ok');
   body.innerHTML = html
-    + '<div class="ai-history" id="ai-history-mount"></div>'
     + '<div class="ai-chat" id="ai-chat-mount"></div>';
-}
-
-function renderAiHistoryList() {
-  var mount = document.getElementById('ai-history-mount');
-  if (!mount) return;
-  if (aiAnalysisData.length <= 1) { mount.innerHTML = ''; return; }
-  var html = '<div class="ai-history-title">歷史分析紀錄</div>';
-  aiAnalysisData.forEach(function(rec, idx) {
-    var f = rec.fields;
-    var dateStr = f['分析時間'] ? fmtDate(f['分析時間']) : '';
-    html += '<div class="ai-history-item" onclick="viewAiHistoryItem(' + idx + ')">'
-      + '<span class="ai-h-date">' + escHtml(dateStr) + '</span>'
-      + '<span>' + escHtml((f['進度概況'] || '').slice(0, 40)) + '</span></div>';
-  });
-  mount.innerHTML = html;
-}
-
-function viewAiHistoryItem(idx) {
-  var rec = aiAnalysisData[idx];
-  if (!rec) return;
-  aiCurrentAnalysisRecordId = rec.record_id;
-  renderAiAnalysisCards(rec.fields);
-  renderAiHistoryList();
-  renderAiChatFromRecord(rec.fields['追問紀錄'] || '');
 }
 
 function renderAiChatFromRecord(rawText) {
@@ -8617,17 +8540,11 @@ function runAiAnalysis() {
       '分析時間': Date.now(),
       '專案': [aiSelectedProjectId]
     };
+    aiLastAnalysisFields = freshFields;
     renderAiAnalysisCards(freshFields);
     renderAiChatFromRecord('');
     if (res.saveWarning) console.warn(res.saveWarning);
-    // 直接把這次結果插入本地的歷史清單最前面，不重新整個向 Lark 重新撈取，
-    // 避免 Lark 剛寫入還沒同步完成時，反而把剛顯示好的畫面覆蓋掉
-    if (aiCurrentAnalysisRecordId) {
-      aiAnalysisData.unshift({ record_id: aiCurrentAnalysisRecordId, fields: freshFields });
-      renderAiHistoryList();
-    }
     saveAiProjectSelection(aiSelectedProjectId);
-    saveAiAutoRestore(true);
     updateAiRunButton(true, true);
   }).catch(function(err) {
     body.innerHTML = '<div class="ai-empty" style="color:var(--danger)">分析失敗：' + escHtml(err.message || '請稍後再試') + '</div>'
