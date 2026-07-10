@@ -2471,6 +2471,39 @@ function parseDaysAgoFromQuestion(question) {
   return unique.sort(function(a, b) { return a - b; });
 }
 
+function journalCompletionPct(point) {
+  if (!point || !point.有日報) return null;
+  const total = (point.進行中 || []).length + (point.今日完成 || []).length + (point.卡關 || []).length + (point.明日預計 || []).length;
+  if (!total) return null;
+  return Math.round(((point.今日完成 || []).length / total) * 100);
+}
+
+function buildFollowupAnswerHints(bundle, taskMap, userQuestion) {
+  const daysPoints = parseDaysAgoFromQuestion(userQuestion);
+  const journalRecords = bundle.journal || [];
+  const hints = [];
+  const taskPct = calcTaskCompletionPct(bundle.tasks || []);
+  hints.push('目前任務整體完成度約 ' + taskPct + '%');
+  daysPoints.forEach(function(d) {
+    const pt = summarizeJournalDayPoint(journalRecords, taskMap, d);
+    const dayLabel = formatDayLabel(d).replace(/（.+）$/, '');
+    if (pt.有日報) {
+      const pct = journalCompletionPct(pt);
+      hints.push(dayLabel + '日報：完成 ' + (pt.今日完成 || []).length + ' 項、進行中 ' + (pt.進行中 || []).length + ' 項、卡關 ' + (pt.卡關 || []).length + ' 項'
+        + (pct != null ? '（日報完成度約 ' + pct + '%）' : ''));
+    } else {
+      hints.push(dayLabel + '：無日報紀錄');
+    }
+  });
+  const overdue = countOverdueTasks(bundle.tasks || []);
+  if (overdue) hints.push('目前逾期任務 ' + overdue + ' 件');
+  const snap = buildCompactProjectSnapshot(bundle);
+  if (snap.逾期任務 && snap.逾期任務.length) {
+    hints.push('逾期項目：' + snap.逾期任務.slice(0, 3).join('、'));
+  }
+  return hints;
+}
+
 function buildFollowupDbContext(bundle, taskMap, userQuestion) {
   const daysPoints = parseDaysAgoFromQuestion(userQuestion);
   const journalRecords = bundle.journal || [];
@@ -2486,7 +2519,7 @@ function buildFollowupDbContext(bundle, taskMap, userQuestion) {
   }
   return {
     專案名稱: (bundle.project.fields || {})['標案名稱'] || '未命名',
-    資料來源: 'Lark 資料庫即時查詢（日報、任務、支出），非對話記憶',
+    回答參考摘要: buildFollowupAnswerHints(bundle, taskMap, userQuestion),
     查詢時間點: timePoints,
     任務現況: buildCompactProjectSnapshot(bundle),
     支出區間: spending
@@ -2494,12 +2527,28 @@ function buildFollowupDbContext(bundle, taskMap, userQuestion) {
 }
 
 function buildFollowupSystemPrompt(context, question) {
-  return '你是專案管理分析助理。請只根據以下從 Lark 資料庫查詢的資料回答，不要假設對話歷史。\n'
-    + '若某時間點「有日報: false」，請說明無日報並改以任務現況／支出推論。\n'
-    + '比較不同天時，請對照「查詢時間點」各欄位差異。\n\n'
-    + '資料庫查詢結果：\n' + JSON.stringify(context, null, 2) + '\n\n'
-    + '使用者問題：' + question + '\n\n'
-    + '請控制在 500 字以內，簡潔專業。';
+  return '你是專案管理分析助理。下方「內部資料」僅供你閱讀，禁止原樣貼給使用者。\n\n'
+    + '【回答規則】\n'
+    + '1. 用繁體中文、口語化，像 PM 向主管口頭匯報\n'
+    + '2. 第一句直接回答問題（比較、升降、好壞）\n'
+    + '3. 再用 2～4 個簡短要點補充關鍵數字與風險，每點一行，以「·」開頭\n'
+    + '4. 禁止：JSON、欄位名、Markdown（##、---、| 表格、**）、「資料來源」「查詢時間點」等系統用語\n'
+    + '5. 數字融入句子（例：「目前完成約 16%，較上週…」），不要列報表或表格\n'
+    + '6. 優先參考「回答參考摘要」，需要細節時再查內部其他欄位\n'
+    + '7. 全篇 300 字以內\n\n'
+    + '【內部資料】\n' + JSON.stringify(context, null, 2) + '\n\n'
+    + '【使用者問題】\n' + question;
+}
+
+function humanizeFollowupReply(text) {
+  let s = String(text || '').trim();
+  s = s.replace(/^#{1,6}\s+/gm, '');
+  s = s.replace(/^-{3,}\s*$/gm, '');
+  s = s.replace(/^\|.+\|\s*$/gm, '');
+  s = s.replace(/\*\*/g, '');
+  s = s.replace(/^.*(?:資料來源|查詢時間點|資料庫即時查詢|Lark 資料庫).*$/gm, '');
+  s = s.replace(/\n{3,}/g, '\n\n');
+  return s.trim();
 }
 
 async function gatherProjectRelatedWithJournal(token, projectId) {
@@ -2578,12 +2627,12 @@ async function runFollowupWithTools(messages, bundle, taskMap) {
   let currentMessages = messages.slice();
   for (let round = 0; round < 4; round++) {
     const claudeRes = await callClaudeApi(currentMessages, {
-      maxTokens: 600,
+      maxTokens: 800,
       tools: AI_FOLLOWUP_TOOLS
     });
     const toolUses = (claudeRes.content || []).filter(function(b) { return b.type === 'tool_use'; });
     if (!toolUses.length) {
-      const text = extractClaudeText(claudeRes);
+      const text = humanizeFollowupReply(extractClaudeText(claudeRes));
       if (text) return text;
       throw new Error('Claude 未回傳有效內容');
     }
