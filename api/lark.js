@@ -2361,7 +2361,61 @@ async function runProjectAnalysis(projectId, larkToken) {
   throw lastError || new Error('Claude 分析失敗');
 }
 
-async function saveAnalysisRecord(larkToken, userToken, projectId, analysis, triggeredByOpenId) {
+function notifyTrim(text, maxLen) {
+  maxLen = maxLen || 300;
+  const s = String(text || '').replace(/\r/g, '').trim();
+  if (!s) return '';
+  if (s.length <= maxLen) return s;
+  return s.slice(0, maxLen - 1) + '…';
+}
+
+function formatAnalysisNotifyMessage(projectName, analysis, metrics) {
+  metrics = metrics || {};
+  analysis = analysis || {};
+  const lines = [];
+  lines.push('📊 AI 分析完成');
+  lines.push('━━━━━━━━━━━━');
+  lines.push('📁 ' + (projectName || '專案') + (metrics.analysisDate ? ' · ' + metrics.analysisDate : ''));
+  lines.push('');
+  if (metrics.completionPct != null) {
+    let kpi = '📈 完成度 ' + metrics.completionPct + '%｜逾期 ' + (metrics.overdueCount != null ? metrics.overdueCount : '—') + ' 件';
+    if (metrics.weekDeltaPct != null) {
+      kpi += '｜較上週 ' + (metrics.weekDeltaPct >= 0 ? '+' : '') + metrics.weekDeltaPct + '%';
+    }
+    lines.push(kpi);
+    lines.push('');
+  }
+  function section(num, title, body) {
+    const t = notifyTrim(body, 280);
+    if (!t) return;
+    lines.push(num + ' ' + title);
+    lines.push(t);
+    lines.push('');
+  }
+  section('1️⃣', '進度概況', analysis.progress_summary);
+  section('2️⃣', '風險與逾期', analysis.risk_alert);
+  section('3️⃣', '成本分析', analysis.cost_analysis);
+  section('4️⃣', '人力分工', analysis.team_allocation);
+  section('5️⃣', '下一步建議', analysis.next_actions);
+  lines.push('— 璽墨專案管理 —');
+  return lines.join('\n');
+}
+
+function formatLatestFollowupNotify(question, reply) {
+  const ts = new Date().toLocaleString('zh-TW', { hour12: false });
+  return [
+    '💬 追問回覆 · ' + ts,
+    '━━━━━━━━━━━━',
+    'Q：' + notifyTrim(question, 200),
+    '',
+    'A：' + notifyTrim(reply, 500),
+    '',
+    '— 璽墨專案管理 —'
+  ].join('\n');
+}
+
+async function saveAnalysisRecord(larkToken, userToken, projectId, analysis, triggeredByOpenId, extras) {
+  extras = extras || {};
   const tableId = tableIdFor('ai_analysis');
   if (!tableId) throw new Error('未設定 AI 分析表（LARK_TABLE_AI_ANALYSIS）');
   const appToken = appTokenForTable('ai_analysis');
@@ -2372,7 +2426,8 @@ async function saveAnalysisRecord(larkToken, userToken, projectId, analysis, tri
     '風險與逾期': analysis.risk_alert || '',
     '成本分析': analysis.cost_analysis || '',
     '人力分工': analysis.team_allocation || '',
-    '下一步建議': analysis.next_actions || ''
+    '下一步建議': analysis.next_actions || '',
+    '通知摘要': formatAnalysisNotifyMessage(extras.projectName, analysis, extras.metrics)
     // 「分析時間」為 Lark 自動建立時間欄位，不需手動寫入
   };
   if (triggeredByOpenId) fields['觸發人'] = [{ id: triggeredByOpenId }];
@@ -2393,7 +2448,11 @@ async function appendFollowupToRecord(larkToken, userToken, analysisRecordId, qu
   const timestamp = new Date().toLocaleString('zh-TW', { hour12: false });
   const newLine = '[' + timestamp + ']\nQ: ' + question + '\nA: ' + reply;
   const merged = prevText ? (prevText + '\n\n' + newLine) : newLine;
-  const normalized = await normalizeWriteFields(larkToken, tableId, { '追問紀錄': merged }, appToken);
+  const latestNotify = formatLatestFollowupNotify(question, reply);
+  const normalized = await normalizeWriteFields(larkToken, tableId, {
+    '追問紀錄': merged,
+    '最新追問': latestNotify
+  }, appToken);
   return writeWithUserFallback(larkToken, userToken, function(tok, asUser) {
     return updateRecord(tok, tableId, analysisRecordId, normalized, appToken, asUser);
   });
@@ -4051,11 +4110,15 @@ export default async function handler(req, res) {
         } catch (e) { /* 觸發人可略過，不影響分析主流程 */ }
       }
       try {
-        const { analysis, metrics } = await runProjectAnalysis(projectId, larkToken);
+        const { analysis, metrics, bundle } = await runProjectAnalysis(projectId, larkToken);
         let saveWarning = '';
         let analysisRecordId = '';
         try {
-          const saved = await saveAnalysisRecord(larkToken, userAccessTokenForAi, projectId, analysis, triggeredByOpenId);
+          const projectName = (bundle.project && bundle.project.fields && bundle.project.fields['標案名稱']) || '未命名標案';
+          const saved = await saveAnalysisRecord(larkToken, userAccessTokenForAi, projectId, analysis, triggeredByOpenId, {
+            projectName: projectName,
+            metrics: metrics
+          });
           analysisRecordId = extractRecordId(saved) || '';
         } catch (saveErr) {
           saveWarning = '分析成功，但寫入「AI分析」表失敗：' + (saveErr.message || String(saveErr));
