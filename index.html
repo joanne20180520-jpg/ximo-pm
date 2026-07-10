@@ -3142,7 +3142,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v92';
+var APP_BUILD = '20260710v93';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8386,9 +8386,23 @@ var aiSelectedProjectId = null;
 var aiCurrentAnalysisRecordId = null;
 var aiConversationHistory = { firstAnalysis: null, followUps: [] };
 var AI_PROJECT_STORAGE_KEY = 'ximo-ai-selected-project';
+var AI_AUTO_RESTORE_KEY = 'ximo-ai-auto-restore';
 
 // 這個下拉選單獨立於左側「已選N個標案」的複選狀態，一次只分析一個專案
-// 進頁面時預設空白，需要使用者自己主動選擇，不自動帶入任何標案
+function saveAiProjectSelection(projectId) {
+  try {
+    if (projectId) localStorage.setItem(AI_PROJECT_STORAGE_KEY, projectId);
+    else localStorage.removeItem(AI_PROJECT_STORAGE_KEY);
+  } catch (e) {}
+}
+
+function saveAiAutoRestore(on) {
+  try {
+    if (on) localStorage.setItem(AI_AUTO_RESTORE_KEY, '1');
+    else localStorage.removeItem(AI_AUTO_RESTORE_KEY);
+  } catch (e) {}
+}
+
 function fillAiProjectSelect() {
   var sel = document.getElementById('ai-proj-select');
   if (!sel) return;
@@ -8410,9 +8424,12 @@ function fillAiProjectSelect() {
   if (prev && values.indexOf(prev) >= 0) {
     sel.value = prev;
     aiSelectedProjectId = prev;
+    saveAiProjectSelection(prev);
+  } else if (prev && !visibleProjects.length) {
+    aiSelectedProjectId = prev;
   } else {
     sel.value = '';
-    aiSelectedProjectId = null;
+    if (!prev) aiSelectedProjectId = null;
   }
 }
 
@@ -8434,8 +8451,9 @@ function showAiReadyState() {
   var sel = document.getElementById('ai-proj-select');
   var name = sel && sel.selectedIndex > 0 ? sel.options[sel.selectedIndex].text : '此專案';
   if (body) {
-    body.innerHTML = '<div class="ai-empty">已選「' + escHtml(name) + '」，點「開始分析」執行 AI 分析'
-      + '<br><button type="button" class="bsm" style="margin-top:10px" onclick="loadAiHistoryAndRenderLatest()">查看歷史紀錄</button></div>';
+    body.innerHTML = '<div class="ai-empty">已選「' + escHtml(name) + '」，點「開始分析」執行新的 AI 分析'
+      + '<br><span style="font-size:11px;color:var(--t3);margin-top:6px;display:inline-block">「載入上次分析」會讀取 Lark「AI分析」表裡此專案最近一次紀錄，不會重新呼叫 AI</span>'
+      + '<br><button type="button" class="bsm" style="margin-top:10px" onclick="loadAiHistoryAndRenderLatest()">載入上次分析</button></div>';
   }
   updateAiRunButton(true, false);
 }
@@ -8443,22 +8461,29 @@ function showAiReadyState() {
 function onAiProjectChange() {
   var sel = document.getElementById('ai-proj-select');
   aiSelectedProjectId = sel ? sel.value : null;
-  try { localStorage.setItem(AI_PROJECT_STORAGE_KEY, aiSelectedProjectId || ''); } catch (e) {}
+  saveAiProjectSelection(aiSelectedProjectId || '');
   aiConversationHistory = { firstAnalysis: null, followUps: [] };
   aiCurrentAnalysisRecordId = null;
   aiAnalysisData = [];
+  saveAiAutoRestore(false);
   if (aiSelectedProjectId) showAiReadyState();
   else showAiIdleState();
 }
 
 function renderAiPage() {
   fillAiProjectSelect();
-  if (aiSelectedProjectId) showAiReadyState();
-  else showAiIdleState();
+  if (!aiSelectedProjectId) {
+    showAiIdleState();
+    return;
+  }
+  var shouldRestore = false;
+  try { shouldRestore = localStorage.getItem(AI_AUTO_RESTORE_KEY) === '1'; } catch (e) {}
+  if (shouldRestore) loadAiHistoryAndRenderLatest(true);
+  else showAiReadyState();
 }
 
-// 讀取這個專案過去的分析紀錄（沿用通用 GET ?table= 端點，不用額外寫後端）
-function loadAiHistoryAndRenderLatest() {
+// 讀取這個專案過去的分析紀錄（Lark「AI分析」表）
+function loadAiHistoryAndRenderLatest(silent) {
   var body = document.getElementById('ai-body');
   if (!aiSelectedProjectId) {
     showAiIdleState();
@@ -8488,9 +8513,10 @@ function loadAiHistoryAndRenderLatest() {
       renderAiHistoryList();
       renderAiChatFromRecord(latest.fields['追問紀錄'] || '');
       updateAiRunButton(true, true);
+      saveAiAutoRestore(true);
     } else {
       showAiReadyState();
-      alert('此專案尚無歷史分析紀錄，請點「開始分析」產生第一筆');
+      if (!silent) alert('此專案尚無分析紀錄，請點「開始分析」產生第一筆');
     }
   }).catch(function(err) {
     body.innerHTML = '<div class="ai-empty" style="color:var(--danger)">載入失敗：' + escHtml(err.message || '請稍後再試') + '</div>'
@@ -8600,6 +8626,8 @@ function runAiAnalysis() {
       aiAnalysisData.unshift({ record_id: aiCurrentAnalysisRecordId, fields: freshFields });
       renderAiHistoryList();
     }
+    saveAiProjectSelection(aiSelectedProjectId);
+    saveAiAutoRestore(true);
     updateAiRunButton(true, true);
   }).catch(function(err) {
     body.innerHTML = '<div class="ai-empty" style="color:var(--danger)">分析失敗：' + escHtml(err.message || '請稍後再試') + '</div>'
