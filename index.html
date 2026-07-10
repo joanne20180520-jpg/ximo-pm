@@ -165,6 +165,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 #content{flex:1;min-height:0;overflow-y:auto;background:var(--bg);border-radius:var(--r);padding:10px;-webkit-overflow-scrolling:touch}
 .page{display:none}
 .page.active{display:block}
+#pg-ai.page.active{display:flex;flex-direction:column;min-height:0;height:100%}
 #pg-s.page.active{display:flex;flex-direction:column;min-height:0;height:100%}
 #pg-s .gctl{flex-shrink:0}
 #gantt-area{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y}
@@ -691,12 +692,13 @@ button:disabled,.bpri:disabled,.bsub:disabled,.bsub2:disabled,.bsm:disabled,.bde
 button.btn-loading::after{content:'…';margin-left:2px}
 
 /* AI 分析頁 */
-.ai-page-shell{position:relative;display:flex;flex-direction:column;height:calc(100vh - var(--th) - 36px);max-height:calc(100vh - var(--th) - 36px);overflow:hidden}
+.ai-page-shell{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+.ai-page-shell.jpage-single{min-height:0;height:auto}
 .ai-page-shell.has-composer .ai-body{padding-bottom:120px}
 .ai-page-toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0}
 .ai-page-toolbar h3{font-size:14px;font-weight:700;flex-shrink:0}
 .ai-proj-select{padding:6px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;background:#fff;min-width:200px}
-.ai-body{padding:14px;overflow-y:auto;flex:1;min-height:0}
+.ai-body{padding:14px;overflow-y:auto;flex:1;min-height:0;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .ai-composer-float{position:fixed;bottom:8px;z-index:40;padding:0 14px 10px;background:linear-gradient(to top,var(--surface) 70%,rgba(255,255,255,0));pointer-events:none}
 .ai-composer-float.hidden{display:none}
 .ai-composer-card{pointer-events:auto;max-width:920px;margin:0 auto;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.12),0 2px 10px rgba(0,0,0,.06);padding:12px 14px 10px}
@@ -3215,7 +3217,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v110';
+var APP_BUILD = '20260710v111';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8577,12 +8579,13 @@ function bindAiFollowupInput(input) {
   input._aiBound = true;
   var imeComposing = false;
   var skipNextEnter = false;
+  var lastEnterSendAt = 0;
   input.addEventListener('compositionstart', function() { imeComposing = true; });
   input.addEventListener('compositionend', function() {
     imeComposing = false;
     skipNextEnter = true;
   });
-  input.addEventListener('keydown', function(e) {
+  function handleEnterSend(e) {
     if (e.key !== 'Enter') return;
     if (e.shiftKey) return;
     if (e.isComposing || e.keyCode === 229 || imeComposing) return;
@@ -8591,26 +8594,45 @@ function bindAiFollowupInput(input) {
       return;
     }
     e.preventDefault();
+    var now = Date.now();
+    if (now - lastEnterSendAt < 300) return;
+    lastEnterSendAt = now;
     sendAiFollowup();
+  }
+  input.addEventListener('keydown', handleEnterSend);
+  if (isLikelyLarkClient()) input.addEventListener('keyup', handleEnterSend);
+}
+
+function forceScrollToAiChatBottom() {
+  var body = document.getElementById('ai-body');
+  var content = document.getElementById('content');
+  var cp = document.getElementById('cp');
+  var mount = document.getElementById('ai-chat-msgs');
+  var anchor = mount && (mount.querySelector('#ai-followup-loading') || mount.lastElementChild);
+  [body, content, cp, mount].forEach(function(el) {
+    if (el) el.scrollTop = el.scrollHeight;
   });
+  if (anchor) {
+    var node = anchor.parentElement;
+    while (node && node !== document.documentElement) {
+      if (node.scrollHeight > node.clientHeight + 1) node.scrollTop = node.scrollHeight;
+      node = node.parentElement;
+    }
+    try {
+      anchor.scrollIntoView({ block: 'end', inline: 'nearest', behavior: isLikelyLarkClient() ? 'auto' : 'smooth' });
+    } catch (e) {
+      try { anchor.scrollIntoView(false); } catch (e2) {}
+    }
+    if (body) body.scrollTop = body.scrollHeight;
+  }
 }
 
 function scrollAiToLatest() {
-  function run() {
-    var body = document.getElementById('ai-body');
-    var content = document.getElementById('content');
-    var mount = document.getElementById('ai-chat-msgs');
-    var anchor = mount && (mount.querySelector('#ai-followup-loading') || mount.lastElementChild);
-    [body, content, mount].forEach(function(el) {
-      if (el) el.scrollTop = el.scrollHeight;
-    });
-    if (anchor && anchor.scrollIntoView) {
-      anchor.scrollIntoView({ block: 'end', behavior: 'smooth' });
-    }
-  }
-  run();
-  requestAnimationFrame(run);
-  setTimeout(run, 100);
+  forceScrollToAiChatBottom();
+  requestAnimationFrame(forceScrollToAiChatBottom);
+  [50, 150, 400, 900].forEach(function(ms) {
+    setTimeout(forceScrollToAiChatBottom, ms);
+  });
 }
 
 function showAiLoading() {
