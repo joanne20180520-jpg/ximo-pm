@@ -691,10 +691,19 @@ button:disabled,.bpri:disabled,.bsub:disabled,.bsub2:disabled,.bsm:disabled,.bde
 button.btn-loading::after{content:'…';margin-left:2px}
 
 /* AI 分析頁 */
-.ai-page-toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ai-page-shell{position:relative;display:flex;flex-direction:column;min-height:calc(100vh - var(--th) - 36px)}
+.ai-page-shell.has-composer .ai-body{padding-bottom:150px}
+.ai-page-toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0}
 .ai-page-toolbar h3{font-size:14px;font-weight:700;flex-shrink:0}
 .ai-proj-select{padding:6px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;background:#fff;min-width:200px}
-.ai-body{padding:14px;overflow-y:auto}
+.ai-body{padding:14px;overflow-y:auto;flex:1;min-height:0}
+.ai-composer-float{position:absolute;left:0;right:0;bottom:0;padding:10px 16px 18px;background:linear-gradient(to top,var(--surface) 65%,rgba(255,255,255,0));z-index:20;pointer-events:none}
+.ai-composer-float.hidden{display:none}
+.ai-composer-card{pointer-events:auto;max-width:920px;margin:0 auto;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.12),0 2px 10px rgba(0,0,0,.06);padding:14px 16px 12px}
+.ai-composer-card textarea{width:100%;border:none;outline:none;resize:none;font-size:14px;line-height:1.65;min-height:76px;max-height:160px;font-family:inherit;color:var(--t1);background:transparent}
+.ai-composer-card textarea::placeholder{color:var(--t3)}
+.ai-composer-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.ai-composer-hint{font-size:11px;color:var(--t3)}
 .ai-loading{padding:24px;text-align:center;color:var(--t3);font-size:12px}
 .ai-empty{padding:24px;text-align:center;color:var(--t3);font-size:12px;line-height:1.6}
 .ai-kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
@@ -719,12 +728,11 @@ button.btn-loading::after{content:'…';margin-left:2px}
 .ai-card-title{font-size:12px;font-weight:700;margin-bottom:5px;display:flex;align-items:center;gap:6px}
 .ai-card-body{font-size:12px;color:var(--t2);line-height:1.7;white-space:pre-wrap}
 .ai-chat{margin-top:14px;border-top:1px solid var(--border);padding-top:12px}
+.ai-chat-msgs{max-height:420px;overflow-y:auto;padding-right:4px;margin-bottom:4px}
 .ai-chat-msg{padding:10px 12px;border-radius:10px;margin-bottom:8px;font-size:12px;line-height:1.65;position:relative}
 .ai-chat-msg.user{background:#f5f5f4}
 .ai-chat-msg.assistant{background:#eef4fc}
 .ai-chat-who{font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px}
-.ai-chat-input-row{display:flex;gap:6px;margin-top:8px}
-.ai-chat-input-row input{flex:1}
 </style>
 </head>
 <body>
@@ -919,7 +927,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
 
     <!-- AI 分析 -->
     <div id="pg-ai" class="page">
-      <div class="jpage-single">
+      <div class="jpage-single ai-page-shell" id="ai-page-shell">
         <div class="ai-page-toolbar">
           <h3>AI 分析</h3>
           <select id="ai-proj-select" class="ai-proj-select" onchange="onAiProjectChange()"></select>
@@ -927,6 +935,15 @@ button.btn-loading::after{content:'…';margin-left:2px}
         </div>
         <div class="ai-body" id="ai-body">
           <div class="ai-empty">請先在上方選擇要分析的專案</div>
+        </div>
+        <div class="ai-composer-float hidden" id="ai-composer-float">
+          <div class="ai-composer-card">
+            <textarea id="ai-followup-input" rows="3" placeholder="繼續追問，例如：跟上週比，這個專案有進步嗎？"></textarea>
+            <div class="ai-composer-bar">
+              <span class="ai-composer-hint">Shift+Enter 換行 · Enter 送出</span>
+              <button type="button" class="bpri bsm" onclick="sendAiFollowup()">送出</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -3154,7 +3171,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v95';
+var APP_BUILD = '20260710v96';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8445,9 +8462,29 @@ function updateAiRunButton(hasProject, hasResult) {
   btn.textContent = hasResult ? '重新分析' : '開始分析';
 }
 
+function showAiComposer(show) {
+  var composer = document.getElementById('ai-composer-float');
+  var shell = document.getElementById('ai-page-shell');
+  if (composer) composer.classList.toggle('hidden', !show);
+  if (shell) shell.classList.toggle('has-composer', !!show);
+  if (show) {
+    var input = document.getElementById('ai-followup-input');
+    if (input && !input._aiBound) {
+      input._aiBound = true;
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendAiFollowup();
+        }
+      });
+    }
+  }
+}
+
 function showAiIdleState() {
   var body = document.getElementById('ai-body');
   if (body) body.innerHTML = '<div class="ai-empty">請先在上方選擇要分析的專案</div>';
+  showAiComposer(false);
   updateAiRunButton(false, false);
 }
 
@@ -8459,6 +8496,7 @@ function showAiReadyState() {
     body.innerHTML = '<div class="ai-empty">已選「' + escHtml(name) + '」，點「開始分析」執行 AI 分析'
       + '<br><span style="font-size:11px;color:var(--t3);margin-top:6px;display:inline-block">追問時會即時查詢日報、任務、支出等資料庫，不讀取過往 AI 分析紀錄</span></div>';
   }
+  showAiComposer(false);
   updateAiRunButton(true, false);
 }
 
@@ -8530,13 +8568,14 @@ function renderAiAnalysisView(fields, metrics) {
     });
     html += '</div>';
   }
-  html += '<div class="ai-chat" id="ai-chat-mount"></div>';
+  html += '<div class="ai-chat"><div class="ai-chat-msgs" id="ai-chat-msgs"></div></div>';
   body.innerHTML = html;
-  renderAiChatMount();
+  showAiComposer(true);
+  renderAiChatMessages();
 }
 
-function renderAiChatMount() {
-  var mount = document.getElementById('ai-chat-mount');
+function renderAiChatMessages() {
+  var mount = document.getElementById('ai-chat-msgs');
   if (!mount) return;
   var html = '';
   (aiConversationHistory.followUps || []).forEach(function(turn) {
@@ -8546,10 +8585,12 @@ function renderAiChatMount() {
       html += '<div class="ai-chat-msg assistant"><span class="ai-chat-who">AI</span>' + escHtml(turn.content) + '</div>';
     }
   });
-  html += '<div class="ai-chat-input-row">'
-    + '<input type="text" id="ai-followup-input" placeholder="繼續追問，例如：跟上週比，這個專案有進步嗎？" onkeydown="if(event.key===\'Enter\')sendAiFollowup()">'
-    + '<button class="bsm" onclick="sendAiFollowup()">送出</button></div>';
   mount.innerHTML = html;
+  mount.scrollTop = mount.scrollHeight;
+}
+
+function renderAiChatMount() {
+  renderAiChatMessages();
 }
 
 function renderAiAnalysisCards(fields, metrics) {
@@ -8565,6 +8606,7 @@ function runAiAnalysis() {
   var body = document.getElementById('ai-body');
   var btn = document.getElementById('ai-run-btn');
   body.innerHTML = '<div class="ai-loading">AI 分析中，請稍候…（約 15–30 秒）</div>';
+  showAiComposer(false);
   if (btn) { btn.disabled = true; btn.textContent = '分析中…'; }
   var headers = { 'Content-Type': 'application/json' };
   var tok = getUserAccessToken();
@@ -8610,10 +8652,12 @@ function sendAiFollowup() {
   if (!question) return;
   if (!aiSelectedProjectId) { alert('請先選擇專案'); return; }
 
-  var mount = document.getElementById('ai-chat-mount');
+  var mount = document.getElementById('ai-chat-msgs');
+  if (!mount) return;
   var userBubble = '<div class="ai-chat-msg user"><span class="ai-chat-who">你</span>' + escHtml(question) + '</div>';
   var loadingBubble = '<div class="ai-chat-msg assistant" id="ai-followup-loading"><span class="ai-chat-who">AI</span>思考中…</div>';
   mount.insertAdjacentHTML('beforeend', userBubble + loadingBubble);
+  mount.scrollTop = mount.scrollHeight;
   if (input) input.value = '';
 
   var headers = { 'Content-Type': 'application/json' };
