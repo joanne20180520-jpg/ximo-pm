@@ -2278,11 +2278,35 @@ function buildJournalSnapshot(journalRecords, tasks, taskMap) {
     doing: cats.doing,
     block: cats.block,
     notStarted: cats.notStarted,
+    counts: {
+      done: cats.done.length,
+      doing: cats.doing.length,
+      block: cats.block.length,
+      notStarted: cats.notStarted.length
+    },
     overallSummary: (hasJournal && latest.merge)
       ? buildOverallSummaryFromJournal(latest.recs, latest.merge, cats)
       : noJournalMsg,
     snapshotDate: latest.dateKey || ''
   };
+}
+
+function buildTaskAnalysis(bundle, snapshot) {
+  const tasks = summarizeTasksForPrompt(bundle.tasks || []);
+  const overdue = tasks.filter(function(t) { return t.overdueDays > 0; })
+    .sort(function(a, b) { return b.overdueDays - a.overdueDays; });
+  const blocked = (snapshot && snapshot.block) ? snapshot.block.slice() : [];
+  const parts = [];
+  if (blocked.length) {
+    parts.push('【卡關】' + blocked.join('、') + '。建議今日確認卡關原因、責任分工與預計解除日。');
+  }
+  overdue.forEach(function(t) {
+    parts.push('【逾期】' + t.name + '（逾期 ' + t.overdueDays + ' 天）：建議立即追蹤進度或調整完成日，避免影響後續時程。');
+  });
+  if (!parts.length) {
+    return '目前無卡關或逾期任務，可維持現有進度；建議持續更新墨日誌以便追蹤。';
+  }
+  return parts.join('\n\n');
 }
 
 function computeProjectMetrics(bundle, journalRecords) {
@@ -2301,6 +2325,7 @@ function computeProjectMetrics(bundle, journalRecords) {
   let weekDeltaPct = null;
   if (weekAgoCompletionPct != null) weekDeltaPct = completionPct - weekAgoCompletionPct;
   const d = new Date();
+  const journalSnapshot = buildJournalSnapshot(journalRecords, bundle.tasks, taskMap);
   return {
     completionPct: completionPct,
     overdueCount: overdueCount,
@@ -2308,7 +2333,8 @@ function computeProjectMetrics(bundle, journalRecords) {
     weekAgoCompletionPct: weekAgoCompletionPct,
     weekAgoOverdueCount: weekAgoOverdueCount,
     analysisDate: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'),
-    journalSnapshot: buildJournalSnapshot(journalRecords, bundle.tasks, taskMap)
+    journalSnapshot: journalSnapshot,
+    taskAnalysis: buildTaskAnalysis(bundle, journalSnapshot)
   };
 }
 

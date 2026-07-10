@@ -692,18 +692,26 @@ button.btn-loading::after{content:'…';margin-left:2px}
 
 /* AI 分析頁 */
 .ai-page-shell{position:relative;display:flex;flex-direction:column;min-height:calc(100vh - var(--th) - 36px)}
-.ai-page-shell.has-composer .ai-body{padding-bottom:150px}
+.ai-page-shell.has-composer .ai-body{padding-bottom:120px}
 .ai-page-toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0}
 .ai-page-toolbar h3{font-size:14px;font-weight:700;flex-shrink:0}
 .ai-proj-select{padding:6px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;background:#fff;min-width:200px}
 .ai-body{padding:14px;overflow-y:auto;flex:1;min-height:0}
-.ai-composer-float{position:absolute;left:0;right:0;bottom:0;padding:10px 16px 18px;background:linear-gradient(to top,var(--surface) 65%,rgba(255,255,255,0));z-index:20;pointer-events:none}
+.ai-composer-float{position:fixed;bottom:8px;z-index:40;padding:0 14px 10px;background:linear-gradient(to top,var(--surface) 70%,rgba(255,255,255,0));pointer-events:none}
 .ai-composer-float.hidden{display:none}
-.ai-composer-card{pointer-events:auto;max-width:920px;margin:0 auto;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.12),0 2px 10px rgba(0,0,0,.06);padding:14px 16px 12px}
-.ai-composer-card textarea{width:100%;border:none;outline:none;resize:none;font-size:14px;line-height:1.65;min-height:76px;max-height:160px;font-family:inherit;color:var(--t1);background:transparent}
+.ai-composer-card{pointer-events:auto;max-width:920px;margin:0 auto;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:18px;box-shadow:0 10px 40px rgba(0,0,0,.12),0 2px 10px rgba(0,0,0,.06);padding:12px 14px 10px}
+.ai-composer-card textarea{width:100%;border:none;outline:none;resize:none;font-size:14px;line-height:1.55;min-height:44px;max-height:120px;font-family:inherit;color:var(--t1);background:transparent}
 .ai-composer-card textarea::placeholder{color:var(--t3)}
-.ai-composer-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
-.ai-composer-hint{font-size:11px;color:var(--t3)}
+.ai-composer-bar{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:8px}
+.ai-snap-kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px}
+.ai-snap-kpi{padding:10px 8px;border-radius:10px;border:1px solid var(--border);text-align:center;background:#fff}
+.ai-snap-kpi.ok{background:#f0fdf4;border-color:#bbf7d0}
+.ai-snap-kpi.doing{background:#eff6ff;border-color:#bfdbfe}
+.ai-snap-kpi.block{background:#fef2f2;border-color:#fecaca}
+.ai-snap-kpi.idle{background:#f8fafc;border-color:#e2e8f0}
+.ai-snap-kpi-val{font-size:22px;font-weight:800;line-height:1.1;color:var(--t1)}
+.ai-snap-kpi.block .ai-snap-kpi-val{color:#b42318}
+.ai-snap-kpi-label{font-size:11px;color:var(--t3);margin-top:4px}
 .ai-loading{padding:24px;text-align:center;color:var(--t3);font-size:12px}
 .ai-loading-wrap{padding:32px 24px;text-align:center}
 .ai-loading-title{font-size:14px;font-weight:700;color:var(--t2);margin-bottom:10px}
@@ -962,9 +970,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
         </div>
         <div class="ai-composer-float hidden" id="ai-composer-float">
           <div class="ai-composer-card">
-            <textarea id="ai-followup-input" rows="3" placeholder="繼續追問，例如：跟上週比，這個專案有進步嗎？"></textarea>
+            <textarea id="ai-followup-input" rows="2" placeholder="write a message..."></textarea>
             <div class="ai-composer-bar">
-              <span class="ai-composer-hint">Enter 兩下送出 · Shift+Enter 換行</span>
               <button type="button" class="bpri bsm" onclick="sendAiFollowup()">送出</button>
             </div>
           </div>
@@ -1312,6 +1319,7 @@ function toggleL(){
   var btn=document.getElementById('tl');
   btn.textContent=lc?'▶':'◀';
   btn.style.left=lc?'0':'calc(8px + var(--lw))';
+  syncAiComposerBounds();
 }
 function toggleR(){
   rc=!rc;
@@ -1319,6 +1327,18 @@ function toggleR(){
   var btn=document.getElementById('tr');
   btn.textContent=rc?'◀':'▶';
   btn.style.right=rc?'0':'calc(8px + var(--rw))';
+  syncAiComposerBounds();
+}
+function syncAiComposerBounds() {
+  var composer = document.getElementById('ai-composer-float');
+  var cp = document.getElementById('cp');
+  if (!composer || !cp || composer.classList.contains('hidden')) return;
+  var r = cp.getBoundingClientRect();
+  composer.style.left = r.left + 'px';
+  composer.style.width = r.width + 'px';
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', syncAiComposerBounds);
 }
 function tgp(row){row.classList.toggle('open');row.nextElementSibling.classList.toggle('open');}
 function sw(btn,id){
@@ -1338,7 +1358,7 @@ function sw(btn,id){
   if(id==='pg-b') renderBudget();
   if(id==='pg-d') renderDesigns();
   if(id==='pg-p') applyLoginUserToForms();
-  if(id==='pg-ai') renderAiPage();
+  if(id==='pg-ai') { renderAiPage(); syncAiComposerBounds(); }
 }
 function sf(el,color){
   document.querySelectorAll('.ftag').forEach(function(t){t.style.background='';t.style.color='';});
@@ -8613,6 +8633,7 @@ function showAiComposer(show) {
   var shell = document.getElementById('ai-page-shell');
   if (composer) composer.classList.toggle('hidden', !show);
   if (shell) shell.classList.toggle('has-composer', !!show);
+  if (show) syncAiComposerBounds();
   if (show) {
     var input = document.getElementById('ai-followup-input');
     if (input && !input._aiBound) {
@@ -8834,6 +8855,12 @@ function buildLocalJournalSnapshot(projectId) {
     doing: cats.doing,
     block: cats.block,
     notStarted: cats.notStarted,
+    counts: {
+      done: cats.done.length,
+      doing: cats.doing.length,
+      block: cats.block.length,
+      notStarted: cats.notStarted.length
+    },
     overallSummary: overallSummary
   };
 }
@@ -8849,10 +8876,6 @@ function getAiJournalSnapshotForView(metrics, projectId) {
       overallSummary: '此標案尚無墨日誌日報紀錄，請至墨日誌填寫今日回報。'
     };
   }
-  if (snap.hasJournal === undefined) {
-    snap.hasJournal = !!(snap.done && snap.done.length) || !!(snap.doing && snap.doing.length)
-      || !!(snap.block && snap.block.length) || !!(snap.notStarted && snap.notStarted.length);
-  }
   return snap;
 }
 
@@ -8865,19 +8888,58 @@ function buildAiJournalSnapshotHtml(snapshot) {
   snapshot = snapshot || {
     monthLabel: (new Date().getMonth() + 1) + '月',
     hasJournal: false,
-    done: [], doing: [], block: [], notStarted: [],
+    counts: { done: 0, doing: 0, block: 0, notStarted: 0 },
     overallSummary: '此標案尚無墨日誌日報紀錄，請至墨日誌填寫今日回報。'
   };
-  var html = '<div class="ai-hist-block"><div class="ai-hist-head">🕐 日報快照（依資料庫）</div><div class="ai-snap-box">';
+  var c = snapshot.counts || {
+    done: (snapshot.done || []).length,
+    doing: (snapshot.doing || []).length,
+    block: (snapshot.block || []).length,
+    notStarted: (snapshot.notStarted || []).length
+  };
+  var html = '<div class="ai-hist-block"><div class="ai-hist-head">🕐 日報快照</div><div class="ai-snap-box">';
   html += '<div class="ai-snap-title">' + escHtml(snapshot.monthLabel || '') + '任務</div>';
   if (snapshot.hasJournal === false) {
     html += '<div class="ai-snap-empty-note">' + escHtml(snapshot.overallSummary || '此標案尚無墨日誌日報紀錄，請至墨日誌填寫今日回報。') + '</div>';
   }
-  html += '<div class="ai-snap-row"><span class="ai-snap-label">已經完成：</span><span class="ai-snap-items">' + escHtml(formatAiSnapshotList(snapshot.done)) + '</span></div>';
-  html += '<div class="ai-snap-row"><span class="ai-snap-label">進行中：</span><span class="ai-snap-items">' + escHtml(formatAiSnapshotList(snapshot.doing)) + '</span></div>';
-  html += '<div class="ai-snap-row"><span class="ai-snap-label">卡關：</span><span class="ai-snap-items">' + escHtml(formatAiSnapshotList(snapshot.block)) + '</span></div>';
-  html += '<div class="ai-snap-row"><span class="ai-snap-label">尚未開始執行：</span><span class="ai-snap-items">' + escHtml(formatAiSnapshotList(snapshot.notStarted)) + '</span></div>';
-  html += '<div class="ai-snap-row"><span class="ai-snap-label">整體說明狀況：</span><span class="ai-snap-items">' + escHtml(snapshot.overallSummary || '—') + '</span></div>';
+  html += '<div class="ai-snap-kpi-row">';
+  html += '<div class="ai-snap-kpi ok"><div class="ai-snap-kpi-val">' + escHtml(String(c.done)) + '</div><div class="ai-snap-kpi-label">已完成</div></div>';
+  html += '<div class="ai-snap-kpi doing"><div class="ai-snap-kpi-val">' + escHtml(String(c.doing)) + '</div><div class="ai-snap-kpi-label">進行中</div></div>';
+  html += '<div class="ai-snap-kpi block"><div class="ai-snap-kpi-val">' + escHtml(String(c.block)) + '</div><div class="ai-snap-kpi-label">卡關</div></div>';
+  html += '<div class="ai-snap-kpi idle"><div class="ai-snap-kpi-val">' + escHtml(String(c.notStarted)) + '</div><div class="ai-snap-kpi-label">尚未進行</div></div>';
+  html += '</div></div></div>';
+  return html;
+}
+
+function buildTaskAnalysisFromLocal(projectId, snapshot) {
+  var tasks = getProjectTaskRecordsForAi(projectId);
+  var parts = [];
+  var blocked = (snapshot && snapshot.block) ? snapshot.block : [];
+  if (blocked.length) {
+    parts.push('【卡關】' + blocked.join('、') + '。建議今日確認卡關原因、責任分工與預計解除日。');
+  }
+  tasks.forEach(function(t) {
+    var f = t.fields || {};
+    var due = f['預計完成日'];
+    var progress = parseFloat(f['進度數值']) || 0;
+    var status = f['進度狀態'] || '';
+    if (!due || progress >= 100 || status === '已完成') return;
+    var overdueDays = Math.floor((Date.now() - due) / 86400000);
+    if (overdueDays > 0) {
+      parts.push('【逾期】' + (f['任務名稱'] || '未命名') + '（逾期 ' + overdueDays + ' 天）：建議立即追蹤進度或調整完成日，避免影響後續時程。');
+    }
+  });
+  if (!parts.length) return '目前無卡關或逾期任務，可維持現有進度；建議持續更新墨日誌以便追蹤。';
+  return parts.join('\n\n');
+}
+
+function buildAiTaskAnalysisHtml(metrics, projectId, snapshot) {
+  var text = (metrics && metrics.taskAnalysis) || buildTaskAnalysisFromLocal(projectId, snapshot);
+  var html = '<div class="ai-hist-block"><div class="ai-hist-head">📋 任務分析</div><div class="ai-report-box">';
+  String(text || '').split(/\n\n+/).forEach(function(para) {
+    if (!para.trim()) return;
+    html += '<div class="ai-report-para">' + escHtml(para.trim()) + '</div>';
+  });
   html += '</div></div>';
   return html;
 }
@@ -8903,7 +8965,9 @@ function renderAiAnalysisView(fields, metrics) {
   html += '</div>';
   html += '<div class="ai-section-title"><span>📈 本次分析</span><span class="ai-section-date">' + escHtml(metrics.analysisDate || '') + '</span></div>';
   html += '<div class="ai-report-box">' + buildAiReportHtml(fields, aiConversationHistory.firstAnalysis) + '</div>';
-  html += buildAiJournalSnapshotHtml(getAiJournalSnapshotForView(metrics, aiSelectedProjectId));
+  var snap = getAiJournalSnapshotForView(metrics, aiSelectedProjectId);
+  html += buildAiJournalSnapshotHtml(snap);
+  html += buildAiTaskAnalysisHtml(metrics, aiSelectedProjectId, snap);
   html += '<div class="ai-chat"><div class="ai-chat-msgs" id="ai-chat-msgs"></div></div>';
   body.innerHTML = html;
   showAiComposer(true);
