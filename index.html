@@ -3183,7 +3183,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v103';
+var APP_BUILD = '20260710v104';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -6114,7 +6114,7 @@ var DESIGN_CAT_MARKER = '__XIMA_DSG__';
 var JOURNAL_SYS_KEYS = ['系統資料', '系统数据', '內部資料'];
 
 function emptyDesignCategories() {
-  return { doing: [], done: [], block: [], tomorrow: [], blockReasons: {} };
+  return { doing: [], done: [], block: [], tomorrow: [], blockReasons: {}, taskNotes: {}, designNotes: {} };
 }
 
 function journalPlainNote(rec) {
@@ -6163,12 +6163,19 @@ function parseDesignCategories(rec) {
         done: parsed.done || [],
         block: parsed.block || [],
         tomorrow: parsed.tomorrow || [],
-        blockReasons: parsed.blockReasons || {}
+        blockReasons: parsed.blockReasons || {},
+        taskNotes: parsed.taskNotes || {},
+        designNotes: parsed.designNotes || {}
       };
     } catch (e) {}
   }
   var legacy = parseDesignCategoriesFromText(journalField(rec, ['備註', '日誌內容', '內容']) || '');
-  return legacy || emptyDesignCategories();
+  if (legacy) {
+    legacy.taskNotes = legacy.taskNotes || {};
+    legacy.designNotes = legacy.designNotes || {};
+    return legacy;
+  }
+  return emptyDesignCategories();
 }
 
 function stripDesignMarker(text) {
@@ -6177,9 +6184,36 @@ function stripDesignMarker(text) {
   return String(text).slice(0, idx).trim();
 }
 
-function applyJournalDesignData(fields, noteText, data) {
+function applyJournalDesignData(fields, noteText, data, noteMaps) {
+  noteMaps = noteMaps || {};
   fields['備註'] = stripDesignMarker(noteText || '');
-  fields['系統資料'] = serializeDesignCategories(data || emptyDesignCategories());
+  fields['系統資料'] = JSON.stringify({
+    doing: (data && data.doing) || [],
+    done: (data && data.done) || [],
+    block: (data && data.block) || [],
+    tomorrow: (data && data.tomorrow) || [],
+    blockReasons: (data && data.blockReasons) || {},
+    taskNotes: noteMaps.taskNotes || {},
+    designNotes: noteMaps.designNotes || {}
+  });
+}
+
+function mergeJournalNoteMaps(existingRec, patch) {
+  patch = patch || {};
+  var base = existingRec ? parseDesignCategories(existingRec) : emptyDesignCategories();
+  var taskNotes = Object.assign({}, base.taskNotes || {});
+  var designNotes = Object.assign({}, base.designNotes || {});
+  Object.keys(patch.taskNotes || {}).forEach(function(id) {
+    var val = patch.taskNotes[id];
+    if (val) taskNotes[id] = val;
+    else delete taskNotes[id];
+  });
+  Object.keys(patch.designNotes || {}).forEach(function(id) {
+    var val = patch.designNotes[id];
+    if (val) designNotes[id] = val;
+    else delete designNotes[id];
+  });
+  return { taskNotes: taskNotes, designNotes: designNotes };
 }
 
 function getExistingDesignCategories(rec) {
@@ -6284,7 +6318,7 @@ function openDesignDetail(desId) {
     return '<option' + (o === (ctx.f['進度狀態'] || '') ? ' selected' : '') + '>' + o + '</option>';
   }).join('');
   syncReportStatusSelect('dd-status', designReportCategory);
-  document.getElementById('dd-note').value = ctx.f['備註'] || '';
+  document.getElementById('dd-note').value = getTodayJournalItemNote(desId, author, 'design');
   var today = new Date();
   today.setHours(0, 0, 0, 0);
   var existingJournal = findDailyJournalRecord(today.getTime(), author);
@@ -6341,7 +6375,9 @@ function confirmDesignReport() {
     block: merged.block,
     tomorrow: merged.tomorrow,
     blockReasons: merged.blockReasons
-  });
+  }, mergeJournalNoteMaps(existingJournal, {
+    designNotes: (function() { var m = {}; m[currentDesignId] = note; return m; })()
+  }));
   journalFields['日期'] = todayStart;
 
   var pid = findProjectIdByName(ctx.projName);
@@ -6671,7 +6707,9 @@ function confirmTaskReport() {
     var noteLine = '/ ' + ctx.projName + ' · ' + taskName + (note ? '：' + note : '');
     baseNote = baseNote ? (baseNote + '\n' + noteLine) : ('【' + (catLabels[category] || '進行中') + '】\n' + noteLine);
   }
-  applyJournalDesignData(journalFields, baseNote, existingJournal ? parseDesignCategories(existingJournal) : emptyDesignCategories());
+  applyJournalDesignData(journalFields, baseNote, existingJournal ? parseDesignCategories(existingJournal) : emptyDesignCategories(), mergeJournalNoteMaps(existingJournal, {
+    taskNotes: (function() { var m = {}; m[currentTaskId] = note; return m; })()
+  }));
 
   var pid = findProjectIdByName(ctx.projName);
   if (pid) {
@@ -6822,7 +6860,7 @@ function openTaskDetail(taskId) {
     return '<option' + (o === (ctx.f['進度狀態'] || '') ? ' selected' : '') + '>' + o + '</option>';
   }).join('');
   syncReportStatusSelect('td-status', taskReportCategory);
-  document.getElementById('td-note').value = ctx.f['備註'] || '';
+  document.getElementById('td-note').value = getTodayJournalItemNote(taskId, ctx.assignee, 'task');
   taskPendingAttachments[taskId] = normalizeTaskAttachments(ctx.f['附件']);
   renderTaskAttachList();
   var today = new Date();
@@ -7019,6 +7057,74 @@ function getMergedJournalNotes(dayStart, author) {
     if (plain && notes.indexOf(plain) < 0) notes.push(plain);
   });
   return notes.join('\n\n');
+}
+
+function parseLegacyItemNotesFromPlain(rec) {
+  var result = { task: {}, design: {} };
+  var plain = journalPlainNote(rec);
+  if (!plain) return result;
+  plain.split('\n').forEach(function(line) {
+    var trimmed = line.trim();
+    if (!trimmed || trimmed.charAt(0) !== '/') return;
+    var isDesign = trimmed.indexOf('[設計]') >= 0;
+    var m = trimmed.match(/^\/\s*(?:\[設計\]\s*)?(.+?)\s·\s(.+?)(?:（卡關：.+）)?(?:：(.+))?$/);
+    if (!m || !m[3]) return;
+    var projName = m[1].trim();
+    var itemName = m[2].trim();
+    var note = m[3].trim();
+    getDailyLogAllItems().forEach(function(it) {
+      if (it.projName !== projName || it.taskName !== itemName) return;
+      if (isDesign && it.kind === 'design') result.design[it.id] = note;
+      else if (!isDesign && it.kind !== 'design') result.task[it.id] = note;
+    });
+  });
+  return result;
+}
+
+function getMergedTaskNotes(dayStart, author) {
+  var notes = {};
+  findDailyJournalRecords(dayStart, author).forEach(function(rec) {
+    var c = parseDesignCategories(rec);
+    Object.assign(notes, c.taskNotes || {});
+    var legacy = parseLegacyItemNotesFromPlain(rec);
+    Object.keys(legacy.task).forEach(function(id) {
+      if (!notes[id]) notes[id] = legacy.task[id];
+    });
+  });
+  return notes;
+}
+
+function getMergedDesignNotes(dayStart, author) {
+  var notes = {};
+  findDailyJournalRecords(dayStart, author).forEach(function(rec) {
+    var c = parseDesignCategories(rec);
+    Object.assign(notes, c.designNotes || {});
+    var legacy = parseLegacyItemNotesFromPlain(rec);
+    Object.keys(legacy.design).forEach(function(id) {
+      if (!notes[id]) notes[id] = legacy.design[id];
+    });
+  });
+  return notes;
+}
+
+function getTodayJournalItemNote(itemId, author, kind) {
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  var notes = kind === 'design'
+    ? getMergedDesignNotes(today.getTime(), author)
+    : getMergedTaskNotes(today.getTime(), author);
+  return notes[itemId] || '';
+}
+
+function buildDailyLogNoteMaps(rows) {
+  var taskNotes = {};
+  var designNotes = {};
+  (rows || []).forEach(function(row) {
+    if (!row.note) return;
+    if (row.kind === 'design') designNotes[row.id] = row.note;
+    else taskNotes[row.id] = row.note;
+  });
+  return { taskNotes: taskNotes, designNotes: designNotes };
 }
 
 function getBlockReasonForTaskFromJournals(dayStart, author, taskId) {
@@ -7365,6 +7471,8 @@ function renderDailyLogTasks(preselectId) {
   var dayTs = dailyLogDate.getTime();
   var catMap = getMergedTaskCategories(dayTs, author);
   var designMaps = getMergedDesignCategoryMaps(dayTs, author);
+  var taskNotes = getMergedTaskNotes(dayTs, author);
+  var designNotes = getMergedDesignNotes(dayTs, author);
   var designCatMap = designMaps.catMap;
   var designReasons = designMaps.blockReasons;
   if (preselectId) {
@@ -7390,7 +7498,7 @@ function renderDailyLogTasks(preselectId) {
       var isDesign = it.kind === 'design';
       var cat = isDesign ? (designCatMap[it.id] || '') : (catMap[it.id] || '');
       var extra = isDesign ? (dailyLogDesignExtras[it.id] || {}) : (dailyLogTaskExtras[it.id] || {});
-      var noteVal = extra.note !== undefined ? extra.note : it.note;
+      var noteVal = extra.note !== undefined ? extra.note : (isDesign ? (designNotes[it.id] || '') : (taskNotes[it.id] || ''));
       var blockVal = extra.blockReason !== undefined ? extra.blockReason
         : (isDesign ? (designReasons[it.id] || '') : getBlockReasonForTaskFromJournals(dayTs, author, it.id));
       var isBlock = cat === 'block';
@@ -7654,6 +7762,13 @@ function saveDailyJournal() {
     if (row.blockReason) reasonById[row.id] = row.blockReason;
   });
 
+  var existingRecs = findDailyJournalRecords(todayTs, author);
+  var targetRec = null;
+  if (existingRecs.length) {
+    existingRecs.sort(function(a, b) { return (journalTs(b) || 0) - (journalTs(a) || 0); });
+    targetRec = existingRecs[0];
+  }
+
   var journalFields = {
     '日期': todayTs,
     '進行中任務': data.ids.doing,
@@ -7668,19 +7783,13 @@ function saveDailyJournal() {
     block: data.designIds.block,
     tomorrow: data.designIds.tomorrow,
     blockReasons: data.designBlockReasons
-  });
+  }, buildDailyLogNoteMaps(allItems));
   if (projIds.length) setJournalProjIds(journalFields, projIds);
 
   var reporter = larkPerson(author);
   if (reporter) journalFields['回報人'] = reporter;
   else if (author && author !== '（未指定）') journalFields['回報人'] = author;
 
-  var existingRecs = findDailyJournalRecords(todayTs, author);
-  var targetRec = null;
-  if (existingRecs.length) {
-    existingRecs.sort(function(a, b) { return (journalTs(b) || 0) - (journalTs(a) || 0); });
-    targetRec = existingRecs[0];
-  }
   var journalPromise = targetRec
     ? fetch(API + '?table=journal&recordId=' + targetRec.record_id, {
         method: 'PUT',
@@ -8175,7 +8284,7 @@ function mergePersonJournalRecords(recs) {
   if (projIds.length) setJournalProjIds(fields, projIds);
   else if (base.fields['所屬標案']) fields['所屬標案'] = base.fields['所屬標案'];
   else if (base.fields['所屬專案']) fields['所屬專案'] = base.fields['所屬專案'];
-  var designMerged = { doing: [], done: [], block: [], tomorrow: [], blockReasons: {} };
+  var designMerged = { doing: [], done: [], block: [], tomorrow: [], blockReasons: {}, taskNotes: {}, designNotes: {} };
   var notes = [];
   recs.forEach(function(rec) {
     var c = parseDesignCategories(rec);
@@ -8185,6 +8294,8 @@ function mergePersonJournalRecords(recs) {
       });
     });
     Object.assign(designMerged.blockReasons, c.blockReasons || {});
+    Object.assign(designMerged.taskNotes, c.taskNotes || {});
+    Object.assign(designMerged.designNotes, c.designNotes || {});
     var plain = journalPlainNote(rec);
     if (plain && notes.indexOf(plain) < 0) notes.push(plain);
   });
