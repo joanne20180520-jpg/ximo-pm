@@ -691,7 +691,7 @@ button:disabled,.bpri:disabled,.bsub:disabled,.bsub2:disabled,.bsm:disabled,.bde
 button.btn-loading::after{content:'…';margin-left:2px}
 
 /* AI 分析頁 */
-.ai-page-shell{position:relative;display:flex;flex-direction:column;min-height:calc(100vh - var(--th) - 36px)}
+.ai-page-shell{position:relative;display:flex;flex-direction:column;height:calc(100vh - var(--th) - 36px);max-height:calc(100vh - var(--th) - 36px);overflow:hidden}
 .ai-page-shell.has-composer .ai-body{padding-bottom:120px}
 .ai-page-toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0}
 .ai-page-toolbar h3{font-size:14px;font-weight:700;flex-shrink:0}
@@ -757,7 +757,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
 .ai-card-title{font-size:12px;font-weight:700;margin-bottom:5px;display:flex;align-items:center;gap:6px}
 .ai-card-body{font-size:12px;color:var(--t2);line-height:1.7;white-space:pre-wrap}
 .ai-chat{margin-top:14px;border-top:1px solid var(--border);padding-top:12px}
-.ai-chat-msgs{max-height:420px;overflow-y:auto;padding-right:4px;margin-bottom:4px}
+.ai-chat-msgs{overflow:visible;padding-right:4px;margin-bottom:4px}
 .ai-chat-msg{padding:10px 12px;border-radius:10px;margin-bottom:8px;font-size:12px;line-height:1.65;position:relative}
 .ai-chat-msg.user{background:#f5f5f4}
 .ai-chat-msg.assistant{background:#eef4fc}
@@ -3215,7 +3215,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v109';
+var APP_BUILD = '20260710v110';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8575,43 +8575,42 @@ var AI_LOADING_TICKER = '讀取標案資料 · 整理任務與支出 · 彙整�
 function bindAiFollowupInput(input) {
   if (!input || input._aiBound) return;
   input._aiBound = true;
-  var pendingEnter = false;
-  var pendingTimer = null;
-  function resetPendingEnter() {
-    pendingEnter = false;
-    if (pendingTimer) {
-      clearTimeout(pendingTimer);
-      pendingTimer = null;
-    }
-  }
+  var imeComposing = false;
+  var skipNextEnter = false;
+  input.addEventListener('compositionstart', function() { imeComposing = true; });
+  input.addEventListener('compositionend', function() {
+    imeComposing = false;
+    skipNextEnter = true;
+  });
   input.addEventListener('keydown', function(e) {
     if (e.key !== 'Enter') return;
     if (e.shiftKey) return;
-    if (e.isComposing || e.keyCode === 229) return;
-    e.preventDefault();
-    if (pendingEnter) {
-      resetPendingEnter();
-      sendAiFollowup();
+    if (e.isComposing || e.keyCode === 229 || imeComposing) return;
+    if (skipNextEnter) {
+      skipNextEnter = false;
       return;
     }
-    pendingEnter = true;
-    pendingTimer = setTimeout(resetPendingEnter, 800);
-  });
-  input.addEventListener('input', function(e) {
-    if (e && e.inputType === 'insertLineBreak') return;
-    resetPendingEnter();
+    e.preventDefault();
+    sendAiFollowup();
   });
 }
 
 function scrollAiToLatest() {
-  requestAnimationFrame(function() {
+  function run() {
     var body = document.getElementById('ai-body');
+    var content = document.getElementById('content');
     var mount = document.getElementById('ai-chat-msgs');
-    if (mount) mount.scrollTop = mount.scrollHeight;
-    if (body) body.scrollTop = body.scrollHeight;
-    var chat = document.querySelector('#ai-body .ai-chat');
-    if (chat && chat.scrollIntoView) chat.scrollIntoView({ block: 'end', behavior: 'smooth' });
-  });
+    var anchor = mount && (mount.querySelector('#ai-followup-loading') || mount.lastElementChild);
+    [body, content, mount].forEach(function(el) {
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+    if (anchor && anchor.scrollIntoView) {
+      anchor.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    }
+  }
+  run();
+  requestAnimationFrame(run);
+  setTimeout(run, 100);
 }
 
 function showAiLoading() {
