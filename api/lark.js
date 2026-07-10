@@ -3210,6 +3210,65 @@ async function sendWebhook(text) {
   };
 }
 
+function aiAnalysisDmNotifyEnabled() {
+  const raw = (process.env.AI_ANALYSIS_DM_NOTIFY || 'on').trim().toLowerCase();
+  return raw !== 'off' && raw !== 'false' && raw !== 'skip' && raw !== '0';
+}
+
+async function sendImTextToOpenId(tenantToken, openId, text) {
+  const receiveId = String(openId || '').trim();
+  if (!receiveId || !isValidPersonOpenId(receiveId)) {
+    return { ok: false, skipped: true, reason: 'invalid open_id' };
+  }
+  const bodyText = String(text || '').trim();
+  if (!bodyText) return { ok: false, skipped: true, reason: 'empty text' };
+  const url = BASE_URL + '/im/v1/messages?receive_id_type=open_id';
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + tenantToken,
+      'Content-Type': 'application/json; charset=utf-8'
+    },
+    body: JSON.stringify({
+      receive_id: receiveId,
+      msg_type: 'text',
+      content: JSON.stringify({ text: bodyText.slice(0, 4000) })
+    })
+  });
+  const data = await res.json();
+  if (data.code !== 0) {
+    let hint = data.msg || 'im send failed';
+    if (/permission|scope|90208|99991672/i.test(hint)) {
+      hint += '（請在 Lark 開發者後台開啟 im:message、im:message:send_as_bot 並重新發布）';
+    }
+    return { ok: false, error: hint, code: data.code };
+  }
+  return { ok: true, messageId: data.data && data.data.message_id };
+}
+
+async function findProjectNameById(larkToken, projectId) {
+  try {
+    const cfg = getOperationalBitableConfig();
+    const records = await getRecords(larkToken, tableIdFor('projects'), cfg.appToken);
+    const rec = records.find(function(r) { return r.record_id === projectId; });
+    return (rec && rec.fields && rec.fields['標案名稱']) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+async function sendAiAnalysisDm(larkToken, openId, projectName, notifyText) {
+  const title = 'AI分析｜' + (projectName || '專案');
+  const text = title + '\n----------------\n' + String(notifyText || '').trim();
+  return sendImTextToOpenId(larkToken, openId, text);
+}
+
+async function sendAiFollowupDm(larkToken, openId, projectName, question, reply) {
+  const title = 'AI追問｜' + (projectName || '專案');
+  const text = title + '\n----------------\n' + formatLatestFollowupNotify(question, reply);
+  return sendImTextToOpenId(larkToken, openId, text);
+}
+
 function paymentApplicantText(fields) {
   if (!fields) return '';
   if (fields._applicantDisplayName) return String(fields._applicantDisplayName).trim();
@@ -4175,6 +4234,17 @@ export default async function handler(req, res) {
           if (!triggeredByOpenId) {
             saveWarning = (saveWarning ? saveWarning + '\n' : '') + '未寫入「觸發人」，紀錄會顯示為應用機器人，自動化也無法寄給您（請重新 Lark 登入後再分析）。';
           }
+          if (triggeredByOpenId && aiAnalysisDmNotifyEnabled()) {
+            try {
+              const notifyText = formatAnalysisNotifyMessage(projectName, analysis, metrics);
+              const dm = await sendAiAnalysisDm(larkToken, triggeredByOpenId, projectName, notifyText);
+              if (!dm.ok && !dm.skipped) {
+                saveWarning = (saveWarning ? saveWarning + '\n' : '') + 'Lark 私訊通知失敗：' + (dm.error || '未知錯誤');
+              }
+            } catch (dmErr) {
+              saveWarning = (saveWarning ? saveWarning + '\n' : '') + 'Lark 私訊通知失敗：' + (dmErr.message || String(dmErr));
+            }
+          }
         } catch (saveErr) {
           saveWarning = '分析成功，但寫入「AI分析」表失敗：' + (saveErr.message || String(saveErr));
         }
@@ -4200,6 +4270,11 @@ export default async function handler(req, res) {
       }
       const larkToken = await getToken();
       const userAccessTokenForFollowup = extractUserAccessToken(req);
+      const hintOpenId = b.triggeredByOpenId || '';
+      let followOpenId = '';
+      try {
+        followOpenId = await resolveTriggeredByOpenId(larkToken, userAccessTokenForFollowup, hintOpenId);
+      } catch (e) {}
       try {
         const reply = await runProjectFollowup(projectId, larkToken, userQuestion);
         if (analysisRecordId) {
@@ -4209,7 +4284,19 @@ export default async function handler(req, res) {
             console.warn('追問紀錄寫入失敗', appendErr.message || appendErr);
           }
         }
-        return res.status(200).json({ ok: true, reply: reply });
+        let followWarning = '';
+        if (followOpenId && aiAnalysisDmNotifyEnabled()) {
+          try {
+            const projectName = await findProjectNameById(larkToken, projectId);
+            const dm = await sendAiFollowupDm(larkToken, followOpenId, projectName, userQuestion, reply);
+            if (!dm.ok && !dm.skipped) {
+              followWarning = 'Lark 私訊通知失敗：' + (dm.error || '未知錯誤');
+            }
+          } catch (dmErr) {
+            followWarning = 'Lark 私訊通知失敗：' + (dmErr.message || String(dmErr));
+          }
+        }
+        return res.status(200).json({ ok: true, reply: reply, notifyWarning: followWarning || undefined });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
