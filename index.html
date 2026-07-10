@@ -722,6 +722,10 @@ button.btn-loading::after{content:'…';margin-left:2px}
 .ai-section-title{font-size:13px;font-weight:700;margin:0 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .ai-section-date{font-size:11px;color:var(--t3);font-weight:500}
 .ai-report-box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;line-height:1.75;color:var(--t2);white-space:pre-wrap}
+.ai-report-sec{margin-bottom:12px}
+.ai-report-sec:last-child{margin-bottom:0}
+.ai-report-sec-title{font-size:12px;font-weight:700;color:var(--t1);margin-bottom:4px}
+.ai-report-sec-body{font-size:12px;line-height:1.75;color:var(--t2);white-space:pre-wrap}
 .ai-hist-block{margin-bottom:14px}
 .ai-hist-head{font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px}
 .ai-hist-row{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--t2)}
@@ -3179,7 +3183,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v102';
+var APP_BUILD = '20260710v103';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8546,17 +8550,35 @@ function renderAiPage() {
   showAiReadyState();
 }
 
+var AI_REPORT_SECTIONS = [
+  { n: 1, label: '進度概況', field: '進度概況', alt: 'progress_summary' },
+  { n: 2, label: '風險預期', field: '風險與逾期', alt: 'risk_alert' },
+  { n: 3, label: '成本分析', field: '成本分析', alt: 'cost_analysis' },
+  { n: 4, label: '人力分工', field: '人力分工', alt: 'team_allocation' },
+  { n: 5, label: '下一步建議', field: '下一步建議', alt: 'next_actions' }
+];
+
+function getAiSectionText(fields, analysis, section) {
+  var text = (fields && fields[section.field]) || (analysis && analysis[section.alt]) || '';
+  text = String(text).trim();
+  return text || '—';
+}
+
+function buildAiReportHtml(fields, analysis) {
+  var html = '';
+  AI_REPORT_SECTIONS.forEach(function(s) {
+    html += '<div class="ai-report-sec">'
+      + '<div class="ai-report-sec-title">' + s.n + '. ' + escHtml(s.label) + '</div>'
+      + '<div class="ai-report-sec-body">' + escHtml(getAiSectionText(fields, analysis, s)) + '</div>'
+      + '</div>';
+  });
+  return html;
+}
+
 function buildAiReportText(fields, analysis) {
-  var parts = [];
-  if (fields['進度概況']) parts.push(fields['進度概況']);
-  if (fields['風險與逾期'] && fields['風險與逾期'].indexOf('無逾期') < 0) parts.push(fields['風險與逾期']);
-  if (fields['下一步建議']) parts.push('建議：' + fields['下一步建議']);
-  if (!parts.length && analysis) {
-    if (analysis.progress_summary) parts.push(analysis.progress_summary);
-    if (analysis.risk_alert) parts.push(analysis.risk_alert);
-    if (analysis.next_actions) parts.push('建議：' + analysis.next_actions);
-  }
-  return parts.join('\n\n');
+  return AI_REPORT_SECTIONS.map(function(s) {
+    return s.n + '. ' + s.label + '\n' + getAiSectionText(fields, analysis, s);
+  }).join('\n\n');
 }
 
 function renderAiAnalysisView(fields, metrics) {
@@ -8579,7 +8601,7 @@ function renderAiAnalysisView(fields, metrics) {
   html += '<div class="' + deltaCls + '"><div class="ai-kpi-label">與上週比</div><div class="ai-kpi-val">' + escHtml(deltaHtml) + '</div></div>';
   html += '</div>';
   html += '<div class="ai-section-title"><span>📈 本次分析</span><span class="ai-section-date">' + escHtml(metrics.analysisDate || '') + '</span></div>';
-  html += '<div class="ai-report-box">' + escHtml(buildAiReportText(fields, aiConversationHistory.firstAnalysis)) + '</div>';
+  html += '<div class="ai-report-box">' + buildAiReportHtml(fields, aiConversationHistory.firstAnalysis) + '</div>';
   var hist = metrics.journalHistory || [];
   if (hist.length) {
     html += '<div class="ai-hist-block"><div class="ai-hist-head">🕐 日報快照（依資料庫）</div>';
