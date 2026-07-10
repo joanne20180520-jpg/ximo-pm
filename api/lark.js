@@ -2093,10 +2093,11 @@ async function runProjectFollowup(projectId, larkToken, history, userQuestion) {
   (history.followUps || []).forEach(function(turn) {
     messages.push({ role: turn.role, content: turn.content });
   });
-  messages.push({ role: 'user', content: userQuestion });
+  const questionWithLimit = userQuestion + '\n\n（請將回答控制在 500 字以內，簡潔扼要，不要長篇大論）';
+  messages.push({ role: 'user', content: questionWithLimit });
 
   let claudeRes = await callClaudeApi(messages, {
-    maxTokens: 800,
+    maxTokens: 500,
     tools: AI_FOLLOWUP_TOOLS
   });
 
@@ -2114,7 +2115,7 @@ async function runProjectFollowup(projectId, larkToken, history, userQuestion) {
         }]
       }
     ]);
-    claudeRes = await callClaudeApi(toolMessages, { maxTokens: 800, tools: AI_FOLLOWUP_TOOLS });
+    claudeRes = await callClaudeApi(toolMessages, { maxTokens: 500, tools: AI_FOLLOWUP_TOOLS });
   }
 
   return extractClaudeText(claudeRes);
