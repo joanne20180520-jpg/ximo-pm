@@ -2373,12 +2373,12 @@ function formatAnalysisNotifyMessage(projectName, analysis, metrics) {
   metrics = metrics || {};
   analysis = analysis || {};
   const lines = [];
-  lines.push('📊 AI 分析完成');
-  lines.push('━━━━━━━━━━━━');
-  lines.push('📁 ' + (projectName || '專案') + (metrics.analysisDate ? ' · ' + metrics.analysisDate : ''));
+  lines.push('【AI 分析完成】');
+  lines.push('----------------');
+  lines.push('專案：' + (projectName || '專案') + (metrics.analysisDate ? '（' + metrics.analysisDate + '）' : ''));
   lines.push('');
   if (metrics.completionPct != null) {
-    let kpi = '📈 完成度 ' + metrics.completionPct + '%｜逾期 ' + (metrics.overdueCount != null ? metrics.overdueCount : '—') + ' 件';
+    let kpi = '完成度 ' + metrics.completionPct + '%｜逾期 ' + (metrics.overdueCount != null ? metrics.overdueCount : '—') + ' 件';
     if (metrics.weekDeltaPct != null) {
       kpi += '｜較上週 ' + (metrics.weekDeltaPct >= 0 ? '+' : '') + metrics.weekDeltaPct + '%';
     }
@@ -2388,29 +2388,29 @@ function formatAnalysisNotifyMessage(projectName, analysis, metrics) {
   function section(num, title, body) {
     const t = notifyTrim(body, 280);
     if (!t) return;
-    lines.push(num + ' ' + title);
+    lines.push('■ ' + num + '. ' + title);
     lines.push(t);
     lines.push('');
   }
-  section('1️⃣', '進度概況', analysis.progress_summary);
-  section('2️⃣', '風險與逾期', analysis.risk_alert);
-  section('3️⃣', '成本分析', analysis.cost_analysis);
-  section('4️⃣', '人力分工', analysis.team_allocation);
-  section('5️⃣', '下一步建議', analysis.next_actions);
-  lines.push('— 璽墨專案管理 —');
+  section('1', '進度概況', analysis.progress_summary);
+  section('2', '風險與逾期', analysis.risk_alert);
+  section('3', '成本分析', analysis.cost_analysis);
+  section('4', '人力分工', analysis.team_allocation);
+  section('5', '下一步建議', analysis.next_actions);
+  lines.push('-- 璽墨專案管理 --');
   return lines.join('\n');
 }
 
 function formatLatestFollowupNotify(question, reply) {
   const ts = new Date().toLocaleString('zh-TW', { hour12: false });
   return [
-    '💬 追問回覆 · ' + ts,
-    '━━━━━━━━━━━━',
+    '【AI 追問回覆】' + ts,
+    '----------------',
     'Q：' + notifyTrim(question, 200),
     '',
     'A：' + notifyTrim(reply, 500),
     '',
-    '— 璽墨專案管理 —'
+    '-- 璽墨專案管理 --'
   ].join('\n');
 }
 
@@ -2432,9 +2432,12 @@ async function saveAnalysisRecord(larkToken, userToken, projectId, analysis, tri
   };
   if (triggeredByOpenId) fields['觸發人'] = [{ id: triggeredByOpenId }];
   const normalized = await normalizeWriteFields(larkToken, tableId, fields, appToken);
-  return writeWithUserFallback(larkToken, userToken, function(tok, asUser) {
+  const notifyDropped = fields['通知摘要'] && !normalized['通知摘要'];
+  const result = await writeWithUserFallback(larkToken, userToken, function(tok, asUser) {
     return createRecord(tok, tableId, normalized, appToken, asUser);
   });
+  if (notifyDropped) result._notifyFieldMissing = '通知摘要';
+  return result;
 }
 
 // 把追問對話存回同一筆分析紀錄（累加寫入「追問紀錄」欄位）
@@ -2453,9 +2456,12 @@ async function appendFollowupToRecord(larkToken, userToken, analysisRecordId, qu
     '追問紀錄': merged,
     '最新追問': latestNotify
   }, appToken);
-  return writeWithUserFallback(larkToken, userToken, function(tok, asUser) {
+  const followDropped = latestNotify && !normalized['最新追問'];
+  const result = await writeWithUserFallback(larkToken, userToken, function(tok, asUser) {
     return updateRecord(tok, tableId, analysisRecordId, normalized, appToken, asUser);
   });
+  if (followDropped) result._notifyFieldMissing = '最新追問';
+  return result;
 }
 
 // ── 追問：從資料庫查詢（日報／任務／支出），不依賴對話歷史 ──
@@ -4120,6 +4126,12 @@ export default async function handler(req, res) {
             metrics: metrics
           });
           analysisRecordId = extractRecordId(saved) || '';
+          if (saved && saved._notifyFieldMissing) {
+            saveWarning = (saveWarning ? saveWarning + '\n' : '') + '請在「AI分析」表新增「' + saved._notifyFieldMissing + '」多行文字欄位，自動化通知才會有內容。';
+          }
+          if (!triggeredByOpenId) {
+            saveWarning = (saveWarning ? saveWarning + '\n' : '') + '未寫入「觸發人」，自動化可能無法寄送給您（請確認已 Lark 登入）。';
+          }
         } catch (saveErr) {
           saveWarning = '分析成功，但寫入「AI分析」表失敗：' + (saveErr.message || String(saveErr));
         }
