@@ -3171,7 +3171,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v96';
+var APP_BUILD = '20260710v97';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8631,7 +8631,10 @@ function runAiAnalysis() {
     aiLastAnalysisFields = freshFields;
     aiLastMetrics = res.metrics || null;
     renderAiAnalysisView(freshFields, aiLastMetrics);
-    if (res.saveWarning) console.warn(res.saveWarning);
+    if (res.saveWarning) {
+      console.warn(res.saveWarning);
+      alert(res.saveWarning);
+    }
     saveAiProjectSelection(aiSelectedProjectId);
     updateAiRunButton(true, true);
   }).catch(function(err) {

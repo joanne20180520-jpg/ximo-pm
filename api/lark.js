@@ -2123,8 +2123,10 @@ async function runProjectAnalysis(projectId, larkToken) {
   throw lastError || new Error('Claude 分析失敗');
 }
 
-async function saveAnalysisRecord(larkToken, projectId, analysis, triggeredByOpenId) {
-  const cfg = getOperationalBitableConfig();
+async function saveAnalysisRecord(larkToken, userToken, projectId, analysis, triggeredByOpenId) {
+  const tableId = tableIdFor('ai_analysis');
+  if (!tableId) throw new Error('未設定 AI 分析表（LARK_TABLE_AI_ANALYSIS）');
+  const appToken = appTokenForTable('ai_analysis');
   const fields = {
     '專案': [projectId],
     '日期': Date.now(),
@@ -2136,19 +2138,27 @@ async function saveAnalysisRecord(larkToken, projectId, analysis, triggeredByOpe
     // 「分析時間」為 Lark 自動建立時間欄位，不需手動寫入
   };
   if (triggeredByOpenId) fields['觸發人'] = [{ id: triggeredByOpenId }];
-  return createRecord(larkToken, cfg.tables.ai_analysis, fields, cfg.appToken, false);
+  const normalized = await normalizeWriteFields(larkToken, tableId, fields, appToken);
+  return writeWithUserFallback(larkToken, userToken, function(tok, asUser) {
+    return createRecord(tok, tableId, normalized, appToken, asUser);
+  });
 }
 
 // 把追問對話存回同一筆分析紀錄（累加寫入「追問紀錄」欄位）
-async function appendFollowupToRecord(larkToken, analysisRecordId, question, reply) {
-  const cfg = getOperationalBitableConfig();
-  const existing = await getRecords(larkToken, cfg.tables.ai_analysis, cfg.appToken);
+async function appendFollowupToRecord(larkToken, userToken, analysisRecordId, question, reply) {
+  const tableId = tableIdFor('ai_analysis');
+  if (!tableId) throw new Error('未設定 AI 分析表（LARK_TABLE_AI_ANALYSIS）');
+  const appToken = appTokenForTable('ai_analysis');
+  const existing = await getRecords(larkToken, tableId, appToken);
   const rec = existing.find(function(r) { return r.record_id === analysisRecordId; });
   const prevText = (rec && rec.fields && rec.fields['追問紀錄']) || '';
   const timestamp = new Date().toLocaleString('zh-TW', { hour12: false });
   const newLine = '[' + timestamp + ']\nQ: ' + question + '\nA: ' + reply;
   const merged = prevText ? (prevText + '\n\n' + newLine) : newLine;
-  return updateRecord(larkToken, cfg.tables.ai_analysis, analysisRecordId, { '追問紀錄': merged }, cfg.appToken, false);
+  const normalized = await normalizeWriteFields(larkToken, tableId, { '追問紀錄': merged }, appToken);
+  return writeWithUserFallback(larkToken, userToken, function(tok, asUser) {
+    return updateRecord(tok, tableId, analysisRecordId, normalized, appToken, asUser);
+  });
 }
 
 // ── 追問：從資料庫查詢（日報／任務／支出），不依賴對話歷史 ──
@@ -3762,7 +3772,7 @@ export default async function handler(req, res) {
         let saveWarning = '';
         let analysisRecordId = '';
         try {
-          const saved = await saveAnalysisRecord(larkToken, projectId, analysis, triggeredByOpenId);
+          const saved = await saveAnalysisRecord(larkToken, userAccessTokenForAi, projectId, analysis, triggeredByOpenId);
           analysisRecordId = extractRecordId(saved) || '';
         } catch (saveErr) {
           saveWarning = '分析成功，但寫入「AI分析」表失敗：' + (saveErr.message || String(saveErr));
@@ -3788,11 +3798,12 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'missing projectId or question' });
       }
       const larkToken = await getToken();
+      const userAccessTokenForFollowup = extractUserAccessToken(req);
       try {
         const reply = await runProjectFollowup(projectId, larkToken, userQuestion);
         if (analysisRecordId) {
           try {
-            await appendFollowupToRecord(larkToken, analysisRecordId, userQuestion, reply);
+            await appendFollowupToRecord(larkToken, userAccessTokenForFollowup, analysisRecordId, userQuestion, reply);
           } catch (appendErr) {
             console.warn('追問紀錄寫入失敗', appendErr.message || appendErr);
           }
