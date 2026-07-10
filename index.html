@@ -689,6 +689,30 @@ button.btn-flash.flash-blue{animation-name:btnFlashBlue}
 button.btn-flash.flash-red{animation-name:btnFlashRed}
 button:disabled,.bpri:disabled,.bsub:disabled,.bsub2:disabled,.bsm:disabled,.bdel:disabled,.confirm-ok:disabled{opacity:.5;cursor:not-allowed;pointer-events:none}
 button.btn-loading::after{content:'…';margin-left:2px}
+
+/* AI 分析頁 */
+.ai-page-toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ai-page-toolbar h3{font-size:14px;font-weight:700;flex-shrink:0}
+.ai-proj-select{padding:6px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;background:#fff;min-width:200px}
+.ai-body{padding:14px;overflow-y:auto}
+.ai-loading{padding:24px;text-align:center;color:var(--t3);font-size:12px}
+.ai-empty{padding:24px;text-align:center;color:var(--t3);font-size:12px;line-height:1.6}
+.ai-card{border-radius:10px;padding:12px 14px;margin-bottom:10px;border:1px solid var(--border)}
+.ai-card.warn{background:#fef2f2;border-color:#f5c6c6}
+.ai-card.ok{background:#f0f9f4;border-color:#c8e6d4}
+.ai-card-title{font-size:12px;font-weight:700;margin-bottom:5px;display:flex;align-items:center;gap:6px}
+.ai-card-body{font-size:12px;color:var(--t2);line-height:1.7;white-space:pre-wrap}
+.ai-history{margin-top:16px;border-top:1px solid var(--border);padding-top:10px}
+.ai-history-title{font-size:11px;color:var(--t3);margin-bottom:8px}
+.ai-history-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:5px;cursor:pointer;font-size:12px}
+.ai-history-item:hover{background:var(--sf2)}
+.ai-history-item .ai-h-date{color:var(--t3);min-width:70px}
+.ai-chat{margin-top:14px;border-top:1px solid var(--border);padding-top:12px}
+.ai-chat-msg{padding:8px 11px;border-radius:var(--rs);margin-bottom:8px;font-size:12px;line-height:1.6}
+.ai-chat-msg.user{background:var(--sf2)}
+.ai-chat-msg.assistant{background:#eef4fc}
+.ai-chat-input-row{display:flex;gap:6px}
+.ai-chat-input-row input{flex:1}
 </style>
 </head>
 <body>
@@ -747,6 +771,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <button class="tbar-tab" onclick="sw(this,'pg-p')">付款申請</button>
     <button class="tbar-tab" onclick="sw(this,'pg-d')">設計任務單</button>
     <button class="tbar-tab" onclick="sw(this,'pg-journal')">墨日誌</button>
+    <button class="tbar-tab" onclick="sw(this,'pg-ai')">AI分析</button>
   </nav>
 </div>
 
@@ -876,6 +901,20 @@ button.btn-loading::after{content:'…';margin-left:2px}
         </div>
         <div class="jpage-feed" id="journal-page-list">
           <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI 分析 -->
+    <div id="pg-ai" class="page">
+      <div class="jpage-single">
+        <div class="ai-page-toolbar">
+          <h3>AI 分析</h3>
+          <select id="ai-proj-select" class="ai-proj-select" onchange="onAiProjectChange()"></select>
+          <button class="bjlog" onclick="runAiAnalysis()">重新分析</button>
+        </div>
+        <div class="ai-body" id="ai-body">
+          <div class="ai-empty">請選擇專案，點「重新分析」開始</div>
         </div>
       </div>
     </div>
@@ -1246,6 +1285,7 @@ function sw(btn,id){
   if(id==='pg-b') renderBudget();
   if(id==='pg-d') renderDesigns();
   if(id==='pg-p') applyLoginUserToForms();
+  if(id==='pg-ai') renderAiPage();
 }
 function sf(el,color){
   document.querySelectorAll('.ftag').forEach(function(t){t.style.background='';t.style.color='';});
@@ -3424,7 +3464,7 @@ var TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 var loginRefreshPromise = null;
 var currentUserRole = 'PM';
 var ROLE_PAGES = {
-  PM: ['pg-s', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal'],
+  PM: ['pg-s', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
   '設計師': ['pg-d']
 };
 
@@ -8334,6 +8374,224 @@ function renderJournalPage() {
   var area = document.getElementById('journal-page-list');
   if (!area) return;
   renderJournalDashboard(area);
+}
+
+// ══════════════════════════════════════════════════════
+// AI 分析頁
+// ══════════════════════════════════════════════════════
+var aiAnalysisData = [];
+var aiSelectedProjectId = null;
+var aiCurrentAnalysisRecordId = null;
+var aiConversationHistory = { firstAnalysis: null, followUps: [] };
+var AI_PROJECT_STORAGE_KEY = 'ximo-ai-selected-project';
+
+// 這個下拉選單獨立於左側「已選N個標案」的複選狀態，一次只分析一個專案
+function fillAiProjectSelect() {
+  var sel = document.getElementById('ai-proj-select');
+  if (!sel) return;
+  var visibleProjects = projectsData.filter(function(p) { return isProjectVisible(p); });
+  fillSelectOptions(sel,
+    visibleProjects.map(function(p) { return p.fields['標案名稱'] || '未命名'; }),
+    visibleProjects.map(function(p) { return p.record_id; })
+  );
+  var saved = null;
+  try { saved = localStorage.getItem(AI_PROJECT_STORAGE_KEY); } catch (e) {}
+  var target = saved && visibleProjects.some(function(p) { return p.record_id === saved; })
+    ? saved
+    : (visibleProjects[0] && visibleProjects[0].record_id);
+  if (target) sel.value = target;
+  aiSelectedProjectId = sel.value || null;
+}
+
+function onAiProjectChange() {
+  var sel = document.getElementById('ai-proj-select');
+  aiSelectedProjectId = sel ? sel.value : null;
+  try { localStorage.setItem(AI_PROJECT_STORAGE_KEY, aiSelectedProjectId || ''); } catch (e) {}
+  aiConversationHistory = { firstAnalysis: null, followUps: [] };
+  aiCurrentAnalysisRecordId = null;
+  loadAiHistoryAndRenderLatest();
+}
+
+function renderAiPage() {
+  fillAiProjectSelect();
+  loadAiHistoryAndRenderLatest();
+}
+
+// 讀取這個專案過去的分析紀錄（沿用通用 GET ?table= 端點，不用額外寫後端）
+function loadAiHistoryAndRenderLatest() {
+  var body = document.getElementById('ai-body');
+  if (!aiSelectedProjectId) {
+    body.innerHTML = '<div class="ai-empty">請先在上方選擇一個專案</div>';
+    return;
+  }
+  body.innerHTML = '<div class="ai-loading">載入歷史分析紀錄…</div>';
+  fetchJsonWithTimeout('?table=ai_analysis', 20000).then(function(res) {
+    var all = (res && res.records) || [];
+    aiAnalysisData = all.filter(function(r) {
+      return getLinkIds(r.fields['專案']).indexOf(aiSelectedProjectId) >= 0;
+    }).sort(function(a, b) {
+      var ta = a.fields['分析時間'] ? new Date(a.fields['分析時間']).getTime() : 0;
+      var tb = b.fields['分析時間'] ? new Date(b.fields['分析時間']).getTime() : 0;
+      return tb - ta;
+    });
+    if (aiAnalysisData.length) {
+      var latest = aiAnalysisData[0];
+      aiCurrentAnalysisRecordId = latest.record_id;
+      aiConversationHistory.firstAnalysis = {
+        progress_summary: latest.fields['進度概況'] || '',
+        risk_alert: latest.fields['風險與逾期'] || '',
+        cost_analysis: latest.fields['成本分析'] || '',
+        team_allocation: latest.fields['人力分工'] || '',
+        next_actions: latest.fields['下一步建議'] || ''
+      };
+      renderAiAnalysisCards(latest.fields);
+      renderAiHistoryList();
+      renderAiChatFromRecord(latest.fields['追問紀錄'] || '');
+    } else {
+      body.innerHTML = '<div class="ai-empty">此專案尚無分析紀錄，點右上角「重新分析」產生第一筆</div>';
+    }
+  }).catch(function(err) {
+    body.innerHTML = '<div class="ai-empty" style="color:var(--danger)">載入失敗：' + escHtml(err.message || '請稍後再試') + '</div>';
+  });
+}
+
+function aiCardHtml(title, content, tone) {
+  var cls = tone === 'warn' ? ' warn' : (tone === 'ok' ? ' ok' : '');
+  return '<div class="ai-card' + cls + '">'
+    + '<div class="ai-card-title">' + escHtml(title) + '</div>'
+    + '<div class="ai-card-body">' + escHtml(content || '（無內容）') + '</div>'
+    + '</div>';
+}
+
+function renderAiAnalysisCards(fields) {
+  var body = document.getElementById('ai-body');
+  var hasRisk = fields['風險與逾期'] && fields['風險與逾期'].indexOf('無逾期') < 0;
+  var html = '';
+  html += aiCardHtml('進度概況', fields['進度概況'], 'default');
+  html += aiCardHtml('風險與逾期', fields['風險與逾期'], hasRisk ? 'warn' : 'ok');
+  html += aiCardHtml('成本分析', fields['成本分析'], 'default');
+  html += aiCardHtml('人力分工', fields['人力分工'], 'default');
+  html += aiCardHtml('下一步建議', fields['下一步建議'], 'ok');
+  body.innerHTML = html
+    + '<div class="ai-history" id="ai-history-mount"></div>'
+    + '<div class="ai-chat" id="ai-chat-mount"></div>';
+}
+
+function renderAiHistoryList() {
+  var mount = document.getElementById('ai-history-mount');
+  if (!mount) return;
+  if (aiAnalysisData.length <= 1) { mount.innerHTML = ''; return; }
+  var html = '<div class="ai-history-title">歷史分析紀錄</div>';
+  aiAnalysisData.forEach(function(rec, idx) {
+    var f = rec.fields;
+    var dateStr = f['分析時間'] ? fmtDate(f['分析時間']) : '';
+    html += '<div class="ai-history-item" onclick="viewAiHistoryItem(' + idx + ')">'
+      + '<span class="ai-h-date">' + escHtml(dateStr) + '</span>'
+      + '<span>' + escHtml((f['進度概況'] || '').slice(0, 40)) + '</span></div>';
+  });
+  mount.innerHTML = html;
+}
+
+function viewAiHistoryItem(idx) {
+  var rec = aiAnalysisData[idx];
+  if (!rec) return;
+  aiCurrentAnalysisRecordId = rec.record_id;
+  renderAiAnalysisCards(rec.fields);
+  renderAiHistoryList();
+  renderAiChatFromRecord(rec.fields['追問紀錄'] || '');
+}
+
+function renderAiChatFromRecord(rawText) {
+  var mount = document.getElementById('ai-chat-mount');
+  if (!mount) return;
+  var html = '';
+  if (rawText) {
+    // 追問紀錄存成純文字，用 Q:/A: 標記做簡單解析顯示
+    var blocks = rawText.split(/\n\n+/);
+    blocks.forEach(function(block) {
+      var qMatch = block.match(/Q:\s*([\s\S]*?)\nA:/);
+      var aMatch = block.match(/A:\s*([\s\S]*)$/);
+      if (qMatch) html += '<div class="ai-chat-msg user">' + escHtml(qMatch[1].trim()) + '</div>';
+      if (aMatch) html += '<div class="ai-chat-msg assistant">' + escHtml(aMatch[1].trim()) + '</div>';
+    });
+  }
+  html += '<div class="ai-chat-input-row">'
+    + '<input type="text" id="ai-followup-input" placeholder="繼續追問，例如：這個逾期會影響哪些後續任務？">'
+    + '<button class="bsm" onclick="sendAiFollowup()">送出</button></div>';
+  mount.innerHTML = html;
+}
+
+function runAiAnalysis() {
+  if (!aiSelectedProjectId) { alert('請先選擇專案'); return; }
+  var body = document.getElementById('ai-body');
+  body.innerHTML = '<div class="ai-loading">AI 分析中，請稍候…</div>';
+  var headers = { 'Content-Type': 'application/json' };
+  var tok = getUserAccessToken();
+  if (tok) headers['X-User-Access-Token'] = tok;
+  fetch(apiUrl('action=ai-analysis'), {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify(withUserToken({ projectId: aiSelectedProjectId }))
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    if (!res.ok) throw new Error(res.error || '分析失敗');
+    aiCurrentAnalysisRecordId = res.analysisRecordId || null;
+    aiConversationHistory = { firstAnalysis: res.analysis, followUps: [] };
+    renderAiAnalysisCards({
+      '進度概況': res.analysis.progress_summary,
+      '風險與逾期': res.analysis.risk_alert,
+      '成本分析': res.analysis.cost_analysis,
+      '人力分工': res.analysis.team_allocation,
+      '下一步建議': res.analysis.next_actions
+    });
+    renderAiChatFromRecord('');
+    if (res.saveWarning) console.warn(res.saveWarning);
+    loadAiHistoryAndRenderLatest();
+  }).catch(function(err) {
+    body.innerHTML = '<div class="ai-empty" style="color:var(--danger)">分析失敗：' + escHtml(err.message || '請稍後再試') + '</div>';
+  });
+}
+
+function sendAiFollowup() {
+  var input = document.getElementById('ai-followup-input');
+  var question = input ? input.value.trim() : '';
+  if (!question) return;
+  if (!aiSelectedProjectId) { alert('請先選擇專案'); return; }
+
+  var mount = document.getElementById('ai-chat-mount');
+  var userBubble = '<div class="ai-chat-msg user">' + escHtml(question) + '</div>';
+  var loadingBubble = '<div class="ai-chat-msg assistant" id="ai-followup-loading">思考中…</div>';
+  mount.insertAdjacentHTML('beforeend', userBubble + loadingBubble);
+  if (input) input.value = '';
+
+  var headers = { 'Content-Type': 'application/json' };
+  var tok = getUserAccessToken();
+  if (tok) headers['X-User-Access-Token'] = tok;
+  fetch(apiUrl('action=ai-followup'), {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify(withUserToken({
+      projectId: aiSelectedProjectId,
+      question: question,
+      history: aiConversationHistory,
+      analysisRecordId: aiCurrentAnalysisRecordId
+    }))
+  }).then(function(r) { return r.json(); }).then(function(res) {
+    var loadingEl = document.getElementById('ai-followup-loading');
+    if (!res.ok) throw new Error(res.error || '追問失敗');
+    aiConversationHistory.followUps = aiConversationHistory.followUps || [];
+    aiConversationHistory.followUps.push({ role: 'user', content: question });
+    aiConversationHistory.followUps.push({ role: 'assistant', content: res.reply });
+    if (loadingEl) {
+      loadingEl.textContent = res.reply;
+      loadingEl.removeAttribute('id');
+    }
+  }).catch(function(err) {
+    var loadingEl = document.getElementById('ai-followup-loading');
+    if (loadingEl) {
+      loadingEl.textContent = '追問失敗：' + (err.message || '請稍後再試');
+      loadingEl.style.color = 'var(--danger)';
+    }
+  });
 }
 
 function savePaymentRecord(data) {
