@@ -721,11 +721,16 @@ button.btn-loading::after{content:'…';margin-left:2px}
 .ai-kpi-label{font-size:11px;color:var(--t3)}
 .ai-section-title{font-size:13px;font-weight:700;margin:0 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .ai-section-date{font-size:11px;color:var(--t3);font-weight:500}
-.ai-report-box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;line-height:1.75;color:var(--t2);white-space:pre-wrap}
-.ai-report-sec{margin-bottom:12px}
+.ai-report-box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;line-height:1.75;color:var(--t2)}
+.ai-report-sec{margin-bottom:14px}
 .ai-report-sec:last-child{margin-bottom:0}
-.ai-report-sec-title{font-size:12px;font-weight:700;color:var(--t1);margin-bottom:4px}
-.ai-report-sec-body{font-size:12px;line-height:1.75;color:var(--t2);white-space:pre-wrap}
+.ai-report-sec-title{font-size:12px;font-weight:700;color:#1a365d;margin-bottom:6px}
+.ai-report-sec-body{font-size:12px;line-height:1.75;white-space:normal}
+.ai-report-para{color:var(--t1);margin-bottom:6px}
+.ai-report-item{display:block;margin-bottom:8px;line-height:1.65}
+.ai-report-item-no{color:#1a365d;font-weight:700}
+.ai-report-item-title{color:#1a365d;font-weight:700}
+.ai-report-item-body{color:var(--t1);font-weight:400}
 .ai-hist-block{margin-bottom:14px}
 .ai-hist-head{font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px}
 .ai-snap-box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.75;color:var(--t2)}
@@ -3189,7 +3194,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v105';
+var APP_BUILD = '20260710v106';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8681,12 +8686,40 @@ function getAiSectionText(fields, analysis, section) {
   return text || '—';
 }
 
+function formatAiReportSectionBody(text) {
+  var raw = String(text || '').trim();
+  if (!raw || raw === '—') return '<div class="ai-report-para">—</div>';
+  var normalized = raw.replace(/(\d+[\.、]\s*)/g, '\n$1');
+  var chunks = normalized.split(/\n+/).map(function(s) { return s.trim(); }).filter(Boolean);
+  var html = '';
+  chunks.forEach(function(chunk) {
+    var numMatch = chunk.match(/^(\d+[\.、]\s*)([\s\S]*)$/);
+    if (numMatch) {
+      var rest = numMatch[2].trim();
+      var bracketMatch = rest.match(/^(\【[^】]+?\】[^：:\n]*)([\s\S]*)$/);
+      html += '<div class="ai-report-item">';
+      html += '<span class="ai-report-item-no">' + escHtml(numMatch[1]) + '</span>';
+      if (bracketMatch) {
+        html += '<span class="ai-report-item-title">' + escHtml(bracketMatch[1].trim()) + '</span>';
+        var bodyPart = bracketMatch[2].replace(/^[：:\s]+/, '').trim();
+        if (bodyPart) html += '<span class="ai-report-item-body">' + escHtml(bodyPart) + '</span>';
+      } else {
+        html += '<span class="ai-report-item-body">' + escHtml(rest) + '</span>';
+      }
+      html += '</div>';
+    } else {
+      html += '<div class="ai-report-para">' + escHtml(chunk) + '</div>';
+    }
+  });
+  return html || '<div class="ai-report-para">' + escHtml(raw) + '</div>';
+}
+
 function buildAiReportHtml(fields, analysis) {
   var html = '';
   AI_REPORT_SECTIONS.forEach(function(s) {
     html += '<div class="ai-report-sec">'
       + '<div class="ai-report-sec-title">' + s.n + '. ' + escHtml(s.label) + '</div>'
-      + '<div class="ai-report-sec-body">' + escHtml(getAiSectionText(fields, analysis, s)) + '</div>'
+      + '<div class="ai-report-sec-body">' + formatAiReportSectionBody(getAiSectionText(fields, analysis, s)) + '</div>'
       + '</div>';
   });
   return html;
@@ -8698,13 +8731,138 @@ function buildAiReportText(fields, analysis) {
   }).join('\n\n');
 }
 
+function aiJournalBelongsToProject(rec, projectId) {
+  if (!rec || !projectId) return false;
+  var f = rec.fields || {};
+  return getLinkIds(f['所屬標案'] || f['所屬專案']).indexOf(projectId) >= 0;
+}
+
+function getProjectTaskRecordsForAi(projectId) {
+  var wiIds = {};
+  workitemsData.forEach(function(wi) {
+    if (getLinkIds(wi.fields['所屬標案']).indexOf(projectId) >= 0) wiIds[wi.record_id] = 1;
+  });
+  getProjectWiIdsFromRecord(projectsData.find(function(p) { return p.record_id === projectId; })).forEach(function(id) {
+    wiIds[id] = 1;
+  });
+  return tasksData.filter(function(t) {
+    return getLinkIds(t.fields['所屬工作項目']).some(function(id) { return wiIds[id]; });
+  });
+}
+
+function getProjectWiIdsFromRecord(proj) {
+  if (!proj) return [];
+  return getLinkIds((proj.fields || {})['工作項目']);
+}
+
+function mergeAiJournalSummaries(recs) {
+  var taskMap = {};
+  tasksData.forEach(function(t) {
+    taskMap[t.record_id] = (t.fields && t.fields['任務名稱']) || '未命名';
+  });
+  var merged = { doing: [], done: [], block: [], tomorrow: [], notes: [] };
+  (recs || []).forEach(function(r) {
+    var f = r.fields || {};
+    function names(key) {
+      return getLinkIds(f[key]).map(function(id) { return taskMap[id] || id; });
+    }
+    ['doing', 'done', 'block', 'tomorrow'].forEach(function(k, i) {
+      var keys = ['進行中任務', '已完成今日任務', '卡關任務', '明日預計任務'];
+      names(keys[i]).forEach(function(name) {
+        if (merged[k].indexOf(name) < 0) merged[k].push(name);
+      });
+    });
+    var note = journalPlainNote(r);
+    if (note && merged.notes.indexOf(note) < 0) merged.notes.push(note);
+  });
+  return merged;
+}
+
+function buildLocalJournalSnapshot(projectId) {
+  var d = new Date();
+  var monthLabel = (d.getMonth() + 1) + '月';
+  var recs = (journalData || []).filter(function(r) { return aiJournalBelongsToProject(r, projectId); });
+  var tasks = getProjectTaskRecordsForAi(projectId);
+  var byDay = {};
+  recs.forEach(function(r) {
+    var ts = journalTs(r);
+    if (!ts) return;
+    var dt = new Date(ts);
+    var key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+    if (!byDay[key]) byDay[key] = [];
+    byDay[key].push(r);
+  });
+  var dayKeys = Object.keys(byDay).sort().reverse();
+  var latestRecs = dayKeys.length ? byDay[dayKeys[0]] : [];
+  var latestMerge = latestRecs.length ? mergeAiJournalSummaries(latestRecs) : null;
+  var cats = { done: [], doing: [], block: [], notStarted: [] };
+  var allNames = tasks.map(function(t) { return (t.fields && t.fields['任務名稱']) || '未命名'; });
+  if (latestMerge) {
+    cats.done = latestMerge.done.slice();
+    cats.doing = latestMerge.doing.slice();
+    cats.block = latestMerge.block.slice();
+    var listed = {};
+    function mark(arr) { arr.forEach(function(n) { listed[n] = 1; }); }
+    mark(cats.done); mark(cats.doing); mark(cats.block);
+    latestMerge.tomorrow.forEach(function(n) {
+      if (!listed[n]) { cats.doing.push(n); listed[n] = 1; }
+    });
+    allNames.forEach(function(name) {
+      if (!listed[name]) cats.notStarted.push(name);
+    });
+  } else {
+    tasks.forEach(function(t) {
+      var f = t.fields || {};
+      var name = f['任務名稱'] || '未命名';
+      var status = f['進度狀態'] || '';
+      var p = parseFloat(f['進度數值']) || 0;
+      if (status === '已完成' || p >= 100) cats.done.push(name);
+      else if (/卡關|阻塞/.test(status)) cats.block.push(name);
+      else if (p > 0 || /進行|持續/.test(status)) cats.doing.push(name);
+      else cats.notStarted.push(name);
+    });
+  }
+  var summaryParts = [];
+  if (cats.done.length) summaryParts.push('已完成' + cats.done.length + '項');
+  if (cats.doing.length) summaryParts.push('進行' + cats.doing.length + '項');
+  if (cats.block.length) summaryParts.push('卡關' + cats.block.length + '項');
+  if (cats.notStarted.length) summaryParts.push('未開始' + cats.notStarted.length + '項');
+  var overallSummary = summaryParts.join('，').slice(0, 30) || (latestRecs.length ? '已取最近日報' : '本月尚無日報紀錄');
+  if (latestMerge && latestMerge.notes.length) {
+    var noteText = latestMerge.notes.join(' ').replace(/\s+/g, ' ').trim();
+    if (noteText) overallSummary = noteText.slice(0, 30);
+  }
+  return {
+    monthLabel: monthLabel,
+    done: cats.done,
+    doing: cats.doing,
+    block: cats.block,
+    notStarted: cats.notStarted,
+    overallSummary: overallSummary
+  };
+}
+
+function getAiJournalSnapshotForView(metrics, projectId) {
+  if (metrics && metrics.journalSnapshot) return metrics.journalSnapshot;
+  if (projectId) return buildLocalJournalSnapshot(projectId);
+  return {
+    monthLabel: (new Date().getMonth() + 1) + '月',
+    done: [], doing: [], block: [], notStarted: [],
+    overallSummary: '—'
+  };
+}
+
 function formatAiSnapshotList(names) {
   if (!names || !names.length) return '—';
   return names.join('、');
 }
 
 function buildAiJournalSnapshotHtml(snapshot) {
-  if (!snapshot) return '';
+  snapshot = snapshot || {
+    monthLabel: (new Date().getMonth() + 1) + '月',
+    done: [], doing: [], block: [], notStarted: [],
+    overallSummary: '—'
+  };
   var html = '<div class="ai-hist-block"><div class="ai-hist-head">🕐 日報快照（依資料庫）</div><div class="ai-snap-box">';
   html += '<div class="ai-snap-title">' + escHtml(snapshot.monthLabel || '') + '任務</div>';
   html += '<div class="ai-snap-row"><span class="ai-snap-label">已經完成：</span><span class="ai-snap-items">' + escHtml(formatAiSnapshotList(snapshot.done)) + '</span></div>';
@@ -8737,7 +8895,7 @@ function renderAiAnalysisView(fields, metrics) {
   html += '</div>';
   html += '<div class="ai-section-title"><span>📈 本次分析</span><span class="ai-section-date">' + escHtml(metrics.analysisDate || '') + '</span></div>';
   html += '<div class="ai-report-box">' + buildAiReportHtml(fields, aiConversationHistory.firstAnalysis) + '</div>';
-  html += buildAiJournalSnapshotHtml(metrics.journalSnapshot);
+  html += buildAiJournalSnapshotHtml(getAiJournalSnapshotForView(metrics, aiSelectedProjectId));
   html += '<div class="ai-chat"><div class="ai-chat-msgs" id="ai-chat-msgs"></div></div>';
   body.innerHTML = html;
   showAiComposer(true);
