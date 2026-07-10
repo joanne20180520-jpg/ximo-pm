@@ -3171,7 +3171,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v97';
+var APP_BUILD = '20260710v98';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8490,12 +8490,7 @@ function showAiIdleState() {
 
 function showAiReadyState() {
   var body = document.getElementById('ai-body');
-  var sel = document.getElementById('ai-proj-select');
-  var name = sel && sel.selectedIndex > 0 ? sel.options[sel.selectedIndex].text : '此專案';
-  if (body) {
-    body.innerHTML = '<div class="ai-empty">已選「' + escHtml(name) + '」，點「開始分析」執行 AI 分析'
-      + '<br><span style="font-size:11px;color:var(--t3);margin-top:6px;display:inline-block">追問時會即時查詢日報、任務、支出等資料庫，不讀取過往 AI 分析紀錄</span></div>';
-  }
+  if (body) body.innerHTML = '';
   showAiComposer(false);
   updateAiRunButton(true, false);
 }
