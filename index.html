@@ -739,6 +739,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
 .ai-snap-row:last-child{margin-bottom:0}
 .ai-snap-label{font-weight:600;color:var(--t1)}
 .ai-snap-items{color:var(--t2)}
+.ai-snap-empty-note{font-size:12px;line-height:1.65;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;margin-bottom:10px}
 .ai-hist-row{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--t2)}
 .ai-hist-row:last-child{border-bottom:none}
 .ai-hist-date{color:var(--t3);min-width:42px;flex-shrink:0}
@@ -3194,7 +3195,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v106';
+var APP_BUILD = '20260710v107';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8795,6 +8796,8 @@ function buildLocalJournalSnapshot(projectId) {
   var dayKeys = Object.keys(byDay).sort().reverse();
   var latestRecs = dayKeys.length ? byDay[dayKeys[0]] : [];
   var latestMerge = latestRecs.length ? mergeAiJournalSummaries(latestRecs) : null;
+  var hasJournal = recs.length > 0 && !!latestMerge;
+  var noJournalMsg = '此標案尚無墨日誌日報紀錄，請至墨日誌填寫今日回報。';
   var cats = { done: [], doing: [], block: [], notStarted: [] };
   var allNames = tasks.map(function(t) { return (t.fields && t.fields['任務名稱']) || '未命名'; });
   if (latestMerge) {
@@ -8810,30 +8813,23 @@ function buildLocalJournalSnapshot(projectId) {
     allNames.forEach(function(name) {
       if (!listed[name]) cats.notStarted.push(name);
     });
-  } else {
-    tasks.forEach(function(t) {
-      var f = t.fields || {};
-      var name = f['任務名稱'] || '未命名';
-      var status = f['進度狀態'] || '';
-      var p = parseFloat(f['進度數值']) || 0;
-      if (status === '已完成' || p >= 100) cats.done.push(name);
-      else if (/卡關|阻塞/.test(status)) cats.block.push(name);
-      else if (p > 0 || /進行|持續/.test(status)) cats.doing.push(name);
-      else cats.notStarted.push(name);
-    });
   }
-  var summaryParts = [];
-  if (cats.done.length) summaryParts.push('已完成' + cats.done.length + '項');
-  if (cats.doing.length) summaryParts.push('進行' + cats.doing.length + '項');
-  if (cats.block.length) summaryParts.push('卡關' + cats.block.length + '項');
-  if (cats.notStarted.length) summaryParts.push('未開始' + cats.notStarted.length + '項');
-  var overallSummary = summaryParts.join('，').slice(0, 30) || (latestRecs.length ? '已取最近日報' : '本月尚無日報紀錄');
-  if (latestMerge && latestMerge.notes.length) {
-    var noteText = latestMerge.notes.join(' ').replace(/\s+/g, ' ').trim();
-    if (noteText) overallSummary = noteText.slice(0, 30);
+  var overallSummary = noJournalMsg;
+  if (hasJournal) {
+    var summaryParts = [];
+    if (cats.done.length) summaryParts.push('已完成' + cats.done.length + '項');
+    if (cats.doing.length) summaryParts.push('進行' + cats.doing.length + '項');
+    if (cats.block.length) summaryParts.push('卡關' + cats.block.length + '項');
+    if (cats.notStarted.length) summaryParts.push('未開始' + cats.notStarted.length + '項');
+    overallSummary = summaryParts.join('，').slice(0, 30) || '已取最近日報';
+    if (latestMerge && latestMerge.notes.length) {
+      var noteText = latestMerge.notes.join(' ').replace(/\s+/g, ' ').trim();
+      if (noteText) overallSummary = noteText.slice(0, 30);
+    }
   }
   return {
     monthLabel: monthLabel,
+    hasJournal: hasJournal,
     done: cats.done,
     doing: cats.doing,
     block: cats.block,
@@ -8843,13 +8839,21 @@ function buildLocalJournalSnapshot(projectId) {
 }
 
 function getAiJournalSnapshotForView(metrics, projectId) {
-  if (metrics && metrics.journalSnapshot) return metrics.journalSnapshot;
-  if (projectId) return buildLocalJournalSnapshot(projectId);
-  return {
-    monthLabel: (new Date().getMonth() + 1) + '月',
-    done: [], doing: [], block: [], notStarted: [],
-    overallSummary: '—'
-  };
+  var snap = (metrics && metrics.journalSnapshot) ? metrics.journalSnapshot : null;
+  if ((!snap || snap.hasJournal === undefined) && projectId) snap = buildLocalJournalSnapshot(projectId);
+  if (!snap) {
+    snap = {
+      monthLabel: (new Date().getMonth() + 1) + '月',
+      hasJournal: false,
+      done: [], doing: [], block: [], notStarted: [],
+      overallSummary: '此標案尚無墨日誌日報紀錄，請至墨日誌填寫今日回報。'
+    };
+  }
+  if (snap.hasJournal === undefined) {
+    snap.hasJournal = !!(snap.done && snap.done.length) || !!(snap.doing && snap.doing.length)
+      || !!(snap.block && snap.block.length) || !!(snap.notStarted && snap.notStarted.length);
+  }
+  return snap;
 }
 
 function formatAiSnapshotList(names) {
@@ -8860,11 +8864,15 @@ function formatAiSnapshotList(names) {
 function buildAiJournalSnapshotHtml(snapshot) {
   snapshot = snapshot || {
     monthLabel: (new Date().getMonth() + 1) + '月',
+    hasJournal: false,
     done: [], doing: [], block: [], notStarted: [],
-    overallSummary: '—'
+    overallSummary: '此標案尚無墨日誌日報紀錄，請至墨日誌填寫今日回報。'
   };
   var html = '<div class="ai-hist-block"><div class="ai-hist-head">🕐 日報快照（依資料庫）</div><div class="ai-snap-box">';
   html += '<div class="ai-snap-title">' + escHtml(snapshot.monthLabel || '') + '任務</div>';
+  if (snapshot.hasJournal === false) {
+    html += '<div class="ai-snap-empty-note">' + escHtml(snapshot.overallSummary || '此標案尚無墨日誌日報紀錄，請至墨日誌填寫今日回報。') + '</div>';
+  }
   html += '<div class="ai-snap-row"><span class="ai-snap-label">已經完成：</span><span class="ai-snap-items">' + escHtml(formatAiSnapshotList(snapshot.done)) + '</span></div>';
   html += '<div class="ai-snap-row"><span class="ai-snap-label">進行中：</span><span class="ai-snap-items">' + escHtml(formatAiSnapshotList(snapshot.doing)) + '</span></div>';
   html += '<div class="ai-snap-row"><span class="ai-snap-label">卡關：</span><span class="ai-snap-items">' + escHtml(formatAiSnapshotList(snapshot.block)) + '</span></div>';

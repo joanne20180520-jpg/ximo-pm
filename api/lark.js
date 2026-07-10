@@ -2246,6 +2246,7 @@ function buildOverallSummaryFromJournal(latestRecs, merged, cats) {
 function buildJournalSnapshot(journalRecords, tasks, taskMap) {
   const d = new Date();
   const monthLabel = (d.getMonth() + 1) + '月';
+  const hasJournal = !!(journalRecords && journalRecords.length);
   const latest = getLatestJournalDayMerge(journalRecords, taskMap);
   let cats = { done: [], doing: [], block: [], notStarted: [] };
   const allTaskNames = (tasks || []).map(function(t) {
@@ -2267,17 +2268,19 @@ function buildJournalSnapshot(journalRecords, tasks, taskMap) {
     allTaskNames.forEach(function(name) {
       if (!listed[name]) cats.notStarted.push(name);
     });
-  } else {
-    cats = categorizeTasksByStatus(tasks);
   }
 
+  const noJournalMsg = '此標案尚無墨日誌日報紀錄，請至墨日誌填寫今日回報。';
   return {
     monthLabel: monthLabel,
+    hasJournal: hasJournal && !!latest.merge,
     done: cats.done,
     doing: cats.doing,
     block: cats.block,
     notStarted: cats.notStarted,
-    overallSummary: buildOverallSummaryFromJournal(latest.recs, latest.merge, cats),
+    overallSummary: (hasJournal && latest.merge)
+      ? buildOverallSummaryFromJournal(latest.recs, latest.merge, cats)
+      : noJournalMsg,
     snapshotDate: latest.dateKey || ''
   };
 }
