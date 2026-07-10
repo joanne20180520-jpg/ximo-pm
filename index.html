@@ -3215,7 +3215,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v107';
+var APP_BUILD = '20260710v109';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8572,7 +8572,47 @@ var aiLastMetrics = null;
 var aiConversationHistory = { firstAnalysis: null, followUps: [] };
 var AI_PROJECT_STORAGE_KEY = 'ximo-ai-selected-project';
 var AI_LOADING_TICKER = '讀取標案資料 · 整理任務與支出 · 彙整日報紀錄 · AI 分析中 · ';
-var aiLastEnterAt = 0;
+function bindAiFollowupInput(input) {
+  if (!input || input._aiBound) return;
+  input._aiBound = true;
+  var pendingEnter = false;
+  var pendingTimer = null;
+  function resetPendingEnter() {
+    pendingEnter = false;
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      pendingTimer = null;
+    }
+  }
+  input.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    if (e.shiftKey) return;
+    if (e.isComposing || e.keyCode === 229) return;
+    e.preventDefault();
+    if (pendingEnter) {
+      resetPendingEnter();
+      sendAiFollowup();
+      return;
+    }
+    pendingEnter = true;
+    pendingTimer = setTimeout(resetPendingEnter, 800);
+  });
+  input.addEventListener('input', function(e) {
+    if (e && e.inputType === 'insertLineBreak') return;
+    resetPendingEnter();
+  });
+}
+
+function scrollAiToLatest() {
+  requestAnimationFrame(function() {
+    var body = document.getElementById('ai-body');
+    var mount = document.getElementById('ai-chat-msgs');
+    if (mount) mount.scrollTop = mount.scrollHeight;
+    if (body) body.scrollTop = body.scrollHeight;
+    var chat = document.querySelector('#ai-body .ai-chat');
+    if (chat && chat.scrollIntoView) chat.scrollIntoView({ block: 'end', behavior: 'smooth' });
+  });
+}
 
 function showAiLoading() {
   var body = document.getElementById('ai-body');
@@ -8635,22 +8675,7 @@ function showAiComposer(show) {
   if (shell) shell.classList.toggle('has-composer', !!show);
   if (show) syncAiComposerBounds();
   if (show) {
-    var input = document.getElementById('ai-followup-input');
-    if (input && !input._aiBound) {
-      input._aiBound = true;
-      input.addEventListener('keydown', function(e) {
-        if (e.key !== 'Enter') return;
-        if (e.shiftKey) return;
-        e.preventDefault();
-        var now = Date.now();
-        if (now - aiLastEnterAt < 450) {
-          aiLastEnterAt = 0;
-          sendAiFollowup();
-        } else {
-          aiLastEnterAt = now;
-        }
-      });
-    }
+    bindAiFollowupInput(document.getElementById('ai-followup-input'));
   }
 }
 
@@ -9001,7 +9026,7 @@ function renderAiChatMessages() {
     }
   });
   mount.innerHTML = html;
-  mount.scrollTop = mount.scrollHeight;
+  scrollAiToLatest();
 }
 
 function renderAiChatMount() {
@@ -9076,7 +9101,7 @@ function sendAiFollowup() {
   var userBubble = '<div class="ai-chat-msg user"><span class="ai-chat-who">你</span>' + escHtml(question) + '</div>';
   var loadingBubble = '<div class="ai-chat-msg assistant" id="ai-followup-loading"><span class="ai-chat-who">AI</span>思考中…</div>';
   mount.insertAdjacentHTML('beforeend', userBubble + loadingBubble);
-  mount.scrollTop = mount.scrollHeight;
+  scrollAiToLatest();
 
   var headers = { 'Content-Type': 'application/json' };
   var tok = getUserAccessToken();
@@ -9100,12 +9125,14 @@ function sendAiFollowup() {
     } else {
       renderAiChatMount();
     }
+    scrollAiToLatest();
   }).catch(function(err) {
     var loadingEl = document.getElementById('ai-followup-loading');
     if (loadingEl) {
       loadingEl.textContent = '追問失敗：' + (err.message || '請稍後再試');
       loadingEl.style.color = 'var(--danger)';
     }
+    scrollAiToLatest();
   });
 }
 
