@@ -130,6 +130,93 @@ async function getRecords(token, tableId, appToken, opts) {
   } while (pageToken);
   return items;
 }
+
+async function getRecordById(token, tableId, recordId, appToken, opts) {
+  const targetAppToken = appToken || APP_TOKEN;
+  let url = BASE_URL + '/bitable/v1/apps/' + encodeURIComponent(targetAppToken)
+    + '/tables/' + encodeURIComponent(tableId) + '/records/' + encodeURIComponent(recordId);
+  if (opts && opts.userIdType) url += '?user_id_type=' + encodeURIComponent(opts.userIdType);
+  const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+  const data = await res.json();
+  if (data.code !== 0) throw new Error('Record error: ' + data.msg + ' code:' + data.code);
+  return data.data && data.data.record;
+}
+
+async function batchGetRecords(token, tableId, recordIds, appToken, opts) {
+  const ids = (recordIds || []).filter(Boolean);
+  if (!ids.length) return [];
+  const targetAppToken = appToken || APP_TOKEN;
+  const out = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const chunk = ids.slice(i, i + 100);
+    let url = BASE_URL + '/bitable/v1/apps/' + encodeURIComponent(targetAppToken)
+      + '/tables/' + encodeURIComponent(tableId) + '/records/batch_get?'
+      + chunk.map(function(id) { return 'record_ids=' + encodeURIComponent(id); }).join('&');
+    if (opts && opts.userIdType) url += '&user_id_type=' + encodeURIComponent(opts.userIdType);
+    const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + token } });
+    const data = await res.json();
+    if (data.code !== 0) throw new Error('Batch get error: ' + data.msg + ' code:' + data.code);
+    if (data.data && data.data.records) out.push.apply(out, data.data.records);
+  }
+  return out;
+}
+
+async function searchRecords(token, tableId, appToken, filter, opts) {
+  const targetAppToken = appToken || APP_TOKEN;
+  var items = [];
+  var pageToken = '';
+  do {
+    var url = BASE_URL + '/bitable/v1/apps/' + encodeURIComponent(targetAppToken)
+      + '/tables/' + encodeURIComponent(tableId) + '/records/search?page_size=500';
+    if (opts && opts.userIdType) url += '&user_id_type=' + encodeURIComponent(opts.userIdType);
+    if (pageToken) url += '&page_token=' + encodeURIComponent(pageToken);
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ filter: filter })
+    });
+    const data = await res.json();
+    if (data.code !== 0) throw new Error('Search error: ' + data.msg + ' code:' + data.code);
+    if (data.data && data.data.items) items = items.concat(data.data.items);
+    pageToken = data.data && data.data.has_more ? (data.data.page_token || '') : '';
+  } while (pageToken);
+  return items;
+}
+
+function mergeRecordsById() {
+  const seen = {};
+  const out = [];
+  for (let a = 0; a < arguments.length; a++) {
+    (arguments[a] || []).forEach(function(r) {
+      if (!r || !r.record_id || seen[r.record_id]) return;
+      seen[r.record_id] = 1;
+      out.push(r);
+    });
+  }
+  return out;
+}
+
+async function searchRecordsByLinkFieldsAny(token, tableId, fieldName, recordIds, appToken, opts) {
+  const ids = (recordIds || []).filter(Boolean);
+  if (!ids.length) return [];
+  const chunkSize = 20;
+  let merged = [];
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    const filter = {
+      conjunction: 'or',
+      conditions: chunk.map(function(id) {
+        return { field_name: fieldName, operator: 'contains', value: [id] };
+      })
+    };
+    const rows = await searchRecords(token, tableId, appToken, filter, opts);
+    merged = mergeRecordsById(merged, rows);
+  }
+  return merged;
+}
  
 // 新增記錄
 function buildMainRecordUrl(tableId, recordId, appToken, asUser) {
@@ -1873,17 +1960,18 @@ function makeWikiLink(url) {
   return { link: url, text: text.length > 48 ? text.slice(0, 48) + '…' : text };
 }
 
-async function gatherProjectRelated(token, projectId) {
-  const cfg = getOperationalBitableConfig();
-  const readOpts = { userIdType: 'open_id' };
-  const projects = await getRecords(token, cfg.tables.projects, cfg.appToken, readOpts);
+async function gatherProjectRelatedFullScan(token, projectId, cfg, readOpts) {
+  const appToken = cfg.appToken;
+  const [projects, workitems, tasks, expenses, designs, journalAll] = await Promise.all([
+    getRecords(token, cfg.tables.projects, appToken, readOpts),
+    getRecords(token, cfg.tables.workitems, appToken, readOpts),
+    getRecords(token, cfg.tables.tasks, appToken, readOpts),
+    getRecords(token, cfg.tables.expenses, appToken, readOpts),
+    getRecords(token, cfg.tables.designs, appToken, readOpts),
+    getRecords(token, cfg.tables.journal, appToken, readOpts)
+  ]);
   const proj = projects.find(function(p) { return p.record_id === projectId; });
   if (!proj) throw new Error('找不到標案');
-
-  const workitems = await getRecords(token, cfg.tables.workitems, cfg.appToken, readOpts);
-  const tasks = await getRecords(token, cfg.tables.tasks, cfg.appToken, readOpts);
-  const expenses = await getRecords(token, cfg.tables.expenses, cfg.appToken, readOpts);
-  const designs = await getRecords(token, cfg.tables.designs, cfg.appToken, readOpts);
 
   const workitemsRel = gatherWorkitemsForProject(proj, workitems, projects);
   const wiIdSet = {};
@@ -1900,14 +1988,75 @@ async function gatherProjectRelated(token, projectId) {
   const designsRel = designs.filter(function(d) {
     return getLinkIds(d.fields['所屬工作項目']).some(function(id) { return wiIdSet[id]; });
   });
+  const journal = journalAll.filter(function(r) { return journalBelongsToProject(r, projectId); });
 
   return {
     project: proj,
     workitems: workitemsRel,
     tasks: tasksRel,
     expenses: expensesRel,
-    designs: designsRel
+    designs: designsRel,
+    journal: journal
   };
+}
+
+async function gatherProjectRelatedScoped(token, projectId, cfg, readOpts, appToken) {
+  const proj = await getRecordById(token, cfg.tables.projects, projectId, appToken, readOpts);
+  if (!proj) throw new Error('找不到標案');
+
+  const linkedWiIds = getProjectWiIds(proj);
+  const [workitemsByProj, linkedWorkitems] = await Promise.all([
+    searchRecordsByLinkFieldsAny(token, cfg.tables.workitems, '所屬標案', [projectId], appToken, readOpts),
+    batchGetRecords(token, cfg.tables.workitems, linkedWiIds, appToken, readOpts)
+  ]);
+  let workitemsRel = gatherWorkitemsForProject(proj, mergeRecordsById(workitemsByProj, linkedWorkitems), [proj]);
+  if (!workitemsRel.length) {
+    const allWorkitems = await getRecords(token, cfg.tables.workitems, appToken, readOpts);
+    workitemsRel = gatherWorkitemsForProject(proj, allWorkitems, [proj]);
+  }
+
+  const wiIds = workitemsRel.map(function(w) { return w.record_id; });
+  const wiIdSet = {};
+  wiIds.forEach(function(id) { wiIdSet[id] = 1; });
+
+  const [tasksRel, expensesByWi, expensesByProjA, expensesByProjB, journalByA, journalByB, designsRel] = await Promise.all([
+    searchRecordsByLinkFieldsAny(token, cfg.tables.tasks, '所屬工作項目', wiIds, appToken, readOpts),
+    searchRecordsByLinkFieldsAny(token, cfg.tables.expenses, '所屬工作項目', wiIds, appToken, readOpts),
+    searchRecordsByLinkFieldsAny(token, cfg.tables.expenses, '所數標案', [projectId], appToken, readOpts),
+    searchRecordsByLinkFieldsAny(token, cfg.tables.expenses, '所屬標案', [projectId], appToken, readOpts),
+    searchRecordsByLinkFieldsAny(token, cfg.tables.journal, '所屬標案', [projectId], appToken, readOpts),
+    searchRecordsByLinkFieldsAny(token, cfg.tables.journal, '所屬專案', [projectId], appToken, readOpts),
+    searchRecordsByLinkFieldsAny(token, cfg.tables.designs, '所屬工作項目', wiIds, appToken, readOpts)
+  ]);
+  const expensesRel = mergeRecordsById(expensesByWi, expensesByProjA, expensesByProjB).filter(function(e) {
+    var ewiIds = getLinkIds(e.fields['所屬工作項目']);
+    if (ewiIds.some(function(id) { return wiIdSet[id]; })) return true;
+    return getExpenseProjIds(e.fields).indexOf(projectId) >= 0;
+  });
+  const journal = mergeRecordsById(journalByA, journalByB).filter(function(r) {
+    return journalBelongsToProject(r, projectId);
+  });
+
+  return {
+    project: proj,
+    workitems: workitemsRel,
+    tasks: tasksRel,
+    expenses: expensesRel,
+    designs: designsRel,
+    journal: journal
+  };
+}
+
+async function gatherProjectRelated(token, projectId) {
+  const cfg = getOperationalBitableConfig();
+  const readOpts = { userIdType: 'open_id' };
+  const appToken = cfg.appToken;
+  try {
+    return await gatherProjectRelatedScoped(token, projectId, cfg, readOpts, appToken);
+  } catch (scopedErr) {
+    console.warn('標案範圍查詢失敗，改為全表讀取', scopedErr.message || scopedErr);
+    return gatherProjectRelatedFullScan(token, projectId, cfg, readOpts);
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -2354,11 +2503,7 @@ function buildFollowupSystemPrompt(context, question) {
 }
 
 async function gatherProjectRelatedWithJournal(token, projectId) {
-  const bundle = await gatherProjectRelated(token, projectId);
-  const cfg = getOperationalBitableConfig();
-  const journal = await getRecords(token, cfg.tables.journal, cfg.appToken);
-  bundle.journal = journal.filter(function(r) { return journalBelongsToProject(r, projectId); });
-  return bundle;
+  return gatherProjectRelated(token, projectId);
 }
 
 const AI_FOLLOWUP_TOOLS = [

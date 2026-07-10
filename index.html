@@ -705,6 +705,11 @@ button.btn-loading::after{content:'…';margin-left:2px}
 .ai-composer-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
 .ai-composer-hint{font-size:11px;color:var(--t3)}
 .ai-loading{padding:24px;text-align:center;color:var(--t3);font-size:12px}
+.ai-loading-wrap{padding:32px 24px;text-align:center}
+.ai-loading-title{font-size:14px;font-weight:700;color:var(--t2);margin-bottom:10px}
+.ai-loading-marquee{overflow:hidden;max-width:320px;margin:0 auto;height:20px;position:relative}
+.ai-loading-marquee-track{display:inline-block;white-space:nowrap;padding-left:100%;animation:aiMarquee 12s linear infinite;font-size:12px;color:var(--t3)}
+@keyframes aiMarquee{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
 .ai-empty{padding:24px;text-align:center;color:var(--t3);font-size:12px;line-height:1.6}
 .ai-kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
 .ai-kpi{padding:12px 10px;border-radius:10px;border:1px solid var(--border);text-align:center;background:#fff}
@@ -940,7 +945,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
           <div class="ai-composer-card">
             <textarea id="ai-followup-input" rows="3" placeholder="繼續追問，例如：跟上週比，這個專案有進步嗎？"></textarea>
             <div class="ai-composer-bar">
-              <span class="ai-composer-hint">Shift+Enter 換行 · Enter 送出</span>
+              <span class="ai-composer-hint">Enter 換行 · 再按 Enter 送出</span>
               <button type="button" class="bpri bsm" onclick="sendAiFollowup()">送出</button>
             </div>
           </div>
@@ -3171,7 +3176,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v98';
+var APP_BUILD = '20260710v100';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8416,6 +8421,16 @@ var aiLastAnalysisFields = null;
 var aiLastMetrics = null;
 var aiConversationHistory = { firstAnalysis: null, followUps: [] };
 var AI_PROJECT_STORAGE_KEY = 'ximo-ai-selected-project';
+var AI_LOADING_TICKER = '讀取標案資料 · 整理任務與支出 · 彙整日報紀錄 · AI 分析中 · ';
+
+function showAiLoading() {
+  var body = document.getElementById('ai-body');
+  if (!body) return;
+  body.innerHTML = '<div class="ai-loading-wrap">'
+    + '<div class="ai-loading-title">AI 分析中</div>'
+    + '<div class="ai-loading-marquee"><span class="ai-loading-marquee-track">' + escHtml(AI_LOADING_TICKER + AI_LOADING_TICKER) + '</span></div>'
+    + '</div>';
+}
 
 // 這個下拉選單獨立於左側「已選N個標案」的複選狀態，一次只分析一個專案
 function saveAiProjectSelection(projectId) {
@@ -8472,7 +8487,11 @@ function showAiComposer(show) {
     if (input && !input._aiBound) {
       input._aiBound = true;
       input.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key !== 'Enter' || e.shiftKey) return;
+        var val = input.value;
+        var pos = input.selectionStart;
+        var atEnd = pos === val.length;
+        if (atEnd && /\n\s*$/.test(val)) {
           e.preventDefault();
           sendAiFollowup();
         }
@@ -8600,7 +8619,7 @@ function runAiAnalysis() {
   if (!aiSelectedProjectId) { alert('請先選擇專案'); return; }
   var body = document.getElementById('ai-body');
   var btn = document.getElementById('ai-run-btn');
-  body.innerHTML = '<div class="ai-loading">AI 分析中，請稍候…（約 15–30 秒）</div>';
+  showAiLoading();
   showAiComposer(false);
   if (btn) { btn.disabled = true; btn.textContent = '分析中…'; }
   var headers = { 'Content-Type': 'application/json' };
@@ -8646,17 +8665,17 @@ function runAiAnalysis() {
 
 function sendAiFollowup() {
   var input = document.getElementById('ai-followup-input');
-  var question = input ? input.value.trim() : '';
+  var question = input ? input.value.replace(/\n+$/, '').trim() : '';
   if (!question) return;
   if (!aiSelectedProjectId) { alert('請先選擇專案'); return; }
 
   var mount = document.getElementById('ai-chat-msgs');
   if (!mount) return;
+  if (input) input.value = '';
   var userBubble = '<div class="ai-chat-msg user"><span class="ai-chat-who">你</span>' + escHtml(question) + '</div>';
   var loadingBubble = '<div class="ai-chat-msg assistant" id="ai-followup-loading"><span class="ai-chat-who">AI</span>思考中…</div>';
   mount.insertAdjacentHTML('beforeend', userBubble + loadingBubble);
   mount.scrollTop = mount.scrollHeight;
-  if (input) input.value = '';
 
   var headers = { 'Content-Type': 'application/json' };
   var tok = getUserAccessToken();
