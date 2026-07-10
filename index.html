@@ -8535,16 +8535,24 @@ function runAiAnalysis() {
     if (!res.ok) throw new Error(res.error || '分析失敗');
     aiCurrentAnalysisRecordId = res.analysisRecordId || null;
     aiConversationHistory = { firstAnalysis: res.analysis, followUps: [] };
-    renderAiAnalysisCards({
+    var freshFields = {
       '進度概況': res.analysis.progress_summary,
       '風險與逾期': res.analysis.risk_alert,
       '成本分析': res.analysis.cost_analysis,
       '人力分工': res.analysis.team_allocation,
-      '下一步建議': res.analysis.next_actions
-    });
+      '下一步建議': res.analysis.next_actions,
+      '分析時間': Date.now(),
+      '專案': [aiSelectedProjectId]
+    };
+    renderAiAnalysisCards(freshFields);
     renderAiChatFromRecord('');
     if (res.saveWarning) console.warn(res.saveWarning);
-    loadAiHistoryAndRenderLatest();
+    // 直接把這次結果插入本地的歷史清單最前面，不重新整個向 Lark 重新撈取，
+    // 避免 Lark 剛寫入還沒同步完成時，反而把剛顯示好的畫面覆蓋掉
+    if (aiCurrentAnalysisRecordId) {
+      aiAnalysisData.unshift({ record_id: aiCurrentAnalysisRecordId, fields: freshFields });
+      renderAiHistoryList();
+    }
   }).catch(function(err) {
     body.innerHTML = '<div class="ai-empty" style="color:var(--danger)">分析失敗：' + escHtml(err.message || '請稍後再試') + '</div>';
   });
