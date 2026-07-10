@@ -268,6 +268,8 @@ function buildTables() {
 }
 
 const TABLES = buildTables();
+// AI 分析表——不放進 TABLE_PROFILES，因為只有這個 Base 有這張表
+TABLES.ai_analysis = (process.env.LARK_TABLE_AI_ANALYSIS || 'tblzMPq8qJ0SiPnN').trim();
 const PAYMENTS_TABLE_MAIN = (process.env.LARK_TABLE_PAYMENTS_MAIN || '').trim();
 const PAYMENTS_TABLE_ACCOUNTING = (process.env.LARK_TABLE_PAYMENTS_ACCOUNTING || '').trim();
 
@@ -1908,6 +1910,216 @@ async function gatherProjectRelated(token, projectId) {
   };
 }
 
+// ══════════════════════════════════════════════════════
+// AI 分析
+// ══════════════════════════════════════════════════════
+
+function summarizeTasksForPrompt(tasks) {
+  return tasks.map(function(t) {
+    const f = t.fields || {};
+    const due = f['預計完成日'] ? new Date(f['預計完成日']).toISOString().slice(0, 10) : '無期限';
+    const overdueDays = f['預計完成日'] ? Math.floor((Date.now() - f['預計完成日']) / 86400000) : null;
+    const progress = f['進度數值'] || 0;
+    const isOverdue = overdueDays !== null && overdueDays > 0 && progress < 100;
+    return {
+      name: f['任務名稱'] || '未命名任務',
+      status: f['進度狀態'] || '未開始',
+      progress: progress,
+      due: due,
+      overdueDays: isOverdue ? overdueDays : 0
+    };
+  });
+}
+
+function summarizeExpensesForPrompt(expenses) {
+  let total = 0;
+  expenses.forEach(function(e) {
+    total += parseFloat((e.fields || {})['實際金額']) || 0;
+  });
+  return { count: expenses.length, totalSpent: total };
+}
+
+function summarizeWorkitemsForPrompt(workitems) {
+  return workitems.map(function(w) {
+    const f = w.fields || {};
+    return {
+      name: f['工作項目名稱'] || '未命名',
+      assignee: personDisplayName(f['負責夥伴']) || '未指定',
+      weight: f['權重'] || 0
+    };
+  });
+}
+
+function buildAnalysisPromptText(bundle) {
+  const proj = bundle.project.fields || {};
+  const budget = parseFloat(proj['合約金額']) || 0;
+  const available = parseFloat(proj['可用成本']) || 0;
+
+  const data = {
+    專案名稱: proj['標案名稱'] || '未命名標案',
+    合約金額: budget,
+    可用成本: available,
+    工作項目: summarizeWorkitemsForPrompt(bundle.workitems),
+    任務清單: summarizeTasksForPrompt(bundle.tasks),
+    支出彙總: summarizeExpensesForPrompt(bundle.expenses)
+  };
+
+  return '你是專案管理分析助理。根據以下 JSON 格式的專案資料，進行分析。\n\n'
+    + '專案資料：\n' + JSON.stringify(data, null, 2) + '\n\n'
+    + '請只回傳 JSON，不要有任何其他文字、不要用 markdown 標記（不要加 ```json），格式如下：\n'
+    + '{\n'
+    + '  "progress_summary": "1-2句話說明目前處於哪個階段，是否符合預定時程",\n'
+    + '  "risk_alert": "列出逾期或有風險的任務，包含逾期天數與可能影響；若無逾期則寫「目前無逾期風險」",\n'
+    + '  "cost_analysis": "目前花費是否符合預算、有無超支風險，1-2句話",\n'
+    + '  "team_allocation": "根據工作項目的負責夥伴，說明分工現況，2-3句話",\n'
+    + '  "next_actions": "2-3條具體、可執行的下一步建議，用「、」分隔"\n'
+    + '}\n\n'
+    + '語氣專業、直接，不要客套話，不要編造資料中沒有的內容。';
+}
+
+// ── 呼叫 Claude API ──
+async function callClaudeApi(messages, options) {
+  const apiKey = (process.env.ANTHROPIC_API_KEY || '').trim();
+  if (!apiKey) throw new Error('缺少 ANTHROPIC_API_KEY 環境變數');
+  const body = {
+    model: (options && options.model) || 'claude-sonnet-4-6',
+    max_tokens: (options && options.maxTokens) || 1024,
+    messages: messages
+  };
+  if (options && options.tools) body.tools = options.tools;
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (data.type === 'error') {
+    throw new Error('Claude API error: ' + (data.error && data.error.message || JSON.stringify(data)));
+  }
+  return data;
+}
+
+function extractClaudeText(data) {
+  const blocks = (data.content || []).filter(function(b) { return b.type === 'text'; });
+  return blocks.map(function(b) { return b.text; }).join('\n').trim();
+}
+
+function parseClaudeJson(text) {
+  const cleaned = text.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch (e) {
+    throw new Error('Claude 回傳非合法 JSON：' + cleaned.slice(0, 200));
+  }
+}
+
+async function runProjectAnalysis(projectId, larkToken) {
+  const bundle = await gatherProjectRelated(larkToken, projectId);
+  const promptText = buildAnalysisPromptText(bundle);
+  const claudeRes = await callClaudeApi([
+    { role: 'user', content: promptText }
+  ], { maxTokens: 800 });
+  const text = extractClaudeText(claudeRes);
+  const analysis = parseClaudeJson(text);
+  return { bundle: bundle, analysis: analysis };
+}
+
+async function saveAnalysisRecord(larkToken, projectId, analysis, triggeredByOpenId) {
+  const cfg = getOperationalBitableConfig();
+  const fields = {
+    '專案': [projectId],
+    '日期': Date.now(),
+    '進度概況': analysis.progress_summary || '',
+    '風險與逾期': analysis.risk_alert || '',
+    '成本分析': analysis.cost_analysis || '',
+    '人力分工': analysis.team_allocation || '',
+    '下一步建議': analysis.next_actions || ''
+    // 「分析時間」為 Lark 自動建立時間欄位，不需手動寫入
+  };
+  if (triggeredByOpenId) fields['觸發人'] = [{ id: triggeredByOpenId }];
+  return createRecord(larkToken, cfg.tables.ai_analysis, fields, cfg.appToken, false);
+}
+
+// 把追問對話存回同一筆分析紀錄（累加寫入「追問紀錄」欄位）
+async function appendFollowupToRecord(larkToken, analysisRecordId, question, reply) {
+  const cfg = getOperationalBitableConfig();
+  const existing = await getRecords(larkToken, cfg.tables.ai_analysis, cfg.appToken);
+  const rec = existing.find(function(r) { return r.record_id === analysisRecordId; });
+  const prevText = (rec && rec.fields && rec.fields['追問紀錄']) || '';
+  const timestamp = new Date().toLocaleString('zh-TW', { hour12: false });
+  const newLine = '[' + timestamp + ']\nQ: ' + question + '\nA: ' + reply;
+  const merged = prevText ? (prevText + '\n\n' + newLine) : newLine;
+  return updateRecord(larkToken, cfg.tables.ai_analysis, analysisRecordId, { '追問紀錄': merged }, cfg.appToken, false);
+}
+
+// ── 追問：get_design_status 工具 ──
+const AI_FOLLOWUP_TOOLS = [
+  {
+    name: 'get_design_status',
+    description: '查詢指定專案的設計需求資料，包含設計稿狀態、審核輪次、設計師、預算與實際花費。當使用者問題涉及設計進度、設計稿狀態、審核輪次時使用此工具。',
+    input_schema: {
+      type: 'object',
+      properties: {},
+      required: []
+    }
+  }
+];
+
+function summarizeDesignsForTool(designs) {
+  return designs.map(function(d) {
+    const f = d.fields || {};
+    return {
+      name: f['設計項目名稱'] || '未命名',
+      status: f['進度狀態'] || '未開始',
+      designer: personDisplayName(f['設計師']) || '未指定',
+      budget: f['預算金費'] || f['預算'] || 0,
+      spent: f['實際花費'] || 0
+    };
+  });
+}
+
+async function runProjectFollowup(projectId, larkToken, history, userQuestion) {
+  const bundle = await gatherProjectRelated(larkToken, projectId);
+  const promptText = buildAnalysisPromptText(bundle);
+
+  const messages = [
+    { role: 'user', content: promptText },
+    { role: 'assistant', content: JSON.stringify(history.firstAnalysis || {}) }
+  ];
+  (history.followUps || []).forEach(function(turn) {
+    messages.push({ role: turn.role, content: turn.content });
+  });
+  messages.push({ role: 'user', content: userQuestion });
+
+  let claudeRes = await callClaudeApi(messages, {
+    maxTokens: 800,
+    tools: AI_FOLLOWUP_TOOLS
+  });
+
+  const toolUse = (claudeRes.content || []).find(function(b) { return b.type === 'tool_use'; });
+  if (toolUse && toolUse.name === 'get_design_status') {
+    const designData = summarizeDesignsForTool(bundle.designs);
+    const toolMessages = messages.concat([
+      { role: 'assistant', content: claudeRes.content },
+      {
+        role: 'user',
+        content: [{
+          type: 'tool_result',
+          tool_use_id: toolUse.id,
+          content: JSON.stringify(designData)
+        }]
+      }
+    ]);
+    claudeRes = await callClaudeApi(toolMessages, { maxTokens: 800, tools: AI_FOLLOWUP_TOOLS });
+  }
+
+  return extractClaudeText(claudeRes);
+}
+
 async function batchCreateRecords(token, appToken, tableId, fieldsList, tableLabel) {
   if (!fieldsList.length) return [];
   const created = [];
@@ -3193,6 +3405,64 @@ export default async function handler(req, res) {
       const token = await getToken();
       const result = await archiveProject(token, projectId, wikiUrl, userAccessToken);
       return res.status(200).json(result);
+    }
+
+    if (action === 'ai-analysis' && req.method === 'POST') {
+      const projectId = req.body && req.body.projectId;
+      if (!projectId) return res.status(400).json({ error: 'missing projectId' });
+      const larkToken = await getToken();
+      const userAccessTokenForAi = extractUserAccessToken(req);
+      let triggeredByOpenId = '';
+      if (userAccessTokenForAi) {
+        try {
+          const loginUser = await getUserInfoFromToken(userAccessTokenForAi);
+          triggeredByOpenId = loginUser.openId || '';
+        } catch (e) { /* 觸發人可略過，不影響分析主流程 */ }
+      }
+      try {
+        const { analysis } = await runProjectAnalysis(projectId, larkToken);
+        let saveWarning = '';
+        let analysisRecordId = '';
+        try {
+          const saved = await saveAnalysisRecord(larkToken, projectId, analysis, triggeredByOpenId);
+          analysisRecordId = extractRecordId(saved) || '';
+        } catch (saveErr) {
+          saveWarning = '分析成功，但寫入「AI分析」表失敗：' + (saveErr.message || String(saveErr));
+        }
+        return res.status(200).json({
+          ok: true,
+          analysis: analysis,
+          analysisRecordId: analysisRecordId,
+          saveWarning: saveWarning
+        });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'ai-followup' && req.method === 'POST') {
+      const b = req.body || {};
+      const projectId = b.projectId;
+      const userQuestion = b.question;
+      const history = b.history || {};
+      const analysisRecordId = b.analysisRecordId || '';
+      if (!projectId || !userQuestion) {
+        return res.status(400).json({ error: 'missing projectId or question' });
+      }
+      const larkToken = await getToken();
+      try {
+        const reply = await runProjectFollowup(projectId, larkToken, history, userQuestion);
+        if (analysisRecordId) {
+          try {
+            await appendFollowupToRecord(larkToken, analysisRecordId, userQuestion, reply);
+          } catch (appendErr) {
+            console.warn('追問紀錄寫入失敗', appendErr.message || appendErr);
+          }
+        }
+        return res.status(200).json({ ok: true, reply: reply });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
     }
 
     if (req.method === 'GET') {
