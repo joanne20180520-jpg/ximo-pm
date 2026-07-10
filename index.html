@@ -3788,6 +3788,8 @@ function withUserToken(payload) {
   var tok = getUserAccessToken();
   var out = Object.assign({}, payload || {});
   if (tok) out.userAccessToken = tok;
+  var u = getCurrentLoginUser();
+  if (u && u.openId) out.triggeredByOpenId = u.openId;
   return out;
 }
 

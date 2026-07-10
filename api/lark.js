@@ -297,6 +297,24 @@ async function writeWithUserFallback(tenantToken, userToken, writeFn) {
   throw new Error(errors.join('；') || '寫入失敗');
 }
 
+// AI 分析等需記「觸發人」的寫入：優先用登入者 user token，避免紀錄變成應用機器人
+async function writePreferUserFirst(tenantToken, userToken, writeFn) {
+  const errors = [];
+  if (userToken) {
+    try {
+      return await writeFn(userToken, true);
+    } catch (userErr) {
+      errors.push('使用者：' + (userErr.message || String(userErr)));
+    }
+  }
+  try {
+    return await writeFn(tenantToken, false);
+  } catch (tenantErr) {
+    errors.push('應用：' + (tenantErr.message || String(tenantErr)));
+  }
+  throw new Error(errors.join('；') || '寫入失敗');
+}
+
 async function updateBitableRecord(token, appToken, tableId, recordId, fields) {
   const url = BASE_URL + '/bitable/v1/apps/' + appToken + '/tables/' + tableId + '/records/' + recordId + '?user_id_type=open_id';
   const res = await fetch(url, {
@@ -2433,10 +2451,13 @@ async function saveAnalysisRecord(larkToken, userToken, projectId, analysis, tri
   if (triggeredByOpenId) fields['觸發人'] = [{ id: triggeredByOpenId }];
   const normalized = await normalizeWriteFields(larkToken, tableId, fields, appToken);
   const notifyDropped = fields['通知摘要'] && !normalized['通知摘要'];
-  const result = await writeWithUserFallback(larkToken, userToken, function(tok, asUser) {
+  const triggerDropped = triggeredByOpenId && !normalized['觸發人'];
+  const writeFn = userToken ? writePreferUserFirst : writeWithUserFallback;
+  const result = await writeFn(larkToken, userToken, function(tok, asUser) {
     return createRecord(tok, tableId, normalized, appToken, asUser);
   });
   if (notifyDropped) result._notifyFieldMissing = '通知摘要';
+  if (triggerDropped) result._triggerFieldMissing = true;
   return result;
 }
 
@@ -2457,7 +2478,8 @@ async function appendFollowupToRecord(larkToken, userToken, analysisRecordId, qu
     '最新追問': latestNotify
   }, appToken);
   const followDropped = latestNotify && !normalized['最新追問'];
-  const result = await writeWithUserFallback(larkToken, userToken, function(tok, asUser) {
+  const writeFn = userToken ? writePreferUserFirst : writeWithUserFallback;
+  const result = await writeFn(larkToken, userToken, function(tok, asUser) {
     return updateRecord(tok, tableId, analysisRecordId, normalized, appToken, asUser);
   });
   if (followDropped) result._notifyFieldMissing = '最新追問';
@@ -3629,6 +3651,26 @@ function findMemberForUser(members, user) {
   return null;
 }
 
+async function resolveTriggeredByOpenId(larkToken, userAccessToken, hintOpenId) {
+  const hint = String(hintOpenId || '').trim();
+  if (hint && isValidPersonOpenId(hint)) return hint;
+  if (!userAccessToken) return '';
+  try {
+    const loginUser = await getUserInfoFromToken(userAccessToken);
+    const oid = String(loginUser.openId || '').trim();
+    if (oid && isValidPersonOpenId(oid)) return oid;
+    const members = await getMembersRecords(larkToken);
+    const memberRec = findMemberForUser(members, loginUser);
+    if (memberRec) {
+      const ids = listMemberPersonIds(memberRec.fields || {});
+      for (let i = 0; i < ids.length; i++) {
+        if (isValidPersonOpenId(ids[i])) return ids[i];
+      }
+    }
+  } catch (e) {}
+  return '';
+}
+
 function extractUserAccessToken(req) {
   const body = req.body || {};
   const fromBody = String(body.userAccessToken || body.user_access_token || '').trim();
@@ -4108,13 +4150,11 @@ export default async function handler(req, res) {
       if (!projectId) return res.status(400).json({ error: 'missing projectId' });
       const larkToken = await getToken();
       const userAccessTokenForAi = extractUserAccessToken(req);
+      const hintOpenId = (req.body && req.body.triggeredByOpenId) || '';
       let triggeredByOpenId = '';
-      if (userAccessTokenForAi) {
-        try {
-          const loginUser = await getUserInfoFromToken(userAccessTokenForAi);
-          triggeredByOpenId = loginUser.openId || '';
-        } catch (e) { /* 觸發人可略過，不影響分析主流程 */ }
-      }
+      try {
+        triggeredByOpenId = await resolveTriggeredByOpenId(larkToken, userAccessTokenForAi, hintOpenId);
+      } catch (e) { /* 觸發人可略過，不影響分析主流程 */ }
       try {
         const { analysis, metrics, bundle } = await runProjectAnalysis(projectId, larkToken);
         let saveWarning = '';
@@ -4129,8 +4169,11 @@ export default async function handler(req, res) {
           if (saved && saved._notifyFieldMissing) {
             saveWarning = (saveWarning ? saveWarning + '\n' : '') + '請在「AI分析」表新增「' + saved._notifyFieldMissing + '」多行文字欄位，自動化通知才會有內容。';
           }
+          if (saved && saved._triggerFieldMissing) {
+            saveWarning = (saveWarning ? saveWarning + '\n' : '') + '「觸發人」欄位寫入失敗，請確認表內有「觸發人」人員欄位。';
+          }
           if (!triggeredByOpenId) {
-            saveWarning = (saveWarning ? saveWarning + '\n' : '') + '未寫入「觸發人」，自動化可能無法寄送給您（請確認已 Lark 登入）。';
+            saveWarning = (saveWarning ? saveWarning + '\n' : '') + '未寫入「觸發人」，紀錄會顯示為應用機器人，自動化也無法寄給您（請重新 Lark 登入後再分析）。';
           }
         } catch (saveErr) {
           saveWarning = '分析成功，但寫入「AI分析」表失敗：' + (saveErr.message || String(saveErr));
