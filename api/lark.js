@@ -2072,11 +2072,233 @@ async function appendFollowupToRecord(larkToken, analysisRecordId, question, rep
   return updateRecord(larkToken, cfg.tables.ai_analysis, analysisRecordId, { '追問紀錄': merged }, cfg.appToken, false);
 }
 
-// ── 追問：get_design_status 工具 ──
+// ── 追問：從資料庫查詢（日報／任務／支出），不依賴對話歷史 ──
+const DESIGN_CAT_MARKER = '__XIMA_DSG__';
+
+function parseFieldTs(val) {
+  if (val == null || val === '') return null;
+  if (typeof val === 'number') return val;
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? null : d.getTime();
+}
+
+function journalRecordTs(rec) {
+  const f = (rec && rec.fields) || {};
+  const keys = ['日期', '日報日期', '日誌日期'];
+  for (let i = 0; i < keys.length; i++) {
+    const ts = parseFieldTs(f[keys[i]]);
+    if (ts) return ts;
+  }
+  return null;
+}
+
+function journalBelongsToProject(rec, projectId) {
+  const f = (rec && rec.fields) || {};
+  return getLinkIds(f['所屬標案'] || f['所屬專案']).indexOf(projectId) >= 0;
+}
+
+function stripDesignMarkerFromNote(text) {
+  const idx = String(text || '').indexOf(DESIGN_CAT_MARKER);
+  if (idx < 0) return String(text || '').trim();
+  return String(text).slice(0, idx).trim();
+}
+
+function dayStartMs(daysAgo) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - (daysAgo || 0));
+  return d.getTime();
+}
+
+function formatDayLabel(daysAgo) {
+  const d = new Date(dayStartMs(daysAgo));
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+    + (daysAgo === 0 ? '（今天）' : ('（' + daysAgo + '天前）'));
+}
+
+function buildTaskNameMap(tasks) {
+  const map = {};
+  (tasks || []).forEach(function(t) {
+    map[t.record_id] = (t.fields && t.fields['任務名稱']) || '未命名任務';
+  });
+  return map;
+}
+
+function journalRecordsOnDay(journalRecords, daysAgo) {
+  const start = dayStartMs(daysAgo);
+  const end = start + 86400000;
+  return (journalRecords || []).filter(function(r) {
+    const ts = journalRecordTs(r);
+    return ts != null && ts >= start && ts < end;
+  });
+}
+
+function summarizeJournalRecord(rec, taskMap) {
+  const f = (rec && rec.fields) || {};
+  function names(key) {
+    return getLinkIds(f[key]).map(function(id) { return taskMap[id] || id; });
+  }
+  const note = stripDesignMarkerFromNote(f['備註'] || f['日誌內容'] || f['內容'] || '');
+  return {
+    doing: names('進行中任務'),
+    done: names('已完成今日任務'),
+    block: names('卡關任務'),
+    tomorrow: names('明日預計任務'),
+    note: note ? note.slice(0, 400) : ''
+  };
+}
+
+function mergeJournalSummaries(recs, taskMap) {
+  const merged = { doing: [], done: [], block: [], tomorrow: [], notes: [] };
+  (recs || []).forEach(function(r) {
+    const s = summarizeJournalRecord(r, taskMap);
+    ['doing', 'done', 'block', 'tomorrow'].forEach(function(k) {
+      s[k].forEach(function(name) {
+        if (merged[k].indexOf(name) < 0) merged[k].push(name);
+      });
+    });
+    if (s.note && merged.notes.indexOf(s.note) < 0) merged.notes.push(s.note);
+  });
+  return merged;
+}
+
+function summarizeJournalDayPoint(journalRecords, taskMap, daysAgo) {
+  const recs = journalRecordsOnDay(journalRecords, daysAgo);
+  const label = formatDayLabel(daysAgo);
+  if (!recs.length) {
+    return { 日期: label, 有日報: false, 說明: '此日無日報紀錄' };
+  }
+  const merged = mergeJournalSummaries(recs, taskMap);
+  return {
+    日期: label,
+    有日報: true,
+    進行中: merged.doing,
+    今日完成: merged.done,
+    卡關: merged.block,
+    明日預計: merged.tomorrow,
+    備註摘要: merged.notes.join(' / ').slice(0, 500)
+  };
+}
+
+function buildCompactProjectSnapshot(bundle) {
+  const tasks = summarizeTasksForPrompt(bundle.tasks || []);
+  const overdue = tasks.filter(function(t) { return t.overdueDays > 0; });
+  const done = tasks.filter(function(t) { return t.progress >= 100 || t.status === '已完成'; });
+  const inProgress = tasks.filter(function(t) { return t.progress > 0 && t.progress < 100 && t.status !== '已完成'; });
+  return {
+    任務總數: tasks.length,
+    已完成: done.length,
+    進行中: inProgress.length,
+    逾期中: overdue.length,
+    逾期任務: overdue.slice(0, 10).map(function(t) { return t.name + '（逾期' + t.overdueDays + '天）'; }),
+    支出合計: summarizeExpensesForPrompt(bundle.expenses || []).totalSpent
+  };
+}
+
+function buildSpendingInRange(expenses, daysAgoStart, daysAgoEnd) {
+  const from = dayStartMs(daysAgoEnd);
+  const to = dayStartMs(daysAgoStart) + 86400000;
+  let total = 0;
+  let count = 0;
+  (expenses || []).forEach(function(e) {
+    const ts = parseFieldTs((e.fields || {})['日期']);
+    if (ts == null || ts < from || ts >= to) return;
+    total += parseFloat((e.fields || {})['實際金額']) || 0;
+    count++;
+  });
+  return {
+    區間: formatDayLabel(daysAgoEnd) + ' ~ ' + formatDayLabel(daysAgoStart),
+    筆數: count,
+    合計: total
+  };
+}
+
+function parseDaysAgoFromQuestion(question) {
+  const text = String(question || '');
+  const days = [];
+  if (/今天|目前|現在|今日/.test(text)) days.push(0);
+  if (/昨天/.test(text)) days.push(1);
+  if (/前天/.test(text)) days.push(2);
+  if (/三天前|3天前/.test(text)) days.push(3);
+  if (/上週|上星期|一週前|1週前|7天前|七天前/.test(text)) days.push(7);
+  if (/兩週前|二週前|14天前|兩星期前/.test(text)) days.push(14);
+  if (/上個月|30天前/.test(text)) days.push(30);
+  const unique = [];
+  days.forEach(function(d) { if (unique.indexOf(d) < 0) unique.push(d); });
+  if (/差|比較|對比|變化|進展|跟上週|跟上次/.test(text)) {
+    if (unique.indexOf(0) < 0) unique.unshift(0);
+    if (unique.length < 2) unique.push(7);
+  }
+  if (!unique.length) unique.push(0);
+  return unique.sort(function(a, b) { return a - b; });
+}
+
+function buildFollowupDbContext(bundle, taskMap, userQuestion) {
+  const daysPoints = parseDaysAgoFromQuestion(userQuestion);
+  const journalRecords = bundle.journal || [];
+  const timePoints = daysPoints.map(function(d) {
+    return summarizeJournalDayPoint(journalRecords, taskMap, d);
+  });
+  const spending = [];
+  if (daysPoints.length >= 2) {
+    const maxDay = Math.max.apply(null, daysPoints);
+    spending.push(buildSpendingInRange(bundle.expenses, 0, maxDay));
+  } else {
+    spending.push(buildSpendingInRange(bundle.expenses, 0, 7));
+  }
+  return {
+    專案名稱: (bundle.project.fields || {})['標案名稱'] || '未命名',
+    資料來源: 'Lark 資料庫即時查詢（日報、任務、支出），非對話記憶',
+    查詢時間點: timePoints,
+    任務現況: buildCompactProjectSnapshot(bundle),
+    支出區間: spending
+  };
+}
+
+function buildFollowupSystemPrompt(context, question) {
+  return '你是專案管理分析助理。請只根據以下從 Lark 資料庫查詢的資料回答，不要假設對話歷史。\n'
+    + '若某時間點「有日報: false」，請說明無日報並改以任務現況／支出推論。\n'
+    + '比較不同天時，請對照「查詢時間點」各欄位差異。\n\n'
+    + '資料庫查詢結果：\n' + JSON.stringify(context, null, 2) + '\n\n'
+    + '使用者問題：' + question + '\n\n'
+    + '請控制在 500 字以內，簡潔專業。';
+}
+
+async function gatherProjectRelatedWithJournal(token, projectId) {
+  const bundle = await gatherProjectRelated(token, projectId);
+  const cfg = getOperationalBitableConfig();
+  const journal = await getRecords(token, cfg.tables.journal, cfg.appToken);
+  bundle.journal = journal.filter(function(r) { return journalBelongsToProject(r, projectId); });
+  return bundle;
+}
+
 const AI_FOLLOWUP_TOOLS = [
   {
+    name: 'get_journal_summary',
+    description: '查詢此專案在指定天數前的日報摘要。days_ago=0 表示今天，7 表示一週前。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        days_ago: { type: 'number', description: '幾天前（0=今天）' }
+      },
+      required: ['days_ago']
+    }
+  },
+  {
+    name: 'compare_periods',
+    description: '比較兩個時間點的日報與任務現況差異。',
+    input_schema: {
+      type: 'object',
+      properties: {
+        days_ago_a: { type: 'number', description: '較近時間點（0=今天）' },
+        days_ago_b: { type: 'number', description: '較早時間點（如 7=一週前）' }
+      },
+      required: ['days_ago_a', 'days_ago_b']
+    }
+  },
+  {
     name: 'get_design_status',
-    description: '查詢指定專案的設計需求資料，包含設計稿狀態、審核輪次、設計師、預算與實際花費。當使用者問題涉及設計進度、設計稿狀態、審核輪次時使用此工具。',
+    description: '查詢此專案的設計任務：進度、設計師、預算與實際花費。',
     input_schema: {
       type: 'object',
       properties: {},
@@ -2086,7 +2308,7 @@ const AI_FOLLOWUP_TOOLS = [
 ];
 
 function summarizeDesignsForTool(designs) {
-  return designs.map(function(d) {
+  return (designs || []).map(function(d) {
     const f = d.fields || {};
     return {
       name: f['設計項目名稱'] || '未命名',
@@ -2098,43 +2320,63 @@ function summarizeDesignsForTool(designs) {
   });
 }
 
-async function runProjectFollowup(projectId, larkToken, history, userQuestion) {
-  const bundle = await gatherProjectRelated(larkToken, projectId);
-  const promptText = buildAnalysisPromptText(bundle);
-
-  const messages = [
-    { role: 'user', content: promptText },
-    { role: 'assistant', content: JSON.stringify(history.firstAnalysis || {}) }
-  ];
-  (history.followUps || []).forEach(function(turn) {
-    messages.push({ role: turn.role, content: turn.content });
-  });
-  const questionWithLimit = userQuestion + '\n\n（請將回答控制在 500 字以內，簡潔扼要，不要長篇大論）';
-  messages.push({ role: 'user', content: questionWithLimit });
-
-  let claudeRes = await callClaudeApi(messages, {
-    maxTokens: 500,
-    tools: AI_FOLLOWUP_TOOLS
-  });
-
-  const toolUse = (claudeRes.content || []).find(function(b) { return b.type === 'tool_use'; });
-  if (toolUse && toolUse.name === 'get_design_status') {
-    const designData = summarizeDesignsForTool(bundle.designs);
-    const toolMessages = messages.concat([
-      { role: 'assistant', content: claudeRes.content },
-      {
-        role: 'user',
-        content: [{
-          type: 'tool_result',
-          tool_use_id: toolUse.id,
-          content: JSON.stringify(designData)
-        }]
-      }
-    ]);
-    claudeRes = await callClaudeApi(toolMessages, { maxTokens: 500, tools: AI_FOLLOWUP_TOOLS });
+function executeFollowupTool(name, input, bundle, taskMap) {
+  if (name === 'get_design_status') {
+    return JSON.stringify(summarizeDesignsForTool(bundle.designs || []));
   }
+  if (name === 'get_journal_summary') {
+    const daysAgo = Number(input && input.days_ago) || 0;
+    return JSON.stringify(summarizeJournalDayPoint(bundle.journal || [], taskMap, daysAgo));
+  }
+  if (name === 'compare_periods') {
+    const a = Number(input && input.days_ago_a) || 0;
+    const b = Number(input && input.days_ago_b) || 7;
+    return JSON.stringify({
+      較近: summarizeJournalDayPoint(bundle.journal || [], taskMap, a),
+      較早: summarizeJournalDayPoint(bundle.journal || [], taskMap, b),
+      任務現況: buildCompactProjectSnapshot(bundle)
+    });
+  }
+  return JSON.stringify({ error: 'unknown tool: ' + name });
+}
 
-  return extractClaudeText(claudeRes);
+async function runFollowupWithTools(messages, bundle, taskMap) {
+  let currentMessages = messages.slice();
+  for (let round = 0; round < 4; round++) {
+    const claudeRes = await callClaudeApi(currentMessages, {
+      maxTokens: 600,
+      tools: AI_FOLLOWUP_TOOLS
+    });
+    const toolUses = (claudeRes.content || []).filter(function(b) { return b.type === 'tool_use'; });
+    if (!toolUses.length) {
+      const text = extractClaudeText(claudeRes);
+      if (text) return text;
+      throw new Error('Claude 未回傳有效內容');
+    }
+    const toolResults = toolUses.map(function(tu) {
+      return {
+        type: 'tool_result',
+        tool_use_id: tu.id,
+        content: executeFollowupTool(tu.name, tu.input || {}, bundle, taskMap)
+      };
+    });
+    currentMessages = currentMessages.concat([
+      { role: 'assistant', content: claudeRes.content },
+      { role: 'user', content: toolResults }
+    ]);
+  }
+  throw new Error('追問查詢次數過多，請簡化問題後再試');
+}
+
+async function runProjectFollowup(projectId, larkToken, userQuestion) {
+  const bundle = await gatherProjectRelatedWithJournal(larkToken, projectId);
+  const taskMap = buildTaskNameMap(bundle.tasks);
+  const ctx = buildFollowupDbContext(bundle, taskMap, userQuestion);
+  const messages = [{
+    role: 'user',
+    content: buildFollowupSystemPrompt(ctx, userQuestion)
+  }];
+  return runFollowupWithTools(messages, bundle, taskMap);
 }
 
 async function batchCreateRecords(token, appToken, tableId, fieldsList, tableLabel) {
@@ -3461,14 +3703,13 @@ export default async function handler(req, res) {
       const b = req.body || {};
       const projectId = b.projectId;
       const userQuestion = b.question;
-      const history = b.history || {};
       const analysisRecordId = b.analysisRecordId || '';
       if (!projectId || !userQuestion) {
         return res.status(400).json({ error: 'missing projectId or question' });
       }
       const larkToken = await getToken();
       try {
-        const reply = await runProjectFollowup(projectId, larkToken, history, userQuestion);
+        const reply = await runProjectFollowup(projectId, larkToken, userQuestion);
         if (analysisRecordId) {
           try {
             await appendFollowupToRecord(larkToken, analysisRecordId, userQuestion, reply);
