@@ -911,10 +911,10 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <div class="ai-page-toolbar">
           <h3>AI 分析</h3>
           <select id="ai-proj-select" class="ai-proj-select" onchange="onAiProjectChange()"></select>
-          <button class="bjlog" onclick="runAiAnalysis()">重新分析</button>
+          <button class="bjlog" id="ai-run-btn" onclick="runAiAnalysis()">開始分析</button>
         </div>
         <div class="ai-body" id="ai-body">
-          <div class="ai-empty">請選擇專案，點「重新分析」開始</div>
+          <div class="ai-empty">請先在上方選擇要分析的專案</div>
         </div>
       </div>
     </div>
@@ -3142,7 +3142,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v90';
+var APP_BUILD = '20260710v91';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8416,25 +8416,52 @@ function fillAiProjectSelect() {
   }
 }
 
+function updateAiRunButton(hasProject, hasResult) {
+  var btn = document.getElementById('ai-run-btn');
+  if (!btn) return;
+  btn.disabled = !hasProject;
+  btn.textContent = hasResult ? '重新分析' : '開始分析';
+}
+
+function showAiIdleState() {
+  var body = document.getElementById('ai-body');
+  if (body) body.innerHTML = '<div class="ai-empty">請先在上方選擇要分析的專案</div>';
+  updateAiRunButton(false, false);
+}
+
+function showAiReadyState() {
+  var body = document.getElementById('ai-body');
+  var sel = document.getElementById('ai-proj-select');
+  var name = sel && sel.selectedIndex > 0 ? sel.options[sel.selectedIndex].text : '此專案';
+  if (body) {
+    body.innerHTML = '<div class="ai-empty">已選「' + escHtml(name) + '」，點「開始分析」執行 AI 分析'
+      + '<br><button type="button" class="bsm" style="margin-top:10px" onclick="loadAiHistoryAndRenderLatest()">查看歷史紀錄</button></div>';
+  }
+  updateAiRunButton(true, false);
+}
+
 function onAiProjectChange() {
   var sel = document.getElementById('ai-proj-select');
   aiSelectedProjectId = sel ? sel.value : null;
   try { localStorage.setItem(AI_PROJECT_STORAGE_KEY, aiSelectedProjectId || ''); } catch (e) {}
   aiConversationHistory = { firstAnalysis: null, followUps: [] };
   aiCurrentAnalysisRecordId = null;
-  loadAiHistoryAndRenderLatest();
+  aiAnalysisData = [];
+  if (aiSelectedProjectId) showAiReadyState();
+  else showAiIdleState();
 }
 
 function renderAiPage() {
   fillAiProjectSelect();
-  loadAiHistoryAndRenderLatest();
+  if (aiSelectedProjectId) showAiReadyState();
+  else showAiIdleState();
 }
 
 // 讀取這個專案過去的分析紀錄（沿用通用 GET ?table= 端點，不用額外寫後端）
 function loadAiHistoryAndRenderLatest() {
   var body = document.getElementById('ai-body');
   if (!aiSelectedProjectId) {
-    body.innerHTML = '<div class="ai-empty">請先在上方選擇一個專案</div>';
+    showAiIdleState();
     return;
   }
   body.innerHTML = '<div class="ai-loading">載入歷史分析紀錄…</div>';
@@ -8460,11 +8487,15 @@ function loadAiHistoryAndRenderLatest() {
       renderAiAnalysisCards(latest.fields);
       renderAiHistoryList();
       renderAiChatFromRecord(latest.fields['追問紀錄'] || '');
+      updateAiRunButton(true, true);
     } else {
-      body.innerHTML = '<div class="ai-empty">此專案尚無分析紀錄，點右上角「重新分析」產生第一筆</div>';
+      showAiReadyState();
+      alert('此專案尚無歷史分析紀錄，請點「開始分析」產生第一筆');
     }
   }).catch(function(err) {
-    body.innerHTML = '<div class="ai-empty" style="color:var(--danger)">載入失敗：' + escHtml(err.message || '請稍後再試') + '</div>';
+    body.innerHTML = '<div class="ai-empty" style="color:var(--danger)">載入失敗：' + escHtml(err.message || '請稍後再試') + '</div>'
+      + '<div style="text-align:center;margin-top:8px"><button type="button" class="bsm" onclick="showAiReadyState()">返回</button></div>';
+    updateAiRunButton(true, false);
   });
 }
 
@@ -8537,7 +8568,9 @@ function renderAiChatFromRecord(rawText) {
 function runAiAnalysis() {
   if (!aiSelectedProjectId) { alert('請先選擇專案'); return; }
   var body = document.getElementById('ai-body');
-  body.innerHTML = '<div class="ai-loading">AI 分析中，請稍候…</div>';
+  var btn = document.getElementById('ai-run-btn');
+  body.innerHTML = '<div class="ai-loading">AI 分析中，請稍候…（約 15–30 秒）</div>';
+  if (btn) { btn.disabled = true; btn.textContent = '分析中…'; }
   var headers = { 'Content-Type': 'application/json' };
   var tok = getUserAccessToken();
   if (tok) headers['X-User-Access-Token'] = tok;
@@ -8567,8 +8600,16 @@ function runAiAnalysis() {
       aiAnalysisData.unshift({ record_id: aiCurrentAnalysisRecordId, fields: freshFields });
       renderAiHistoryList();
     }
+    updateAiRunButton(true, true);
   }).catch(function(err) {
-    body.innerHTML = '<div class="ai-empty" style="color:var(--danger)">分析失敗：' + escHtml(err.message || '請稍後再試') + '</div>';
+    body.innerHTML = '<div class="ai-empty" style="color:var(--danger)">分析失敗：' + escHtml(err.message || '請稍後再試') + '</div>'
+      + '<div style="text-align:center;margin-top:8px"><button type="button" class="bsm" onclick="showAiReadyState()">返回</button></div>';
+    updateAiRunButton(true, false);
+  }).finally(function() {
+    var runBtn = document.getElementById('ai-run-btn');
+    if (runBtn && aiSelectedProjectId && runBtn.textContent === '分析中…') {
+      updateAiRunButton(true, !!(aiConversationHistory && aiConversationHistory.firstAnalysis));
+    }
   });
 }
 

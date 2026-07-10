@@ -1974,6 +1974,7 @@ function buildAnalysisPromptText(bundle) {
     + '  "team_allocation": "根據工作項目的負責夥伴，說明分工現況，2-3句話",\n'
     + '  "next_actions": "2-3條具體、可執行的下一步建議，用「、」分隔"\n'
     + '}\n\n'
+    + '每個欄位請簡潔，整份 JSON 控制在 800 字以內；risk_alert 若有多項請用編號列出。\n'
     + '語氣專業、直接，不要客套話，不要編造資料中沒有的內容。';
 }
 
@@ -2009,7 +2010,11 @@ function extractClaudeText(data) {
 }
 
 function parseClaudeJson(text) {
-  const cleaned = text.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+  let cleaned = String(text || '').trim();
+  cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/g, '').trim();
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start >= 0 && end > start) cleaned = cleaned.slice(start, end + 1);
   try {
     return JSON.parse(cleaned);
   } catch (e) {
@@ -2020,12 +2025,23 @@ function parseClaudeJson(text) {
 async function runProjectAnalysis(projectId, larkToken) {
   const bundle = await gatherProjectRelated(larkToken, projectId);
   const promptText = buildAnalysisPromptText(bundle);
-  const claudeRes = await callClaudeApi([
-    { role: 'user', content: promptText }
-  ], { maxTokens: 800 });
-  const text = extractClaudeText(claudeRes);
-  const analysis = parseClaudeJson(text);
-  return { bundle: bundle, analysis: analysis };
+  let lastError = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const maxTokens = attempt === 0 ? 2048 : 4096;
+    const claudeRes = await callClaudeApi([
+      { role: 'user', content: promptText }
+    ], { maxTokens });
+    const text = extractClaudeText(claudeRes);
+    try {
+      const analysis = parseClaudeJson(text);
+      return { bundle: bundle, analysis: analysis };
+    } catch (err) {
+      lastError = err;
+      if (claudeRes.stop_reason === 'max_tokens' || attempt === 0) continue;
+      throw err;
+    }
+  }
+  throw lastError || new Error('Claude 分析失敗');
 }
 
 async function saveAnalysisRecord(larkToken, projectId, analysis, triggeredByOpenId) {
