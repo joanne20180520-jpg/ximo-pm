@@ -697,21 +697,33 @@ button.btn-loading::after{content:'…';margin-left:2px}
 .ai-body{padding:14px;overflow-y:auto}
 .ai-loading{padding:24px;text-align:center;color:var(--t3);font-size:12px}
 .ai-empty{padding:24px;text-align:center;color:var(--t3);font-size:12px;line-height:1.6}
+.ai-kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.ai-kpi{padding:12px 10px;border-radius:10px;border:1px solid var(--border);text-align:center;background:#fff}
+.ai-kpi.warn{background:#fef2f2;border-color:#fecaca}
+.ai-kpi.ok{background:#f0fdf4;border-color:#bbf7d0}
+.ai-kpi-val{font-size:26px;font-weight:800;line-height:1.1;margin:4px 0 2px;color:var(--t1)}
+.ai-kpi.warn .ai-kpi-val{color:#b42318}
+.ai-kpi.ok .ai-kpi-val{color:#047857}
+.ai-kpi-label{font-size:11px;color:var(--t3)}
+.ai-section-title{font-size:13px;font-weight:700;margin:0 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.ai-section-date{font-size:11px;color:var(--t3);font-weight:500}
+.ai-report-box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12px;line-height:1.75;color:var(--t2);white-space:pre-wrap}
+.ai-hist-block{margin-bottom:14px}
+.ai-hist-head{font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px}
+.ai-hist-row{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--t2)}
+.ai-hist-row:last-child{border-bottom:none}
+.ai-hist-date{color:var(--t3);min-width:42px;flex-shrink:0}
 .ai-card{border-radius:10px;padding:12px 14px;margin-bottom:10px;border:1px solid var(--border)}
 .ai-card.warn{background:#fef2f2;border-color:#f5c6c6}
 .ai-card.ok{background:#f0f9f4;border-color:#c8e6d4}
 .ai-card-title{font-size:12px;font-weight:700;margin-bottom:5px;display:flex;align-items:center;gap:6px}
 .ai-card-body{font-size:12px;color:var(--t2);line-height:1.7;white-space:pre-wrap}
-.ai-history{margin-top:16px;border-top:1px solid var(--border);padding-top:10px}
-.ai-history-title{font-size:11px;color:var(--t3);margin-bottom:8px}
-.ai-history-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:5px;cursor:pointer;font-size:12px}
-.ai-history-item:hover{background:var(--sf2)}
-.ai-history-item .ai-h-date{color:var(--t3);min-width:70px}
 .ai-chat{margin-top:14px;border-top:1px solid var(--border);padding-top:12px}
-.ai-chat-msg{padding:8px 11px;border-radius:var(--rs);margin-bottom:8px;font-size:12px;line-height:1.6}
-.ai-chat-msg.user{background:var(--sf2)}
+.ai-chat-msg{padding:10px 12px;border-radius:10px;margin-bottom:8px;font-size:12px;line-height:1.65;position:relative}
+.ai-chat-msg.user{background:#f5f5f4}
 .ai-chat-msg.assistant{background:#eef4fc}
-.ai-chat-input-row{display:flex;gap:6px}
+.ai-chat-who{font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px}
+.ai-chat-input-row{display:flex;gap:6px;margin-top:8px}
 .ai-chat-input-row input{flex:1}
 </style>
 </head>
@@ -3142,7 +3154,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v94';
+var APP_BUILD = '20260710v95';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -8384,6 +8396,7 @@ function renderJournalPage() {
 var aiSelectedProjectId = null;
 var aiCurrentAnalysisRecordId = null;
 var aiLastAnalysisFields = null;
+var aiLastMetrics = null;
 var aiConversationHistory = { firstAnalysis: null, followUps: [] };
 var AI_PROJECT_STORAGE_KEY = 'ximo-ai-selected-project';
 
@@ -8456,6 +8469,7 @@ function onAiProjectChange() {
   aiConversationHistory = { firstAnalysis: null, followUps: [] };
   aiCurrentAnalysisRecordId = null;
   aiLastAnalysisFields = null;
+  aiLastMetrics = null;
   if (aiSelectedProjectId) showAiReadyState();
   else showAiIdleState();
 }
@@ -8467,51 +8481,83 @@ function renderAiPage() {
     return;
   }
   if (aiConversationHistory && aiConversationHistory.firstAnalysis && aiLastAnalysisFields) {
+    renderAiAnalysisView(aiLastAnalysisFields, aiLastMetrics);
     updateAiRunButton(true, true);
     return;
   }
   showAiReadyState();
 }
 
-function aiCardHtml(title, content, tone) {
-  var cls = tone === 'warn' ? ' warn' : (tone === 'ok' ? ' ok' : '');
-  return '<div class="ai-card' + cls + '">'
-    + '<div class="ai-card-title">' + escHtml(title) + '</div>'
-    + '<div class="ai-card-body">' + escHtml(content || '（無內容）') + '</div>'
-    + '</div>';
+function buildAiReportText(fields, analysis) {
+  var parts = [];
+  if (fields['進度概況']) parts.push(fields['進度概況']);
+  if (fields['風險與逾期'] && fields['風險與逾期'].indexOf('無逾期') < 0) parts.push(fields['風險與逾期']);
+  if (fields['下一步建議']) parts.push('建議：' + fields['下一步建議']);
+  if (!parts.length && analysis) {
+    if (analysis.progress_summary) parts.push(analysis.progress_summary);
+    if (analysis.risk_alert) parts.push(analysis.risk_alert);
+    if (analysis.next_actions) parts.push('建議：' + analysis.next_actions);
+  }
+  return parts.join('\n\n');
 }
 
-function renderAiAnalysisCards(fields) {
+function renderAiAnalysisView(fields, metrics) {
   var body = document.getElementById('ai-body');
-  var hasRisk = fields['風險與逾期'] && fields['風險與逾期'].indexOf('無逾期') < 0;
+  if (!body) return;
+  metrics = metrics || {};
+  var completion = metrics.completionPct != null ? metrics.completionPct : '—';
+  var overdue = metrics.overdueCount != null ? metrics.overdueCount : '—';
+  var delta = metrics.weekDeltaPct;
+  var deltaHtml = '—';
+  var deltaCls = 'ai-kpi';
+  if (delta != null) {
+    deltaHtml = (delta >= 0 ? '+' : '') + delta + '%';
+    deltaCls = 'ai-kpi ' + (delta >= 0 ? 'ok' : 'warn');
+  }
   var html = '';
-  html += aiCardHtml('進度概況', fields['進度概況'], 'default');
-  html += aiCardHtml('風險與逾期', fields['風險與逾期'], hasRisk ? 'warn' : 'ok');
-  html += aiCardHtml('成本分析', fields['成本分析'], 'default');
-  html += aiCardHtml('人力分工', fields['人力分工'], 'default');
-  html += aiCardHtml('下一步建議', fields['下一步建議'], 'ok');
-  body.innerHTML = html
-    + '<div class="ai-chat" id="ai-chat-mount"></div>';
+  html += '<div class="ai-kpi-row">';
+  html += '<div class="ai-kpi"><div class="ai-kpi-label">本週完成度</div><div class="ai-kpi-val">' + escHtml(String(completion)) + '%</div></div>';
+  html += '<div class="ai-kpi warn"><div class="ai-kpi-label">逾期任務</div><div class="ai-kpi-val">' + escHtml(String(overdue)) + ' 件</div></div>';
+  html += '<div class="' + deltaCls + '"><div class="ai-kpi-label">與上週比</div><div class="ai-kpi-val">' + escHtml(deltaHtml) + '</div></div>';
+  html += '</div>';
+  html += '<div class="ai-section-title"><span>📈 本次分析</span><span class="ai-section-date">' + escHtml(metrics.analysisDate || '') + '</span></div>';
+  html += '<div class="ai-report-box">' + escHtml(buildAiReportText(fields, aiConversationHistory.firstAnalysis)) + '</div>';
+  var hist = metrics.journalHistory || [];
+  if (hist.length) {
+    html += '<div class="ai-hist-block"><div class="ai-hist-head">🕐 日報快照（依資料庫）</div>';
+    hist.forEach(function(row) {
+      html += '<div class="ai-hist-row"><span class="ai-hist-date">' + escHtml(row.label || '') + '</span><span>' + escHtml(row.summary || '') + '</span></div>';
+    });
+    html += '</div>';
+  }
+  html += '<div class="ai-chat" id="ai-chat-mount"></div>';
+  body.innerHTML = html;
+  renderAiChatMount();
 }
 
-function renderAiChatFromRecord(rawText) {
+function renderAiChatMount() {
   var mount = document.getElementById('ai-chat-mount');
   if (!mount) return;
   var html = '';
-  if (rawText) {
-    // 追問紀錄存成純文字，用 Q:/A: 標記做簡單解析顯示
-    var blocks = rawText.split(/\n\n+/);
-    blocks.forEach(function(block) {
-      var qMatch = block.match(/Q:\s*([\s\S]*?)\nA:/);
-      var aMatch = block.match(/A:\s*([\s\S]*)$/);
-      if (qMatch) html += '<div class="ai-chat-msg user">' + escHtml(qMatch[1].trim()) + '</div>';
-      if (aMatch) html += '<div class="ai-chat-msg assistant">' + escHtml(aMatch[1].trim()) + '</div>';
-    });
-  }
+  (aiConversationHistory.followUps || []).forEach(function(turn) {
+    if (turn.role === 'user') {
+      html += '<div class="ai-chat-msg user"><span class="ai-chat-who">你</span>' + escHtml(turn.content) + '</div>';
+    } else if (turn.role === 'assistant') {
+      html += '<div class="ai-chat-msg assistant"><span class="ai-chat-who">AI</span>' + escHtml(turn.content) + '</div>';
+    }
+  });
   html += '<div class="ai-chat-input-row">'
-    + '<input type="text" id="ai-followup-input" placeholder="追問，例如：跟上週比差在哪？哪些任務新逾期？">'
+    + '<input type="text" id="ai-followup-input" placeholder="繼續追問，例如：跟上週比，這個專案有進步嗎？" onkeydown="if(event.key===\'Enter\')sendAiFollowup()">'
     + '<button class="bsm" onclick="sendAiFollowup()">送出</button></div>';
   mount.innerHTML = html;
+}
+
+function renderAiAnalysisCards(fields, metrics) {
+  renderAiAnalysisView(fields, metrics);
+}
+
+function renderAiChatFromRecord(rawText) {
+  renderAiChatMount();
 }
 
 function runAiAnalysis() {
@@ -8541,8 +8587,8 @@ function runAiAnalysis() {
       '專案': [aiSelectedProjectId]
     };
     aiLastAnalysisFields = freshFields;
-    renderAiAnalysisCards(freshFields);
-    renderAiChatFromRecord('');
+    aiLastMetrics = res.metrics || null;
+    renderAiAnalysisView(freshFields, aiLastMetrics);
     if (res.saveWarning) console.warn(res.saveWarning);
     saveAiProjectSelection(aiSelectedProjectId);
     updateAiRunButton(true, true);
@@ -8565,8 +8611,8 @@ function sendAiFollowup() {
   if (!aiSelectedProjectId) { alert('請先選擇專案'); return; }
 
   var mount = document.getElementById('ai-chat-mount');
-  var userBubble = '<div class="ai-chat-msg user">' + escHtml(question) + '</div>';
-  var loadingBubble = '<div class="ai-chat-msg assistant" id="ai-followup-loading">思考中…</div>';
+  var userBubble = '<div class="ai-chat-msg user"><span class="ai-chat-who">你</span>' + escHtml(question) + '</div>';
+  var loadingBubble = '<div class="ai-chat-msg assistant" id="ai-followup-loading"><span class="ai-chat-who">AI</span>思考中…</div>';
   mount.insertAdjacentHTML('beforeend', userBubble + loadingBubble);
   if (input) input.value = '';
 
@@ -8588,8 +8634,9 @@ function sendAiFollowup() {
     aiConversationHistory.followUps.push({ role: 'user', content: question });
     aiConversationHistory.followUps.push({ role: 'assistant', content: res.reply });
     if (loadingEl) {
-      loadingEl.textContent = res.reply;
-      loadingEl.removeAttribute('id');
+      loadingEl.outerHTML = '<div class="ai-chat-msg assistant"><span class="ai-chat-who">AI</span>' + escHtml(res.reply) + '</div>';
+    } else {
+      renderAiChatMount();
     }
   }).catch(function(err) {
     var loadingEl = document.getElementById('ai-followup-loading');

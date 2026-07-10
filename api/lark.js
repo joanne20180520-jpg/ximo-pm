@@ -2022,8 +2022,87 @@ function parseClaudeJson(text) {
   }
 }
 
+function calcTaskCompletionPct(tasks) {
+  const list = tasks || [];
+  if (!list.length) return 0;
+  let sum = 0;
+  list.forEach(function(t) {
+    const f = t.fields || {};
+    const p = parseFloat(f['進度數值']) || 0;
+    const status = f['進度狀態'] || '';
+    if (status === '已完成' || p >= 100) sum += 100;
+    else sum += Math.min(100, Math.max(0, p));
+  });
+  return Math.round(sum / list.length);
+}
+
+function countOverdueTasks(tasks) {
+  return summarizeTasksForPrompt(tasks || []).filter(function(t) { return t.overdueDays > 0; }).length;
+}
+
+function buildJournalHistoryPoints(journalRecords, taskMap, maxPoints) {
+  const byDay = {};
+  (journalRecords || []).forEach(function(r) {
+    const ts = journalRecordTs(r);
+    if (!ts) return;
+    const d = new Date(ts);
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    if (!byDay[key]) byDay[key] = [];
+    byDay[key].push(r);
+  });
+  const todayKey = (function() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  })();
+  const points = [];
+  Object.keys(byDay).sort().reverse().forEach(function(key) {
+    if (points.length >= (maxPoints || 3)) return;
+    if (key === todayKey) return;
+    const merged = mergeJournalSummaries(byDay[key], taskMap);
+    const total = merged.doing.length + merged.done.length + merged.block.length + merged.tomorrow.length;
+    const completionPct = total ? Math.round((merged.done.length / total) * 100) : null;
+    const parts = key.split('-');
+    points.push({
+      date: key,
+      label: parts[1] + '/' + parts[2],
+      completionPct: completionPct,
+      overdueCount: merged.block.length,
+      summary: '完成度 ' + (completionPct != null ? completionPct : '—') + '% · 逾期 ' + merged.block.length + ' 件'
+    });
+  });
+  return points;
+}
+
+function computeProjectMetrics(bundle, journalRecords) {
+  const taskMap = buildTaskNameMap(bundle.tasks);
+  const completionPct = calcTaskCompletionPct(bundle.tasks);
+  const overdueCount = countOverdueTasks(bundle.tasks);
+  const weekRecs = journalRecordsOnDay(journalRecords, 7);
+  let weekAgoCompletionPct = null;
+  let weekAgoOverdueCount = null;
+  if (weekRecs.length) {
+    const merged = mergeJournalSummaries(weekRecs, taskMap);
+    const total = merged.doing.length + merged.done.length + merged.block.length + merged.tomorrow.length;
+    if (total) weekAgoCompletionPct = Math.round((merged.done.length / total) * 100);
+    weekAgoOverdueCount = merged.block.length;
+  }
+  let weekDeltaPct = null;
+  if (weekAgoCompletionPct != null) weekDeltaPct = completionPct - weekAgoCompletionPct;
+  const d = new Date();
+  return {
+    completionPct: completionPct,
+    overdueCount: overdueCount,
+    weekDeltaPct: weekDeltaPct,
+    weekAgoCompletionPct: weekAgoCompletionPct,
+    weekAgoOverdueCount: weekAgoOverdueCount,
+    analysisDate: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'),
+    journalHistory: buildJournalHistoryPoints(journalRecords, taskMap, 3)
+  };
+}
+
 async function runProjectAnalysis(projectId, larkToken) {
-  const bundle = await gatherProjectRelated(larkToken, projectId);
+  const bundle = await gatherProjectRelatedWithJournal(larkToken, projectId);
+  const metrics = computeProjectMetrics(bundle, bundle.journal || []);
   const promptText = buildAnalysisPromptText(bundle);
   let lastError = null;
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -2034,7 +2113,7 @@ async function runProjectAnalysis(projectId, larkToken) {
     const text = extractClaudeText(claudeRes);
     try {
       const analysis = parseClaudeJson(text);
-      return { bundle: bundle, analysis: analysis };
+      return { bundle: bundle, analysis: analysis, metrics: metrics };
     } catch (err) {
       lastError = err;
       if (claudeRes.stop_reason === 'max_tokens' || attempt === 0) continue;
@@ -3679,7 +3758,7 @@ export default async function handler(req, res) {
         } catch (e) { /* 觸發人可略過，不影響分析主流程 */ }
       }
       try {
-        const { analysis } = await runProjectAnalysis(projectId, larkToken);
+        const { analysis, metrics } = await runProjectAnalysis(projectId, larkToken);
         let saveWarning = '';
         let analysisRecordId = '';
         try {
@@ -3691,6 +3770,7 @@ export default async function handler(req, res) {
         return res.status(200).json({
           ok: true,
           analysis: analysis,
+          metrics: metrics,
           analysisRecordId: analysisRecordId,
           saveWarning: saveWarning
         });
