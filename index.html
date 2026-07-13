@@ -1247,15 +1247,34 @@ button.btn-loading::after{content:'…';margin-left:2px}
 })();
 // 動態載入外部腳本，避免 Lark 內建瀏覽器被 CDN 卡住整頁
 var optionalLibLoads = {};
-function loadScriptOnce(url, globalName) {
+function loadScriptOnce(url, globalName, timeoutMs) {
   if (globalName && window[globalName]) return Promise.resolve();
   if (optionalLibLoads[url]) return optionalLibLoads[url];
   optionalLibLoads[url] = new Promise(function(resolve, reject) {
+    var settled = false;
     var s = document.createElement('script');
     s.src = url;
     s.async = true;
-    s.onload = function() { resolve(); };
-    s.onerror = function() { delete optionalLibLoads[url]; reject(new Error('無法載入腳本：' + url)); };
+    var timer = setTimeout(function() {
+      if (settled) return;
+      settled = true;
+      delete optionalLibLoads[url];
+      try { s.remove(); } catch (e) {}
+      reject(new Error('腳本載入逾時：' + url));
+    }, timeoutMs || 8000);
+    s.onload = function() {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    s.onerror = function() {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      delete optionalLibLoads[url];
+      reject(new Error('無法載入腳本：' + url));
+    };
     document.head.appendChild(s);
   });
   return optionalLibLoads[url];
@@ -1277,11 +1296,22 @@ function ensureH5Sdk() {
   if (window.h5sdk || (window.tt && window.tt.requestAuthCode)) {
     return Promise.resolve();
   }
-  return loadScriptWithFallback([
+  // 登入路徑會 race 整體逾時；單一路徑用較短 timeout，避免 CDN 掛死拖住整頁
+  var urls = [
     'https://sf1-lark-tos.larksuitecdn.com/obj/lark-static-sg/lark/h5sdk/h5-js-sdk-1.5.16.js',
     'https://lf1-cdn-tos.bytegoofy.com/obj/static/developer/jssdk/jssdk-1.5.23.js',
     'https://lf-package-cn.feishucdn.com/obj/feishu-static/developer/jssdk/jssdk-1.5.23.js'
-  ], 'h5sdk');
+  ];
+  var key = 'h5sdk:' + urls.join('|');
+  if (optionalLibLoads[key]) return optionalLibLoads[key];
+  optionalLibLoads[key] = (function tryAt(i) {
+    if (window.h5sdk || (window.tt && window.tt.requestAuthCode)) return Promise.resolve();
+    if (i >= urls.length) {
+      return Promise.reject(new Error('無法載入 Lark SDK'));
+    }
+    return loadScriptOnce(urls[i], 'h5sdk', 2500).catch(function() { return tryAt(i + 1); });
+  })(0);
+  return optionalLibLoads[key];
 }
 function getLarkPageUrl() {
   return location.href.split('?')[0].split('#')[0];
@@ -3921,7 +3951,7 @@ function completeAuthAfterLogin(opts) {
           clearAuthCache();
           if (result.needLogin) logoutAndShowGate();
           else if (result.configError) showAuthGate('login', '後台設定錯誤', result.configError, result.loginUser || null);
-          else showAuthGate('denied', '無法進入系統', '此人員尚未加入授權名單。', result.loginUser);
+          else showAuthGate('denied', '無法進入系統', '此人員尚未加入授權名單。\n請管理員協助新增。', result.loginUser);
           return;
         }
         writeAuthCache(result);
@@ -3975,7 +4005,7 @@ function completeAuthAfterLogin(opts) {
           return true;
         });
       } else {
-        var sub = '此人員尚未加入授權名單。\n請在「人員資料」表登記 Lark 帳號（帳號或姓名欄位）。';
+        var sub = '此人員尚未加入授權名單。\n請管理員協助新增。';
         if (result.memberCount === 0) sub = '系統讀不到人員資料，請確認 Vercel 的 LARK_APP_TOKEN 是否正確。';
         showAuthGate('denied', '無法進入系統', sub, result.loginUser);
       }
@@ -4369,20 +4399,32 @@ function clearLoginError() {
   var el = document.getElementById('login-error-banner');
   if (el) el.style.display = 'none';
 }
-function ensureLarkBridge() {
+function ensureLarkBridge(timeoutMs) {
+  timeoutMs = timeoutMs || 2500;
   if (window.tt && window.tt.requestAuthCode) return Promise.resolve(true);
   if (window.h5sdk) return Promise.resolve(true);
-  return ensureH5Sdk().catch(function() {}).then(function() {
+  var load = ensureH5Sdk().catch(function() {}).then(function() {
     return new Promise(function(resolve) {
       var start = Date.now();
       function check() {
-        if (window.tt || window.h5sdk) { resolve(true); return; }
-        if (Date.now() - start >= 10000) { resolve(false); return; }
-        setTimeout(check, 200);
+        if ((window.tt && window.tt.requestAuthCode) || window.h5sdk) {
+          resolve(true);
+          return;
+        }
+        if (Date.now() - start >= timeoutMs) {
+          resolve(false);
+          return;
+        }
+        setTimeout(check, 100);
       }
       check();
     });
   });
+  // CDN 掛死時也不要空等超過 timeoutMs，立刻改走網頁授權
+  var budget = new Promise(function(resolve) {
+    setTimeout(function() { resolve(false); }, timeoutMs);
+  });
+  return Promise.race([load, budget]);
 }
 function getStablePageRedirectUri() {
   if (larkAppConfig.redirectUri) return larkAppConfig.redirectUri;
@@ -4440,7 +4482,11 @@ function tryLarkInAppLogin(appId) {
         window.h5sdk.ready(function() { requestCode(); });
         setTimeout(function() {
           if (!settled && window.tt && window.tt.requestAuthCode) requestCode();
-        }, 12000);
+          else if (!settled) {
+            lastLoginError = 'Lark SDK ready 逾時';
+            done(null);
+          }
+        }, 2500);
       } else if (window.tt && window.tt.requestAuthCode) {
         requestCode();
       } else {
@@ -4565,7 +4611,10 @@ function startBrowserLarkLogin() {
       return false;
     }
     if (isLikelyLarkClient()) {
-      return promiseWithTimeout(tryLarkInAppLogin(cfg.appId), 25000, null).then(function(user) {
+      // 先預載 OAuth 網址，內嵌授權失敗時可立刻跳轉
+      preloadAuthUrl();
+      // 內嵌授權最多約 6 秒；SDK/CDN 卡住就立刻改網頁 OAuth，避免卡在「改用網頁授權」
+      return promiseWithTimeout(tryLarkInAppLogin(cfg.appId), 6000, null).then(function(user) {
         if (user && user.accessToken) {
           return completeAuthAfterLogin({ skipAutoRetry: true }).then(function(ok) {
             if (!ok) setAuthLoginButtonLoading(false);
