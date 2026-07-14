@@ -3682,9 +3682,45 @@ function getMemberName(fields) {
   return names[0] || '';
 }
 
+function collectMemberRoleTokens(fields) {
+  const tokens = [];
+  function pushRaw(raw) {
+    if (raw == null || raw === '') return;
+    if (Array.isArray(raw)) {
+      raw.forEach(pushRaw);
+      return;
+    }
+    if (typeof raw === 'object') {
+      if (raw.text) tokens.push(String(raw.text).trim());
+      else if (raw.name) tokens.push(String(raw.name).trim());
+      else if (Array.isArray(raw.text_arr)) {
+        raw.text_arr.forEach(function(t) { tokens.push(String(t).trim()); });
+      }
+      return;
+    }
+    tokens.push(String(raw).trim());
+  }
+  const f = fields || {};
+  pushRaw(f['角色']);
+  pushRaw(f['Role']);
+  pushRaw(f['標籤']);
+  pushRaw(f['Tag']);
+  pushRaw(f['Tags']);
+  return tokens.filter(Boolean);
+}
+
+function isDesignerRoleToken(raw) {
+  const r = String(raw || '').trim();
+  if (!r) return false;
+  if (r === '設計師' || r === '设计师') return true;
+  return r.toLowerCase() === 'designer';
+}
+
 function getMemberRole(fields) {
-  const r = fieldTextValue(fields['角色'] || fields['Role']);
-  if (r === '設計師' || r === '设计师' || r.toLowerCase() === 'designer') return '設計師';
+  const tokens = collectMemberRoleTokens(fields);
+  for (let i = 0; i < tokens.length; i++) {
+    if (isDesignerRoleToken(tokens[i])) return '設計師';
+  }
   return 'PM';
 }
 

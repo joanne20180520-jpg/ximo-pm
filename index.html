@@ -3247,7 +3247,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260710v112';
+var APP_BUILD = '20260714v113';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
@@ -7398,14 +7398,16 @@ function selectDailyLogAuthor(name) {
 }
 
 function buildDailyLogAuthorNames(items) {
-  var names = Object.keys(membersMap);
+  var names = getJournalStaffNames();
   if (!names.length) {
     var nameSet = {};
-    (items || []).forEach(function(it) { if (it.assignee) nameSet[it.assignee] = 1; });
+    (items || []).forEach(function(it) {
+      if (it.assignee && isJournalStaffName(it.assignee)) nameSet[it.assignee] = 1;
+    });
     names = Object.keys(nameSet);
   }
   var myName = getMyPersonName();
-  if (myName && !names.some(function(n) { return namesMatch(n, myName); })) {
+  if (myName && isJournalStaffName(myName) && !names.some(function(n) { return namesMatch(n, myName); })) {
     names.unshift(myName);
   }
   return names.length ? names : ['（未指定）'];
@@ -8572,8 +8574,9 @@ function renderJournalDashboard(area) {
     var n = journalPersonName(rec);
     if (n) nameSet[n] = 1;
   });
-  var names = getMemberNames();
-  if (!names.length) names = Object.keys(nameSet);
+  // 應填日報人員：不含標籤／角色為「設計師」者；若當日已有紀錄仍顯示
+  var names = getJournalStaffNames();
+  if (!names.length) names = Object.keys(nameSet).filter(isJournalStaffName);
   Object.keys(nameSet).forEach(function(n) {
     if (names.indexOf(n) < 0) names.push(n);
   });
@@ -9329,14 +9332,67 @@ function renderDesigns() {
   area.innerHTML = html || '<div style="padding:20px;color:var(--t3);text-align:center">' + designEmpty + '</div>';
 }
 
+function collectMemberRoleTokens(fields) {
+  var tokens = [];
+  function pushRaw(raw) {
+    if (raw == null || raw === '') return;
+    if (Array.isArray(raw)) {
+      raw.forEach(pushRaw);
+      return;
+    }
+    if (typeof raw === 'object') {
+      if (raw.text) tokens.push(String(raw.text).trim());
+      else if (raw.name) tokens.push(String(raw.name).trim());
+      else if (raw.text_arr && Array.isArray(raw.text_arr)) {
+        raw.text_arr.forEach(function(t) { tokens.push(String(t).trim()); });
+      }
+      return;
+    }
+    tokens.push(String(raw).trim());
+  }
+  var f = fields || {};
+  pushRaw(f['角色']);
+  pushRaw(f['Role']);
+  pushRaw(f['標籤']);
+  pushRaw(f['Tag']);
+  pushRaw(f['Tags']);
+  return tokens.filter(Boolean);
+}
+
+function isDesignerRoleToken(raw) {
+  var r = String(raw || '').trim();
+  if (!r) return false;
+  if (r === '設計師' || r === '设计师') return true;
+  return r.toLowerCase() === 'designer';
+}
+
+function resolveMemberRole(fields) {
+  var tokens = collectMemberRoleTokens(fields);
+  for (var i = 0; i < tokens.length; i++) {
+    if (isDesignerRoleToken(tokens[i])) return '設計師';
+  }
+  return 'PM';
+}
+
+function isDesignerMember(name) {
+  var m = membersMap[name];
+  return !!(m && isDesignerRoleToken(m.role));
+}
+
+function isJournalStaffName(name) {
+  if (!name || name === '—' || name === '（未指定）') return false;
+  return !isDesignerMember(name);
+}
+
 function buildMembersMap() {
   membersMap = {};
   function addMember(name, id, role) {
     if (!name || name === '—') return;
     if (!membersMap[name]) {
       membersMap[name] = { id: id || '', name: name, role: role || 'PM' };
-    } else if (id && !membersMap[name].id) {
-      membersMap[name].id = id;
+    } else {
+      if (id && !membersMap[name].id) membersMap[name].id = id;
+      if (role === '設計師') membersMap[name].role = '設計師';
     }
   }
   membersData.forEach(function(m) {
@@ -9349,7 +9405,7 @@ function buildMembersMap() {
       name = memberLabel(f[nameKeys[i]]) || personName(f[nameKeys[i]]);
       if (name) break;
     }
-    if (name) addMember(name, id, fieldTextValue(f['角色'] || f['Role']) || 'PM');
+    if (name) addMember(name, id, resolveMemberRole(f));
   });
   tasksData.forEach(function(t) {
     var p = t.fields['負責人'];
@@ -9377,6 +9433,10 @@ function getMemberNames() {
   var names = Object.keys(membersMap);
   if (!names.length) return ['—'];
   return names;
+}
+
+function getJournalStaffNames() {
+  return getMemberNames().filter(isJournalStaffName);
 }
 
 function fillSelectOptions(sel, options, values) {
