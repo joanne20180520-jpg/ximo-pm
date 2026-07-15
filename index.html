@@ -3247,7 +3247,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260715v114';
+var APP_BUILD = '20260715v116';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v2';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -8597,7 +8597,7 @@ function renderJournalDashboard(area) {
     var n = journalPersonName(rec);
     if (n) nameSet[n] = 1;
   });
-  // 應填日報人員：不含標籤／角色為「設計師」者；若當日已有紀錄仍顯示
+  // 應填日報人員：不含「設計師」「免日報」；若當日已有紀錄仍顯示
   var names = getJournalStaffNames();
   if (!names.length) names = Object.keys(nameSet).filter(isJournalStaffName);
   Object.keys(nameSet).forEach(function(n) {
@@ -9389,7 +9389,24 @@ function isDesignerRoleToken(raw) {
   return r.toLowerCase() === 'designer';
 }
 
+function isJournalExemptToken(raw) {
+  var r = String(raw || '').trim();
+  if (!r) return false;
+  if (r === '免日報' || r === '免日报') return true;
+  var lower = r.toLowerCase();
+  return lower === 'no-journal' || lower === 'skip_journal' || lower === 'skip-journal';
+}
+
+function memberSkipsJournal(fields) {
+  var tokens = collectMemberRoleTokens(fields);
+  for (var i = 0; i < tokens.length; i++) {
+    if (isDesignerRoleToken(tokens[i]) || isJournalExemptToken(tokens[i])) return true;
+  }
+  return false;
+}
+
 function resolveMemberRole(fields) {
+  // 「免日報」只影響日報名單，不影響頁面權限；只有「設計師」會限縮權限
   var tokens = collectMemberRoleTokens(fields);
   for (var i = 0; i < tokens.length; i++) {
     if (isDesignerRoleToken(tokens[i])) return '設計師';
@@ -9404,31 +9421,61 @@ function isDesignerMember(name) {
 
 function isJournalStaffName(name) {
   if (!name || name === '—' || name === '（未指定）') return false;
-  return !isDesignerMember(name);
+  var m = membersMap[name];
+  if (!m) return true;
+  if (m.skipJournal) return false;
+  if (isDesignerRoleToken(m.role)) return false;
+  return true;
+}
+
+function collectMemberAccountNames(fields) {
+  var names = [];
+  function pushName(n) {
+    n = String(n || '').trim();
+    if (n && names.indexOf(n) < 0) names.push(n);
+  }
+  function pushField(raw) {
+    if (!raw) return;
+    if (Array.isArray(raw)) {
+      raw.forEach(function(x) {
+        if (!x) return;
+        if (typeof x === 'string') pushName(x);
+        else pushName(x.name || x.en_name || x.enName || x.text || '');
+      });
+      return;
+    }
+    pushName(memberLabel(raw) || personName(raw));
+  }
+  var keys = ['帳號', '成員', '姓名', '名稱', '人員', 'Member', 'Account', '顯示名稱'];
+  keys.forEach(function(k) { pushField(fields[k]); });
+  return names;
 }
 
 function buildMembersMap() {
   membersMap = {};
-  function addMember(name, id, role) {
+  function addMember(name, id, meta) {
     if (!name || name === '—') return;
+    meta = meta || {};
+    var role = meta.role || 'PM';
+    var skipJournal = !!meta.skipJournal;
     if (!membersMap[name]) {
-      membersMap[name] = { id: id || '', name: name, role: role || 'PM' };
+      membersMap[name] = { id: id || '', name: name, role: role, skipJournal: skipJournal };
     } else {
       if (id && !membersMap[name].id) membersMap[name].id = id;
       if (role === '設計師') membersMap[name].role = '設計師';
+      if (skipJournal) membersMap[name].skipJournal = true;
     }
   }
   membersData.forEach(function(m) {
     var f = m.fields || {};
     var ids = memberFieldPersonIds(f);
-    var id = ids[0] || '';
-    var name = '';
-    var nameKeys = ['帳號', '成員', '姓名', '名稱', '人員', 'Member', 'Account', '顯示名稱'];
-    for (var i = 0; i < nameKeys.length; i++) {
-      name = memberLabel(f[nameKeys[i]]) || personName(f[nameKeys[i]]);
-      if (name) break;
-    }
-    if (name) addMember(name, id, resolveMemberRole(f));
+    var names = collectMemberAccountNames(f);
+    var role = resolveMemberRole(f);
+    var skipJournal = memberSkipsJournal(f);
+    if (!names.length) return;
+    names.forEach(function(name, idx) {
+      addMember(name, ids[idx] || ids[0] || '', { role: role, skipJournal: skipJournal });
+    });
   });
   tasksData.forEach(function(t) {
     var p = t.fields['負責人'];

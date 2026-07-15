@@ -3717,6 +3717,7 @@ function isDesignerRoleToken(raw) {
 }
 
 function getMemberRole(fields) {
+  // 「免日報」不影響登入權限；僅「設計師」限縮可看頁面
   const tokens = collectMemberRoleTokens(fields);
   for (let i = 0; i < tokens.length; i++) {
     if (isDesignerRoleToken(tokens[i])) return '設計師';
