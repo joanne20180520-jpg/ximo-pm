@@ -3247,7 +3247,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260715v116';
+var APP_BUILD = '20260715v117';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v2';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -9422,9 +9422,18 @@ function isDesignerMember(name) {
 function isJournalStaffName(name) {
   if (!name || name === '—' || name === '（未指定）') return false;
   var m = membersMap[name];
-  if (!m) return true;
-  if (m.skipJournal) return false;
-  if (isDesignerRoleToken(m.role)) return false;
+  if (m) {
+    if (m.skipJournal) return false;
+    if (isDesignerRoleToken(m.role)) return false;
+  }
+  // 同一人可能有中英文不同顯示名，用 fuzzy / open_id 再對一次
+  var keys = Object.keys(membersMap);
+  for (var i = 0; i < keys.length; i++) {
+    var other = membersMap[keys[i]];
+    if (!other || !other.skipJournal) continue;
+    if (namesMatch(name, keys[i])) return false;
+    if (m && m.id && other.id && m.id === other.id) return false;
+  }
   return true;
 }
 
@@ -9434,16 +9443,24 @@ function collectMemberAccountNames(fields) {
     n = String(n || '').trim();
     if (n && names.indexOf(n) < 0) names.push(n);
   }
+  function pushPersonObj(x) {
+    if (!x) return;
+    if (typeof x === 'string') {
+      pushName(x);
+      return;
+    }
+    pushName(x.name);
+    pushName(x.en_name || x.enName);
+    pushName(x.text);
+  }
   function pushField(raw) {
     if (!raw) return;
     if (Array.isArray(raw)) {
-      raw.forEach(function(x) {
-        if (!x) return;
-        if (typeof x === 'string') pushName(x);
-        else pushName(x.name || x.en_name || x.enName || x.text || '');
-      });
+      raw.forEach(pushPersonObj);
       return;
     }
+    pushPersonObj(raw);
+    // 相容舊邏輯
     pushName(memberLabel(raw) || personName(raw));
   }
   var keys = ['帳號', '成員', '姓名', '名稱', '人員', 'Member', 'Account', '顯示名稱'];
@@ -9479,17 +9496,75 @@ function buildMembersMap() {
   });
   tasksData.forEach(function(t) {
     var p = t.fields['負責人'];
-    if (p && p[0] && p[0].name) addMember(p[0].name, p[0].id || p[0].open_id);
+    if (Array.isArray(p)) {
+      p.forEach(function(person) {
+        if (!person) return;
+        var n = person.name || person.en_name || person.enName;
+        if (n) addMember(n, person.id || person.open_id);
+        if (person.en_name || person.enName) addMember(person.en_name || person.enName, person.id || person.open_id);
+      });
+    } else if (p && p[0] && p[0].name) {
+      addMember(p[0].name, p[0].id || p[0].open_id);
+    }
   });
   workitemsData.forEach(function(wi) {
     ['負責夥伴', '執行夥伴'].forEach(function(key) {
       var p = wi.fields[key];
-      if (p && p[0] && p[0].name) addMember(p[0].name, p[0].id || p[0].open_id);
+      if (Array.isArray(p)) {
+        p.forEach(function(person) {
+          if (!person) return;
+          var n = person.name || person.en_name || person.enName;
+          if (n) addMember(n, person.id || person.open_id);
+          if (person.en_name || person.enName) addMember(person.en_name || person.enName, person.id || person.open_id);
+        });
+      } else if (p && p[0] && p[0].name) {
+        addMember(p[0].name, p[0].id || p[0].open_id);
+      }
     });
   });
   projectsData.forEach(function(p) {
     var pm = p.fields['主PM'];
-    if (pm && pm[0] && pm[0].name) addMember(pm[0].name, pm[0].id || pm[0].open_id);
+    if (Array.isArray(pm)) {
+      pm.forEach(function(person) {
+        if (!person) return;
+        var n = person.name || person.en_name || person.enName;
+        if (n) addMember(n, person.id || person.open_id);
+        if (person.en_name || person.enName) addMember(person.en_name || person.enName, person.id || person.open_id);
+      });
+    } else if (pm && pm[0] && pm[0].name) {
+      addMember(pm[0].name, pm[0].id || pm[0].open_id);
+    }
+  });
+
+  // 把「免日報／設計師」標記依 open_id／姓名對應擴散到所有別名（解決 Max Xie 中英文不一致）
+  var skipIds = {};
+  var skipNames = [];
+  Object.keys(membersMap).forEach(function(key) {
+    var entry = membersMap[key];
+    if (!entry || !entry.skipJournal) return;
+    if (entry.id) skipIds[entry.id] = 1;
+    skipNames.push(key);
+  });
+  membersData.forEach(function(m) {
+    if (!memberSkipsJournal(m.fields || {})) return;
+    memberFieldPersonIds(m.fields || {}).forEach(function(id) { if (id) skipIds[id] = 1; });
+    collectMemberAccountNames(m.fields || {}).forEach(function(n) {
+      if (n && skipNames.indexOf(n) < 0) skipNames.push(n);
+    });
+  });
+  Object.keys(membersMap).forEach(function(key) {
+    var entry = membersMap[key];
+    if (!entry) return;
+    if (entry.id && skipIds[entry.id]) {
+      entry.skipJournal = true;
+      return;
+    }
+    for (var i = 0; i < skipNames.length; i++) {
+      if (namesMatch(key, skipNames[i])) {
+        entry.skipJournal = true;
+        return;
+      }
+    }
   });
 }
 
