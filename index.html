@@ -3247,10 +3247,10 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260714v113';
-var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v1';
+var APP_BUILD = '20260715v114';
+var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v2';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
-var DATA_CACHE_MAX_AGE = 3 * 60 * 1000;
+var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
 var AUTH_CACHE_MAX_AGE = 10 * 60 * 1000;
 var BOOTSTRAP_TABLE_KEYS = ['projects', 'workitems', 'tasks', 'expenses', 'designs', 'journal', 'members'];
 var SYNC_EXPAND = {
@@ -5145,7 +5145,18 @@ function renderAllFromBootstrap() {
 
 function readBootstrapCache() {
   try {
-    var raw = sessionStorage.getItem(DATA_CACHE_KEY);
+    var raw = localStorage.getItem(DATA_CACHE_KEY);
+    if (!raw) {
+      // 相容舊版 sessionStorage 快取
+      raw = sessionStorage.getItem('ximo-bootstrap-cache-v1') || sessionStorage.getItem(DATA_CACHE_KEY);
+      if (raw) {
+        try { localStorage.setItem(DATA_CACHE_KEY, raw); } catch (e2) {}
+        try {
+          sessionStorage.removeItem('ximo-bootstrap-cache-v1');
+          sessionStorage.removeItem(DATA_CACHE_KEY);
+        } catch (e3) {}
+      }
+    }
     if (!raw) return null;
     var parsed = JSON.parse(raw);
     if (!parsed || !parsed.payload) return null;
@@ -5157,7 +5168,7 @@ function readBootstrapCache() {
 
 function writeBootstrapCache(payload) {
   try {
-    sessionStorage.setItem(DATA_CACHE_KEY, JSON.stringify({ ts: Date.now(), payload: payload }));
+    localStorage.setItem(DATA_CACHE_KEY, JSON.stringify({ ts: Date.now(), payload: payload }));
   } catch (e) {}
 }
 
@@ -5196,6 +5207,19 @@ function loadExtraData() {
   syncTables(['designs']);
 }
 
+function applyRemoteBootstrap(payload, hadCache) {
+  applyBootstrapPayload(payload);
+  writeBootstrapCache(payload);
+  renderAllFromBootstrap();
+  var loadErr = (payload.projects && payload.projects.error)
+    || (payload.workitems && payload.workitems.error)
+    || (payload.tasks && payload.tasks.error);
+  if (loadErr && !projectsData.length && !hadCache) {
+    showDataHint(loadErr);
+  }
+  setBootStatus('');
+}
+
 function loadData(opts) {
   opts = opts || {};
   var hadCache = false;
@@ -5207,6 +5231,7 @@ function loadData(opts) {
       cacheFresh = !!(cached.ts && (Date.now() - cached.ts < DATA_CACHE_MAX_AGE));
       applyBootstrapPayload(cached.payload);
       renderAllFromBootstrap();
+      setBootStatus('');
     }
   }
   if (!hadCache && !opts.silent) {
@@ -5214,22 +5239,18 @@ function loadData(opts) {
     document.getElementById('task-list-body').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
   }
 
-  if (cacheFresh && !opts.forceRefresh) {
-    setBootStatus('');
+  // 有新鮮快取時：先回畫面，背景再打 API 更新；超過 5 分鐘則必要重打
+  if (hadCache && cacheFresh && !opts.forceRefresh) {
+    fetchBootstrapPayloadRemote().then(function(payload) {
+      applyRemoteBootstrap(payload, true);
+    }).catch(function(err) {
+      console.warn('背景更新失敗，沿用快取', err);
+    });
     return Promise.resolve();
   }
 
   return fetchBootstrapPayloadRemote().then(function(payload) {
-    applyBootstrapPayload(payload);
-    writeBootstrapCache(payload);
-    renderAllFromBootstrap();
-    var loadErr = (payload.projects && payload.projects.error)
-      || (payload.workitems && payload.workitems.error)
-      || (payload.tasks && payload.tasks.error);
-    if (loadErr && !projectsData.length && !hadCache) {
-      showDataHint(loadErr);
-    }
-    setBootStatus('');
+    applyRemoteBootstrap(payload, hadCache);
   }).catch(function(err) {
     console.error('載入失敗', err);
     if (!hadCache) {
@@ -5243,6 +5264,8 @@ function loadData(opts) {
       safeRenderAfterLoad();
       showDataHint(err.message || '連線失敗');
       setBootStatus('Lark 資料載入失敗：' + (err.message || '連線失敗') + '（build ' + APP_BUILD + '）', true);
+    } else {
+      setBootStatus('資料更新失敗，顯示的是本機快取', true);
     }
   });
 }
@@ -9498,6 +9521,160 @@ function apiDelete(table, recordId) {
   });
 }
 
+function getTableArray(table) {
+  switch (table) {
+    case 'projects': return projectsData;
+    case 'workitems': return workitemsData;
+    case 'tasks': return tasksData;
+    case 'expenses': return expensesData;
+    case 'designs': return designsData;
+    case 'journal': return journalData;
+    case 'members': return membersData;
+    default: return null;
+  }
+}
+
+function setTableArray(table, arr) {
+  switch (table) {
+    case 'projects': projectsData = arr; break;
+    case 'workitems': workitemsData = arr; break;
+    case 'tasks': tasksData = arr; break;
+    case 'expenses': expensesData = arr; break;
+    case 'designs': designsData = arr; break;
+    case 'journal': journalData = arr; break;
+    case 'members': membersData = arr; break;
+  }
+}
+
+function extractClientRecordId(res) {
+  if (!res) return '';
+  var d = res.data || res;
+  if (d.record && d.record.record_id) return d.record.record_id;
+  if (d.record_id) return d.record_id;
+  if (d.records && d.records[0] && d.records[0].record_id) return d.records[0].record_id;
+  return '';
+}
+
+function cloneRecords(arr) {
+  try { return JSON.parse(JSON.stringify(arr || [])); }
+  catch (e) { return (arr || []).slice(); }
+}
+
+function normalizeOptimisticFields(fields) {
+  var out = {};
+  var personKeys = {
+    '主PM': 1, '負責PM': 1, '負責夥伴': 1, '執行夥伴': 1,
+    '負責人': 1, '設計師': 1, '申請人': 1, '回報人': 1
+  };
+  Object.keys(fields || {}).forEach(function(k) {
+    var v = fields[k];
+    if (typeof v === 'string' && v && personKeys[k]) {
+      var p = larkPerson(v);
+      out[k] = p ? [{ id: p[0].id, name: v }] : [{ name: v }];
+    } else {
+      out[k] = v;
+    }
+  });
+  return out;
+}
+
+function commitLocalTable(table) {
+  writeBootstrapCache(buildBootstrapPayloadFromState());
+  refreshViewsForTables([table]);
+}
+
+function restoreTableSnapshot(table, snapshot) {
+  setTableArray(table, snapshot);
+  commitLocalTable(table);
+}
+
+/** 樂觀新增：先更新畫面，背景打 API，失敗則還原 */
+function optimisticCreate(table, fields, opts) {
+  opts = opts || {};
+  var arr = getTableArray(table);
+  if (!arr) {
+    return apiPost(table, fields).then(function(res) {
+      if (!opts.skipSync) syncTables([table]);
+      return res;
+    });
+  }
+  var prev = cloneRecords(arr);
+  var tempId = 'tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  var rec = { record_id: tempId, fields: normalizeOptimisticFields(fields), _optimistic: true };
+  arr.unshift(rec);
+  commitLocalTable(table);
+  return apiPost(table, fields).then(function(res) {
+    var realId = extractClientRecordId(res);
+    var cur = getTableArray(table) || [];
+    for (var i = 0; i < cur.length; i++) {
+      if (cur[i].record_id === tempId) {
+        cur[i].record_id = realId || tempId;
+        delete cur[i]._optimistic;
+        if (res && res.data && res.data.record && res.data.record.fields) {
+          cur[i].fields = Object.assign({}, cur[i].fields, res.data.record.fields);
+        }
+        break;
+      }
+    }
+    commitLocalTable(table);
+    if (!opts.skipSync) syncTables([table]);
+    return res;
+  }).catch(function(err) {
+    restoreTableSnapshot(table, prev);
+    alert((opts.failMsg || '新增失敗') + '：' + (err.message || '請稍後再試'));
+    throw err;
+  });
+}
+
+/** 樂觀更新：先更新畫面，背景打 API，失敗則還原 */
+function optimisticUpdate(table, recordId, fields, opts) {
+  opts = opts || {};
+  var arr = getTableArray(table);
+  if (!arr) {
+    return apiPut(table, recordId, fields).then(function(res) {
+      if (!opts.skipSync) syncTables([table]);
+      return res;
+    });
+  }
+  var prev = cloneRecords(arr);
+  var rec = arr.find(function(r) { return r.record_id === recordId; });
+  if (rec) {
+    rec.fields = Object.assign({}, rec.fields || {}, normalizeOptimisticFields(fields));
+    commitLocalTable(table);
+  }
+  return apiPut(table, recordId, fields).then(function(res) {
+    if (!opts.skipSync) syncTables([table]);
+    return res;
+  }).catch(function(err) {
+    restoreTableSnapshot(table, prev);
+    alert((opts.failMsg || '修改失敗') + '：' + (err.message || '請稍後再試'));
+    throw err;
+  });
+}
+
+/** 樂觀刪除：先更新畫面，背景打 API，失敗則還原 */
+function optimisticDelete(table, recordId, opts) {
+  opts = opts || {};
+  var arr = getTableArray(table);
+  if (!arr) {
+    return apiDelete(table, recordId).then(function(res) {
+      if (!opts.skipSync) syncTables(opts.syncKeys || [table]);
+      return res;
+    });
+  }
+  var prev = cloneRecords(arr);
+  setTableArray(table, arr.filter(function(r) { return r.record_id !== recordId; }));
+  commitLocalTable(table);
+  return apiDelete(table, recordId).then(function(res) {
+    if (!opts.skipSync) syncTables(opts.syncKeys || [table]);
+    return res;
+  }).catch(function(err) {
+    restoreTableSnapshot(table, prev);
+    alert((opts.failMsg || '刪除失敗') + '：' + (err.message || '請稍後再試'));
+    throw err;
+  });
+}
+
 
 // ── 修改功能 ──
 var editingWiId = null;
@@ -9826,10 +10003,9 @@ function saveEditDesign() {
     okText: '儲存',
     onOk: function() {
       if (oldFields) undoStack.push({ type: 'update', table: 'designs', recordId: editingDesignId, data: oldFields });
-      apiPut('designs', editingDesignId, fields).then(function() {
-        cl('pp-edit-des');
-        syncTables(['designs']);
-      }).catch(function(err) { alert('修改失敗：' + err.message); });
+      var id = editingDesignId;
+      cl('pp-edit-des');
+      optimisticUpdate('designs', id, fields, { failMsg: '修改失敗' }).catch(function() {});
     }
   });
 }
@@ -9903,10 +10079,9 @@ function saveEditExpense() {
     okText: '儲存',
     onOk: function() {
       if (oldFields) undoStack.push({ type: 'update', table: 'expenses', recordId: editingExpenseId, data: oldFields });
-      apiPut('expenses', editingExpenseId, fields).then(function() {
-        cl('pp-edit-exp');
-        syncTables(['expenses']);
-      }).catch(function(err) { alert('修改失敗：' + err.message); });
+      var id = editingExpenseId;
+      cl('pp-edit-exp');
+      optimisticUpdate('expenses', id, fields, { failMsg: '修改失敗' }).catch(function() {});
     }
   });
 }
@@ -10000,10 +10175,9 @@ function saveEditWorkItem() {
     okText: '儲存',
     onOk: function() {
       if (oldFields) undoStack.push({ type: 'update', table: 'workitems', recordId: editingWiId, data: oldFields });
-      apiPut('workitems', editingWiId, fields).then(function() {
-        cl('pp-edit-wi');
-        syncTables(['workitems']);
-      }).catch(function(err) { alert('修改失敗：' + err.message); });
+      var id = editingWiId;
+      cl('pp-edit-wi');
+      optimisticUpdate('workitems', id, fields, { failMsg: '修改失敗' }).catch(function() {});
     }
   });
 }
@@ -10062,10 +10236,9 @@ function saveEditProject() {
     okText: '儲存',
     onOk: function() {
       if (oldFields) undoStack.push({ type: 'update', table: 'projects', recordId: editingProjId, data: oldFields });
-      apiPut('projects', editingProjId, fields).then(function() {
-        cl('pp-edit-proj');
-        syncTables(['projects']);
-      }).catch(function(err) { alert('修改失敗：' + err.message); });
+      var id = editingProjId;
+      cl('pp-edit-proj');
+      optimisticUpdate('projects', id, fields, { failMsg: '修改失敗' }).catch(function() {});
     }
   });
 }
@@ -10089,10 +10262,10 @@ function deleteProject(id, name) {
     okText: '刪除',
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
-      apiDelete('projects', id).then(function() {
-        if (savedData) undoStack.push({ type: 'delete', table: 'projects', data: savedData });
-        syncTables(['all']);
-      }).catch(function(err) { alert('刪除失敗：' + err.message); });
+      if (savedData) undoStack.push({ type: 'delete', table: 'projects', data: savedData });
+      optimisticDelete('projects', id, { failMsg: '刪除失敗', syncKeys: ['all'] }).catch(function() {
+        if (savedData) undoStack.pop();
+      });
     }
   });
 }
@@ -10106,10 +10279,10 @@ function deleteWorkItem(id, name) {
     okText: '刪除',
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
-      apiDelete('workitems', id).then(function() {
-        if (savedData) undoStack.push({ type: 'delete', table: 'workitems', data: savedData });
-        syncTables(['workitems', 'tasks']);
-      }).catch(function(err) { alert('刪除失敗：' + err.message); });
+      if (savedData) undoStack.push({ type: 'delete', table: 'workitems', data: savedData });
+      optimisticDelete('workitems', id, { failMsg: '刪除失敗', syncKeys: ['workitems', 'tasks'] }).catch(function() {
+        if (savedData) undoStack.pop();
+      });
     }
   });
 }
@@ -10123,10 +10296,10 @@ function deleteTask(id, name) {
     okText: '刪除',
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
-      apiDelete('tasks', id).then(function() {
-        if (savedData) undoStack.push({ type: 'delete', table: 'tasks', data: savedData });
-        syncTables(['tasks']);
-      }).catch(function(err) { alert('刪除失敗：' + err.message); });
+      if (savedData) undoStack.push({ type: 'delete', table: 'tasks', data: savedData });
+      optimisticDelete('tasks', id, { failMsg: '刪除失敗' }).catch(function() {
+        if (savedData) undoStack.pop();
+      });
     }
   });
 }
@@ -10140,12 +10313,12 @@ function deleteExpense(id, name) {
     okText: '刪除',
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
-      apiDelete('expenses', id).then(function() {
-        if (savedData) undoStack.push({ type: 'delete', table: 'expenses', data: savedData });
-        cl('pp-edit-exp');
-        editingExpenseId = null;
-        syncTables(['expenses']);
-      }).catch(function(err) { alert('刪除失敗：' + err.message); });
+      if (savedData) undoStack.push({ type: 'delete', table: 'expenses', data: savedData });
+      cl('pp-edit-exp');
+      editingExpenseId = null;
+      optimisticDelete('expenses', id, { failMsg: '刪除失敗' }).catch(function() {
+        if (savedData) undoStack.pop();
+      });
     }
   });
 }
@@ -10166,12 +10339,12 @@ function deleteDesign(id, name) {
     okText: '刪除',
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
-      apiDelete('designs', id).then(function() {
-        if (savedData) undoStack.push({ type: 'delete', table: 'designs', data: savedData });
-        cl('pp-edit-des');
-        editingDesignId = null;
-        syncTables(['designs']);
-      }).catch(function(err) { alert('刪除失敗：' + err.message); });
+      if (savedData) undoStack.push({ type: 'delete', table: 'designs', data: savedData });
+      cl('pp-edit-des');
+      editingDesignId = null;
+      optimisticDelete('designs', id, { failMsg: '刪除失敗' }).catch(function() {
+        if (savedData) undoStack.pop();
+      });
     }
   });
 }
@@ -10383,13 +10556,9 @@ function saveTask() {
   var person = larkPerson(assignee);
   if (person) fields['負責人'] = person;
 
-  apiPost('tasks', fields).then(function() {
-    cl('pp-task');
-    document.getElementById('nt-name').value = '';
-    syncTables(['tasks']);
-  }).catch(function(err) {
-    alert('新增失敗：' + err.message);
-  });
+  cl('pp-task');
+  document.getElementById('nt-name').value = '';
+  optimisticCreate('tasks', fields, { failMsg: '新增失敗' }).catch(function() {});
 }
 
 function saveExpense() {
@@ -10415,15 +10584,11 @@ function saveExpense() {
   var person = larkPerson(assignee);
   if (person) fields['負責人'] = person;
 
-  apiPost('expenses', fields).then(function() {
-    cl('pp-exp');
-    document.getElementById('ex-name').value = '';
-    document.getElementById('aa').value = '';
-    document.getElementById('ua').value = '';
-    syncTables(['expenses']);
-  }).catch(function(err) {
-    alert('新增失敗：' + err.message);
-  });
+  cl('pp-exp');
+  document.getElementById('ex-name').value = '';
+  document.getElementById('aa').value = '';
+  document.getElementById('ua').value = '';
+  optimisticCreate('expenses', fields, { failMsg: '新增失敗' }).catch(function() {});
 }
 
 function saveDesign() {
@@ -10457,13 +10622,9 @@ function saveDesign() {
   if (final) fields['完稿交付日'] = dateInputToTs(final);
   if (deliver) fields['成品交付日'] = dateInputToTs(deliver);
 
-  apiPost('designs', fields).then(function() {
-    cl('pp-des');
-    document.getElementById('ds-name').value = '';
-    syncTables(['designs']);
-  }).catch(function(err) {
-    alert('新增失敗：' + err.message);
-  });
+  cl('pp-des');
+  document.getElementById('ds-name').value = '';
+  optimisticCreate('designs', fields, { failMsg: '新增失敗' }).catch(function() {});
 }
 
 function fillMemberSelects() {
