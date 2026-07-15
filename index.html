@@ -3248,8 +3248,8 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260715v118';
-var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v3';
+var APP_BUILD = '20260715v119';
+var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v4';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
 var AUTH_CACHE_MAX_AGE = 10 * 60 * 1000;
@@ -8601,11 +8601,12 @@ function renderJournalDashboard(area) {
     var n = journalPersonName(rec);
     if (n) nameSet[n] = 1;
   });
-  // 應填日報人員：不含「設計師」「免日報」；若當日已有紀錄仍顯示
+  // 應填日報人員：來自「人員資料」（非回報人／負責人）；免日報、設計師不列空卡
   var names = getJournalStaffNames();
   if (!names.length) names = Object.keys(nameSet).filter(isJournalStaffName);
   Object.keys(nameSet).forEach(function(n) {
-    if (names.indexOf(n) < 0) names.push(n);
+    // 當日已有紀錄的人仍顯示；免日報者若不在應填名單且無紀錄則不列
+    if (names.indexOf(n) < 0 && isJournalStaffName(n)) names.push(n);
   });
   if (!names.length) names = ['（未指定）'];
 
@@ -9368,11 +9369,13 @@ function collectMemberRoleTokens(fields) {
       return;
     }
     if (typeof raw === 'object') {
-      if (raw.text) tokens.push(String(raw.text).trim());
-      else if (raw.name) tokens.push(String(raw.name).trim());
-      else if (raw.text_arr && Array.isArray(raw.text_arr)) {
+      if (raw.text != null) tokens.push(String(raw.text).trim());
+      if (raw.name != null) tokens.push(String(raw.name).trim());
+      if (raw.value != null && typeof raw.value !== 'object') tokens.push(String(raw.value).trim());
+      if (Array.isArray(raw.text_arr)) {
         raw.text_arr.forEach(function(t) { tokens.push(String(t).trim()); });
       }
+      if (Array.isArray(raw.options)) raw.options.forEach(pushRaw);
       return;
     }
     tokens.push(String(raw).trim());
@@ -9383,6 +9386,10 @@ function collectMemberRoleTokens(fields) {
   pushRaw(f['標籤']);
   pushRaw(f['Tag']);
   pushRaw(f['Tags']);
+  // 多選偶發以整段字串存在，補抓「免日報」
+  Object.keys(f).forEach(function(k) {
+    if (/角色|標籤|tag|role/i.test(k)) pushRaw(f[k]);
+  });
   return tokens.filter(Boolean);
 }
 
@@ -9397,6 +9404,7 @@ function isJournalExemptToken(raw) {
   var r = String(raw || '').trim();
   if (!r) return false;
   if (r === '免日報' || r === '免日报') return true;
+  if (r.indexOf('免日報') >= 0 || r.indexOf('免日报') >= 0) return true;
   var lower = r.toLowerCase();
   return lower === 'no-journal' || lower === 'skip_journal' || lower === 'skip-journal';
 }
@@ -9425,19 +9433,47 @@ function isDesignerMember(name) {
 
 function isJournalStaffName(name) {
   if (!name || name === '—' || name === '（未指定）') return false;
+  // 直接依「人員資料」判定免日報／設計師，不依賴回報人或任務負責人
+  for (var i = 0; i < membersData.length; i++) {
+    var f = membersData[i].fields || {};
+    var hit = false;
+    forEachMemberAccountPerson(f, function(person) {
+      if (person.name && namesMatch(person.name, name)) hit = true;
+      if (person.id && membersMap[name] && membersMap[name].id && person.id === membersMap[name].id) hit = true;
+    });
+    if (!hit) continue;
+    if (memberSkipsJournal(f) || resolveMemberRole(f) === '設計師') return false;
+  }
   var m = membersMap[name];
   if (m) {
     if (m.skipJournal) return false;
     if (isDesignerRoleToken(m.role)) return false;
     if (m.id) {
       var keys = Object.keys(membersMap);
-      for (var i = 0; i < keys.length; i++) {
-        var other = membersMap[keys[i]];
+      for (var j = 0; j < keys.length; j++) {
+        var other = membersMap[keys[j]];
         if (other && other.skipJournal && other.id && other.id === m.id) return false;
       }
     }
   }
   return true;
+}
+
+/** 墨日誌應填名單：只看人員資料表，不是今日回報人／任務負責人 */
+function getJournalStaffNames() {
+  var names = [];
+  var seen = {};
+  membersData.forEach(function(m) {
+    var f = m.fields || {};
+    if (memberSkipsJournal(f)) return;
+    if (resolveMemberRole(f) === '設計師') return;
+    forEachMemberAccountPerson(f, function(person) {
+      if (!person.name || seen[person.name]) return;
+      seen[person.name] = 1;
+      names.push(person.name);
+    });
+  });
+  return names.sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
 }
 
 /** 從人員資料列逐一取出「姓名 + open_id」配對，避免多人同列時 id 對錯人 */
@@ -9582,10 +9618,6 @@ function getMemberSelectOptions() {
     values = ['—'];
   }
   return { labels: labels, values: values };
-}
-
-function getJournalStaffNames() {
-  return getMemberNames().filter(isJournalStaffName);
 }
 
 function fillSelectOptions(sel, options, values) {
