@@ -4613,7 +4613,7 @@ function startBrowserLarkLogin() {
     if (isLikelyLarkClient()) {
       // 先預載 OAuth 網址，內嵌授權失敗時可立刻跳轉
       preloadAuthUrl();
-      // 內嵌授權最多約 6 秒；SDK/CDN 卡住就立刻改網頁 OAuth，避免卡在「改用網頁授權」
+      // 內嵌授權最多約 6 秒；SDK/CDN 卡住就立刻改網頁 OAuth（畫面維持「正在登入」，不顯示技術切換字樣）
       return promiseWithTimeout(tryLarkInAppLogin(cfg.appId), 6000, null).then(function(user) {
         if (user && user.accessToken) {
           return completeAuthAfterLogin({ skipAutoRetry: true }).then(function(ok) {
@@ -4622,11 +4622,11 @@ function startBrowserLarkLogin() {
           });
         }
         var errHint = lastLoginError || 'Lark 內授權未完成';
-        showAuthGate('loading', '改用網頁授權…', errHint, null);
+        showAuthGate('loading', '正在登入 Lark…', '', null);
         loginUserConfirmed = true;
         return redirectToLarkOAuth().then(function(ok) {
           if (!ok) {
-            showAuthGateLogin('Lark 內登入失敗', errHint + '\n請複製網址到瀏覽器開啟：' + location.origin);
+            showAuthGateLogin('Lark 登入失敗', errHint + '\n請複製網址到瀏覽器開啟：' + location.origin);
             setAuthLoginButtonLoading(false);
             loginUserConfirmed = false;
           }
