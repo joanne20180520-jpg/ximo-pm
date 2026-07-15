@@ -2798,8 +2798,9 @@ function addS(){
   var r=document.createElement('div');r.className='srow';
   r.innerHTML='<input type="text" class="wi-name" placeholder="工作項目名稱"><input type="date" class="wi-start" value="' + escAttr(start) + '"><input type="date" class="wi-end" value="' + escAttr(end) + '"><select class="wi-member" data-members></select><select class="wi-exec-member" data-members></select><input type="text" class="wi-cost money-input" placeholder="NT$0"><input type="text" class="wi-weight" placeholder="0%" oninput="updateNwWiWeightRemain()" onblur="onNwWiWeightBlur(this)">';
   document.getElementById('sl').appendChild(r);
-  fillSelectOptions(r.querySelector('.wi-member'), getMemberNames());
-  fillSelectOptions(r.querySelector('.wi-exec-member'), getMemberNames());
+  var mOptsRow = getMemberSelectOptions();
+  fillSelectOptions(r.querySelector('.wi-member'), mOptsRow.labels, mOptsRow.values);
+  fillSelectOptions(r.querySelector('.wi-exec-member'), mOptsRow.labels, mOptsRow.values);
   updateNwWiWeightRemain();
 }
 function workRowHtml() {
@@ -3247,8 +3248,8 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260715v117';
-var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v2';
+var APP_BUILD = '20260715v118';
+var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v3';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
 var AUTH_CACHE_MAX_AGE = 10 * 60 * 1000;
@@ -4268,9 +4269,7 @@ function applyLoginUserToForms() {
   if (name) {
     var authorSel = document.getElementById('dl-author');
     if (authorSel && !authorSel.dataset.userPicked) {
-      for (var i = 0; i < authorSel.options.length; i++) {
-        if (authorSel.options[i].text === name) { authorSel.selectedIndex = i; break; }
-      }
+      selectMemberOption(authorSel, getLoginLarkPerson() || [{ name: name, id: (getCurrentLoginUser() || {}).openId }]);
     }
   }
 }
@@ -6947,11 +6946,16 @@ function openTaskDetail(taskId) {
     + '<span style="font-size:11px;color:var(--t3)">' + ctx.progress + '%</span>';
   var assigneeSel = document.getElementById('td-assignee');
   if (assigneeSel) {
-    fillSelectOptions(assigneeSel, getMemberNames());
-    for (var ai = 0; ai < assigneeSel.options.length; ai++) {
-      if (assigneeSel.options[ai].text === ctx.assignee || assigneeSel.options[ai].value === ctx.assignee) {
-        assigneeSel.selectedIndex = ai;
-        break;
+    var mOpts = getMemberSelectOptions();
+    fillSelectOptions(assigneeSel, mOpts.labels, mOpts.values);
+    var taskRec = tasksData.find(function(t) { return t.record_id === currentTaskId; });
+    if (taskRec) selectMemberOption(assigneeSel, taskRec.fields['負責人']);
+    else if (ctx.assignee) {
+      for (var ai = 0; ai < assigneeSel.options.length; ai++) {
+        if (assigneeSel.options[ai].text === ctx.assignee || assigneeSel.options[ai].value === ctx.assignee) {
+          assigneeSel.selectedIndex = ai;
+          break;
+        }
       }
     }
   }
@@ -9425,47 +9429,46 @@ function isJournalStaffName(name) {
   if (m) {
     if (m.skipJournal) return false;
     if (isDesignerRoleToken(m.role)) return false;
-  }
-  // 同一人可能有中英文不同顯示名，用 fuzzy / open_id 再對一次
-  var keys = Object.keys(membersMap);
-  for (var i = 0; i < keys.length; i++) {
-    var other = membersMap[keys[i]];
-    if (!other || !other.skipJournal) continue;
-    if (namesMatch(name, keys[i])) return false;
-    if (m && m.id && other.id && m.id === other.id) return false;
+    if (m.id) {
+      var keys = Object.keys(membersMap);
+      for (var i = 0; i < keys.length; i++) {
+        var other = membersMap[keys[i]];
+        if (other && other.skipJournal && other.id && other.id === m.id) return false;
+      }
+    }
   }
   return true;
 }
 
-function collectMemberAccountNames(fields) {
-  var names = [];
-  function pushName(n) {
-    n = String(n || '').trim();
-    if (n && names.indexOf(n) < 0) names.push(n);
-  }
-  function pushPersonObj(x) {
-    if (!x) return;
-    if (typeof x === 'string') {
-      pushName(x);
-      return;
-    }
-    pushName(x.name);
-    pushName(x.en_name || x.enName);
-    pushName(x.text);
-  }
-  function pushField(raw) {
-    if (!raw) return;
-    if (Array.isArray(raw)) {
-      raw.forEach(pushPersonObj);
-      return;
-    }
-    pushPersonObj(raw);
-    // 相容舊邏輯
-    pushName(memberLabel(raw) || personName(raw));
-  }
+/** 從人員資料列逐一取出「姓名 + open_id」配對，避免多人同列時 id 對錯人 */
+function forEachMemberAccountPerson(fields, cb) {
   var keys = ['帳號', '成員', '姓名', '名稱', '人員', 'Member', 'Account', '顯示名稱'];
-  keys.forEach(function(k) { pushField(fields[k]); });
-  return names;
+  var seen = {};
+  function emit(name, id) {
+    name = String(name || '').trim();
+    id = String(id || '').trim();
+    if (!name) return;
+    var key = name + '||' + id;
+    if (seen[key]) return;
+    seen[key] = 1;
+    cb({ name: name, id: id });
+  }
+  keys.forEach(function(k) {
+    var raw = (fields || {})[k];
+    if (!raw) return;
+    var items = Array.isArray(raw) ? raw : [raw];
+    items.forEach(function(x) {
+      if (!x) return;
+      if (typeof x === 'string') {
+        emit(x, '');
+        return;
+      }
+      var id = String(x.id || x.open_id || '').trim();
+      emit(x.name, id);
+      emit(x.en_name || x.enName, id);
+      emit(x.text, id);
+    });
+  });
 }
 
 function buildMembersMap() {
@@ -9475,96 +9478,64 @@ function buildMembersMap() {
     meta = meta || {};
     var role = meta.role || 'PM';
     var skipJournal = !!meta.skipJournal;
+    id = String(id || '').trim();
     if (!membersMap[name]) {
-      membersMap[name] = { id: id || '', name: name, role: role, skipJournal: skipJournal };
+      membersMap[name] = { id: id, name: name, role: role, skipJournal: skipJournal };
     } else {
-      if (id && !membersMap[name].id) membersMap[name].id = id;
+      if (id && /^ou_|^on_/i.test(id)) {
+        if (!membersMap[name].id || !/^ou_|^on_/i.test(membersMap[name].id)) {
+          membersMap[name].id = id;
+        }
+      }
       if (role === '設計師') membersMap[name].role = '設計師';
       if (skipJournal) membersMap[name].skipJournal = true;
     }
   }
+  function addPersonAlias(person, meta) {
+    if (!person) return;
+    var id = person.id || person.open_id || '';
+    var n = person.name || person.en_name || person.enName;
+    if (n) addMember(n, id, meta);
+    if (person.en_name || person.enName) addMember(person.en_name || person.enName, id, meta);
+  }
   membersData.forEach(function(m) {
     var f = m.fields || {};
-    var ids = memberFieldPersonIds(f);
-    var names = collectMemberAccountNames(f);
     var role = resolveMemberRole(f);
     var skipJournal = memberSkipsJournal(f);
-    if (!names.length) return;
-    names.forEach(function(name, idx) {
-      addMember(name, ids[idx] || ids[0] || '', { role: role, skipJournal: skipJournal });
+    var meta = { role: role, skipJournal: skipJournal };
+    forEachMemberAccountPerson(f, function(person) {
+      addMember(person.name, person.id, meta);
     });
   });
   tasksData.forEach(function(t) {
     var p = t.fields['負責人'];
-    if (Array.isArray(p)) {
-      p.forEach(function(person) {
-        if (!person) return;
-        var n = person.name || person.en_name || person.enName;
-        if (n) addMember(n, person.id || person.open_id);
-        if (person.en_name || person.enName) addMember(person.en_name || person.enName, person.id || person.open_id);
-      });
-    } else if (p && p[0] && p[0].name) {
-      addMember(p[0].name, p[0].id || p[0].open_id);
-    }
+    if (Array.isArray(p)) p.forEach(function(person) { addPersonAlias(person); });
   });
   workitemsData.forEach(function(wi) {
     ['負責夥伴', '執行夥伴'].forEach(function(key) {
       var p = wi.fields[key];
-      if (Array.isArray(p)) {
-        p.forEach(function(person) {
-          if (!person) return;
-          var n = person.name || person.en_name || person.enName;
-          if (n) addMember(n, person.id || person.open_id);
-          if (person.en_name || person.enName) addMember(person.en_name || person.enName, person.id || person.open_id);
-        });
-      } else if (p && p[0] && p[0].name) {
-        addMember(p[0].name, p[0].id || p[0].open_id);
-      }
+      if (Array.isArray(p)) p.forEach(function(person) { addPersonAlias(person); });
     });
   });
   projectsData.forEach(function(p) {
     var pm = p.fields['主PM'];
-    if (Array.isArray(pm)) {
-      pm.forEach(function(person) {
-        if (!person) return;
-        var n = person.name || person.en_name || person.enName;
-        if (n) addMember(n, person.id || person.open_id);
-        if (person.en_name || person.enName) addMember(person.en_name || person.enName, person.id || person.open_id);
-      });
-    } else if (pm && pm[0] && pm[0].name) {
-      addMember(pm[0].name, pm[0].id || pm[0].open_id);
-    }
+    if (Array.isArray(pm)) pm.forEach(function(person) { addPersonAlias(person); });
   });
 
-  // 把「免日報／設計師」標記依 open_id／姓名對應擴散到所有別名（解決 Max Xie 中英文不一致）
+  // 僅依 open_id 擴散免日報（避免姓名模糊比對造成錯配）
   var skipIds = {};
-  var skipNames = [];
-  Object.keys(membersMap).forEach(function(key) {
-    var entry = membersMap[key];
-    if (!entry || !entry.skipJournal) return;
-    if (entry.id) skipIds[entry.id] = 1;
-    skipNames.push(key);
-  });
   membersData.forEach(function(m) {
     if (!memberSkipsJournal(m.fields || {})) return;
-    memberFieldPersonIds(m.fields || {}).forEach(function(id) { if (id) skipIds[id] = 1; });
-    collectMemberAccountNames(m.fields || {}).forEach(function(n) {
-      if (n && skipNames.indexOf(n) < 0) skipNames.push(n);
+    forEachMemberAccountPerson(m.fields || {}, function(person) {
+      if (person.id && /^ou_|^on_/i.test(person.id)) skipIds[person.id] = 1;
+    });
+    memberFieldPersonIds(m.fields || {}).forEach(function(id) {
+      if (id && /^ou_|^on_/i.test(id)) skipIds[id] = 1;
     });
   });
   Object.keys(membersMap).forEach(function(key) {
     var entry = membersMap[key];
-    if (!entry) return;
-    if (entry.id && skipIds[entry.id]) {
-      entry.skipJournal = true;
-      return;
-    }
-    for (var i = 0; i < skipNames.length; i++) {
-      if (namesMatch(key, skipNames[i])) {
-        entry.skipJournal = true;
-        return;
-      }
-    }
+    if (entry && entry.id && skipIds[entry.id]) entry.skipJournal = true;
   });
 }
 
@@ -9577,7 +9548,40 @@ function memberLabel(field) {
 function getMemberNames() {
   var names = Object.keys(membersMap);
   if (!names.length) return ['—'];
-  return names;
+  return names.sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
+}
+
+/** 下拉選單：value 用 open_id（穩定），label 用顯示名（避免選 A 存成 B） */
+function getMemberSelectOptions() {
+  var byId = {};
+  var nameOnly = [];
+  Object.keys(membersMap).forEach(function(name) {
+    var m = membersMap[name];
+    if (!m) return;
+    var id = String(m.id || '').trim();
+    if (id && /^ou_|^on_/i.test(id)) {
+      if (!byId[id] || name.length > byId[id].length) byId[id] = name;
+    } else if (name && name !== '—') {
+      if (nameOnly.indexOf(name) < 0) nameOnly.push(name);
+    }
+  });
+  var labels = [];
+  var values = [];
+  Object.keys(byId).sort(function(a, b) {
+    return byId[a].localeCompare(byId[b], 'zh-Hant');
+  }).forEach(function(id) {
+    labels.push(byId[id]);
+    values.push(id);
+  });
+  nameOnly.sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); }).forEach(function(name) {
+    labels.push(name);
+    values.push(name);
+  });
+  if (!labels.length) {
+    labels = ['—'];
+    values = ['—'];
+  }
+  return { labels: labels, values: values };
 }
 
 function getJournalStaffNames() {
@@ -9586,16 +9590,45 @@ function getJournalStaffNames() {
 
 function fillSelectOptions(sel, options, values) {
   if (!sel) return;
+  var prev = sel.value;
   sel.innerHTML = options.map(function(label, i) {
     var val = values ? values[i] : label;
     return '<option value="' + escAttr(String(val)) + '">' + escAttr(String(label)) + '</option>';
   }).join('');
+  if (prev) {
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === prev) { sel.selectedIndex = i; break; }
+    }
+  }
 }
 
-function larkPerson(name) {
-  var m = membersMap[name];
-  if (m && m.id && /^ou_/i.test(String(m.id))) return [{ id: m.id }];
-  if (m && m.id && /^on_/i.test(String(m.id))) return [{ id: m.id }];
+function selectMemberOption(sel, personField) {
+  if (!sel) return;
+  var openId = getPersonOpenId(personField);
+  var name = personName(personField);
+  if (openId) {
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === openId) { sel.selectedIndex = i; return; }
+    }
+  }
+  if (name) {
+    for (var j = 0; j < sel.options.length; j++) {
+      if (sel.options[j].text === name || sel.options[j].value === name) {
+        sel.selectedIndex = j;
+        return;
+      }
+    }
+  }
+}
+
+function larkPerson(nameOrId) {
+  var raw = String(nameOrId || '').trim();
+  if (!raw || raw === '—') return undefined;
+  if (/^ou_/i.test(raw) || /^on_/i.test(raw)) return [{ id: raw }];
+  var m = membersMap[raw];
+  if (m && m.id && (/^ou_/i.test(String(m.id)) || /^on_/i.test(String(m.id)))) {
+    return [{ id: String(m.id), name: raw }];
+  }
   return undefined;
 }
 
@@ -9688,11 +9721,25 @@ function normalizeOptimisticFields(fields) {
     '主PM': 1, '負責PM': 1, '負責夥伴': 1, '執行夥伴': 1,
     '負責人': 1, '設計師': 1, '申請人': 1, '回報人': 1
   };
+  function labelForId(id) {
+    var found = '';
+    Object.keys(membersMap).forEach(function(name) {
+      if (membersMap[name] && membersMap[name].id === id) {
+        if (!found || name.length > found.length) found = name;
+      }
+    });
+    return found;
+  }
   Object.keys(fields || {}).forEach(function(k) {
     var v = fields[k];
     if (typeof v === 'string' && v && personKeys[k]) {
       var p = larkPerson(v);
-      out[k] = p ? [{ id: p[0].id, name: v }] : [{ name: v }];
+      if (p) {
+        var label = (/^ou_|^on_/i.test(v) ? labelForId(v) : v) || v;
+        out[k] = [{ id: p[0].id, name: label }];
+      } else {
+        out[k] = [{ name: v }];
+      }
     } else {
       out[k] = v;
     }
@@ -10037,21 +10084,11 @@ function openEditDesign(desId) {
   var wiSel = document.getElementById('ed-wi');
   if (wiSel && wiIds[0]) wiSel.value = wiIds[0];
   var pmSel = document.getElementById('ed-pm');
-  var pmName = personName(f['負責PM']);
-  if (pmSel) {
-    for (var i = 0; i < pmSel.options.length; i++) {
-      if (pmSel.options[i].text === pmName) { pmSel.selectedIndex = i; break; }
-    }
-  }
+  selectMemberOption(pmSel, f['負責PM']);
   document.getElementById('ed-item').value = f['項目'] || '';
   document.getElementById('ed-req').value = f['設計需求'] || '';
   var designerSel = document.getElementById('ed-designer');
-  var designerName = personName(f['設計師']);
-  if (designerSel) {
-    for (var j = 0; j < designerSel.options.length; j++) {
-      if (designerSel.options[j].text === designerName) { designerSel.selectedIndex = j; break; }
-    }
-  }
+  selectMemberOption(designerSel, f['設計師']);
   var statusSel = document.getElementById('ed-status');
   if (statusSel) {
     fillSelectOptions(statusSel, PROGRESS_OPTIONS);
@@ -10147,12 +10184,7 @@ function openEditExpense(expId) {
   var wiSel = document.getElementById('ee-wi');
   if (wiSel && wiIds[0]) wiSel.value = wiIds[0];
   var assigneeSel = document.getElementById('ee-assignee');
-  var assigneeName = personName(f['負責人']);
-  if (assigneeSel) {
-    for (var i = 0; i < assigneeSel.options.length; i++) {
-      if (assigneeSel.options[i].text === assigneeName) { assigneeSel.selectedIndex = i; break; }
-    }
-  }
+  selectMemberOption(assigneeSel, f['負責人']);
   var dateEl = document.getElementById('ee-date');
   if (dateEl) dateEl.value = f['日期'] ? tsToDateInput(f['日期']) : '';
   var actual = parseFloat(f['實際金額']) || 0;
@@ -10232,16 +10264,8 @@ function openEditWorkItem(wiId) {
   document.getElementById('ew-name').value = f['工作項目名稱'] || '';
   var assigneeSel = document.getElementById('ew-assignee');
   var execSel = document.getElementById('ew-exec-partner');
-  var assigneeName = personName(f['負責夥伴']) || personName(f['負責人']);
-  var execName = personName(f['執行夥伴']);
-  for (var i = 0; i < assigneeSel.options.length; i++) {
-    if (assigneeSel.options[i].text === assigneeName) { assigneeSel.selectedIndex = i; break; }
-  }
-  if (execSel) {
-    for (var j = 0; j < execSel.options.length; j++) {
-      if (execSel.options[j].text === execName) { execSel.selectedIndex = j; break; }
-    }
-  }
+  selectMemberOption(assigneeSel, f['負責夥伴'] || f['負責人']);
+  selectMemberOption(execSel, f['執行夥伴']);
   document.getElementById('ew-end').value = f['截止日'] ? tsToDateInput(f['截止日']) : '';
   document.getElementById('ew-cost').value = f['可用成本'] ? 'NT$' + Math.round(f['可用成本']).toLocaleString() : '';
   var wNum = parseWeightNum(f);
@@ -10282,11 +10306,12 @@ function saveEditWorkItem() {
     }
   }
   var fields = {
-    '工作項目名稱': name,
-    '負責夥伴': document.getElementById('ew-assignee').value
+    '工作項目名稱': name
   };
-  var execVal = document.getElementById('ew-exec-partner').value;
-  if (execVal) fields['執行夥伴'] = execVal;
+  var partnerPerson = larkPerson(document.getElementById('ew-assignee').value);
+  if (partnerPerson) fields['負責夥伴'] = partnerPerson;
+  var execPerson = larkPerson(document.getElementById('ew-exec-partner').value);
+  if (execPerson) fields['執行夥伴'] = execPerson;
   if (endVal) fields['截止日'] = dateInputToTs(endVal);
   if (costRaw) fields['可用成本'] = parseInt(costRaw, 10);
   fields['權重'] = parseWeight(String(weightPct));
@@ -10312,10 +10337,7 @@ function openEditProject(projId) {
   refreshEditSelects();
   document.getElementById('ep-name').value = f['標案名稱'] || '';
   var pmSel = document.getElementById('ep-pm');
-  var pmName = personName(f['主PM']);
-  for (var i = 0; i < pmSel.options.length; i++) {
-    if (pmSel.options[i].text === pmName) { pmSel.selectedIndex = i; break; }
-  }
+  selectMemberOption(pmSel, f['主PM']);
   document.getElementById('ep-start').value = f['合約開始日'] ? tsToDateInput(f['合約開始日']) : '';
   document.getElementById('ep-end').value = f['合約結束日'] ? tsToDateInput(f['合約結束日']) : '';
   document.getElementById('ep-amount').value = f['合約金額'] ? 'NT$' + Math.round(f['合約金額']).toLocaleString() : '';
@@ -10340,10 +10362,11 @@ function saveEditProject() {
   var amount = amtRaw ? parseInt(amtRaw, 10) : 0;
   var fields = {
     '標案名稱': name,
-    '主PM': document.getElementById('ep-pm').value,
     '合約開始日': dateInputToTs(document.getElementById('ep-start').value),
     '合約結束日': dateInputToTs(document.getElementById('ep-end').value)
   };
+  var pmPerson = larkPerson(document.getElementById('ep-pm').value);
+  if (pmPerson) fields['主PM'] = pmPerson;
   if (amount) {
     fields['合約金額'] = amount;
     fields['合約未稅金額'] = Math.round(amount / 1.05);
@@ -10366,10 +10389,10 @@ function saveEditProject() {
 }
 
 function refreshEditSelects() {
-  var names = getMemberNames();
+  var memberOpts = getMemberSelectOptions();
   ['ew-assignee', 'ew-exec-partner', 'ep-pm'].forEach(function(id) {
     var sel = document.getElementById(id);
-    if (sel) fillSelectOptions(sel, names);
+    if (sel) fillSelectOptions(sel, memberOpts.labels, memberOpts.values);
   });
   var tdWi = document.getElementById('td-wi');
   if (tdWi) fillTaskDetailWiSelect(tdWi);
@@ -10491,8 +10514,9 @@ function preparePopup(id) {
     var sl = document.getElementById('sl');
     if (sl && !sl.children.length) {
       sl.innerHTML = workRowHtml();
-      fillSelectOptions(sl.querySelector('.wi-member'), getMemberNames());
-      fillSelectOptions(sl.querySelector('.wi-exec-member'), getMemberNames());
+      var mOpts = getMemberSelectOptions();
+      fillSelectOptions(sl.querySelector('.wi-member'), mOpts.labels, mOpts.values);
+      fillSelectOptions(sl.querySelector('.wi-exec-member'), mOpts.labels, mOpts.values);
     }
     onNwProjChange();
   }
@@ -10545,9 +10569,9 @@ function onEditExpenseProjChange() {
 function refreshFormSelects() {
   // also refresh edit selects if they exist
   if (document.getElementById('td-wi')) refreshEditSelects();
-  var names = getMemberNames();
+  var memberOpts = getMemberSelectOptions();
   document.querySelectorAll('select[data-members]').forEach(function(sel) {
-    fillSelectOptions(sel, names);
+    fillSelectOptions(sel, memberOpts.labels, memberOpts.values);
   });
   var projSel = document.getElementById('nw-proj');
   if (projSel) {
