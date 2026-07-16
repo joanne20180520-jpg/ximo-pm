@@ -648,6 +648,11 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .pay-save-notice-btn:hover{background:#bfdbfe}
 .pay-save-notice-btn:active{transform:scale(0.97)}
 body.role-designer #lp,body.role-designer #rp,body.role-designer #tl,body.role-designer #tr{display:none!important}
+.design-filter-bar{display:none;align-items:center;gap:10px;padding:8px 12px;margin-bottom:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);position:sticky;top:0;z-index:20;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+body.role-designer .design-filter-bar{display:flex}
+.design-filter-label{font-size:12px;font-weight:600;color:var(--t2);flex-shrink:0;white-space:nowrap}
+.design-proj-picker-mount{flex:1;max-width:320px;min-width:180px}
+.design-proj-picker-mount .proj-picker{margin:0}
 .gtb-status-readonly{font-size:11px;color:var(--t2);padding:2px 8px;background:var(--sf2);border-radius:4px}
 .dl-design-badge{font-size:10px;background:#d4a017;color:#fff;padding:1px 5px;border-radius:3px;margin-right:4px;vertical-align:middle}
 .bpri:active{background:var(--c1)!important;transform:scale(0.97);box-shadow:0 0 0 3px rgba(45,106,79,.28)}
@@ -936,6 +941,10 @@ button.btn-loading::after{content:'…';margin-left:2px}
 
     <!-- 設計任務單 -->
     <div id="pg-d" class="page">
+      <div id="design-filter-bar" class="design-filter-bar">
+        <span class="design-filter-label">篩選標案</span>
+        <div id="design-proj-picker-mount" class="design-proj-picker-mount"></div>
+      </div>
       <div id="design-area"><div style="padding:20px;color:var(--t3);font-size:12px;text-align:center">載入中...</div></div>
     </div>
 
@@ -3572,8 +3581,14 @@ document.addEventListener('DOMContentLoaded', function() {
   });
   document.addEventListener('click', function(e) {
     if (!projectPickerOpen) return;
-    var root = document.getElementById('proj-picker-root');
-    if (root && !root.contains(e.target)) {
+    var roots = [
+      document.getElementById('proj-picker-root'),
+      document.getElementById('design-proj-picker-root')
+    ];
+    var inside = roots.some(function(root) {
+      return root && root.contains(e.target);
+    });
+    if (!inside) {
       projectPickerOpen = false;
       renderProjects();
     }
@@ -5564,8 +5579,17 @@ function toggleProjectPicker(ev) {
 }
 function onProjectPickerSearch(val) {
   projectPickerSearchQuery = String(val || '').trim();
-  renderProjects();
   projectPickerOpen = true;
+  renderProjects();
+  var activeMount = document.body.classList.contains('role-designer')
+    ? document.getElementById('design-proj-picker-mount')
+    : document.getElementById('proj-picker-mount');
+  var input = activeMount && activeMount.querySelector('.proj-picker-search input');
+  if (input) {
+    input.focus();
+    var len = input.value.length;
+    try { input.setSelectionRange(len, len); } catch (e) {}
+  }
 }
 function selectAllVisibleProjects() {
   var q = projectPickerSearchQuery;
@@ -5631,10 +5655,7 @@ function syncTruncatedTitle(el, fullText) {
   if (el.scrollHeight > el.clientHeight + 1) el.title = full;
   else el.removeAttribute('title');
 }
-function renderProjects() {
-  var pickerMount = document.getElementById('proj-picker-mount');
-  var container = document.getElementById('pl-projects');
-  if (!container && !pickerMount) return;
+function buildProjectPickerDropdownHTML(rootId) {
   var selectedCount = selectedProjectIds.size;
   var btnLabel = selectedCount ? ('已選 ' + selectedCount + ' 個標案 ▼') : '請選擇標案 ▼';
   var panelHidden = projectPickerOpen ? '' : ' hidden';
@@ -5654,16 +5675,25 @@ function renderProjects() {
       + '<span class="proj-picker-dot" style="background:' + color + '"></span>'
       + '<span>' + escHtml(name) + '</span></label>';
   });
-  var dropdownHTML = '<div class="proj-picker" id="proj-picker-root">'
+  return '<div class="proj-picker" id="' + escAttr(rootId) + '">'
     + '<button type="button" class="proj-picker-btn" onclick="toggleProjectPicker(event)">'
     + '<span>' + escHtml(btnLabel) + '</span><span style="font-size:9px;opacity:.7">' + (projectPickerOpen ? '▲' : '▼') + '</span></button>'
-    + '<div class="proj-picker-panel' + panelHidden + '" id="proj-picker-panel" onclick="event.stopPropagation()">'
+    + '<div class="proj-picker-panel' + panelHidden + '" onclick="event.stopPropagation()">'
     + '<div class="proj-picker-search"><input type="text" placeholder="搜尋標案…" value="' + escAttr(searchVal) + '" oninput="onProjectPickerSearch(this.value)"></div>'
     + '<div class="proj-picker-actions"><button type="button" onclick="selectAllVisibleProjects()">全選</button><button type="button" onclick="clearProjectSelection()">清除</button></div>'
     + '<div class="proj-picker-list">' + (listHTML || '<div style="padding:8px 10px;color:var(--t3);font-size:11px">無符合的標案</div>')
     + (pickerIdx ? '<div style="padding:4px 10px 6px;font-size:10px;color:var(--t3);border-top:1px solid var(--border)">共 ' + pickerIdx + ' 個標案可選</div>' : '')
     + '</div>'
     + '</div></div>';
+}
+function renderProjects() {
+  var pickerMount = document.getElementById('proj-picker-mount');
+  var designPickerMount = document.getElementById('design-proj-picker-mount');
+  var container = document.getElementById('pl-projects');
+  if (!container && !pickerMount && !designPickerMount) return;
+  var selectedCount = selectedProjectIds.size;
+  var leftDropdownHTML = buildProjectPickerDropdownHTML('proj-picker-root');
+  var designDropdownHTML = buildProjectPickerDropdownHTML('design-proj-picker-root');
   var cardsHTML = '';
   projectsData.forEach(function(rec) {
     if (!isProjectVisible(rec)) return;
@@ -5673,7 +5703,8 @@ function renderProjects() {
   var cardsBlock = cardsHTML
     ? ('<div class="pl-cards">' + cardsHTML + '</div>')
     : '<div style="padding:8px 10px;color:var(--t3);font-size:11px">' + (selectedCount ? '所選標案無工作項目' : '請點上方藍色按鈕選擇標案') + '</div>';
-  if (pickerMount) pickerMount.innerHTML = dropdownHTML;
+  if (pickerMount) pickerMount.innerHTML = leftDropdownHTML;
+  if (designPickerMount) designPickerMount.innerHTML = designDropdownHTML;
   if (container) container.innerHTML = cardsBlock;
   fillAiProjectSelect();
 }
@@ -9433,7 +9464,7 @@ function renderDesigns() {
   });
   var designEmpty = selectedProjectIds.size
     ? '所選標案尚無設計任務'
-    : '請從左側選擇要顯示的標案';
+    : (isPMRole() ? '請從左側選擇要顯示的標案' : '請先在上方篩選要顯示的標案');
   area.innerHTML = html || '<div style="padding:20px;color:var(--t3);text-align:center">' + designEmpty + '</div>';
 }
 
