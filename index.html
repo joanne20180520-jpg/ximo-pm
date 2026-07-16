@@ -1103,9 +1103,9 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div id="dd-proj-tag" class="td-proj"></div>
   <div id="dd-meta" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
-    <div class="fg" style="margin:0"><label>初稿交付日</label><input type="date" id="dd-draft"></div>
-    <div class="fg" style="margin:0"><label>完稿交付日</label><input type="date" id="dd-final"></div>
-    <div class="fg" style="margin:0"><label>成品交付日</label><input type="date" id="dd-deliver"></div>
+    <div class="fg" style="margin:0"><label>初稿交付日</label><input type="date" id="dd-draft" onchange="onOptionalDateClear(this)"></div>
+    <div class="fg" style="margin:0"><label>完稿交付日</label><input type="date" id="dd-final" onchange="onOptionalDateClear(this)"></div>
+    <div class="fg" style="margin:0"><label>成品交付日</label><input type="date" id="dd-deliver" onchange="onOptionalDateClear(this)"></div>
   </div>
   <div class="fg"><label>今日回報分類</label><div class="td-cats" id="dd-cats">
     <span class="td-cat active" data-cat="doing" onclick="pickDesignReportCat(this)">進行中</span>
@@ -1121,17 +1121,17 @@ button.btn-loading::after{content:'…';margin-left:2px}
 
 <div class="po" id="pp-daily-log"><div class="pp pp-daily"><div class="pph pph-report"><h3>每日工作回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-daily-log')">✕</button></div><div class="ppb">
   <div class="dl-date" id="dl-date-display"></div>
-  <div class="fg"><label>回報人</label><select id="dl-author" data-members onchange="onDailyLogAuthorChange()"></select></div>
+  <div class="fg"><label>回報人</label><select id="dl-author" onchange="onDailyLogAuthorChange()"></select></div>
   <div class="fg"><label>任務分類</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-person-filter" id="dl-person-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">預設只顯示目前回報人負責的項目；若今日已填過日報，會自動帶入先前分類。選「不列入」可從日報移除該項；誤填可點左下「刪除今日日報」。</div></div>
   <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="選擇任務後自動產生…"></textarea></div>
 </div><div class="ppf"><button class="bcan bdel-action" id="dl-delete-btn" onclick="deleteDailyJournal()" style="display:none">刪除今日日報</button><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
 <div class="po" id="pp-exp"><div class="pp"><div class="pph"><h3>新增支出明細</h3><button class="ppc" onclick="cl('pp-exp')">✕</button></div><div class="ppb"><div class="fg"><label>支出細項</label><input type="text" id="ex-name" placeholder="茶葉5斤"></div><div class="fg"><label>所屬標案</label><select id="ex-proj" onchange="onExpenseProjChange()"></select></div><div class="fg"><label>所屬工作項目</label><select id="ex-wi"></select></div><div class="fg"><label>負責人</label><select id="ex-assignee" data-members></select></div><div class="fg"><label>預估花費</label><input type="text" class="money-input" id="ex-est" placeholder="NT$0"></div><div class="fg"><label>日期</label><input type="date" id="ex-date"></div><div class="fg"><label>實際金額</label><input type="text" class="money-input" placeholder="NT$0" id="aa" oninput="calcE()"></div><div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ua" readonly style="background:#f0f0f0;color:var(--t3)"></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-exp')">取消</button><button class="bpri" onclick="saveExpense()">新增</button></div></div></div>
 
-<div class="po" id="pp-des"><div class="pp ppw"><div class="pph"><h3>建立新設計任務</h3><button class="ppc" onclick="cl('pp-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ds-name" placeholder="Logo"></div><div class="fg"><label>所屬工作項目</label><select id="ds-wi"></select></div><div class="fg"><label>負責PM</label><select id="ds-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ds-item" placeholder="A"></div><div class="fg"><label>設計需求</label><input type="text" id="ds-req" placeholder="AA"></div><div class="fg"><label>設計師</label><select id="ds-designer" data-members></select></div><div class="fg"><label>進度狀態</label><select id="ds-status"></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" class="money-input" id="ds-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" class="money-input" id="ds-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ds-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ds-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ds-deliver"></div><div class="fg"><label>備註</label><textarea id="ds-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-des')">取消</button><button class="bpri" onclick="saveDesign()">新增</button></div></div></div>
+<div class="po" id="pp-des"><div class="pp ppw"><div class="pph"><h3>建立新設計任務</h3><button class="ppc" onclick="cl('pp-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ds-name" placeholder="Logo"></div><div class="fg"><label>所屬工作項目</label><select id="ds-wi"></select></div><div class="fg"><label>負責PM</label><select id="ds-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ds-item" placeholder="A"></div><div class="fg"><label>設計需求</label><input type="text" id="ds-req" placeholder="AA"></div><div class="fg"><label>設計師</label><select id="ds-designer" data-members></select></div><div class="fg"><label>進度狀態</label><select id="ds-status"></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" class="money-input" id="ds-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" class="money-input" id="ds-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ds-draft" onchange="onOptionalDateClear(this)"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ds-final" onchange="onOptionalDateClear(this)"></div><div class="fg"><label>成品交付日</label><input type="date" id="ds-deliver" onchange="onOptionalDateClear(this)"></div><div class="fg"><label>備註</label><textarea id="ds-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-des')">取消</button><button class="bpri" onclick="saveDesign()">新增</button></div></div></div>
 
 <!-- 修改設計任務單 -->
-<div class="po" id="pp-edit-des"><div class="pp ppw"><div class="pph"><h3>修改設計任務單</h3><button class="ppc" onclick="cl('pp-edit-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ed-name"></div><div class="fg"><label>所屬工作項目</label><select id="ed-wi"></select></div><div class="fg"><label>負責PM</label><select id="ed-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ed-item"></div><div class="fg"><label>設計需求</label><input type="text" id="ed-req"></div><div class="fg"><label>設計師</label><select id="ed-designer" data-members></select></div><div class="fg"><label>進度狀態</label><select id="ed-status"></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" class="money-input" id="ed-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" class="money-input" id="ed-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ed-draft"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ed-final"></div><div class="fg"><label>成品交付日</label><input type="date" id="ed-deliver"></div><div class="fg"><label>備註</label><textarea id="ed-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan bdel-action" id="ed-del-btn" onclick="deleteDesignFromEdit()">刪除</button><button class="bcan" onclick="cl('pp-edit-des')">取消</button><button class="bpri" onclick="saveEditDesign()">儲存</button></div></div></div>
+<div class="po" id="pp-edit-des"><div class="pp ppw"><div class="pph"><h3>修改設計任務單</h3><button class="ppc" onclick="cl('pp-edit-des')">✕</button></div><div class="ppb2"><div><div class="fg"><label>設計項目名稱</label><input type="text" id="ed-name"></div><div class="fg"><label>所屬工作項目</label><select id="ed-wi"></select></div><div class="fg"><label>負責PM</label><select id="ed-pm" data-members></select></div><div class="fg"><label>項目</label><input type="text" id="ed-item"></div><div class="fg"><label>設計需求</label><input type="text" id="ed-req"></div><div class="fg"><label>設計師</label><select id="ed-designer" data-members></select></div><div class="fg"><label>進度狀態</label><select id="ed-status"></select></div></div><div><div class="fg"><label>預算金費</label><input type="text" class="money-input" id="ed-budget" placeholder="NT$0"></div><div class="fg"><label>實際花費</label><input type="text" class="money-input" id="ed-spent" placeholder="NT$0"></div><div class="fg"><label>初稿交付日</label><input type="date" id="ed-draft" onchange="onOptionalDateClear(this)"></div><div class="fg"><label>完稿交付日</label><input type="date" id="ed-final" onchange="onOptionalDateClear(this)"></div><div class="fg"><label>成品交付日</label><input type="date" id="ed-deliver" onchange="onOptionalDateClear(this)"></div><div class="fg"><label>備註</label><textarea id="ed-remark" rows="2" placeholder="備註..."></textarea></div></div></div><div class="ppf"><button class="bcan bdel-action" id="ed-del-btn" onclick="deleteDesignFromEdit()">刪除</button><button class="bcan" onclick="cl('pp-edit-des')">取消</button><button class="bpri" onclick="saveEditDesign()">儲存</button></div></div></div>
 
 <!-- 付款預覽（元頂集團格式） -->
 <div class="po" id="pp-prev" style="align-items:flex-start;padding-top:20px">
@@ -4812,6 +4812,29 @@ function dateInputToTs(str) {
   var p = str.split('-');
   return new Date(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10)).getTime();
 }
+function optionalDateInputToTs(str) {
+  if (!str || !String(str).trim()) return null;
+  return dateInputToTs(str);
+}
+function resetDateInput(el) {
+  if (!el) return;
+  el.value = '';
+  try { el.valueAsDate = null; } catch (e) {}
+  var parent = el.parentNode;
+  if (!parent) return;
+  var clone = el.cloneNode(true);
+  clone.value = '';
+  parent.replaceChild(clone, el);
+}
+function onOptionalDateClear(el) {
+  if (!el || el.value) return;
+  resetDateInput(el);
+}
+function applyOptionalDateField(fields, key, inputValue) {
+  var ts = optionalDateInputToTs(inputValue);
+  if (ts != null) fields[key] = ts;
+  else fields[key] = null;
+}
 function projColorByName(name) {
   for (var i = 0; i < projectsData.length; i++) {
     if ((projectsData[i].fields['標案名稱'] || '') === name) return PROJECT_COLORS[i % PROJECT_COLORS.length];
@@ -6614,8 +6637,11 @@ function confirmDesignReport() {
   var ddFinal = document.getElementById('dd-final');
   var ddDeliver = document.getElementById('dd-deliver');
   if (ddDraft && ddDraft.value) designFields['初稿交付日'] = dateInputToTs(ddDraft.value);
+  else designFields['初稿交付日'] = null;
   if (ddFinal && ddFinal.value) designFields['完稿交付日'] = dateInputToTs(ddFinal.value);
+  else designFields['完稿交付日'] = null;
   if (ddDeliver && ddDeliver.value) designFields['成品交付日'] = dateInputToTs(ddDeliver.value);
+  else designFields['成品交付日'] = null;
 
   var btn = document.getElementById('dd-confirm-btn');
   if (btn) { btn.disabled = true; btn.textContent = '儲存中…'; }
@@ -7533,19 +7559,32 @@ function selectDailyLogAuthor(name) {
 }
 
 function buildDailyLogAuthorNames(items) {
-  var names = getJournalStaffNames();
+  var names = getJournalStaffNames().filter(function(name) {
+    return isJournalStaffName(name) && !isDesignerMember(name);
+  });
   if (!names.length) {
     var nameSet = {};
     (items || []).forEach(function(it) {
-      if (it.assignee && isJournalStaffName(it.assignee)) nameSet[it.assignee] = 1;
+      if (it.assignee && isJournalStaffName(it.assignee) && !isDesignerMember(it.assignee)) {
+        nameSet[it.assignee] = 1;
+      }
     });
     names = Object.keys(nameSet);
   }
   var myName = getMyPersonName();
-  if (myName && isJournalStaffName(myName) && !names.some(function(n) { return namesMatch(n, myName); })) {
+  if (myName && isJournalStaffName(myName) && !isDesignerMember(myName)
+      && !names.some(function(n) { return namesMatch(n, myName); })) {
     names.unshift(myName);
   }
   return names.length ? names : ['（未指定）'];
+}
+
+function fillDailyLogAuthorSelect() {
+  var authorSel = document.getElementById('dl-author');
+  if (!authorSel) return;
+  var prev = authorSel.value;
+  fillSelectOptions(authorSel, buildDailyLogAuthorNames(getDailyLogAllItems()));
+  if (prev) selectDailyLogAuthor(prev);
 }
 
 function updateDailyLogDeleteButton() {
@@ -10288,12 +10327,9 @@ function saveEditDesign() {
   var designer = larkPerson(document.getElementById('ed-designer').value);
   if (pm) fields['負責PM'] = pm;
   if (designer) fields['設計師'] = designer;
-  var draft = document.getElementById('ed-draft').value;
-  var final = document.getElementById('ed-final').value;
-  var deliver = document.getElementById('ed-deliver').value;
-  if (draft) fields['初稿交付日'] = dateInputToTs(draft);
-  if (final) fields['完稿交付日'] = dateInputToTs(final);
-  if (deliver) fields['成品交付日'] = dateInputToTs(deliver);
+  applyOptionalDateField(fields, '初稿交付日', document.getElementById('ed-draft').value);
+  applyOptionalDateField(fields, '完稿交付日', document.getElementById('ed-final').value);
+  applyOptionalDateField(fields, '成品交付日', document.getElementById('ed-deliver').value);
 
   showConfirm({
     type: 'edit',
@@ -10711,6 +10747,7 @@ function refreshFormSelects() {
   if (document.getElementById('td-wi')) refreshEditSelects();
   var memberOpts = getMemberSelectOptions();
   document.querySelectorAll('select[data-members]').forEach(function(sel) {
+    if (sel.id === 'dl-author') return;
     fillSelectOptions(sel, memberOpts.labels, memberOpts.values);
   });
   var projSel = document.getElementById('nw-proj');
@@ -10762,6 +10799,7 @@ function refreshFormSelects() {
     var sel = document.getElementById(id);
     if (sel) fillSelectOptions(sel, PROGRESS_OPTIONS);
   });
+  fillDailyLogAuthorSelect();
 }
 
 function saveWorkItems() {
@@ -10901,12 +10939,9 @@ function saveDesign() {
   var designer = larkPerson(document.getElementById('ds-designer').value);
   if (pm) fields['負責PM'] = pm;
   if (designer) fields['設計師'] = designer;
-  var draft = document.getElementById('ds-draft').value;
-  var final = document.getElementById('ds-final').value;
-  var deliver = document.getElementById('ds-deliver').value;
-  if (draft) fields['初稿交付日'] = dateInputToTs(draft);
-  if (final) fields['完稿交付日'] = dateInputToTs(final);
-  if (deliver) fields['成品交付日'] = dateInputToTs(deliver);
+  applyOptionalDateField(fields, '初稿交付日', document.getElementById('ds-draft').value);
+  applyOptionalDateField(fields, '完稿交付日', document.getElementById('ds-final').value);
+  applyOptionalDateField(fields, '成品交付日', document.getElementById('ds-deliver').value);
 
   cl('pp-des');
   document.getElementById('ds-name').value = '';

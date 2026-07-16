@@ -1709,6 +1709,10 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
       out[name] = val;
       return;
     }
+    if (m.type === 5 && val === null) {
+      out[name] = null;
+      return;
+    }
     if (BITABLE_LINK_FIELD_TYPES[m.type]) {
       out[name] = normalizeLinkFieldValue(val);
       return;
