@@ -1392,6 +1392,78 @@ function sw(btn,id){
   if(id==='pg-p') applyLoginUserToForms();
   if(id==='pg-ai') { renderAiPage(); syncAiComposerBounds(); }
 }
+
+var DEEP_LINK_STORAGE_KEY = 'ximo-deeplink-page';
+var DEEP_LINK_PAGES = {
+  // 時程管理（任務期限）
+  schedule: 'pg-s',
+  gantt: 'pg-s',
+  '時程管理': 'pg-s',
+  '時程': 'pg-s',
+  // 費用管理（預算）
+  budget: 'pg-b',
+  '費用管理': 'pg-b',
+  '費用': 'pg-b',
+  '預算': 'pg-b',
+  // 支出明細
+  expense: 'pg-e',
+  expenses: 'pg-e',
+  '支出明細': 'pg-e',
+  '支出': 'pg-e',
+  // 付款申請
+  payment: 'pg-p',
+  '付款申請': 'pg-p',
+  '付款': 'pg-p',
+  // 設計任務單
+  design: 'pg-d',
+  designs: 'pg-d',
+  '設計任務單': 'pg-d',
+  '設計': 'pg-d',
+  // 墨日誌
+  journal: 'pg-journal',
+  '墨日誌': 'pg-journal',
+  '日報': 'pg-journal',
+  // AI 分析
+  ai: 'pg-ai',
+  'ai分析': 'pg-ai',
+  'AI分析': 'pg-ai'
+};
+
+function captureDeepLinkFromUrl() {
+  try {
+    var params = new URLSearchParams(window.location.search);
+    var page = (params.get('page') || params.get('tab') || '').trim();
+    if (!page) return;
+    var key = page.toLowerCase();
+    var pageId = DEEP_LINK_PAGES[page] || DEEP_LINK_PAGES[key];
+    if (!pageId) return;
+    sessionStorage.setItem(DEEP_LINK_STORAGE_KEY, pageId);
+  } catch (e) {}
+}
+
+function applyDeepLinkPage() {
+  try {
+    var pageId = sessionStorage.getItem(DEEP_LINK_STORAGE_KEY) || '';
+    if (!pageId) {
+      var params = new URLSearchParams(window.location.search);
+      var page = (params.get('page') || params.get('tab') || '').trim();
+      var key = page.toLowerCase();
+      pageId = DEEP_LINK_PAGES[page] || DEEP_LINK_PAGES[key] || '';
+    }
+    if (!pageId) return;
+    sessionStorage.removeItem(DEEP_LINK_STORAGE_KEY);
+    var btn = document.querySelector('.tbar-tab[onclick*="' + pageId + '"]');
+    if (!btn) return;
+    sw(btn, pageId);
+    if (window.history.replaceState) {
+      var url = new URL(window.location.href);
+      url.searchParams.delete('page');
+      url.searchParams.delete('tab');
+      var qs = url.searchParams.toString();
+      window.history.replaceState({}, '', url.pathname + (qs ? '?' + qs : '') + url.hash);
+    }
+  } catch (e) {}
+}
 function sf(el,color){
   document.querySelectorAll('.ftag').forEach(function(t){t.style.background='';t.style.color='';});
   el.style.background=color||'var(--accent)';
@@ -3248,7 +3320,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260715v119';
+var APP_BUILD = '20260716v121';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v4';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -3928,10 +4000,15 @@ function applyAuthorizedSession(result, opts) {
   }
   if (!authReady) {
     authReady = true;
-    loadData();
+    Promise.resolve(loadData()).then(function() {
+      applyDeepLinkPage();
+    }).catch(function() {
+      applyDeepLinkPage();
+    });
   } else if (!opts.silent) {
     updateTodoLoginLabel();
     renderTeamPanel();
+    applyDeepLinkPage();
   }
   initPayFormDefaults();
   applyLoginUserToForms();
@@ -10862,6 +10939,7 @@ function bootApp() {
   if (isLikelyLarkClient()) {
     ensureH5Sdk().catch(function() {});
   }
+  captureDeepLinkFromUrl();
   initTaskGroupMode();
   runAuthGate();
 }
