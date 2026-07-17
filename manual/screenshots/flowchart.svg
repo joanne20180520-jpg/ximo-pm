@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="980" viewBox="0 0 900 980">
+  <rect width="900" height="980" fill="#f5f5f7"/>
+  <defs>
+    <style>
+      .t { font-family: "PingFang TC", "Noto Sans TC", "Helvetica Neue", sans-serif; fill: #28282d; text-anchor: middle; }
+      .t1 { font-size: 15px; font-weight: 600; }
+      .t2 { font-size: 13px; }
+      .t3 { font-size: 12px; }
+      .arr { stroke: #a0a0a5; stroke-width: 1; fill: none; }
+      .ah { fill: #a0a0a5; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#a0a0a5"/>
+    </marker>
+  </defs>
+  <!-- top -->
+  <rect x="320" y="30" width="260" height="56" rx="10" fill="#d2e6fa" stroke="#b4b4b9"/>
+  <text class="t t1" x="450" y="52">開案</text>
+  <text class="t t2" x="450" y="72">＋新增服務建議書</text>
+  <line class="arr" x1="450" y1="86" x2="450" y2="110" marker-end="url(#arrow)"/>
+
+  <rect x="320" y="110" width="260" height="48" rx="10" fill="#e6e6eb" stroke="#b4b4b9"/>
+  <text class="t t1" x="450" y="140">確認新增標案</text>
+  <line class="arr" x1="450" y1="158" x2="450" y2="185" marker-end="url(#arrow)"/>
+
+  <rect x="310" y="185" width="280" height="52" rx="10" fill="#d2e6fa" stroke="#b4b4b9"/>
+  <text class="t t1" x="450" y="217">標案建立後的日常執行</text>
+
+  <!-- fork -->
+  <line class="arr" x1="450" y1="237" x2="450" y2="255"/>
+  <line class="arr" x1="158" y1="255" x2="742" y2="255"/>
+  <line class="arr" x1="158" y1="255" x2="158" y2="280" marker-end="url(#arrow)"/>
+  <line class="arr" x1="450" y1="255" x2="450" y2="280" marker-end="url(#arrow)"/>
+  <line class="arr" x1="742" y1="255" x2="742" y2="280" marker-end="url(#arrow)"/>
+
+  <!-- left green -->
+  <rect x="33" y="280" width="250" height="58" rx="10" fill="#d2ebd7" stroke="#b4b4b9"/>
+  <text class="t t1" x="158" y="303">新增任務</text>
+  <text class="t t2" x="158" y="323">（顯示在時程圖）</text>
+  <line class="arr" x1="158" y1="338" x2="158" y2="366" marker-end="url(#arrow)"/>
+  <rect x="33" y="366" width="250" height="52" rx="10" fill="#d2ebd7" stroke="#b4b4b9"/>
+  <text class="t t3" x="158" y="397">墨日誌 / 設計任務單 / AI分析</text>
+
+  <!-- mid pink -->
+  <rect x="325" y="280" width="250" height="48" rx="10" fill="#fadcdc" stroke="#b4b4b9"/>
+  <text class="t t1" x="450" y="310">錢的流程</text>
+  <line class="arr" x1="450" y1="328" x2="450" y2="356" marker-end="url(#arrow)"/>
+  <rect x="325" y="356" width="250" height="48" rx="10" fill="#fadcdc" stroke="#b4b4b9"/>
+  <text class="t t1" x="450" y="386">支出明細（記帳）</text>
+  <line class="arr" x1="450" y1="404" x2="450" y2="432" marker-end="url(#arrow)"/>
+  <rect x="325" y="432" width="250" height="48" rx="10" fill="#fadcdc" stroke="#b4b4b9"/>
+  <text class="t t1" x="450" y="462">費用管理（總覽）</text>
+  <line class="arr" x1="450" y1="480" x2="450" y2="508" marker-end="url(#arrow)"/>
+  <rect x="325" y="508" width="250" height="62" rx="10" fill="#fadcdc" stroke="#b4b4b9"/>
+  <text class="t t1" x="450" y="532">付款申請</text>
+  <text class="t t3" x="450" y="552">（要核銷請款或提早請款時才用）</text>
+
+  <!-- right orange -->
+  <rect x="617" y="280" width="250" height="48" rx="10" fill="#f5e1c3" stroke="#b4b4b9"/>
+  <text class="t t1" x="742" y="310">時程管理 · 封存</text>
+  <line class="arr" x1="742" y1="328" x2="742" y2="356" marker-end="url(#arrow)"/>
+  <rect x="617" y="356" width="250" height="48" rx="10" fill="#f5e1c3" stroke="#b4b4b9"/>
+  <text class="t t1" x="742" y="386">已完成標案 或 無標到標案</text>
+  <line class="arr" x1="742" y1="404" x2="742" y2="432" marker-end="url(#arrow)"/>
+  <rect x="617" y="432" width="250" height="48" rx="10" fill="#f5e1c3" stroke="#b4b4b9"/>
+  <text class="t t3" x="742" y="462">Lark 知識庫新建 → 複製連結</text>
+  <line class="arr" x1="742" y1="480" x2="742" y2="508" marker-end="url(#arrow)"/>
+  <rect x="617" y="508" width="250" height="58" rx="10" fill="#f5e1c3" stroke="#b4b4b9"/>
+  <text class="t t1" x="742" y="530">時程管理選「封存」</text>
+  <text class="t t3" x="742" y="550">→ 貼網址 → 確認封存</text>
+  <line class="arr" x1="742" y1="566" x2="742" y2="594" marker-end="url(#arrow)"/>
+  <rect x="617" y="594" width="250" height="48" rx="10" fill="#e6e6eb" stroke="#b4b4b9"/>
+  <text class="t t1" x="742" y="624">跳到知識庫畫面</text>
+</svg>
