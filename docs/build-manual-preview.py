@@ -111,7 +111,48 @@ def parse_flow_cards(body_lines):
 
 lines = text.splitlines()
 
-def render_html():
+GATE_STYLE = '''
+#manual-gate{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:#f4f1ec}
+#manual-gate .gate-box{max-width:340px;text-align:center;padding:28px 26px;background:#fff;border:1px solid #e4dfd7;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+#manual-gate h2{all:unset;display:block;font-size:17px;font-weight:700;color:#1c1b19;margin-bottom:8px}
+#manual-gate p{font-size:13px;color:#6a655c;line-height:1.6;margin:0 0 18px}
+#manual-gate a.gate-btn{display:inline-block;padding:11px 22px;border-radius:8px;background:#2d6a4f;color:#fff;text-decoration:none;font-size:14px;font-weight:600}
+#manual-gate a.gate-btn:hover{background:#25583f}
+body.gated main,body.gated .hint{display:none}
+'''
+
+GATE_SCRIPT = '''
+<div id="manual-gate">
+  <div class="gate-box">
+    <h2>請先登入系統</h2>
+    <p>操作手冊僅供內部人員檢視。請先用 Lark 登入璽墨系統，再回到本頁。</p>
+    <a class="gate-btn" href="/">前往登入</a>
+  </div>
+</div>
+<script>
+(function(){
+  var KEY='ximo-login-user', MAX=10*60*60*1000;
+  function ok(){
+    try{
+      var raw=localStorage.getItem(KEY)||sessionStorage.getItem(KEY);
+      if(!raw) return false;
+      var u=JSON.parse(raw);
+      if(!u||!(u.name||u.enName)) return false;
+      var started=Number(u.sessionStartedAt||0);
+      if(started && Date.now()-started>MAX) return false;
+      var exp=Number(u.tokenExpiresAt||0);
+      if(exp && Date.now()>exp) return false;
+      return true;
+    }catch(e){return false;}
+  }
+  var gate=document.getElementById('manual-gate');
+  if(ok()){ if(gate) gate.remove(); document.body.classList.remove('gated'); }
+  else { document.body.classList.add('gated'); }
+})();
+</script>
+'''
+
+def render_html(gated=False):
     html_parts = []
     i = 0
     in_code = False
@@ -184,7 +225,10 @@ def render_html():
         elif line.strip() == '待更新': html_parts.append('<p class="pending">待更新</p>')
         else: html_parts.append(f'<p>{inline(line)}</p>')
         i += 1
-    return f'<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>璽墨專案管理系統 · 操作手冊</title><style>{style}</style></head><body><div class="hint">自學操作手冊 · 黃數字＝步驟</div><main>{"".join(html_parts)}</main></body></html>'
+    gate_css = GATE_STYLE if gated else ''
+    gate_body = GATE_SCRIPT if gated else ''
+    body_cls = ' class="gated"' if gated else ''
+    return f'<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>璽墨專案管理系統 · 操作手冊</title><style>{style}{gate_css}</style></head><body{body_cls}><div class="hint">自學操作手冊 · 黃數字＝步驟</div><main>{"".join(html_parts)}</main>{gate_body}</body></html>'
 
 style = r'''
 :root{--bg:#f4f1ec;--card:#fff;--text:#1c1b19;--border:#e4dfd7;--accent:#2d6a4f;--accent-soft:#e8f2ec;--badge:#f5c400;--badge-text:#1c1b19}
@@ -242,12 +286,12 @@ th{background:#f3efe9;font-weight:700;color:#3d3a35}
 @media(max-width:560px){.flow-cards{grid-template-columns:1fr}}
 '''
 
-# local offline preview (base64 images)
+# local offline preview (base64 images, no login gate)
 EMBED_MODE = 'base64'
-out_html.write_text(render_html(), encoding='utf-8')
+out_html.write_text(render_html(gated=False), encoding='utf-8')
 print('built', out_html)
 
-# public shareable site
+# public shareable site (relative images + login gate)
 EMBED_MODE = 'relative'
 public_dir.mkdir(parents=True, exist_ok=True)
 shots_dst.mkdir(parents=True, exist_ok=True)
@@ -255,5 +299,5 @@ for src in re.findall(r'!\[[^\]]*\]\(([^)]+)\)', text):
     src_path = (base / src.lstrip('./')).resolve()
     if src_path.exists():
         shutil.copy2(src_path, shots_dst / src_path.name)
-public_html.write_text(render_html(), encoding='utf-8')
+public_html.write_text(render_html(gated=True), encoding='utf-8')
 print('built', public_html)
