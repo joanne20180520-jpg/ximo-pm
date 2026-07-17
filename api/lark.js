@@ -1691,10 +1691,15 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
   const paymentAliases = {
     '申請人': ['申請人員', 'Applicant', '申请人']
   };
+  // yd 工作項目表欄位為「可用成本未稅」；前端仍寫「可用成本」
+  const fieldAliases = Object.assign({
+    '可用成本': ['可用成本未稅'],
+    '可用成本未稅': ['可用成本']
+  }, paymentAliases);
   const src = Object.assign({}, fields);
-  Object.keys(paymentAliases).forEach(function(canonical) {
+  Object.keys(fieldAliases).forEach(function(canonical) {
     if (allowed[canonical]) return;
-    paymentAliases[canonical].forEach(function(alt) {
+    fieldAliases[canonical].forEach(function(alt) {
       if (allowed[alt] && src[canonical] !== undefined && src[alt] === undefined) {
         src[alt] = src[canonical];
         delete src[canonical];

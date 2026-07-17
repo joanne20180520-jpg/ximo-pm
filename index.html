@@ -5398,6 +5398,15 @@ function showDataHint(msg) {
 }
 
 function ntf(n) { return 'NT$' + Math.round(n).toLocaleString(); }
+
+/** yd 工作項目表為「可用成本未稅」，joanne 為「可用成本」 */
+function wiAvailableCost(wf) {
+  if (!wf) return 0;
+  var raw = wf['可用成本未稅'];
+  if (raw == null || raw === '') raw = wf['可用成本'];
+  return parseFloat(raw) || 0;
+}
+
 function formatMoneyField(el) {
   if (!el || el.readOnly) return;
   var v = parseMoney(el.value);
@@ -5440,7 +5449,7 @@ function renderBudget() {
     workitems.forEach(function(wi) {
       var wf = wi.fields;
       var wName = wf['工作項目名稱'] || '';
-      var wAvail = parseFloat(wf['可用成本']) || 0;
+      var wAvail = wiAvailableCost(wf);
       var exp = expenseByWi[wi.record_id] || { spent: 0, untax: 0 };
       var wSpent = exp.spent;
       if (!wSpent && wf['實際花費']) wSpent = parseFloat(wf['實際花費']) || 0;
@@ -10488,7 +10497,8 @@ function openEditWorkItem(wiId) {
   selectMemberOption(assigneeSel, f['負責夥伴'] || f['負責人']);
   selectMemberOption(execSel, f['執行夥伴']);
   document.getElementById('ew-end').value = f['截止日'] ? tsToDateInput(f['截止日']) : '';
-  document.getElementById('ew-cost').value = f['可用成本'] ? 'NT$' + Math.round(f['可用成本']).toLocaleString() : '';
+  var ewCost = wiAvailableCost(f);
+  document.getElementById('ew-cost').value = ewCost ? 'NT$' + Math.round(ewCost).toLocaleString() : '';
   var wNum = parseWeightNum(f);
   document.getElementById('ew-weight').value = wNum != null && wNum > 0 ? formatWeightPct(wNum) : '';
   updateEditWiWeightRemain();
@@ -10510,7 +10520,7 @@ function saveEditWorkItem() {
     '負責人': rec.fields['負責人'],
     '執行夥伴': rec.fields['執行夥伴'],
     '截止日': rec.fields['截止日'],
-    '可用成本': rec.fields['可用成本'],
+    '可用成本': wiAvailableCost(rec.fields),
     '權重': rec.fields['權重']
   } : null;
   var name = document.getElementById('ew-name').value.trim();
