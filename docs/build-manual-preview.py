@@ -34,6 +34,12 @@ def img_tag(alt, src, css_class=''):
     cls = f' class="{css_class}"' if css_class else ''
     if EMBED_MODE == 'relative':
         return f'<img{cls} src="screenshots/{src_path.name}" alt="{esc(alt)}"/>'
+    if EMBED_MODE == 'remote_url':
+        name = src_path.name
+        if name.endswith('.svg'):
+            name = name.replace('.svg', '.png')
+        url = f'https://ximo-pm-umber.vercel.app/manual/screenshots/{name}'
+        return f'<img{cls} src="{url}" alt="{esc(alt)}"/>'
     if src_path.suffix.lower() == '.svg':
         svg = re.sub(r'<\?xml[^?]*\?>', '', src_path.read_text(encoding='utf-8')).strip()
         return f'<div class="svg-wrap" role="img" aria-label="{esc(alt)}">{svg}</div>'
@@ -287,17 +293,21 @@ th{background:#f3efe9;font-weight:700;color:#3d3a35}
 '''
 
 # local offline preview (base64 images, no login gate)
-EMBED_MODE = 'base64'
-out_html.write_text(render_html(gated=False), encoding='utf-8')
-print('built', out_html)
+if __name__ == '__main__':
+    EMBED_MODE = 'base64'
+    out_html.write_text(render_html(gated=False), encoding='utf-8')
+    print('built', out_html)
 
-# public shareable site (relative images + login gate)
-EMBED_MODE = 'relative'
-public_dir.mkdir(parents=True, exist_ok=True)
-shots_dst.mkdir(parents=True, exist_ok=True)
-for src in re.findall(r'!\[[^\]]*\]\(([^)]+)\)', text):
-    src_path = (base / src.lstrip('./')).resolve()
-    if src_path.exists():
-        shutil.copy2(src_path, shots_dst / src_path.name)
-public_html.write_text(render_html(gated=True), encoding='utf-8')
-print('built', public_html)
+    # public shareable site (relative images + login gate)
+    EMBED_MODE = 'relative'
+    public_dir.mkdir(parents=True, exist_ok=True)
+    shots_dst.mkdir(parents=True, exist_ok=True)
+    for src in re.findall(r'!\[[^\]]*\]\(([^)]+)\)', text):
+        src_path = (base / src.lstrip('./')).resolve()
+        if src_path.exists():
+            shutil.copy2(src_path, shots_dst / src_path.name)
+    flow_png = shots_src / 'flowchart.png'
+    if flow_png.exists():
+        shutil.copy2(flow_png, shots_dst / flow_png.name)
+    public_html.write_text(render_html(gated=True), encoding='utf-8')
+    print('built', public_html)
