@@ -846,7 +846,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="ah">
       <span class="sl">Projects</span>
       <div class="sa">
-        <button class="badd" onclick="openPopup('pp-proj')">＋上傳服務建議書</button>
+        <button class="badd" onclick="openPopup('pp-proj')">＋新增服務建議書</button>
         <button class="badd" onclick="openPopup('pp-work')">＋工作項目</button>
       </div>
       <div id="proj-picker-mount"></div>
@@ -1014,12 +1014,12 @@ button.btn-loading::after{content:'…';margin-left:2px}
 </div><!-- /body -->
 
 <!-- ══ POPUPS ══ -->
-<div class="po" id="pp-proj"><div class="pp ppw pp-proj-modal"><div class="pph"><h3>上傳服務建議書</h3><button type="button" class="ppc" onclick="closeProcProjPopup(event)">✕</button></div><div class="ppb">
+<div class="po" id="pp-proj"><div class="pp ppw pp-proj-modal"><div class="pph"><h3>新增服務建議書</h3><button type="button" class="ppc" onclick="closeProcProjPopup(event)">✕</button></div><div class="ppb">
   <div class="proc-upload-wrap" id="proc-upload-zone">
     <label for="proc-file" class="upload-zone-inner" id="proc-upload-label">
       <div class="uz-empty" id="proc-empty-state">
         <div class="uz-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 18v2a1 1 0 001 1h14a1 1 0 001-1v-2"/></svg></div>
-        <div class="uz-title">點此上傳服務建議書</div>
+        <div class="uz-title">點此選擇服務建議書</div>
         <div class="uz-formats">支援 PDF、Word（.docx）、經費表圖片（.jpg / .png）</div>
       </div>
     </label>
@@ -2808,7 +2808,7 @@ function setWorkItemsImportSaving(saving) {
 function saveProjectImport() {
   if (projectImportSaving) return;
   var name = document.getElementById('np-name').value.trim();
-  if (!name) { alert('請填寫標案名稱（或上傳服務建議書自動帶入）'); return; }
+  if (!name) { alert('請填寫標案名稱（或新增服務建議書自動帶入）'); return; }
   var pm = document.getElementById('np-pm').value;
   var start = document.getElementById('np-start').value;
   var end = document.getElementById('np-end').value;
@@ -3659,10 +3659,12 @@ var loginRefreshPromise = null;
 var currentUserRole = 'PM';
 var ROLE_PAGES = {
   PM: ['pg-s', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
+  '管理員': ['pg-s', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
   '設計師': ['pg-d']
 };
 
 function isPMRole() {
+  // PM、管理員皆可看全部頁面與新增；設計師才限縮
   return currentUserRole !== '設計師';
 }
 
@@ -9547,6 +9549,15 @@ function isDesignerRoleToken(raw) {
   return r.toLowerCase() === 'designer';
 }
 
+function isAdminRoleToken(raw) {
+  var r = String(raw || '').trim();
+  if (!r) return false;
+  if (r === '管理員' || r === '管理员') return true;
+  if (r.indexOf('管理員') >= 0 || r.indexOf('管理员') >= 0) return true;
+  var lower = r.toLowerCase();
+  return lower === 'admin' || lower === 'administrator';
+}
+
 function isJournalExemptToken(raw) {
   var r = String(raw || '').trim();
   if (!r) return false;
@@ -9559,16 +9570,27 @@ function isJournalExemptToken(raw) {
 function memberSkipsJournal(fields) {
   var tokens = collectMemberRoleTokens(fields);
   for (var i = 0; i < tokens.length; i++) {
-    if (isDesignerRoleToken(tokens[i]) || isJournalExemptToken(tokens[i])) return true;
+    if (isDesignerRoleToken(tokens[i]) || isJournalExemptToken(tokens[i]) || isAdminRoleToken(tokens[i])) return true;
+  }
+  return false;
+}
+
+function memberHidesFromSelects(fields) {
+  var tokens = collectMemberRoleTokens(fields);
+  for (var i = 0; i < tokens.length; i++) {
+    if (isAdminRoleToken(tokens[i])) return true;
   }
   return false;
 }
 
 function resolveMemberRole(fields) {
-  // 「免日報」只影響日報名單，不影響頁面權限；只有「設計師」會限縮權限
+  // 「免日報」只影響日報名單；「管理員」全頁權限但不進人員選單；「設計師」限縮頁面
   var tokens = collectMemberRoleTokens(fields);
   for (var i = 0; i < tokens.length; i++) {
-    if (isDesignerRoleToken(tokens[i])) return '設計師';
+    if (isAdminRoleToken(tokens[i])) return '管理員';
+  }
+  for (var j = 0; j < tokens.length; j++) {
+    if (isDesignerRoleToken(tokens[j])) return '設計師';
   }
   return 'PM';
 }
@@ -9589,11 +9611,12 @@ function isJournalStaffName(name) {
       if (person.id && membersMap[name] && membersMap[name].id && person.id === membersMap[name].id) hit = true;
     });
     if (!hit) continue;
-    if (memberSkipsJournal(f) || resolveMemberRole(f) === '設計師') return false;
+    if (memberSkipsJournal(f) || resolveMemberRole(f) === '設計師' || resolveMemberRole(f) === '管理員') return false;
   }
   var m = membersMap[name];
   if (m) {
     if (m.skipJournal) return false;
+    if (m.hideFromSelects || m.role === '管理員') return false;
     if (isDesignerRoleToken(m.role)) return false;
     if (m.id) {
       var keys = Object.keys(membersMap);
@@ -9613,7 +9636,8 @@ function getJournalStaffNames() {
   membersData.forEach(function(m) {
     var f = m.fields || {};
     if (memberSkipsJournal(f)) return;
-    if (resolveMemberRole(f) === '設計師') return;
+    var role = resolveMemberRole(f);
+    if (role === '設計師' || role === '管理員') return;
     forEachMemberAccountPerson(f, function(person) {
       if (!person.name || seen[person.name]) return;
       seen[person.name] = 1;
@@ -9661,17 +9685,20 @@ function buildMembersMap() {
     meta = meta || {};
     var role = meta.role || 'PM';
     var skipJournal = !!meta.skipJournal;
+    var hideFromSelects = !!meta.hideFromSelects || role === '管理員';
     id = String(id || '').trim();
     if (!membersMap[name]) {
-      membersMap[name] = { id: id, name: name, role: role, skipJournal: skipJournal };
+      membersMap[name] = { id: id, name: name, role: role, skipJournal: skipJournal, hideFromSelects: hideFromSelects };
     } else {
       if (id && /^ou_|^on_/i.test(id)) {
         if (!membersMap[name].id || !/^ou_|^on_/i.test(membersMap[name].id)) {
           membersMap[name].id = id;
         }
       }
-      if (role === '設計師') membersMap[name].role = '設計師';
+      if (role === '管理員') membersMap[name].role = '管理員';
+      else if (role === '設計師' && membersMap[name].role !== '管理員') membersMap[name].role = '設計師';
       if (skipJournal) membersMap[name].skipJournal = true;
+      if (hideFromSelects) membersMap[name].hideFromSelects = true;
     }
   }
   function addPersonAlias(person, meta) {
@@ -9685,7 +9712,8 @@ function buildMembersMap() {
     var f = m.fields || {};
     var role = resolveMemberRole(f);
     var skipJournal = memberSkipsJournal(f);
-    var meta = { role: role, skipJournal: skipJournal };
+    var hideFromSelects = memberHidesFromSelects(f);
+    var meta = { role: role, skipJournal: skipJournal, hideFromSelects: hideFromSelects };
     forEachMemberAccountPerson(f, function(person) {
       addMember(person.name, person.id, meta);
     });
@@ -9705,20 +9733,35 @@ function buildMembersMap() {
     if (Array.isArray(pm)) pm.forEach(function(person) { addPersonAlias(person); });
   });
 
-  // 僅依 open_id 擴散免日報（避免姓名模糊比對造成錯配）
+  // 僅依 open_id 擴散免日報／管理員隱藏（避免姓名模糊比對造成錯配）
   var skipIds = {};
+  var hideIds = {};
   membersData.forEach(function(m) {
-    if (!memberSkipsJournal(m.fields || {})) return;
-    forEachMemberAccountPerson(m.fields || {}, function(person) {
-      if (person.id && /^ou_|^on_/i.test(person.id)) skipIds[person.id] = 1;
+    var f = m.fields || {};
+    var skip = memberSkipsJournal(f);
+    var hide = memberHidesFromSelects(f);
+    if (!skip && !hide) return;
+    forEachMemberAccountPerson(f, function(person) {
+      if (person.id && /^ou_|^on_/i.test(person.id)) {
+        if (skip) skipIds[person.id] = 1;
+        if (hide) hideIds[person.id] = 1;
+      }
     });
-    memberFieldPersonIds(m.fields || {}).forEach(function(id) {
-      if (id && /^ou_|^on_/i.test(id)) skipIds[id] = 1;
+    memberFieldPersonIds(f).forEach(function(id) {
+      if (id && /^ou_|^on_/i.test(id)) {
+        if (skip) skipIds[id] = 1;
+        if (hide) hideIds[id] = 1;
+      }
     });
   });
   Object.keys(membersMap).forEach(function(key) {
     var entry = membersMap[key];
-    if (entry && entry.id && skipIds[entry.id]) entry.skipJournal = true;
+    if (!entry || !entry.id) return;
+    if (skipIds[entry.id]) entry.skipJournal = true;
+    if (hideIds[entry.id]) {
+      entry.hideFromSelects = true;
+      entry.role = '管理員';
+    }
   });
 }
 
@@ -9734,13 +9777,14 @@ function getMemberNames() {
   return names.sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
 }
 
-/** 下拉選單：value 用 open_id（穩定），label 用顯示名（避免選 A 存成 B） */
+/** 下拉選單：value 用 open_id（穩定），label 用顯示名（避免選 A 存成 B）；管理員不列入 */
 function getMemberSelectOptions() {
   var byId = {};
   var nameOnly = [];
   Object.keys(membersMap).forEach(function(name) {
     var m = membersMap[name];
     if (!m) return;
+    if (m.hideFromSelects || m.role === '管理員') return;
     var id = String(m.id || '').trim();
     if (id && /^ou_|^on_/i.test(id)) {
       if (!byId[id] || name.length > byId[id].length) byId[id] = name;
