@@ -27,6 +27,8 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .tbar-tab{padding:6px 12px;border-radius:var(--rs);border:none;background:none;font-size:12px;cursor:pointer;color:var(--t2);transition:all .15s;white-space:nowrap;flex-shrink:0}
 .tbar-tab:hover{background:var(--sf2);color:var(--text)}
 .tbar-tab.active{background:var(--accent);color:#fff}
+.tbar-help{padding:6px 12px;border-radius:var(--rs);border:1px dashed var(--border);background:none;font-size:12px;cursor:pointer;color:var(--t3);transition:all .15s;white-space:nowrap;flex-shrink:0;text-decoration:none;margin-left:4px}
+.tbar-help:hover{background:var(--sf2);color:var(--text);border-color:#cfc8bc}
 .topbar-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto}
 #boot-status{display:none;position:fixed;top:var(--th);left:0;right:0;z-index:300;background:#fff3e0;color:#92400e;padding:6px 12px;font-size:11px;text-align:center;border-bottom:1px solid #fcd34d}
 #boot-status.syncing{background:#eef4fc;color:#1a4a7a;border-bottom-color:#b8cfe8}
@@ -831,6 +833,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <button class="tbar-tab" onclick="sw(this,'pg-d')">設計任務單</button>
     <button class="tbar-tab" onclick="sw(this,'pg-journal')">墨日誌</button>
     <button class="tbar-tab" onclick="sw(this,'pg-ai')">AI分析</button>
+    <a class="tbar-help" href="/manual/" target="_blank" rel="noopener noreferrer" title="開啟操作手冊（新分頁）">操作手冊</a>
   </nav>
 </div>
 
