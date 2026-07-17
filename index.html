@@ -931,7 +931,6 @@ button.btn-loading::after{content:'…';margin-left:2px}
             <div class="fg"><label>備註</label><input type="text" id="p-remark" placeholder="備註說明"></div>
             <div class="fg"><label>付款總金額</label><input type="text" class="money-input" id="p-total" placeholder="NT$0" oninput="updatePayUpper()"><div class="p-upper" id="p-upper"></div></div>
             <div class="bss">
-              <button class="bsm" onclick="savePaymentOnly()">僅存檔（不列印）</button>
               <button class="bsub" onclick="prevPay()">確認資料預覽</button>
             </div>
           </div>
@@ -1144,7 +1143,6 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="ppb"><iframe id="prev-iframe" title="付款申請單預覽"></iframe></div>
     <div class="ppf">
       <button class="bcan" onclick="cl('pp-prev')">返回修改</button>
-      <button class="bsm" onclick="savePaymentOnly(true)">僅存檔不列印</button>
       <button class="bsm" onclick="openPayPrintTab()">新分頁列印</button>
       <button class="bpri" onclick="doPrint()">🖨 確認列印並存檔</button>
     </div>
