@@ -41,8 +41,12 @@ def img_tag(alt, src, css_class=''):
         url = f'https://ximo-pm-umber.vercel.app/manual/screenshots/{name}'
         return f'<img{cls} src="{url}" alt="{esc(alt)}"/>'
     if src_path.suffix.lower() == '.svg':
-        svg = re.sub(r'<\?xml[^?]*\?>', '', src_path.read_text(encoding='utf-8')).strip()
-        return f'<div class="svg-wrap" role="img" aria-label="{esc(alt)}">{svg}</div>'
+        png_path = src_path.with_suffix('.png')
+        if png_path.exists():
+            src_path = png_path
+        else:
+            svg = re.sub(r'<\?xml[^?]*\?>', '', src_path.read_text(encoding='utf-8')).strip()
+            return f'<div class="svg-wrap" role="img" aria-label="{esc(alt)}">{svg}</div>'
     data = base64.b64encode(src_path.read_bytes()).decode('ascii')
     return f'<img{cls} src="data:image/png;base64,{data}" alt="{esc(alt)}"/>'
 
@@ -309,5 +313,6 @@ if __name__ == '__main__':
     flow_png = shots_src / 'flowchart.png'
     if flow_png.exists():
         shutil.copy2(flow_png, shots_dst / flow_png.name)
-    public_html.write_text(render_html(gated=True), encoding='utf-8')
+    # public shareable site — open to anyone (no login gate)
+    public_html.write_text(render_html(gated=False), encoding='utf-8')
     print('built', public_html)
