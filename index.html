@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>璽墨 專案管理系統</title>
+<title>Demo專案管理系統</title>
 <style>
 :root {
   --bg:#edeae4; --surface:#fff; --sf2:#f7f5f2; --border:#e2ddd8;
@@ -831,7 +831,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <button class="tbar-tab" onclick="sw(this,'pg-e')">支出明細</button>
     <button class="tbar-tab" onclick="sw(this,'pg-p')">付款申請</button>
     <button class="tbar-tab" onclick="sw(this,'pg-d')">設計任務單</button>
-    <button class="tbar-tab" onclick="sw(this,'pg-journal')">墨日誌</button>
+    <button class="tbar-tab" onclick="sw(this,'pg-journal')">日誌</button>
     <button class="tbar-tab" onclick="sw(this,'pg-ai')">AI分析</button>
     <a class="tbar-help" href="/manual/" target="_blank" rel="noopener noreferrer" title="開啟操作手冊（新分頁）">操作手冊</a>
   </nav>
@@ -950,11 +950,11 @@ button.btn-loading::after{content:'…';margin-left:2px}
       <div id="design-area"><div style="padding:20px;color:var(--t3);font-size:12px;text-align:center">載入中...</div></div>
     </div>
 
-    <!-- 墨日誌 -->
+    <!-- 日誌 -->
     <div id="pg-journal" class="page">
       <div class="jpage-single">
         <div class="jpage-toolbar">
-          <h3>墨日誌小天地</h3>
+          <h3>日誌小天地</h3>
           <div class="j-date-nav">
             <button type="button" class="j-date-btn" onclick="shiftJournalDay(-1)" title="前一天">‹</button>
             <input type="date" id="journal-date-input" class="j-date-input" onchange="onJournalDateChange(this.value)">
@@ -1429,9 +1429,9 @@ var DEEP_LINK_PAGES = {
   designs: 'pg-d',
   '設計任務單': 'pg-d',
   '設計': 'pg-d',
-  // 墨日誌
+  // 日誌
   journal: 'pg-journal',
-  '墨日誌': 'pg-journal',
+  '日誌': 'pg-journal',
   '日報': 'pg-journal',
   // AI 分析
   ai: 'pg-ai',
@@ -7620,7 +7620,7 @@ function deleteDailyJournal() {
   }
   var d = dailyLogDate;
   var label = (author && author !== '（未指定）' ? author + ' ' : '') + (d.getMonth() + 1) + '/' + d.getDate();
-  if (!confirm('確定刪除「' + label + '」的日報？刪除後墨日誌看板也會一併移除。')) return;
+  if (!confirm('確定刪除「' + label + '」的日報？刪除後日誌看板也會一併移除。')) return;
 
   var btn = document.getElementById('dl-delete-btn');
   if (btn) { btn.disabled = true; btn.textContent = '刪除中…'; }
@@ -9105,7 +9105,7 @@ function buildLocalJournalSnapshot(projectId) {
   var latestRecs = dayKeys.length ? byDay[dayKeys[0]] : [];
   var latestMerge = latestRecs.length ? mergeAiJournalSummaries(latestRecs) : null;
   var hasJournal = recs.length > 0 && !!latestMerge;
-  var noJournalMsg = '此標案尚無墨日誌日報紀錄，請至墨日誌填寫今日回報。';
+  var noJournalMsg = '此標案尚無日誌日報紀錄，請至日誌填寫今日回報。';
   var cats = { done: [], doing: [], block: [], notStarted: [] };
   var allNames = tasks.map(function(t) { return (t.fields && t.fields['任務名稱']) || '未命名'; });
   if (latestMerge) {
@@ -9160,7 +9160,7 @@ function getAiJournalSnapshotForView(metrics, projectId) {
       monthLabel: (new Date().getMonth() + 1) + '月',
       hasJournal: false,
       done: [], doing: [], block: [], notStarted: [],
-      overallSummary: '此標案尚無墨日誌日報紀錄，請至墨日誌填寫今日回報。'
+      overallSummary: '此標案尚無日誌日報紀錄，請至日誌填寫今日回報。'
     };
   }
   return snap;
@@ -9176,7 +9176,7 @@ function buildAiJournalSnapshotHtml(snapshot) {
     monthLabel: (new Date().getMonth() + 1) + '月',
     hasJournal: false,
     counts: { done: 0, doing: 0, block: 0, notStarted: 0 },
-    overallSummary: '此標案尚無墨日誌日報紀錄，請至墨日誌填寫今日回報。'
+    overallSummary: '此標案尚無日誌日報紀錄，請至日誌填寫今日回報。'
   };
   var c = snapshot.counts || {
     done: (snapshot.done || []).length,
@@ -9187,7 +9187,7 @@ function buildAiJournalSnapshotHtml(snapshot) {
   var html = '<div class="ai-hist-block"><div class="ai-hist-head">🕐 日報快照</div><div class="ai-snap-box">';
   html += '<div class="ai-snap-title">' + escHtml(snapshot.monthLabel || '') + '任務</div>';
   if (snapshot.hasJournal === false) {
-    html += '<div class="ai-snap-empty-note">' + escHtml(snapshot.overallSummary || '此標案尚無墨日誌日報紀錄，請至墨日誌填寫今日回報。') + '</div>';
+    html += '<div class="ai-snap-empty-note">' + escHtml(snapshot.overallSummary || '此標案尚無日誌日報紀錄，請至日誌填寫今日回報。') + '</div>';
   }
   html += '<div class="ai-snap-kpi-row">';
   html += '<div class="ai-snap-kpi ok"><div class="ai-snap-kpi-val">' + escHtml(String(c.done)) + '</div><div class="ai-snap-kpi-label">已完成</div></div>';
@@ -9216,7 +9216,7 @@ function buildTaskAnalysisFromLocal(projectId, snapshot) {
       parts.push('【逾期】' + (f['任務名稱'] || '未命名') + '（逾期 ' + overdueDays + ' 天）：建議立即追蹤進度或調整完成日，避免影響後續時程。');
     }
   });
-  if (!parts.length) return '目前無卡關或逾期任務，可維持現有進度；建議持續更新墨日誌以便追蹤。';
+  if (!parts.length) return '目前無卡關或逾期任務，可維持現有進度；建議持續更新日誌以便追蹤。';
   return parts.join('\n\n');
 }
 
@@ -9639,7 +9639,7 @@ function isJournalStaffName(name) {
   return true;
 }
 
-/** 墨日誌應填名單：只看人員資料表，不是今日回報人／任務負責人 */
+/** 日誌應填名單：只看人員資料表，不是今日回報人／任務負責人 */
 function getJournalStaffNames() {
   var names = [];
   var seen = {};
