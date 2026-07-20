@@ -189,11 +189,24 @@ def render_html(gated=False):
                     rows.append(lines[j]); j += 1
                 if 'flowchart' in src:
                     html_parts.append(f'<figure class="flowchart">{img_tag(alt, src)}</figure>')
+                    html_parts.append(
+                        '<div class="flow-expand-card">'
+                        '<p>側欄空間較窄，完整流程圖請用新分頁查看。</p>'
+                        '<a href="/manual/" target="_blank" rel="noopener noreferrer">新分頁看完整流程圖</a>'
+                        '</div>'
+                    )
                     html_parts.append(f'<div class="table-wrap">{parse_table(rows)}</div>')
                 else:
                     html_parts.append(f'<section class="card lr"><div class="lr-img">{img_tag(alt, src)}</div><div class="lr-txt">{parse_table(rows)}</div></section>')
                 i = j; continue
             html_parts.append(f'<figure class="{figure_class(src)}">{img_tag(alt, src)}</figure>')
+            if 'flowchart' in src:
+                html_parts.append(
+                    '<div class="flow-expand-card">'
+                    '<p>側欄空間較窄，完整流程圖請用新分頁查看。</p>'
+                    '<a class="flow-full-link" href="/manual/" target="_blank" rel="noopener noreferrer">新分頁看完整流程圖</a>'
+                    '</div>'
+                )
             i += 1; continue
         if line.strip() == ':::flow':
             body = []
@@ -238,7 +251,7 @@ def render_html(gated=False):
     gate_css = GATE_STYLE if gated else ''
     gate_body = GATE_SCRIPT if gated else ''
     body_cls = ' class="gated"' if gated else ''
-    return f'<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>璽墨專案管理系統 · 操作手冊</title><style>{style}{gate_css}</style></head><body{body_cls}><div class="hint">自學操作手冊 · 黃數字＝步驟</div><main>{"".join(html_parts)}</main>{gate_body}<script>if(window.self!==window.top){{var h=document.querySelector(".hint");if(h)h.style.display="none";document.body.classList.add("embedded");}}</script></body></html>'
+    return f'<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>璽墨專案管理系統 · 操作手冊</title><style>{style}{gate_css}</style></head><body{body_cls}><div class="hint">自學操作手冊 · 黃數字＝步驟</div><main>{"".join(html_parts)}</main>{gate_body}<script>(function(){{if(window.self===window.top)return;var h=document.querySelector(".hint");if(h)h.style.display="none";document.body.classList.add("embedded");document.querySelectorAll(".flow-expand-card a").forEach(function(a){{a.href=(location.protocol==="file:")?"教育訓練操作手冊-預覽.html":"/manual/";}});}})();</script></body></html>'
 
 style = r'''
 :root{--bg:#f4f1ec;--card:#fff;--text:#1c1b19;--border:#e4dfd7;--accent:#2d6a4f;--accent-soft:#e8f2ec;--badge:#f5c400;--badge-text:#1c1b19}
@@ -289,7 +302,23 @@ th{background:#f3efe9;font-weight:700;color:#3d3a35}
 .lr-txt .step-table th:first-child,.lr-txt .step-table td.num{width:40px}
 .flowchart{margin:12px 0 20px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;text-align:center}
 .flowchart .svg-wrap{display:inline-block;max-width:100%}
-.flowchart svg{max-width:700px;width:100%;height:auto}
+.flowchart svg,.flowchart img{max-width:700px;width:100%;height:auto;display:block;margin:0 auto}
+.flow-expand-hint{display:none}
+.flow-expand-card{display:none}
+body.embedded .flowchart{display:none}
+body.embedded .flow-expand-hint{display:none}
+body.embedded .flow-expand-card{
+  display:block;margin:8px 0 16px;padding:14px 14px 12px;background:var(--card);
+  border:1px solid var(--border);border-radius:12px;text-align:left
+}
+body.embedded .flow-expand-card p{margin:0 0 10px;font-size:13px;color:#3d3a35;line-height:1.55}
+body.embedded .flow-expand-card a{
+  display:inline-flex;align-items:center;padding:8px 12px;border-radius:8px;
+  background:var(--accent);color:#fff;text-decoration:none;font-size:13px;font-weight:600
+}
+body.embedded .flow-expand-card a:hover{background:#25583f}
+body.embedded .flow-cards{grid-template-columns:1fr;gap:8px}
+body.embedded .flow-card{padding:12px}
 .solo{margin:12px 0 18px;background:transparent;border:none;border-radius:0;padding:0}
 .solo img{display:block;max-width:100%;width:auto;height:auto;border-radius:8px;border:1px solid var(--border)}
 .solo.compact img{max-width:320px}
