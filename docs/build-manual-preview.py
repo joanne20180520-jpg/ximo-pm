@@ -238,7 +238,7 @@ def render_html(gated=False):
     gate_css = GATE_STYLE if gated else ''
     gate_body = GATE_SCRIPT if gated else ''
     body_cls = ' class="gated"' if gated else ''
-    return f'<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>璽墨專案管理系統 · 操作手冊</title><style>{style}{gate_css}</style></head><body{body_cls}><div class="hint">自學操作手冊 · 黃數字＝步驟</div><main>{"".join(html_parts)}</main>{gate_body}</body></html>'
+    return f'<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>璽墨專案管理系統 · 操作手冊</title><style>{style}{gate_css}</style></head><body{body_cls}><div class="hint">自學操作手冊 · 黃數字＝步驟</div><main>{"".join(html_parts)}</main>{gate_body}<script>if(window.self!==window.top){{var h=document.querySelector(".hint");if(h)h.style.display="none";document.body.classList.add("embedded");}}</script></body></html>'
 
 style = r'''
 :root{--bg:#f4f1ec;--card:#fff;--text:#1c1b19;--border:#e4dfd7;--accent:#2d6a4f;--accent-soft:#e8f2ec;--badge:#f5c400;--badge-text:#1c1b19}
@@ -247,6 +247,8 @@ html{scroll-behavior:smooth}
 body{margin:0;font-family:"PingFang TC","Noto Sans TC","Helvetica Neue",sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
 .hint{position:sticky;top:0;z-index:20;background:#1c1b19;color:#fff;padding:10px 18px;font-size:13px}
 main{max-width:1080px;margin:0 auto;padding:28px 22px 96px}
+body.embedded main{padding:16px 14px 48px}
+body.embedded .doc-head h1{font-size:20px}
 .doc-head h1{font-size:26px;font-weight:700;margin:8px 0 6px;letter-spacing:.02em}
 h2{font-size:19px;font-weight:700;margin:42px 0 14px;padding:10px 14px;background:var(--accent-soft);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;scroll-margin-top:56px}
 h3{font-size:16px;font-weight:700;margin:28px 0 10px;scroll-margin-top:56px}

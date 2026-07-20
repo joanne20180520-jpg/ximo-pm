@@ -27,8 +27,26 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .tbar-tab{padding:6px 12px;border-radius:var(--rs);border:none;background:none;font-size:12px;cursor:pointer;color:var(--t2);transition:all .15s;white-space:nowrap;flex-shrink:0}
 .tbar-tab:hover{background:var(--sf2);color:var(--text)}
 .tbar-tab.active{background:var(--accent);color:#fff}
-.tbar-help{padding:6px 12px;border-radius:var(--rs);border:1px dashed var(--border);background:none;font-size:12px;cursor:pointer;color:var(--t3);transition:all .15s;white-space:nowrap;flex-shrink:0;text-decoration:none;margin-left:4px}
+.tbar-help{padding:6px 12px;border-radius:var(--rs);border:1px dashed var(--border);background:none;font-size:12px;cursor:pointer;color:var(--t3);transition:all .15s;white-space:nowrap;flex-shrink:0;text-decoration:none;margin-left:4px;font-family:inherit}
 .tbar-help:hover{background:var(--sf2);color:var(--text);border-color:#cfc8bc}
+.tbar-help.active{background:var(--sf2);color:var(--text);border-style:solid;border-color:#cfc8bc}
+
+/* 操作手冊側欄：邊看邊操作 */
+#manual-drawer{position:fixed;top:var(--th);right:0;bottom:0;width:min(440px,46vw);z-index:260;display:flex;flex-direction:column;background:#fff;border-left:1px solid var(--border);box-shadow:-8px 0 28px rgba(0,0,0,.08);transform:translateX(100%);transition:transform .22s ease;pointer-events:none}
+#manual-drawer.open{transform:translateX(0);pointer-events:auto}
+#manual-drawer .md-head{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);background:#1c1b19;color:#fff;flex-shrink:0}
+#manual-drawer .md-title{font-size:13px;font-weight:600;flex:1;min-width:0}
+#manual-drawer .md-btn{border:1px solid rgba(255,255,255,.2);background:transparent;color:#fff;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;white-space:nowrap;text-decoration:none;line-height:1.4}
+#manual-drawer .md-btn:hover{background:rgba(255,255,255,.12)}
+#manual-drawer .md-close{width:28px;height:28px;padding:0;font-size:16px;line-height:1}
+#manual-drawer iframe{flex:1;width:100%;border:0;background:#f4f1ec}
+body.manual-open #body{right:min(440px,46vw)}
+body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
+@media(max-width:900px){
+  #manual-drawer{width:min(100vw,100%)}
+  body.manual-open #body{right:0}
+  body.manual-open #tr{right:calc(8px + var(--rw))}
+}
 .topbar-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto}
 #boot-status{display:none;position:fixed;top:var(--th);left:0;right:0;z-index:300;background:#fff3e0;color:#92400e;padding:6px 12px;font-size:11px;text-align:center;border-bottom:1px solid #fcd34d}
 #boot-status.syncing{background:#eef4fc;color:#1a4a7a;border-bottom-color:#b8cfe8}
@@ -833,8 +851,17 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <button class="tbar-tab" onclick="sw(this,'pg-d')">設計任務單</button>
     <button class="tbar-tab" onclick="sw(this,'pg-journal')">日誌</button>
     <button class="tbar-tab" onclick="sw(this,'pg-ai')">AI分析</button>
-    <a class="tbar-help" href="/manual/" target="_blank" rel="noopener noreferrer" title="開啟操作手冊（新分頁）">操作手冊</a>
+    <button type="button" class="tbar-help" id="btn-manual" onclick="toggleManualDrawer()" title="在右側開啟操作手冊（可邊看邊操作）">操作手冊</button>
   </nav>
+</div>
+
+<div id="manual-drawer" aria-hidden="true">
+  <div class="md-head">
+    <span class="md-title">操作手冊</span>
+    <a class="md-btn" href="/manual/" target="_blank" rel="noopener noreferrer" title="另開新分頁">新分頁</a>
+    <button type="button" class="md-btn md-close" onclick="toggleManualDrawer(false)" title="關閉">×</button>
+  </div>
+  <iframe id="manual-frame" title="操作手冊" loading="lazy"></iframe>
 </div>
 
 <!-- 收合按鈕 -->
@@ -1366,9 +1393,36 @@ function toggleL(){
 function toggleR(){
   rc=!rc;
   document.getElementById('rp').classList.toggle('col',rc);
+  syncRightTogglePos();
+  syncAiComposerBounds();
+}
+function syncRightTogglePos(){
   var btn=document.getElementById('tr');
+  if(!btn) return;
   btn.textContent=rc?'◀':'▶';
-  btn.style.right=rc?'0':'calc(8px + var(--rw))';
+  var manualOpen=document.body.classList.contains('manual-open');
+  if(rc){
+    btn.style.right=manualOpen?'min(440px,46vw)':'0';
+  }else{
+    btn.style.right=manualOpen
+      ?'calc(8px + var(--rw) + min(440px,46vw))'
+      :'calc(8px + var(--rw))';
+  }
+}
+function toggleManualDrawer(force){
+  var drawer=document.getElementById('manual-drawer');
+  var btn=document.getElementById('btn-manual');
+  var frame=document.getElementById('manual-frame');
+  if(!drawer) return;
+  var open=(typeof force==='boolean')?force:!drawer.classList.contains('open');
+  drawer.classList.toggle('open',open);
+  drawer.setAttribute('aria-hidden',open?'false':'true');
+  document.body.classList.toggle('manual-open',open);
+  if(btn) btn.classList.toggle('active',open);
+  if(open && frame && !frame.getAttribute('src')){
+    frame.setAttribute('src','/manual/');
+  }
+  syncRightTogglePos();
   syncAiComposerBounds();
 }
 function syncAiComposerBounds() {
