@@ -348,10 +348,15 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .dl-task-name{font-size:13px;font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dl-task-meta{font-size:11px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dl-progress{font-size:11px;font-weight:700;color:var(--report);flex:0 0 auto;min-width:36px;text-align:right;line-height:28px}
-.dl-progress-wrap{flex:0 0 auto;display:inline-flex;align-items:center;gap:3px;height:28px;align-self:center}
-.dl-progress-sel{display:block;width:48px;max-width:48px;height:28px;max-height:28px;padding:0 14px 0 6px;border:1px solid var(--c2);border-radius:4px;font-size:12px;font-weight:700;color:var(--c2);background-color:#eef4fc;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%231a4a7a' d='M1 1l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 5px center;background-size:10px 6px;font-family:inherit;cursor:pointer;line-height:26px;box-sizing:border-box;-webkit-appearance:none;appearance:none}
-.dl-progress-sel:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(26,74,122,.15)}
+.dl-progress-wrap{position:relative;flex:0 0 auto;display:inline-flex;align-items:center;gap:3px;height:28px;align-self:center;z-index:2}
+.dl-progress-btn{display:inline-flex;align-items:center;justify-content:center;gap:3px;min-width:40px;height:28px;padding:0 6px;border:1px solid var(--c2);border-radius:4px;font-size:12px;font-weight:700;color:var(--c2);background:#eef4fc;font-family:inherit;cursor:pointer;line-height:1;box-sizing:border-box;white-space:nowrap}
+.dl-progress-btn:hover,.dl-progress-btn.open{background:#fff;border-color:var(--accent)}
+.dl-progress-btn .dl-progress-caret{font-size:8px;opacity:.7;line-height:1}
 .dl-progress-unit{font-size:10px;font-weight:700;color:var(--c2);line-height:1;flex-shrink:0}
+.dl-progress-menu{display:none;position:absolute;right:14px;top:calc(100% + 4px);z-index:40;min-width:52px;max-height:180px;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 8px 20px rgba(0,0,0,.14);padding:4px}
+.dl-progress-menu.open{display:block}
+.dl-progress-opt{display:block;width:100%;padding:6px 8px;border:none;background:transparent;font-size:12px;font-weight:600;color:var(--text);text-align:center;cursor:pointer;border-radius:4px;font-family:inherit}
+.dl-progress-opt:hover,.dl-progress-opt.active{background:#eef4fc;color:var(--c2)}
 .dl-note{width:100%;margin-top:6px;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:#fff;box-sizing:border-box}
 .dl-block-reason{width:100%;margin-top:6px;padding:6px 9px;border:1px solid #e8a0a0;border-radius:4px;font-size:12px;background:#fff8f8;font-family:inherit;box-sizing:border-box}
 .dl-cat{padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:#fff;flex:0 0 auto;max-width:88px;height:28px;box-sizing:border-box}
@@ -3639,6 +3644,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (e.target === overlay) confirmCancel();
   });
   document.addEventListener('click', function(e) {
+    if (!e.target.closest || !e.target.closest('.dl-progress-wrap')) {
+      closeAllDailyLogProgressMenus();
+    }
     if (!projectPickerOpen) return;
     var roots = [
       document.getElementById('proj-picker-root'),
@@ -7637,11 +7645,15 @@ function resolveDailyLogRowProgressPct(row, it) {
 function buildDailyProgressCellHtml(cat, progressPct) {
   if (cat === 'doing') {
     var selected = snapDoingProgressPct(progressPct);
-    var html = '<span class="dl-progress-wrap"><select class="dl-progress-sel" size="1" title="調整進度" onclick="event.stopPropagation()" onchange="onDailyLogProgressChange(this)">';
+    var html = '<span class="dl-progress-wrap" data-pct="' + selected + '">';
+    html += '<button type="button" class="dl-progress-btn" title="調整進度" onclick="toggleDailyLogProgressMenu(this,event)"><span class="dl-progress-val">' + selected + '</span><span class="dl-progress-caret">▼</span></button>';
+    html += '<span class="dl-progress-unit">%</span>';
+    html += '<div class="dl-progress-menu" onclick="event.stopPropagation()">';
     for (var p = 10; p <= 90; p += 10) {
-      html += '<option value="' + p + '"' + (p === selected ? ' selected' : '') + '>' + p + '</option>';
+      html += '<button type="button" class="dl-progress-opt' + (p === selected ? ' active' : '') + '" data-pct="' + p + '" onclick="pickDailyLogProgress(this,event)">' + p + '</button>';
     }
-    return html + '</select><span class="dl-progress-unit">%</span></span>';
+    html += '</div></span>';
+    return html;
   }
   if (cat === 'done') return '<span class="dl-progress">100%</span>';
   var shown = Math.max(0, Math.round(Number(progressPct) || 0));
@@ -7649,27 +7661,49 @@ function buildDailyProgressCellHtml(cat, progressPct) {
   return '<span class="dl-progress">' + shown + '%</span>';
 }
 
-function updateDailyLogRowProgressCell(row, cat) {
-  var top = row && row.querySelector('.dl-row-top');
-  if (!top) return;
-  var old = top.querySelector('.dl-progress-wrap, .dl-progress, .dl-progress-sel');
-  var html = buildDailyProgressCellHtml(cat, resolveDailyLogRowProgressPct(row));
-  var wrap = document.createElement('div');
-  wrap.innerHTML = html;
-  var neu = wrap.firstChild;
-  if (!neu) return;
-  if (old) top.replaceChild(neu, old);
-  else top.appendChild(neu);
+function closeAllDailyLogProgressMenus(exceptWrap) {
+  document.querySelectorAll('.dl-progress-menu.open').forEach(function(menu) {
+    var wrap = menu.closest('.dl-progress-wrap');
+    if (exceptWrap && wrap === exceptWrap) return;
+    menu.classList.remove('open');
+    var btn = wrap && wrap.querySelector('.dl-progress-btn');
+    if (btn) btn.classList.remove('open');
+  });
 }
 
-function onDailyLogProgressChange(sel) {
-  var row = sel && sel.closest('.dl-row');
-  if (!row) return;
+function toggleDailyLogProgressMenu(btn, ev) {
+  if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+  var wrap = btn && btn.closest('.dl-progress-wrap');
+  if (!wrap) return;
+  var menu = wrap.querySelector('.dl-progress-menu');
+  if (!menu) return;
+  var willOpen = !menu.classList.contains('open');
+  closeAllDailyLogProgressMenus(wrap);
+  menu.classList.toggle('open', willOpen);
+  btn.classList.toggle('open', willOpen);
+}
+
+function pickDailyLogProgress(optBtn, ev) {
+  if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+  var wrap = optBtn && optBtn.closest('.dl-progress-wrap');
+  var row = wrap && wrap.closest('.dl-row');
+  if (!wrap || !row) return;
+  var pct = snapDoingProgressPct(optBtn.getAttribute('data-pct'));
+  wrap.setAttribute('data-pct', String(pct));
+  var valEl = wrap.querySelector('.dl-progress-val');
+  if (valEl) valEl.textContent = String(pct);
+  wrap.querySelectorAll('.dl-progress-opt').forEach(function(opt) {
+    opt.classList.toggle('active', snapDoingProgressPct(opt.getAttribute('data-pct')) === pct);
+  });
+  closeAllDailyLogProgressMenus();
+  applyDailyLogProgressToExtras(row, pct);
+}
+
+function applyDailyLogProgressToExtras(row, pct) {
   var kind = row.dataset.kind || 'task';
   var id = kind === 'design' ? row.dataset.designId : row.dataset.taskId;
   if (!id) return;
-  var pct = snapDoingProgressPct(sel.value);
-  sel.value = String(pct);
+  pct = snapDoingProgressPct(pct);
   var status = statusFromDoingProgressPct(pct);
   if (kind === 'design') {
     if (!dailyLogDesignExtras[id]) dailyLogDesignExtras[id] = {};
@@ -7680,6 +7714,32 @@ function onDailyLogProgressChange(sel) {
     dailyLogTaskExtras[id].progressPct = pct;
     dailyLogTaskExtras[id].status = status;
   }
+}
+
+function getDailyLogRowSelectedProgress(row) {
+  var wrap = row && row.querySelector('.dl-progress-wrap');
+  if (wrap && wrap.getAttribute('data-pct')) return snapDoingProgressPct(wrap.getAttribute('data-pct'));
+  return null;
+}
+
+function updateDailyLogRowProgressCell(row, cat) {
+  var top = row && row.querySelector('.dl-row-top');
+  if (!top) return;
+  var old = top.querySelector('.dl-progress-wrap, .dl-progress');
+  var html = buildDailyProgressCellHtml(cat, resolveDailyLogRowProgressPct(row));
+  var wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  var neu = wrap.firstChild;
+  if (!neu) return;
+  if (old) top.replaceChild(neu, old);
+  else top.appendChild(neu);
+}
+
+function onDailyLogProgressChange(sel) {
+  // 保留相容；新 UI 改走 pickDailyLogProgress
+  var row = sel && sel.closest('.dl-row');
+  if (!row) return;
+  applyDailyLogProgressToExtras(row, sel.value);
 }
 
 function onDailyLogCatChange(sel) {
@@ -8000,10 +8060,10 @@ function collectDailyLogCategories() {
       if (!dctx) return;
       var dBaseStatus = (dailyLogDesignExtras[id] && dailyLogDesignExtras[id].status) || dctx.f['進度狀態'] || '未開始';
       var dOrigStatus = dctx.f['進度狀態'] || getDesignProgressStatus(dctx.f) || '未開始';
-      var dProgSel = row.querySelector('.dl-progress-sel');
+      var dProgPct = getDailyLogRowSelectedProgress(row);
       var dStatus = null;
-      if (cat === 'doing' && dProgSel && dProgSel.value) {
-        dStatus = statusFromDoingProgressPct(dProgSel.value);
+      if (cat === 'doing' && dProgPct != null) {
+        dStatus = statusFromDoingProgressPct(dProgPct);
       } else if (cat === 'doing') {
         dStatus = normalizeReportStatusForCategory(dBaseStatus, cat, dOrigStatus);
       } else if (cat === 'done') {
@@ -8027,10 +8087,10 @@ function collectDailyLogCategories() {
       if (!ctx) return;
       var tBaseStatus = (dailyLogTaskExtras[id] && dailyLogTaskExtras[id].status) || ctx.f['進度狀態'] || '未開始';
       var tOrigStatus = ctx.f['進度狀態'] || '未開始';
-      var tProgSel = row.querySelector('.dl-progress-sel');
+      var tProgPct = getDailyLogRowSelectedProgress(row);
       var tStatus = null;
-      if (cat === 'doing' && tProgSel && tProgSel.value) {
-        tStatus = statusFromDoingProgressPct(tProgSel.value);
+      if (cat === 'doing' && tProgPct != null) {
+        tStatus = statusFromDoingProgressPct(tProgPct);
       } else if (cat === 'doing') {
         tStatus = normalizeReportStatusForCategory(tBaseStatus, cat, tOrigStatus);
       } else if (cat === 'done') {
