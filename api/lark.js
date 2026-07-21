@@ -3648,7 +3648,7 @@ function collectPersonFromValue(val, ids, names) {
 function listMemberPersonIds(fields) {
   const ids = [];
   const names = [];
-  const priorityKeys = ['帳號', '成員', '姓名', '名稱', '人員', 'Member', 'Account'];
+  const priorityKeys = ['帳號', '成員', '姓名', '名稱', '人員', 'Member', 'Account', '英文名', 'English Name', 'Name'];
   priorityKeys.forEach(function(k) { collectPersonFromValue(fields[k], ids, names); });
   Object.keys(fields || {}).forEach(function(k) {
     const v = fields[k];
@@ -3667,13 +3667,17 @@ function listMemberPersonIds(fields) {
 function listMemberPersonNames(fields) {
   const names = [];
   const ids = [];
-  const priorityKeys = ['帳號', '成員', '姓名', '名稱', '人員', 'Member', 'Account', '顯示名稱'];
+  const priorityKeys = ['帳號', '成員', '姓名', '名稱', '人員', 'Member', 'Account', '顯示名稱', '英文名', 'English Name', 'Name'];
   priorityKeys.forEach(function(k) { collectPersonFromValue(fields[k], ids, names); });
   Object.keys(fields || {}).forEach(function(k) {
     const v = fields[k];
     if (!v) return;
-    if (Array.isArray(v) && v[0] && (v[0].id || v[0].name)) collectPersonFromValue(v, ids, names);
-    else if (v && typeof v === 'object' && !Array.isArray(v) && (v.id || v.name)) collectPersonFromValue(v, ids, names);
+    if (typeof v === 'string' && v.trim() && /名|Name|Account|帳號|人員|成員/i.test(k)) {
+      names.push(v.trim());
+      return;
+    }
+    if (Array.isArray(v) && v[0] && (v[0].id || v[0].name || v[0].en_name || v[0].enName)) collectPersonFromValue(v, ids, names);
+    else if (v && typeof v === 'object' && !Array.isArray(v) && (v.id || v.name || v.en_name || v.enName)) collectPersonFromValue(v, ids, names);
   });
   return names.filter(Boolean);
 }
@@ -3906,7 +3910,8 @@ async function getMembersRecords(token) {
     return _membersRecordsCache.records;
   }
   const cfg = getOperationalBitableConfig();
-  const members = await getRecords(token, tableIdFor('members'), cfg.appToken);
+  // 必須用 open_id，才能與 OAuth user_info 的 open_id 對上
+  const members = await getRecords(token, tableIdFor('members'), cfg.appToken, { userIdType: 'open_id' });
   _membersRecordsCache = {
     records: members,
     expiresAt: now + MEMBERS_CACHE_TTL_MS
@@ -3941,7 +3946,15 @@ async function checkMemberAuthorization(userAccessToken) {
   }
   const memberRec = findMemberForUser(members, user);
   if (!memberRec) {
-    return { ok: true, needLogin: false, authorized: false, user, memberCount: members.length };
+    return {
+      ok: true,
+      needLogin: false,
+      authorized: false,
+      user,
+      memberCount: members.length,
+      hint: '登入身分「' + ([user.name, user.enName].filter(Boolean).join(' / ') || '未知')
+        + '」未對上人員表。請在「帳號」欄位用 Lark 人員選擇器選入本人（不要只打文字）。'
+    };
   }
   const role = getMemberRole(memberRec.fields || {});
   return {

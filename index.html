@@ -3708,6 +3708,7 @@ var lastLoginError = '';
 var loginUserConfirmed = false;
 var loginAuthInProgress = false;
 var LOGIN_STORAGE_KEY = 'ximo-login-user';
+var POST_LOGIN_REDIRECT_KEY = 'ximo-post-login-redirect';
 var SESSION_MAX_MS = 10 * 60 * 60 * 1000;
 var TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 var loginRefreshPromise = null;
@@ -3993,7 +3994,8 @@ function checkMemberAuthorization() {
           authorized: false,
           needLogin: false,
           loginUser: res.user || null,
-          memberCount: res.memberCount || 0
+          memberCount: res.memberCount || 0,
+          hint: res.hint || ''
         };
       }
       return { authorized: true, role: res.role || 'PM', memberName: res.memberName || '', loginUser: res.user || null };
@@ -4055,10 +4057,37 @@ function clearAuthCache() {
   try { sessionStorage.removeItem(AUTH_CACHE_KEY); } catch (e) {}
 }
 
+function capturePostLoginRedirect() {
+  try {
+    var next = new URLSearchParams(window.location.search).get('next');
+    if (next && next.charAt(0) === '/' && next.charAt(1) !== '/') {
+      sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, next);
+    }
+  } catch (e) {}
+}
+
+function takePostLoginRedirect() {
+  try {
+    var target = sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY);
+    if (target && target.charAt(0) === '/' && target.charAt(1) !== '/') {
+      sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
+      return target;
+    }
+  } catch (e) {}
+  return null;
+}
+
 function applyAuthorizedSession(result, opts) {
   opts = opts || {};
   currentUserRole = result.role || 'PM';
   hideAuthGate();
+  if (!opts.silent) {
+    var postLogin = takePostLoginRedirect();
+    if (postLogin) {
+      window.location.href = postLogin;
+      return;
+    }
+  }
   applyRolePermissions();
   if (result.loginUser || result.memberName) {
     var merged = Object.assign({}, getCurrentLoginUser() || {}, result.loginUser || {});
@@ -4157,6 +4186,7 @@ function completeAuthAfterLogin(opts) {
       } else {
         var sub = '此人員尚未加入授權名單。\n請管理員協助新增。';
         if (result.memberCount === 0) sub = '系統讀不到人員資料，請確認 Vercel 的 LARK_APP_TOKEN 是否正確。';
+        else if (result.hint) sub = result.hint;
         showAuthGate('denied', '無法進入系統', sub, result.loginUser);
       }
       return false;
@@ -4168,6 +4198,7 @@ function completeAuthAfterLogin(opts) {
 }
 
 function runAuthGate() {
+  capturePostLoginRedirect();
   return loadLarkAppConfig().then(function() {
     var hasOAuthCode = !!new URLSearchParams(window.location.search).get('code');
     if (hasOAuthCode || getCurrentLoginUser()) {
@@ -6387,6 +6418,8 @@ var dailyLogTaskExtras = {};
 var dailyLogDesignExtras = {};
 var taskReportCategory = 'doing';
 var designReportCategory = 'doing';
+var taskReportOriginalStatus = '';
+var designReportOriginalStatus = '';
 var currentDesignId = null;
 var dailyLogPreselectKind = 'task';
 
@@ -6569,7 +6602,7 @@ function setDesignReportCategory(cat) {
   document.querySelectorAll('#dd-cats .td-cat').forEach(function(c) {
     c.classList.toggle('active', c.dataset.cat === designReportCategory);
   });
-  syncReportStatusSelect('dd-status', designReportCategory);
+  syncReportStatusSelect('dd-status', designReportCategory, designReportOriginalStatus);
   toggleDdBlockReason();
 }
 
@@ -6590,6 +6623,7 @@ function openDesignDetail(desId) {
   if (!ctx) return;
   currentDesignId = desId;
   var author = ctx.designer || ctx.pm;
+  designReportOriginalStatus = ctx.f['進度狀態'] || getDesignProgressStatus(ctx.f) || '未開始';
   designReportCategory = getTodayJournalDesignCategory(desId, author);
   document.getElementById('dd-title').textContent = ctx.f['設計項目名稱'] || '設計回報';
   var projTag = document.getElementById('dd-proj-tag');
@@ -6621,7 +6655,7 @@ function openDesignDetail(desId) {
   sel.innerHTML = PROGRESS_OPTIONS.map(function(o) {
     return '<option' + (o === (ctx.f['進度狀態'] || '') ? ' selected' : '') + '>' + o + '</option>';
   }).join('');
-  syncReportStatusSelect('dd-status', designReportCategory);
+  syncReportStatusSelect('dd-status', designReportCategory, designReportOriginalStatus);
   document.getElementById('dd-note').value = getTodayJournalItemNote(desId, author, 'design');
   var today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -6657,9 +6691,9 @@ function confirmDesignReport() {
   if (category === 'done') {
     status = '已完成';
   } else {
-    status = normalizeReportStatusForCategory(status, category);
+    status = normalizeReportStatusForCategory(status, category, designReportOriginalStatus);
   }
-  syncReportStatusSelect('dd-status', category);
+  syncReportStatusSelect('dd-status', category, designReportOriginalStatus);
   setDesignReportCategory(category);
 
   var merged = mergeDesignIntoJournalCategories(existingJournal, currentDesignId, category);
@@ -6789,7 +6823,7 @@ function setTaskReportCategory(cat) {
   document.querySelectorAll('#td-cats .td-cat').forEach(function(c) {
     c.classList.toggle('active', c.dataset.cat === taskReportCategory);
   });
-  syncReportStatusSelect('td-status', taskReportCategory);
+  syncReportStatusSelect('td-status', taskReportCategory, taskReportOriginalStatus);
   toggleTdBlockReason();
   updateTaskDetailDueBadge();
 }
@@ -6802,18 +6836,27 @@ function onTaskReportStatusChange() {
   updateTaskDetailDueBadge();
 }
 
-function normalizeReportStatusForCategory(status, category) {
+function isCompletedReportStatus(status) {
+  return status === '已完成' || parseProgressVal(status, null) >= 100;
+}
+
+function normalizeReportStatusForCategory(status, category, originalStatus) {
   if (category === 'done') return '已完成';
   if (category === 'doing' || category === 'block' || category === 'tomorrow') {
-    if (status === '已完成' || parseProgressVal(status, null) >= 100) return '進行中90%';
+    if (isCompletedReportStatus(status)) {
+      var orig = originalStatus != null ? originalStatus : status;
+      // 誤點「今日完成」再改回時，還原開啟時的真實進度；只有原本就已完成才退到 90%
+      if (!isCompletedReportStatus(orig) && orig) return orig;
+      return '進行中90%';
+    }
   }
   return status;
 }
 
-function syncReportStatusSelect(selectId, category) {
+function syncReportStatusSelect(selectId, category, originalStatus) {
   var sel = document.getElementById(selectId);
   if (!sel || !sel.options.length) return;
-  var status = normalizeReportStatusForCategory(sel.value, category);
+  var status = normalizeReportStatusForCategory(sel.value, category, originalStatus);
   for (var i = 0; i < sel.options.length; i++) {
     if (sel.options[i].value === status) { sel.selectedIndex = i; return; }
   }
@@ -6991,9 +7034,9 @@ function confirmTaskReport() {
   if (category === 'done') {
     status = '已完成';
   } else {
-    status = normalizeReportStatusForCategory(status, category);
+    status = normalizeReportStatusForCategory(status, category, taskReportOriginalStatus);
   }
-  syncReportStatusSelect('td-status', category);
+  syncReportStatusSelect('td-status', category, taskReportOriginalStatus);
   setTaskReportCategory(category);
 
   var merged = mergeTaskIntoJournalCategories(existingJournal, currentTaskId, category);
@@ -7116,6 +7159,7 @@ function openTaskDetail(taskId) {
   var ctx = getTaskContext(taskId);
   if (!ctx) return;
   currentTaskId = taskId;
+  taskReportOriginalStatus = ctx.f['進度狀態'] || '未開始';
   taskReportCategory = getTodayJournalCategory(taskId, ctx.assignee);
   document.getElementById('td-title').textContent = ctx.f['任務名稱'] || '任務回報';
   var tdNameEl = document.getElementById('td-name');
@@ -7171,7 +7215,7 @@ function openTaskDetail(taskId) {
   sel.innerHTML = PROGRESS_OPTIONS.map(function(o) {
     return '<option' + (o === (ctx.f['進度狀態'] || '') ? ' selected' : '') + '>' + o + '</option>';
   }).join('');
-  syncReportStatusSelect('td-status', taskReportCategory);
+  syncReportStatusSelect('td-status', taskReportCategory, taskReportOriginalStatus);
   document.getElementById('td-note').value = getTodayJournalItemNote(taskId, ctx.assignee, 'task');
   taskPendingAttachments[taskId] = normalizeTaskAttachments(ctx.f['附件']);
   renderTaskAttachList();
@@ -7888,7 +7932,8 @@ function collectDailyLogCategories() {
         blockReason: blockReason,
         status: normalizeReportStatusForCategory(
           (dailyLogDesignExtras[id] && dailyLogDesignExtras[id].status) || dctx.f['進度狀態'] || '未開始',
-          cat
+          cat,
+          dctx.f['進度狀態'] || getDesignProgressStatus(dctx.f) || '未開始'
         )
       };
       designGroups[cat].push(ditem);
@@ -7906,7 +7951,8 @@ function collectDailyLogCategories() {
         blockReason: blockReason,
         status: normalizeReportStatusForCategory(
           (dailyLogTaskExtras[id] && dailyLogTaskExtras[id].status) || ctx.f['進度狀態'] || '未開始',
-          cat
+          cat,
+          ctx.f['進度狀態'] || '未開始'
         )
       };
       groups[cat].push(item);
