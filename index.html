@@ -341,18 +341,19 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .dl-row:last-child{border-bottom:none}
 .dl-row:hover{background:var(--sf2)}
 .dl-row-unlisted{opacity:.78;background:var(--sf2)}
-.dl-row-top{display:flex;align-items:center;gap:8px}
+.dl-row-top{display:flex;align-items:center;gap:8px;min-width:0}
 .dl-row input[type=checkbox]{width:15px;height:15px;flex-shrink:0;cursor:pointer}
 .dl-proj-tag{font-size:10px;padding:2px 7px;border-radius:8px;color:#fff;font-weight:600;flex-shrink:0;max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dl-task-main{flex:1;min-width:0}
-.dl-task-name{font-size:13px;font-weight:600;display:block}
-.dl-task-meta{font-size:11px;color:var(--t3);margin-top:2px}
-.dl-progress{font-size:11px;font-weight:700;color:var(--report);flex-shrink:0;min-width:36px;text-align:right}
-.dl-progress-sel{padding:3px 4px;border:1px solid var(--c2);border-radius:4px;font-size:11px;font-weight:700;color:var(--c2);background:#eef4fc;flex-shrink:0;min-width:62px;font-family:inherit;cursor:pointer}
+.dl-task-main{flex:1 1 auto;min-width:0;overflow:hidden}
+.dl-task-name{font-size:13px;font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl-task-meta{font-size:11px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl-progress{font-size:11px;font-weight:700;color:var(--report);flex:0 0 auto;min-width:36px;text-align:right;line-height:28px}
+.dl-progress-wrap{flex:0 0 64px;width:64px;max-width:64px;height:28px;overflow:hidden;align-self:center}
+.dl-progress-sel{display:block;width:64px;max-width:64px;height:28px;max-height:28px;padding:0 4px;border:1px solid var(--c2);border-radius:4px;font-size:12px;font-weight:700;color:var(--c2);background:#eef4fc;font-family:inherit;cursor:pointer;line-height:26px;box-sizing:border-box;-webkit-appearance:menulist;appearance:menulist}
 .dl-progress-sel:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(26,74,122,.15)}
-.dl-note{width:100%;margin-top:6px;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:#fff}
-.dl-block-reason{width:100%;margin-top:6px;padding:6px 9px;border:1px solid #e8a0a0;border-radius:4px;font-size:12px;background:#fff8f8;font-family:inherit}
-.dl-cat{padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:#fff;flex-shrink:0;max-width:88px}
+.dl-note{width:100%;margin-top:6px;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:#fff;box-sizing:border-box}
+.dl-block-reason{width:100%;margin-top:6px;padding:6px 9px;border:1px solid #e8a0a0;border-radius:4px;font-size:12px;background:#fff8f8;font-family:inherit;box-sizing:border-box}
+.dl-cat{padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:#fff;flex:0 0 auto;max-width:88px;height:28px;box-sizing:border-box}
 .dl-cat-block{border-color:#e8a0a0;background:#fff8f8}
 .dl-block-box{margin-bottom:10px}
 .dl-block-box textarea{width:100%;padding:6px 9px;border:1px solid #e8a0a0;border-radius:var(--rs);font-size:12px;background:#fff8f8;font-family:inherit}
@@ -7635,11 +7636,11 @@ function resolveDailyLogRowProgressPct(row, it) {
 function buildDailyProgressCellHtml(cat, progressPct) {
   if (cat === 'doing') {
     var selected = snapDoingProgressPct(progressPct);
-    var html = '<select class="dl-progress-sel" title="調整進度" onclick="event.stopPropagation()" onchange="onDailyLogProgressChange(this)">';
+    var html = '<span class="dl-progress-wrap"><select class="dl-progress-sel" size="1" title="調整進度" onclick="event.stopPropagation()" onchange="onDailyLogProgressChange(this)">';
     for (var p = 10; p <= 90; p += 10) {
       html += '<option value="' + p + '"' + (p === selected ? ' selected' : '') + '>' + p + '%</option>';
     }
-    return html + '</select>';
+    return html + '</select></span>';
   }
   if (cat === 'done') return '<span class="dl-progress">100%</span>';
   var shown = Math.max(0, Math.round(Number(progressPct) || 0));
@@ -7650,7 +7651,7 @@ function buildDailyProgressCellHtml(cat, progressPct) {
 function updateDailyLogRowProgressCell(row, cat) {
   var top = row && row.querySelector('.dl-row-top');
   if (!top) return;
-  var old = top.querySelector('.dl-progress, .dl-progress-sel');
+  var old = top.querySelector('.dl-progress-wrap, .dl-progress, .dl-progress-sel');
   var html = buildDailyProgressCellHtml(cat, resolveDailyLogRowProgressPct(row));
   var wrap = document.createElement('div');
   wrap.innerHTML = html;
@@ -7952,9 +7953,10 @@ function renderDailyLogTasks(preselectId) {
       html += '<div class="dl-row-top">';
       html += buildDailyCatSelect(cat, isBlock);
       html += '<div class="dl-task-main"><span class="dl-task-name">' + nameBadge + escHtml(it.taskName) + '</span>';
-      html += '<span class="dl-task-meta">' + escHtml(it.wiName) + ' · ' + escHtml(it.assignee) + '</span>';
+      html += '<span class="dl-task-meta">' + escHtml(it.wiName) + ' · ' + escHtml(it.assignee) + '</span></div>';
+      html += buildDailyProgressCellHtml(cat, resolveDailyLogRowProgressPct(null, it));
+      html += '</div>';
       html += '<input type="text" class="dl-note" placeholder="補充說明（選填）" value="' + escAttr(noteVal) + '" onclick="event.stopPropagation()">';
-      html += '</div>' + buildDailyProgressCellHtml(cat, resolveDailyLogRowProgressPct(null, it)) + '</div>';
       html += '<textarea class="dl-block-reason" rows="2" placeholder="卡關原因（必填）" style="display:' + (isBlock ? 'block' : 'none') + '" onclick="event.stopPropagation()">' + String(blockVal).replace(/</g, '&lt;') + '</textarea>';
       html += '</div>';
     });
