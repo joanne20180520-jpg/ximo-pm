@@ -348,6 +348,8 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .dl-task-name{font-size:13px;font-weight:600;display:block}
 .dl-task-meta{font-size:11px;color:var(--t3);margin-top:2px}
 .dl-progress{font-size:11px;font-weight:700;color:var(--report);flex-shrink:0;min-width:36px;text-align:right}
+.dl-progress-sel{padding:3px 4px;border:1px solid var(--c2);border-radius:4px;font-size:11px;font-weight:700;color:var(--c2);background:#eef4fc;flex-shrink:0;min-width:62px;font-family:inherit;cursor:pointer}
+.dl-progress-sel:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(26,74,122,.15)}
 .dl-note{width:100%;margin-top:6px;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:#fff}
 .dl-block-reason{width:100%;margin-top:6px;padding:6px 9px;border:1px solid #e8a0a0;border-radius:4px;font-size:12px;background:#fff8f8;font-family:inherit}
 .dl-cat{padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:#fff;flex-shrink:0;max-width:88px}
@@ -1151,7 +1153,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
 <div class="po" id="pp-daily-log"><div class="pp pp-daily"><div class="pph pph-report"><h3>每日工作回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-daily-log')">✕</button></div><div class="ppb">
   <div class="dl-date" id="dl-date-display"></div>
   <div class="fg"><label>回報人</label><select id="dl-author" onchange="onDailyLogAuthorChange()"></select></div>
-  <div class="fg"><label>任務分類</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-person-filter" id="dl-person-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">預設只顯示目前回報人負責的項目；若今日已填過日報，會自動帶入先前分類。選「不列入」可從日報移除該項；誤填可點左下「刪除今日日報」。</div></div>
+  <div class="fg"><label>任務分類</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-person-filter" id="dl-person-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">預設只顯示目前回報人負責的項目；若今日已填過日報，會自動帶入先前分類。選「進行中」時可調整右側 10%–90%；選「不列入」可從日報移除該項；誤填可點左下「刪除今日日報」。</div></div>
   <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="選擇任務後自動產生…"></textarea></div>
 </div><div class="ppf"><button class="bcan bdel-action" id="dl-delete-btn" onclick="deleteDailyJournal()" style="display:none">刪除今日日報</button><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
@@ -6842,7 +6844,11 @@ function isCompletedReportStatus(status) {
 
 function normalizeReportStatusForCategory(status, category, originalStatus) {
   if (category === 'done') return '已完成';
-  if (category === 'doing' || category === 'block' || category === 'tomorrow') {
+  // 卡關／明日預計：只寫入日報分類，不改任務進度狀態
+  if (category === 'block' || category === 'tomorrow') {
+    return originalStatus != null && originalStatus !== '' ? originalStatus : status;
+  }
+  if (category === 'doing') {
     if (isCompletedReportStatus(status)) {
       var orig = originalStatus != null ? originalStatus : status;
       // 誤點「今日完成」再改回時，還原開啟時的真實進度；只有原本就已完成才退到 90%
@@ -7595,6 +7601,85 @@ function buildDailyCatSelect(value, isBlock) {
   return html + '</select>';
 }
 
+function snapDoingProgressPct(pct) {
+  var n = Math.round(Number(pct) || 0);
+  if (n >= 100) return 90;
+  if (n <= 0) return 10;
+  return Math.min(90, Math.max(10, Math.round(n / 10) * 10));
+}
+
+function statusFromDoingProgressPct(pct) {
+  return '進行中' + snapDoingProgressPct(pct) + '%';
+}
+
+function resolveDailyLogRowProgressPct(row, it) {
+  if (!row && it) {
+    var extra0 = it.kind === 'design' ? dailyLogDesignExtras[it.id] : dailyLogTaskExtras[it.id];
+    if (extra0 && extra0.progressPct != null) return snapDoingProgressPct(extra0.progressPct);
+    if (extra0 && extra0.status) return snapDoingProgressPct(parseProgressVal(extra0.status, null));
+    if (isCompletedReportStatus(it.status)) return 90;
+    return snapDoingProgressPct(it.progress);
+  }
+  var kind = row.dataset.kind || 'task';
+  var id = kind === 'design' ? row.dataset.designId : row.dataset.taskId;
+  var extra = kind === 'design' ? dailyLogDesignExtras[id] : dailyLogTaskExtras[id];
+  if (extra && extra.progressPct != null) return snapDoingProgressPct(extra.progressPct);
+  if (extra && extra.status) return snapDoingProgressPct(parseProgressVal(extra.status, null));
+  var ctx = kind === 'design' ? getDesignContext(id) : getTaskContext(id);
+  if (!ctx) return 10;
+  var st = ctx.f['進度狀態'] || '';
+  if (isCompletedReportStatus(st)) return 90;
+  return snapDoingProgressPct(ctx.progress);
+}
+
+function buildDailyProgressCellHtml(cat, progressPct) {
+  if (cat === 'doing') {
+    var selected = snapDoingProgressPct(progressPct);
+    var html = '<select class="dl-progress-sel" title="調整進度" onclick="event.stopPropagation()" onchange="onDailyLogProgressChange(this)">';
+    for (var p = 10; p <= 90; p += 10) {
+      html += '<option value="' + p + '"' + (p === selected ? ' selected' : '') + '>' + p + '%</option>';
+    }
+    return html + '</select>';
+  }
+  if (cat === 'done') return '<span class="dl-progress">100%</span>';
+  var shown = Math.max(0, Math.round(Number(progressPct) || 0));
+  if (shown > 100) shown = 100;
+  return '<span class="dl-progress">' + shown + '%</span>';
+}
+
+function updateDailyLogRowProgressCell(row, cat) {
+  var top = row && row.querySelector('.dl-row-top');
+  if (!top) return;
+  var old = top.querySelector('.dl-progress, .dl-progress-sel');
+  var html = buildDailyProgressCellHtml(cat, resolveDailyLogRowProgressPct(row));
+  var wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  var neu = wrap.firstChild;
+  if (!neu) return;
+  if (old) top.replaceChild(neu, old);
+  else top.appendChild(neu);
+}
+
+function onDailyLogProgressChange(sel) {
+  var row = sel && sel.closest('.dl-row');
+  if (!row) return;
+  var kind = row.dataset.kind || 'task';
+  var id = kind === 'design' ? row.dataset.designId : row.dataset.taskId;
+  if (!id) return;
+  var pct = snapDoingProgressPct(sel.value);
+  sel.value = String(pct);
+  var status = statusFromDoingProgressPct(pct);
+  if (kind === 'design') {
+    if (!dailyLogDesignExtras[id]) dailyLogDesignExtras[id] = {};
+    dailyLogDesignExtras[id].progressPct = pct;
+    dailyLogDesignExtras[id].status = status;
+  } else {
+    if (!dailyLogTaskExtras[id]) dailyLogTaskExtras[id] = {};
+    dailyLogTaskExtras[id].progressPct = pct;
+    dailyLogTaskExtras[id].status = status;
+  }
+}
+
 function onDailyLogCatChange(sel) {
   sel.classList.toggle('dl-cat-block', sel.value === 'block');
   var row = sel.closest('.dl-row');
@@ -7602,20 +7687,7 @@ function onDailyLogCatChange(sel) {
     var blockInput = row.querySelector('.dl-block-reason');
     if (blockInput) blockInput.style.display = sel.value === 'block' ? 'block' : 'none';
     row.classList.toggle('dl-row-unlisted', !sel.value);
-    var progEl = row.querySelector('.dl-progress');
-    if (progEl) {
-      if (sel.value === 'done') progEl.textContent = '100%';
-      else if (sel.value === 'doing' || sel.value === 'block' || sel.value === 'tomorrow') {
-        var kind = row.dataset.kind || 'task';
-        var id = kind === 'design' ? row.dataset.designId : row.dataset.taskId;
-        var ctx = kind === 'design' ? getDesignContext(id) : getTaskContext(id);
-        if (ctx) {
-          var st = ctx.f['進度狀態'] || '';
-          if (st === '已完成') progEl.textContent = '90%';
-          else progEl.textContent = ctx.progress + '%';
-        }
-      }
-    }
+    updateDailyLogRowProgressCell(row, sel.value || '');
   }
   dailyLogContentEdited = false;
   refreshDailyLogContent();
@@ -7882,7 +7954,7 @@ function renderDailyLogTasks(preselectId) {
       html += '<div class="dl-task-main"><span class="dl-task-name">' + nameBadge + escHtml(it.taskName) + '</span>';
       html += '<span class="dl-task-meta">' + escHtml(it.wiName) + ' · ' + escHtml(it.assignee) + '</span>';
       html += '<input type="text" class="dl-note" placeholder="補充說明（選填）" value="' + escAttr(noteVal) + '" onclick="event.stopPropagation()">';
-      html += '</div><span class="dl-progress">' + it.progress + '%</span></div>';
+      html += '</div>' + buildDailyProgressCellHtml(cat, resolveDailyLogRowProgressPct(null, it)) + '</div>';
       html += '<textarea class="dl-block-reason" rows="2" placeholder="卡關原因（必填）" style="display:' + (isBlock ? 'block' : 'none') + '" onclick="event.stopPropagation()">' + String(blockVal).replace(/</g, '&lt;') + '</textarea>';
       html += '</div>';
     });
@@ -7923,6 +7995,18 @@ function collectDailyLogCategories() {
     if (kind === 'design') {
       var dctx = getDesignContext(id);
       if (!dctx) return;
+      var dBaseStatus = (dailyLogDesignExtras[id] && dailyLogDesignExtras[id].status) || dctx.f['進度狀態'] || '未開始';
+      var dOrigStatus = dctx.f['進度狀態'] || getDesignProgressStatus(dctx.f) || '未開始';
+      var dProgSel = row.querySelector('.dl-progress-sel');
+      var dStatus = null;
+      if (cat === 'doing' && dProgSel && dProgSel.value) {
+        dStatus = statusFromDoingProgressPct(dProgSel.value);
+      } else if (cat === 'doing') {
+        dStatus = normalizeReportStatusForCategory(dBaseStatus, cat, dOrigStatus);
+      } else if (cat === 'done') {
+        dStatus = '已完成';
+      }
+      // block / tomorrow：不更新設計進度
       var ditem = {
         id: id,
         kind: 'design',
@@ -7930,11 +8014,7 @@ function collectDailyLogCategories() {
         taskName: dctx.f['設計項目名稱'] || '未命名',
         note: noteInput ? noteInput.value.trim() : '',
         blockReason: blockReason,
-        status: normalizeReportStatusForCategory(
-          (dailyLogDesignExtras[id] && dailyLogDesignExtras[id].status) || dctx.f['進度狀態'] || '未開始',
-          cat,
-          dctx.f['進度狀態'] || getDesignProgressStatus(dctx.f) || '未開始'
-        )
+        status: dStatus
       };
       designGroups[cat].push(ditem);
       designIds[cat].push(id);
@@ -7942,6 +8022,18 @@ function collectDailyLogCategories() {
     } else {
       var ctx = getTaskContext(id);
       if (!ctx) return;
+      var tBaseStatus = (dailyLogTaskExtras[id] && dailyLogTaskExtras[id].status) || ctx.f['進度狀態'] || '未開始';
+      var tOrigStatus = ctx.f['進度狀態'] || '未開始';
+      var tProgSel = row.querySelector('.dl-progress-sel');
+      var tStatus = null;
+      if (cat === 'doing' && tProgSel && tProgSel.value) {
+        tStatus = statusFromDoingProgressPct(tProgSel.value);
+      } else if (cat === 'doing') {
+        tStatus = normalizeReportStatusForCategory(tBaseStatus, cat, tOrigStatus);
+      } else if (cat === 'done') {
+        tStatus = '已完成';
+      }
+      // block / tomorrow：不更新任務進度
       var item = {
         id: id,
         kind: 'task',
@@ -7949,11 +8041,7 @@ function collectDailyLogCategories() {
         taskName: ctx.f['任務名稱'] || '未命名',
         note: noteInput ? noteInput.value.trim() : '',
         blockReason: blockReason,
-        status: normalizeReportStatusForCategory(
-          (dailyLogTaskExtras[id] && dailyLogTaskExtras[id].status) || ctx.f['進度狀態'] || '未開始',
-          cat,
-          ctx.f['進度狀態'] || '未開始'
-        )
+        status: tStatus
       };
       groups[cat].push(item);
       ids[cat].push(id);
