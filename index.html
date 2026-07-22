@@ -3,9 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
+<meta http-equiv="Cache-Control" content="public, max-age=60">
 <title>璽墨 專案管理系統</title>
 <style>
 :root {
@@ -438,15 +436,16 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 
 /* gantt controls */
 .gctl{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px;padding:7px 12px;display:flex;align-items:center;gap:7px}
-.task-time-btn{margin-left:auto;width:54px;height:54px;border-radius:50%;border:2px solid #f5c518;background:#ffe566;color:#5c4800;font-size:9px;font-weight:800;line-height:1.15;letter-spacing:.02em;cursor:pointer;box-shadow:0 2px 10px rgba(245,197,24,.45);display:inline-flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;position:relative;font-family:inherit;padding:4px;transition:transform .12s,box-shadow .12s,filter .12s}
-.task-time-btn:hover{filter:brightness(1.05);box-shadow:0 4px 14px rgba(245,197,24,.55);transform:translateY(-1px)}
+.task-time-btn{margin-left:auto;height:26px;min-width:44px;padding:0 10px;border-radius:var(--rs);border:1px solid #e6c200;background:#ffe566;color:#5c4800;font-size:11px;font-weight:700;line-height:1;letter-spacing:.02em;cursor:pointer;box-shadow:0 1px 4px rgba(245,197,24,.35);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;position:relative;font-family:inherit;transition:transform .12s,box-shadow .12s,filter .12s}
+.task-time-btn:hover{filter:brightness(1.05);box-shadow:0 2px 8px rgba(245,197,24,.45);transform:translateY(-1px)}
 .task-time-btn:active{transform:scale(0.96)}
-.task-time-btn .tt-label{display:block;text-align:center}
-.task-time-badge{position:absolute;top:-2px;right:-2px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#c0392b;color:#fff;font-size:10px;font-weight:700;line-height:18px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.task-time-btn .tt-label{display:inline;text-align:center}
+.task-time-badge{position:absolute;top:-6px;right:-6px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#c0392b;color:#fff;font-size:9px;font-weight:700;line-height:16px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.2)}
 .task-time-badge:empty,.task-time-badge[data-count="0"]{display:none}
-.tt-issue-row{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;background:#fff;transition:border-color .12s,box-shadow .12s}
-.tt-issue-row:hover{border-color:#f5c518;box-shadow:0 1px 6px rgba(245,197,24,.25)}
-.tt-issue-main{flex:1;min-width:0}
+.tt-issue-row{padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:#fff;transition:border-color .12s,box-shadow .12s}
+.tt-issue-row.open{border-color:#f5c518;box-shadow:0 1px 6px rgba(245,197,24,.25)}
+.tt-issue-main{cursor:pointer}
+.tt-issue-main:hover .tt-issue-name{color:var(--c2)}
 .tt-issue-name{font-size:13px;font-weight:700;color:var(--text);line-height:1.35}
 .tt-issue-meta{font-size:11px;color:var(--t3);margin-top:3px}
 .tt-issue-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
@@ -454,6 +453,9 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .tt-tag.missing-start{background:#ffe8e8;color:#b42318}
 .tt-tag.missing-end{background:#ffe8e8;color:#b42318}
 .tt-tag.ok{background:#e8f5e9;color:#2e7d32}
+.tt-issue-edit{margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)}
+.tt-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tt-edit-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
 .gnb{width:26px;height:26px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--t2)}
 .gnb:hover{background:var(--sf2)}
 .tbtn{padding:4px 10px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);cursor:pointer;font-size:11px;color:var(--t2);font-weight:500}
@@ -949,7 +951,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
           <button class="vb" onclick="setV('quarter',this)">季</button>
         </div>
         <button type="button" class="task-time-btn" id="task-time-btn" onclick="openTaskTimeIssues()" title="查看尚未設好開始／結束時間的任務">
-          <span class="tt-label">Task<br>time</span>
+          <span class="tt-label">Task</span>
           <span class="task-time-badge" id="task-time-badge" data-count="0"></span>
         </button>
       </div>
@@ -1192,8 +1194,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
 </div><div class="ppf"><button class="bcan bdel-action" id="dl-delete-btn" onclick="deleteDailyJournal()" style="display:none">刪除今日日報</button><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
 <!-- 任務時間未設定清單 -->
-<div class="po" id="pp-task-time"><div class="pp" style="width:520px"><div class="pph"><h3>Task time · 未設好時間的任務</h3><button class="ppc" onclick="cl('pp-task-time')">✕</button></div><div class="ppb">
-  <div class="dl-hint" style="margin:0 0 12px">甘特圖需要「預計完成日」才會顯示；建議開始日與結束日都填好。以下為目前所選標案中時間不完整的任務。</div>
+<div class="po" id="pp-task-time"><div class="pp" style="width:520px"><div class="pph"><h3>Task · 未設好時間的任務</h3><button class="ppc" onclick="cl('pp-task-time')">✕</button></div><div class="ppb">
+  <div class="dl-hint" style="margin:0 0 12px">甘特圖需要「預計完成日」才會顯示；點任務可在此直接改開始／結束日並儲存。</div>
   <div id="task-time-list"><div style="padding:12px;color:var(--t3);font-size:12px;text-align:center">載入中...</div></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-task-time')">關閉</button></div></div></div>
 
@@ -1490,11 +1492,21 @@ function sw(btn,id){
     journalViewDate = new Date();
     journalViewDate.setHours(0, 0, 0, 0);
     syncJournalDateInput();
+    if (!deferredDataReady) loadDeferredTables({ silent: true });
     renderJournalPage();
   }
-  if(id==='pg-e') renderExpenses();
-  if(id==='pg-b') renderBudget();
-  if(id==='pg-d') renderDesigns();
+  if(id==='pg-e') {
+    if (!deferredDataReady) loadDeferredTables({ silent: true });
+    renderExpenses();
+  }
+  if(id==='pg-b') {
+    if (!deferredDataReady) loadDeferredTables({ silent: true });
+    renderBudget();
+  }
+  if(id==='pg-d') {
+    if (!deferredDataReady && currentUserRole !== '設計師') loadDeferredTables({ silent: true });
+    renderDesigns();
+  }
   if(id==='pg-p') applyLoginUserToForms();
   if(id==='pg-ai') { renderAiPage(); syncAiComposerBounds(); }
 }
@@ -3426,12 +3438,16 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260716v121';
+var APP_BUILD = '20260722v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v4';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
 var AUTH_CACHE_MAX_AGE = 10 * 60 * 1000;
 var BOOTSTRAP_TABLE_KEYS = ['projects', 'workitems', 'tasks', 'expenses', 'designs', 'journal', 'members'];
+var CORE_TABLE_KEYS_PM = ['projects', 'workitems', 'tasks', 'members'];
+var CORE_TABLE_KEYS_DESIGNER = ['projects', 'workitems', 'designs', 'members'];
+var DEFERRED_TABLE_KEYS_PM = ['expenses', 'designs', 'journal'];
+var DEFERRED_TABLE_KEYS_DESIGNER = ['tasks', 'expenses', 'journal'];
 var SYNC_EXPAND = {
   projects: ['projects'],
   workitems: ['workitems'],
@@ -3445,6 +3461,8 @@ var SYNC_EXPAND = {
 var syncInflight = null;
 var syncQueuedKeys = null;
 var syncStatusCount = 0;
+var deferredDataReady = true;
+var deferredLoadPromise = null;
 var ARCHIVE_OAUTH_SCOPES = ['wiki:wiki', 'wiki:node:read', 'bitable:app'];
 var API = '/api/lark';
 
@@ -5342,6 +5360,24 @@ function fetchJsonWithTimeout(url, ms) {
   });
 }
 
+function getCoreTableKeys() {
+  return currentUserRole === '設計師' ? CORE_TABLE_KEYS_DESIGNER.slice() : CORE_TABLE_KEYS_PM.slice();
+}
+
+function getDeferredTableKeys() {
+  return currentUserRole === '設計師' ? DEFERRED_TABLE_KEYS_DESIGNER.slice() : DEFERRED_TABLE_KEYS_PM.slice();
+}
+
+function applyPartialTables(payload, keys) {
+  if (!payload) return;
+  (keys || Object.keys(payload)).forEach(function(key) {
+    if (BOOTSTRAP_TABLE_KEYS.indexOf(key) < 0) return;
+    if (!payload[key]) return;
+    applyPartialTable(key, payload[key]);
+  });
+  pruneSelectedProjects();
+}
+
 function safeRenderAfterLoad() {
   try {
     ensureDefaultProjectSelection();
@@ -5362,19 +5398,57 @@ function safeRenderAfterLoad() {
   }
 }
 
+function renderCoreShell() {
+  try {
+    ensureDefaultProjectSelection();
+    renderProjects();
+    renderTasks();
+    renderTeamPanel();
+    renderGanttFromData();
+    buildMembersMap();
+    fillMemberSelects();
+    var cachedUser = getCurrentLoginUser();
+    if (cachedUser) {
+      enrichLoginUserFromMembers(cachedUser);
+      storeLoginUser(cachedUser);
+    }
+    updateTodoLoginLabel();
+    applyLoginUserToForms();
+    if (currentUserRole === '設計師') renderDesigns();
+  } catch (renderErr) {
+    console.error('核心畫面渲染失敗', renderErr);
+    var pl = document.getElementById('pl-projects');
+    if (pl) pl.innerHTML = '<div style="padding:12px;color:#b42318;font-size:11px">畫面渲染失敗：' + escHtml(renderErr.message || String(renderErr)) + '</div>';
+  }
+}
+
+function renderDeferredViews(keys) {
+  try {
+    refreshViewsForTables(keys || getDeferredTableKeys());
+    if (currentUserRole !== '設計師') {
+      // designs / journal also need their dedicated renders when keys arrive
+      if (!keys || keys.indexOf('designs') >= 0) renderDesigns();
+      if (!keys || keys.indexOf('journal') >= 0) renderJournalPage();
+    }
+  } catch (renderErr) {
+    console.error('延伸資料渲染失敗', renderErr);
+  }
+}
+
 function applyBootstrapPayload(payload) {
   if (!payload) return;
-  projectsData = (payload.projects && payload.projects.records) || [];
-  workitemsData = (payload.workitems && payload.workitems.records) || [];
-  tasksData = (payload.tasks && payload.tasks.records) || [];
-  expensesData = (payload.expenses && payload.expenses.records) || [];
-  designsData = (payload.designs && payload.designs.records) || [];
-  journalData = (payload.journal && payload.journal.records) || [];
-  membersData = (payload.members && payload.members.records) || [];
+  if (payload.projects) projectsData = (payload.projects.records) || [];
+  if (payload.workitems) workitemsData = (payload.workitems.records) || [];
+  if (payload.tasks) tasksData = (payload.tasks.records) || [];
+  if (payload.expenses) expensesData = (payload.expenses.records) || [];
+  if (payload.designs) designsData = (payload.designs.records) || [];
+  if (payload.journal) journalData = (payload.journal.records) || [];
+  if (payload.members) membersData = (payload.members.records) || [];
   pruneSelectedProjects();
 }
 
 function renderAllFromBootstrap() {
+  deferredDataReady = true;
   safeRenderAfterLoad();
   try {
     renderDesigns();
@@ -5395,7 +5469,6 @@ function readBootstrapCache() {
   try {
     var raw = localStorage.getItem(DATA_CACHE_KEY);
     if (!raw) {
-      // 相容舊版 sessionStorage 快取
       raw = sessionStorage.getItem('ximo-bootstrap-cache-v1') || sessionStorage.getItem(DATA_CACHE_KEY);
       if (raw) {
         try { localStorage.setItem(DATA_CACHE_KEY, raw); } catch (e2) {}
@@ -5420,39 +5493,55 @@ function writeBootstrapCache(payload) {
   } catch (e) {}
 }
 
-function fetchBootstrapPayloadFallback() {
-  return Promise.all([
-    fetchJsonWithTimeout('?table=projects', 25000).catch(function() { return {}; }),
-    fetchJsonWithTimeout('?table=workitems', 25000).catch(function() { return {}; }),
-    fetchJsonWithTimeout('?table=tasks', 25000).catch(function() { return {}; }),
-    fetchJsonWithTimeout('?table=expenses', 25000).catch(function() { return {}; }),
-    fetchJsonWithTimeout('?table=designs', 25000).catch(function() { return {}; }),
-    fetchJsonWithTimeout('?table=journal', 25000).catch(function() { return {}; }),
-    fetchJsonWithTimeout('?table=members', 25000).catch(function() { return {}; })
-  ]).then(function(results) {
-    return {
-      ok: true,
-      ts: Date.now(),
-      projects: results[0],
-      workitems: results[1],
-      tasks: results[2],
-      expenses: results[3],
-      designs: results[4],
-      journal: results[5],
-      members: results[6]
-    };
+function fetchBootstrapPayloadFallback(tableKeys) {
+  var keys = tableKeys && tableKeys.length ? tableKeys : BOOTSTRAP_TABLE_KEYS.slice();
+  return Promise.all(keys.map(function(key) {
+    return fetchJsonWithTimeout('?table=' + key, 25000).catch(function() { return {}; });
+  })).then(function(results) {
+    var payload = { ok: true, ts: Date.now() };
+    keys.forEach(function(key, i) { payload[key] = results[i]; });
+    return payload;
   });
 }
 
-function fetchBootstrapPayloadRemote() {
-  return fetchJsonWithTimeout('?action=bootstrap', 45000).catch(function(err) {
+function fetchBootstrapPayloadRemote(tableKeys) {
+  var keys = tableKeys && tableKeys.length ? tableKeys : null;
+  var qs = keys
+    ? '?action=bootstrap&tables=' + encodeURIComponent(keys.join(','))
+    : '?action=bootstrap';
+  return fetchJsonWithTimeout(qs, 45000).catch(function(err) {
     console.warn('bootstrap API 失敗，改用分批載入', err);
-    return fetchBootstrapPayloadFallback();
+    return fetchBootstrapPayloadFallback(keys);
   });
+}
+
+function loadDeferredTables(opts) {
+  opts = opts || {};
+  var keys = getDeferredTableKeys();
+  if (!keys.length) {
+    deferredDataReady = true;
+    return Promise.resolve();
+  }
+  if (deferredLoadPromise) return deferredLoadPromise;
+  if (!opts.silent) setBootStatus('同步其餘資料中…');
+  deferredLoadPromise = fetchBootstrapPayloadRemote(keys).then(function(payload) {
+    applyPartialTables(payload, keys);
+    writeBootstrapCache(buildBootstrapPayloadFromState());
+    deferredDataReady = true;
+    renderDeferredViews(keys);
+    setBootStatus('');
+  }).catch(function(err) {
+    console.warn('其餘資料載入失敗', err);
+    deferredDataReady = true;
+    setBootStatus('其餘資料稍後再試：' + (err.message || '連線失敗'), true);
+  }).finally(function() {
+    deferredLoadPromise = null;
+  });
+  return deferredLoadPromise;
 }
 
 function loadExtraData() {
-  syncTables(['designs']);
+  return loadDeferredTables({ silent: true });
 }
 
 function applyRemoteBootstrap(payload, hadCache) {
@@ -5483,22 +5572,40 @@ function loadData(opts) {
     }
   }
   if (!hadCache && !opts.silent) {
+    deferredDataReady = false;
     document.getElementById('pl-projects').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
     document.getElementById('task-list-body').innerHTML = '<div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>';
   }
 
-  // 有新鮮快取時：先回畫面，背景再打 API 更新；超過 5 分鐘則必要重打
+  // 有新鮮快取：先回畫面，背景分階段更新
   if (hadCache && cacheFresh && !opts.forceRefresh) {
-    fetchBootstrapPayloadRemote().then(function(payload) {
-      applyRemoteBootstrap(payload, true);
+    var coreKeysBg = getCoreTableKeys();
+    fetchBootstrapPayloadRemote(coreKeysBg).then(function(payload) {
+      applyPartialTables(payload, coreKeysBg);
+      writeBootstrapCache(buildBootstrapPayloadFromState());
+      renderCoreShell();
+      return loadDeferredTables({ silent: true });
     }).catch(function(err) {
       console.warn('背景更新失敗，沿用快取', err);
     });
     return Promise.resolve();
   }
 
-  return fetchBootstrapPayloadRemote().then(function(payload) {
-    applyRemoteBootstrap(payload, hadCache);
+  // 無快取／快取過期：先載核心（兩側＋時程），其餘背景跑
+  var coreKeys = getCoreTableKeys();
+  if (!hadCache) deferredDataReady = false;
+  if (!opts.silent && !hadCache) setBootStatus('載入時程資料…');
+  return fetchBootstrapPayloadRemote(coreKeys).then(function(payload) {
+    applyPartialTables(payload, coreKeys);
+    writeBootstrapCache(buildBootstrapPayloadFromState());
+    renderCoreShell();
+    var loadErr = (payload.projects && payload.projects.error)
+      || (payload.workitems && payload.workitems.error)
+      || (payload.tasks && payload.tasks.error)
+      || (payload.designs && payload.designs.error);
+    if (loadErr && !projectsData.length && !hadCache) showDataHint(loadErr);
+    setBootStatus('');
+    loadDeferredTables({ silent: !!hadCache });
   }).catch(function(err) {
     console.error('載入失敗', err);
     if (!hadCache) {
@@ -5509,10 +5616,12 @@ function loadData(opts) {
       designsData = [];
       journalData = [];
       membersData = [];
+      deferredDataReady = true;
       safeRenderAfterLoad();
       showDataHint(err.message || '連線失敗');
       setBootStatus('Lark 資料載入失敗：' + (err.message || '連線失敗') + '（build ' + APP_BUILD + '）', true);
     } else {
+      deferredDataReady = true;
       setBootStatus('資料更新失敗，顯示的是本機快取', true);
     }
   });
@@ -6472,7 +6581,9 @@ function getTasksWithIncompleteTime() {
       hasStart: hasStart,
       hasEnd: hasEnd,
       startLabel: hasStart ? fmtDate(f['開始日期']) : '—',
-      endLabel: hasEnd ? fmtDate(f['預計完成日']) : '—'
+      endLabel: hasEnd ? fmtDate(f['預計完成日']) : '—',
+      startVal: hasStart ? tsToDateInput(f['開始日期']) : '',
+      endVal: hasEnd ? tsToDateInput(f['預計完成日']) : ''
     });
   });
   issues.sort(function(a, b) {
@@ -6494,13 +6605,25 @@ function updateTaskTimeBadge() {
     : '目前所選標案的任務時間都已設定';
 }
 
+var taskTimeEditId = null;
+
 function openTaskTimeIssues() {
+  taskTimeEditId = null;
+  renderTaskTimeList();
+  op('pp-task-time');
+}
+
+function toggleTaskTimeEdit(taskId) {
+  taskTimeEditId = (taskTimeEditId === taskId) ? null : taskId;
+  renderTaskTimeList();
+}
+
+function renderTaskTimeList() {
   var list = document.getElementById('task-time-list');
   if (!list) return;
   var issues = getTasksWithIncompleteTime();
   if (!issues.length) {
     list.innerHTML = '<div style="padding:18px;color:var(--t3);font-size:12px;text-align:center;line-height:1.6">太好了！目前所選標案沒有時間不完整的任務。</div>';
-    op('pp-task-time');
     return;
   }
   var byProj = {};
@@ -6520,21 +6643,54 @@ function openTaskTimeIssues() {
       if (!it.hasEnd) tags += '<span class="tt-tag missing-end">缺結束日</span>';
       else tags += '<span class="tt-tag ok">結束 ' + escHtml(it.endLabel) + '</span>';
       if (!it.hasEnd) tags += '<span class="tt-tag missing-end">甘特圖不顯示</span>';
-      html += '<div class="tt-issue-row" onclick="openTaskDetailFromTimeIssue(\'' + it.id + '\')">'
-        + '<div class="tt-issue-main">'
+      var expanded = taskTimeEditId === it.id;
+      html += '<div class="tt-issue-row' + (expanded ? ' open' : '') + '">'
+        + '<div class="tt-issue-main" onclick="toggleTaskTimeEdit(\'' + it.id + '\')">'
         + '<div class="tt-issue-name">' + escHtml(it.name) + '</div>'
-        + '<div class="tt-issue-meta">' + escHtml(it.wiName) + ' · ' + escHtml(it.assignee) + '</div>'
+        + '<div class="tt-issue-meta">' + escHtml(it.wiName) + ' · ' + escHtml(it.assignee) + (expanded ? '' : ' · 點擊修改時間') + '</div>'
         + '<div class="tt-issue-tags">' + tags + '</div>'
-        + '</div></div>';
+        + '</div>';
+      if (expanded) {
+        html += '<div class="tt-issue-edit" onclick="event.stopPropagation()">'
+          + '<div class="tt-edit-grid">'
+          + '<div class="fg" style="margin:0"><label>開始日期</label><input type="date" id="tt-start-' + it.id + '" value="' + escAttr(it.startVal) + '" onchange="onOptionalDateClear(this)"></div>'
+          + '<div class="fg" style="margin:0"><label>預計完成日</label><input type="date" id="tt-due-' + it.id + '" value="' + escAttr(it.endVal) + '" onchange="onOptionalDateClear(this)"></div>'
+          + '</div>'
+          + '<div class="tt-edit-actions">'
+          + '<button type="button" class="bcan" onclick="toggleTaskTimeEdit(\'' + it.id + '\')">取消</button>'
+          + '<button type="button" class="bpri" id="tt-save-' + it.id + '" onclick="saveTaskTimeInline(\'' + it.id + '\')">儲存</button>'
+          + '</div></div>';
+      }
+      html += '</div>';
     });
   });
   list.innerHTML = html;
-  op('pp-task-time');
 }
 
-function openTaskDetailFromTimeIssue(taskId) {
-  cl('pp-task-time');
-  openTaskDetail(taskId);
+function saveTaskTimeInline(taskId) {
+  var startEl = document.getElementById('tt-start-' + taskId);
+  var dueEl = document.getElementById('tt-due-' + taskId);
+  var start = startEl ? String(startEl.value || '').trim() : '';
+  var due = dueEl ? String(dueEl.value || '').trim() : '';
+  if (!start && !due) {
+    alert('請至少填寫開始日期或預計完成日');
+    return;
+  }
+  var fields = {
+    '開始日期': optionalDateInputToTs(start),
+    '預計完成日': optionalDateInputToTs(due)
+  };
+  var btn = document.getElementById('tt-save-' + taskId);
+  if (btn) { btn.disabled = true; btn.textContent = '儲存中…'; }
+  optimisticUpdate('tasks', taskId, fields, { failMsg: '時間儲存失敗', skipSync: true }).then(function() {
+    taskTimeEditId = null;
+    updateTaskTimeBadge();
+    renderTaskTimeList();
+    renderGanttFromData();
+    renderTasks();
+  }).catch(function() {
+    if (btn) { btn.disabled = false; btn.textContent = '儲存'; }
+  });
 }
 
 // ── 任務詳情 / 日誌 ──

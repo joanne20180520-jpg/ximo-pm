@@ -4054,6 +4054,22 @@ export default async function handler(req, res) {
     }
 
     if (action === 'bootstrap' && req.method === 'GET') {
+      const raw = String(req.query.tables || '').trim();
+      if (raw) {
+        const keys = raw.split(',').map(function(s) { return s.trim(); }).filter(function(k) {
+          return BOOTSTRAP_TABLE_KEYS.indexOf(k) >= 0;
+        });
+        const uniq = keys.filter(function(k, i) { return keys.indexOf(k) === i; });
+        if (uniq.length) {
+          const token = await getToken();
+          const parts = await Promise.all(uniq.map(function(key) {
+            return fetchTableRecordsSafe(token, key);
+          }));
+          const payload = { ok: true, ts: Date.now() };
+          uniq.forEach(function(key, i) { payload[key] = parts[i]; });
+          return res.status(200).json(payload);
+        }
+      }
       const payload = await fetchBootstrapPayload();
       return res.status(200).json(payload);
     }
