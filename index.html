@@ -3505,7 +3505,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260722v2';
+var APP_BUILD = '20260722v3';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v4';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -7073,6 +7073,21 @@ function openGenerateTasksPreview(ids) {
   op('pp-ms-generate');
 }
 
+function ensureProjectSelectedForView(projId) {
+  if (!projId) return false;
+  if (selectedProjectIds.has(projId)) return false;
+  selectedProjectIds.add(projId);
+  saveSelectedProjects();
+  return true;
+}
+
+function goToScheduleAfterMilestoneTasks(projId) {
+  ensureProjectSelectedForView(projId);
+  refreshAllFilteredViews();
+  var tab = document.querySelector('.tbar-tab[onclick*="pg-s"]');
+  if (tab) sw(tab, 'pg-s');
+}
+
 function confirmGenerateTasks() {
   if (!milestonePageProjId || !msGenerateIds.length) return;
   var proj = projectsData.find(function(p) { return p.record_id === milestonePageProjId; });
@@ -7111,11 +7126,10 @@ function confirmGenerateTasks() {
     cl('pp-ms-generate');
     msGenerateIds = [];
     renderMilestonesPage();
-    renderProjects();
-    renderTasks();
-    renderGanttFromData();
+    goToScheduleAfterMilestoneTasks(milestonePageProjId);
     updateTaskTimeBadge();
-    alert('已產生 ' + created + ' 筆任務，可到時程管理查看。');
+    var projName = proj.fields['標案名稱'] || '標案';
+    alert('已產生 ' + created + ' 筆任務。\n已切換到「時程管理」，並勾選標案「' + projName + '」。\n請在中間任務清單展開工作項目群組（如：期中報告、活動執行）查看。');
   }).catch(function(err) {
     alert('產生任務失敗：' + (err.message || '請稍後再試'));
   }).finally(function() {
