@@ -271,6 +271,9 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .j-date-today{padding:4px 10px;border:1px solid var(--border);border-radius:var(--rs);background:var(--sf2);font-size:11px;cursor:pointer;font-weight:600;color:var(--t2)}
 .j-date-today:hover{border-color:var(--accent);color:var(--accent)}
 .j-date-today.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.j-date-block{padding:4px 10px;border:1px solid var(--border);border-radius:var(--rs);background:var(--sf2);font-size:11px;cursor:pointer;font-weight:600;color:var(--t2)}
+.j-date-block:hover{border-color:var(--danger);color:var(--danger)}
+.j-date-block.active{background:var(--danger);color:#fff;border-color:var(--danger)}
 .j-dash-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
 .j-kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .j-kpi-label{font-size:12px;color:var(--t2);margin-bottom:6px}
@@ -701,7 +704,8 @@ body.role-designer .design-filter-bar{display:flex}
 .todo-scope-btn:active:not(.active){background:rgba(26,74,122,.1)!important;color:var(--c2)!important}
 .todo-scope-btn.active:active{background:var(--c1)!important;color:#fff!important}
 .bjlog:active,.btn-report:active{background:#1e5638!important;transform:scale(0.97);box-shadow:0 0 0 3px rgba(45,106,79,.25)}
-.j-date-btn:active,.j-date-today:active{background:var(--c2)!important;color:#fff!important;border-color:var(--c2)!important;transform:scale(0.94)}
+.j-date-btn:active,.j-date-today:active,.j-date-block:active{background:var(--c2)!important;color:#fff!important;border-color:var(--c2)!important;transform:scale(0.94)}
+.j-date-block:active{background:var(--danger)!important;border-color:var(--danger)!important}
 .ppc:active{background:rgba(180,40,40,.12)!important;color:var(--danger)!important;transform:scale(0.9)}
 .gsb button:active{background:var(--c2)!important;color:#fff!important;border-color:var(--c2)!important;transform:scale(0.9)}
 .dc2 button:active{background:var(--c2)!important;color:#fff!important;border-color:var(--c2)!important}
@@ -996,8 +1000,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
             <input type="date" id="journal-date-input" class="j-date-input" onchange="onJournalDateChange(this.value)">
             <button type="button" class="j-date-btn" onclick="shiftJournalDay(1)" title="後一天">›</button>
             <button type="button" class="j-date-today" id="journal-today-btn" onclick="goJournalToday()">今日</button>
+            <button type="button" class="j-date-block" id="journal-block-btn" onclick="goJournalBlockView()">卡關</button>
           </div>
-          <span class="j-today-label" id="journal-today-label"></span>
           <button class="bjlog" onclick="openDailyLog()">＋ 填寫今日日誌</button>
         </div>
         <div class="jpage-feed" id="journal-page-list">
@@ -4272,6 +4276,7 @@ function getLoginRedirectUri() {
 }
 var currentTaskId = null;
 var journalViewDate = new Date(); journalViewDate.setHours(0,0,0,0);
+var journalViewMode = 'day'; // 'day' | 'block'
 var dailyLogDate = new Date(); dailyLogDate.setHours(0,0,0,0);
 var dailyLogProjFilter = '';
 var dailyLogPersonFilter = '';
@@ -8631,9 +8636,10 @@ function resolveBlockedTask(taskId, journalRecId, newCat, btn) {
 }
 
 function renderJournalBlockView(area) {
+  syncJournalDateInput();
   var blocked = getActiveBlockedTaskItems();
   if (!blocked.length) {
-    area.innerHTML = '<div style="padding:12px;color:var(--t3);font-size:12px">目前無卡關項目</div>';
+    area.innerHTML = '<div class="j-empty-note" style="padding:20px;text-align:center">目前無卡關任務</div>';
     return;
   }
   var byProj = {};
@@ -8642,7 +8648,7 @@ function renderJournalBlockView(area) {
     byProj[item.projName].push(item);
   });
   var projs = Object.keys(byProj).sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
-  var html = '';
+  var html = '<div class="j-empty-note" style="margin-bottom:12px;padding:0">共 ' + blocked.length + ' 項卡關任務（近 90 日日誌）</div>';
   projs.forEach(function(proj) {
     var items = byProj[proj];
     var color = projColorByName(proj);
@@ -8731,38 +8737,53 @@ function syncJournalDateInput() {
   var input = document.getElementById('journal-date-input');
   if (input) input.value = tsToDateInput(journalViewDate.getTime());
   var todayBtn = document.getElementById('journal-today-btn');
-  if (todayBtn) todayBtn.classList.toggle('active', isJournalViewToday());
+  if (todayBtn) todayBtn.classList.toggle('active', journalViewMode === 'day' && isJournalViewToday());
+  var blockBtn = document.getElementById('journal-block-btn');
+  if (blockBtn) blockBtn.classList.toggle('active', journalViewMode === 'block');
+  var dateNav = document.querySelector('#pg-journal .j-date-nav');
+  if (dateNav) {
+    dateNav.querySelectorAll('.j-date-btn, .j-date-input').forEach(function(el) {
+      el.disabled = journalViewMode === 'block';
+      el.style.opacity = journalViewMode === 'block' ? '0.45' : '';
+    });
+  }
 }
 
 function updateJournalDateLabel() {
-  var label = document.getElementById('journal-today-label');
-  var d = new Date(journalViewDate.getTime());
-  var text = (d.getMonth() + 1) + '/' + d.getDate() + '（' + weekdayLabel(d) + '）';
-  if (isJournalViewToday()) text = '今日 ' + text;
-  if (label) label.textContent = text;
+  // 灰色「今日 7/22（三）」已移除，保留函式以免舊呼叫報錯
+}
+
+function setJournalViewMode(mode) {
+  journalViewMode = mode === 'block' ? 'block' : 'day';
+  syncJournalDateInput();
+  renderJournalPage();
 }
 
 function shiftJournalDay(delta) {
+  journalViewMode = 'day';
   journalViewDate.setDate(journalViewDate.getDate() + delta);
   syncJournalDateInput();
-  updateJournalDateLabel();
   renderJournalPage();
 }
 
 function goJournalToday() {
+  journalViewMode = 'day';
   journalViewDate = new Date();
   journalViewDate.setHours(0, 0, 0, 0);
   syncJournalDateInput();
-  updateJournalDateLabel();
   renderJournalPage();
+}
+
+function goJournalBlockView() {
+  setJournalViewMode('block');
 }
 
 function onJournalDateChange(val) {
   if (!val) return;
+  journalViewMode = 'day';
   var parts = val.split('-');
   journalViewDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
   journalViewDate.setHours(0, 0, 0, 0);
-  updateJournalDateLabel();
   syncJournalDateInput();
   renderJournalPage();
 }
@@ -9053,6 +9074,11 @@ function renderJournalDashboard(area) {
 function renderJournalPage() {
   var area = document.getElementById('journal-page-list');
   if (!area) return;
+  syncJournalDateInput();
+  if (journalViewMode === 'block') {
+    renderJournalBlockView(area);
+    return;
+  }
   renderJournalDashboard(area);
 }
 
