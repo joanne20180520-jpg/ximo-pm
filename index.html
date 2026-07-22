@@ -329,7 +329,10 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .pph-report .ppc{color:rgba(255,255,255,.85)}
 
 /* daily log popup */
-.pp-daily{width:580px}
+.pp-daily{width:580px;max-width:94vw;display:flex;flex-direction:column;max-height:min(90vh,820px);overflow:hidden}
+.pp-daily .pph{flex-shrink:0;position:relative}
+.pp-daily .ppb{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.pp-daily .ppf{flex-shrink:0;background:var(--surface);position:sticky;bottom:0;z-index:2}
 .dl-date{font-size:13px;font-weight:700;margin-bottom:10px;color:var(--text)}
 .dl-proj-filter{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
 .dl-person-filter{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
@@ -1457,10 +1460,10 @@ function sw(btn,id){
   document.getElementById(id).classList.add('active');
   if(id==='pg-s') renderGanttFromData();
   if(id==='pg-journal') {
+    journalViewMode = 'day';
     journalViewDate = new Date();
     journalViewDate.setHours(0, 0, 0, 0);
     syncJournalDateInput();
-    updateJournalDateLabel();
     renderJournalPage();
   }
   if(id==='pg-e') renderExpenses();
