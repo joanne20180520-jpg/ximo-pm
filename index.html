@@ -438,6 +438,22 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 
 /* gantt controls */
 .gctl{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px;padding:7px 12px;display:flex;align-items:center;gap:7px}
+.task-time-btn{margin-left:auto;width:54px;height:54px;border-radius:50%;border:2px solid #f5c518;background:#ffe566;color:#5c4800;font-size:9px;font-weight:800;line-height:1.15;letter-spacing:.02em;cursor:pointer;box-shadow:0 2px 10px rgba(245,197,24,.45);display:inline-flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;position:relative;font-family:inherit;padding:4px;transition:transform .12s,box-shadow .12s,filter .12s}
+.task-time-btn:hover{filter:brightness(1.05);box-shadow:0 4px 14px rgba(245,197,24,.55);transform:translateY(-1px)}
+.task-time-btn:active{transform:scale(0.96)}
+.task-time-btn .tt-label{display:block;text-align:center}
+.task-time-badge{position:absolute;top:-2px;right:-2px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#c0392b;color:#fff;font-size:10px;font-weight:700;line-height:18px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.task-time-badge:empty,.task-time-badge[data-count="0"]{display:none}
+.tt-issue-row{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;background:#fff;transition:border-color .12s,box-shadow .12s}
+.tt-issue-row:hover{border-color:#f5c518;box-shadow:0 1px 6px rgba(245,197,24,.25)}
+.tt-issue-main{flex:1;min-width:0}
+.tt-issue-name{font-size:13px;font-weight:700;color:var(--text);line-height:1.35}
+.tt-issue-meta{font-size:11px;color:var(--t3);margin-top:3px}
+.tt-issue-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.tt-tag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#fff3cd;color:#8a6d00}
+.tt-tag.missing-start{background:#ffe8e8;color:#b42318}
+.tt-tag.missing-end{background:#ffe8e8;color:#b42318}
+.tt-tag.ok{background:#e8f5e9;color:#2e7d32}
 .gnb{width:26px;height:26px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--t2)}
 .gnb:hover{background:var(--sf2)}
 .tbtn{padding:4px 10px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);cursor:pointer;font-size:11px;color:var(--t2);font-weight:500}
@@ -932,6 +948,10 @@ button.btn-loading::after{content:'…';margin-left:2px}
           <button class="vb active" onclick="setV('month',this)">月</button>
           <button class="vb" onclick="setV('quarter',this)">季</button>
         </div>
+        <button type="button" class="task-time-btn" id="task-time-btn" onclick="openTaskTimeIssues()" title="查看尚未設好開始／結束時間的任務">
+          <span class="tt-label">Task<br>time</span>
+          <span class="task-time-badge" id="task-time-badge" data-count="0"></span>
+        </button>
       </div>
       <div id="gantt-area">
         <div style="padding:20px;color:var(--t3);font-size:12px;text-align:center">載入中...</div>
@@ -1170,6 +1190,12 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>任務分類</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-person-filter" id="dl-person-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">預設只顯示目前回報人負責的項目；若今日已填過日報，會自動帶入先前分類。選「進行中」時可調整右側 10%–90%；選「不列入」可從日報移除該項；誤填可點左下「刪除今日日報」。</div></div>
   <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="選擇任務後自動產生…"></textarea></div>
 </div><div class="ppf"><button class="bcan bdel-action" id="dl-delete-btn" onclick="deleteDailyJournal()" style="display:none">刪除今日日報</button><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
+
+<!-- 任務時間未設定清單 -->
+<div class="po" id="pp-task-time"><div class="pp" style="width:520px"><div class="pph"><h3>Task time · 未設好時間的任務</h3><button class="ppc" onclick="cl('pp-task-time')">✕</button></div><div class="ppb">
+  <div class="dl-hint" style="margin:0 0 12px">甘特圖需要「預計完成日」才會顯示；建議開始日與結束日都填好。以下為目前所選標案中時間不完整的任務。</div>
+  <div id="task-time-list"><div style="padding:12px;color:var(--t3);font-size:12px;text-align:center">載入中...</div></div>
+</div><div class="ppf"><button class="bcan" onclick="cl('pp-task-time')">關閉</button></div></div></div>
 
 <div class="po" id="pp-exp"><div class="pp"><div class="pph"><h3>新增支出明細</h3><button class="ppc" onclick="cl('pp-exp')">✕</button></div><div class="ppb"><div class="fg"><label>支出細項</label><input type="text" id="ex-name" placeholder="茶葉5斤"></div><div class="fg"><label>所屬標案</label><select id="ex-proj" onchange="onExpenseProjChange()"></select></div><div class="fg"><label>所屬工作項目</label><select id="ex-wi"></select></div><div class="fg"><label>負責人</label><select id="ex-assignee" data-members></select></div><div class="fg"><label>預估花費</label><input type="text" class="money-input" id="ex-est" placeholder="NT$0"></div><div class="fg"><label>日期</label><input type="date" id="ex-date"></div><div class="fg"><label>實際金額</label><input type="text" class="money-input" placeholder="NT$0" id="aa" oninput="calcE()"></div><div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ua" readonly style="background:#f0f0f0;color:var(--t3)"></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-exp')">取消</button><button class="bpri" onclick="saveExpense()">新增</button></div></div></div>
 
@@ -6258,6 +6284,7 @@ function renderGanttFromData() {
   var ganttArea = document.getElementById('gantt-area');
   if (!ganttArea) return;
   ganttArea.innerHTML = '';
+  updateTaskTimeBadge();
 
   var tasksByWi = {};
   tasksData.forEach(function(t) {
@@ -6409,6 +6436,105 @@ function renderGanttFromData() {
   if (!ganttArea.children.length) {
     ganttArea.innerHTML = '<div style="padding:20px;color:var(--t3);font-size:12px;text-align:center">尚無可顯示的任務時程（請確認工作項目與任務有設定日期）</div>';
   }
+}
+
+/** 找出時間不完整、可能無法完整顯示於甘特圖的任務 */
+function getTasksWithIncompleteTime() {
+  var wiMap = {};
+  workitemsData.forEach(function(wi) {
+    wiMap[wi.record_id] = {
+      name: wi.fields['工作項目名稱'] || '',
+      project: getProjectNameFromWi(wi)
+    };
+  });
+  var issues = [];
+  tasksData.forEach(function(rec) {
+    var f = rec.fields || {};
+    var wiIds = getLinkIds(f['所屬工作項目']);
+    var wiId = wiIds[0] || null;
+    var wi = wiId ? wiMap[wiId] : null;
+    var projName = wi ? (wi.project || '其他') : '其他';
+    var projRec = projectsData.find(function(p) { return (p.fields['標案名稱'] || '') === projName; });
+    if (projRec) {
+      if (!isProjectVisible(projRec) || !isProjectSelected(projRec)) return;
+    } else if (selectedProjectIds.size) {
+      return;
+    }
+    var hasStart = !!parseTs(f['開始日期']);
+    var hasEnd = !!parseTs(f['預計完成日']);
+    if (hasStart && hasEnd) return;
+    issues.push({
+      id: rec.record_id,
+      name: f['任務名稱'] || '未命名',
+      assignee: personName(f['負責人']) || '未指定',
+      wiName: wi ? wi.name : '未分類',
+      projName: projName,
+      hasStart: hasStart,
+      hasEnd: hasEnd,
+      startLabel: hasStart ? fmtDate(f['開始日期']) : '—',
+      endLabel: hasEnd ? fmtDate(f['預計完成日']) : '—'
+    });
+  });
+  issues.sort(function(a, b) {
+    if (a.projName !== b.projName) return a.projName.localeCompare(b.projName, 'zh-Hant');
+    return a.name.localeCompare(b.name, 'zh-Hant');
+  });
+  return issues;
+}
+
+function updateTaskTimeBadge() {
+  var badge = document.getElementById('task-time-badge');
+  var btn = document.getElementById('task-time-btn');
+  if (!badge) return;
+  var count = getTasksWithIncompleteTime().length;
+  badge.setAttribute('data-count', String(count));
+  badge.textContent = count ? String(count) : '';
+  if (btn) btn.title = count
+    ? ('有 ' + count + ' 筆任務尚未設好開始／結束時間')
+    : '目前所選標案的任務時間都已設定';
+}
+
+function openTaskTimeIssues() {
+  var list = document.getElementById('task-time-list');
+  if (!list) return;
+  var issues = getTasksWithIncompleteTime();
+  if (!issues.length) {
+    list.innerHTML = '<div style="padding:18px;color:var(--t3);font-size:12px;text-align:center;line-height:1.6">太好了！目前所選標案沒有時間不完整的任務。</div>';
+    op('pp-task-time');
+    return;
+  }
+  var byProj = {};
+  issues.forEach(function(it) {
+    if (!byProj[it.projName]) byProj[it.projName] = [];
+    byProj[it.projName].push(it);
+  });
+  var html = '';
+  Object.keys(byProj).sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); }).forEach(function(proj) {
+    var color = projColorByName(proj);
+    html += '<div class="jfeed-proj-hdr" style="background:' + color + ';margin-bottom:8px">' + escHtml(proj)
+      + '<span class="jfeed-proj-count">' + byProj[proj].length + ' 筆</span></div>';
+    byProj[proj].forEach(function(it) {
+      var tags = '';
+      if (!it.hasStart) tags += '<span class="tt-tag missing-start">缺開始日</span>';
+      else tags += '<span class="tt-tag ok">開始 ' + escHtml(it.startLabel) + '</span>';
+      if (!it.hasEnd) tags += '<span class="tt-tag missing-end">缺結束日</span>';
+      else tags += '<span class="tt-tag ok">結束 ' + escHtml(it.endLabel) + '</span>';
+      if (!it.hasEnd) tags += '<span class="tt-tag missing-end">甘特圖不顯示</span>';
+      html += '<div class="tt-issue-row" onclick="openTaskDetailFromTimeIssue(\'' + it.id + '\')">'
+        + '<div class="tt-issue-main">'
+        + '<div class="tt-issue-name">' + escHtml(it.name) + '</div>'
+        + '<div class="tt-issue-meta">' + escHtml(it.wiName) + ' · ' + escHtml(it.assignee) + '</div>'
+        + '<div class="tt-issue-tags">' + tags + '</div>'
+        + '</div></div>';
+    });
+  });
+  list.innerHTML = html;
+  op('pp-task-time');
+}
+
+function openTaskDetailFromTimeIssue(taskId) {
+  cl('pp-task-time');
+  openTaskDetail(taskId);
 }
 
 // ── 任務詳情 / 日誌 ──
@@ -8216,6 +8342,8 @@ function applyDailyLogPermissions() {
   });
   var saveBtn = popup.querySelector('.ppf .btn-report');
   if (saveBtn) saveBtn.style.display = pm ? '' : 'none';
+  var cancelBtn = popup.querySelector('.ppf .bcan:not(.bdel-action)');
+  if (cancelBtn) cancelBtn.style.display = '';
   updateDailyLogDeleteButton();
 }
 
