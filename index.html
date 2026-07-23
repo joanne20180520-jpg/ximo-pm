@@ -7087,6 +7087,79 @@ function unlinkDeletedTaskFromMilestones(taskId) {
   });
 }
 
+/** 左側改任務後，同步履約規劃內已連結的那一列 */
+function syncTaskFieldsIntoMilestones(taskId, patch) {
+  if (!taskId || !patch) return Promise.resolve();
+  var saves = [];
+  (milestonesData || []).forEach(function(rec) {
+    var ms = milestoneRecordToClient(rec);
+    if (!milestoneContainsTaskId(ms, taskId)) return;
+    var changed = false;
+    var groups = ensureMilestoneGroups(ms).map(function(g) {
+      return {
+        id: g.id,
+        workItemName: g.workItemName || '',
+        workItemId: g.workItemId || '',
+        tasks: (g.tasks || []).map(function(t) {
+          if (!t || t.taskId !== taskId) return t;
+          changed = true;
+          return Object.assign({}, t, {
+            name: patch.name != null ? patch.name : t.name,
+            status: patch.status != null ? patch.status : t.status,
+            start: patch.start != null ? patch.start : t.start,
+            due: patch.due != null ? patch.due : t.due,
+            assignee: patch.assignee != null ? patch.assignee : t.assignee
+          });
+        })
+      };
+    });
+    if (!changed) return;
+    ms.plannedGroups = groups;
+    ms.plannedTasks = flattenMilestonePlanTasks({ plannedGroups: groups });
+    saves.push(persistMilestone(ms, ms.projectId).catch(function(err) {
+      console.warn('同步履約任務欄位失敗', ms.id, err);
+    }));
+  });
+  return Promise.all(saves).then(function() {
+    if (typeof renderMilestonesPage === 'function') renderMilestonesPage();
+  });
+}
+
+/** 履約儲存時，把已產生任務的規劃欄位寫回左側任務 */
+function syncMilestonePlanToLinkedTasks(ms, projId) {
+  var chain = Promise.resolve();
+  flattenMilestonePlanTasks(ms || {}).forEach(function(plan) {
+    if (!plan || !plan.taskId || !plan.name) return;
+    var fields = {
+      '任務名稱': plan.name,
+      '進度狀態': plan.status || '未開始',
+      '進度數值': parseProgressVal(plan.status, null)
+    };
+    if (plan.start) fields['開始日期'] = dateInputToTs(plan.start);
+    else fields['開始日期'] = null;
+    if (plan.due) fields['預計完成日'] = dateInputToTs(plan.due);
+    else fields['預計完成日'] = null;
+    if (plan.assignee) {
+      var person = larkPerson(plan.assignee);
+      if (person) fields['負責人'] = person;
+    }
+    if (plan.workItemId) fields['所屬工作項目'] = [plan.workItemId];
+    else if (plan.workItemName && projId) {
+      var wiId = resolveWorkItemIdByNameForProj(projId, plan.workItemName);
+      if (wiId) fields['所屬工作項目'] = [wiId];
+    }
+    chain = chain.then(function() {
+      return optimisticUpdate('tasks', plan.taskId, fields, {
+        failMsg: '同步任務失敗',
+        skipSync: true
+      }).catch(function(err) {
+        console.warn('同步已產生任務失敗', plan.taskId, err);
+      });
+    });
+  });
+  return chain;
+}
+
 function saveMilestones(projId, list) {
   // 相容舊呼叫：逐筆 upsert 到獨立表；同時寫本機備援
   if (!projId) return Promise.resolve();
@@ -7334,12 +7407,16 @@ function renderMilestonesPage() {
       + '<td>' + (ms.startDate ? escHtml(ms.startDate.replace(/-/g, '/')) : '—') + '</td>'
       + '<td>' + (ms.dueDate ? escHtml(ms.dueDate.replace(/-/g, '/')) : '—') + '</td>'
       + '<td>' + (ms.payPct ? '<span class="ms-tag pay">' + escHtml(ms.payPct) + '</span>' : '—') + '</td>'
-      + '<td><span class="ms-tag' + statusCls + '">' + escHtml(ms.status || '未開始') + '</span></td>'
+      + '<td><span class="ms-tag' + statusCls + '">' + escHtml(ms.status || '未開始') + '</span>'
+      + (pendingPlan ? '<div class="ms-sub">' + pendingPlan + '筆尚未產生任務</div>' : '')
+      + '</td>'
       + '<td>' + (function() {
       var planned = milestonePlanTaskCount(ms);
-      var done = (ms.taskIds && ms.taskIds.length) ? ms.taskIds.length : 0;
-      if (done) return '<span class="ms-tag task">已產生 ' + done + ' 筆</span>' + (planned ? '<div class="ms-sub">規劃 ' + planned + ' 筆</div>' : '');
-      if (planned) return '<span class="ms-sub">規劃 ' + planned + ' 筆 · 尚未產生</span>';
+      var generated = flattenMilestonePlanTasks(ms).filter(function(t) { return t && t.taskId; }).length;
+      if (!generated && (ms.taskIds || []).length) generated = ms.taskIds.length;
+      if (generated) return '<span class="ms-tag task">已產生 ' + generated + ' 筆</span>'
+        + (planned > generated ? '<div class="ms-sub">規劃共 ' + planned + ' 筆</div>' : '');
+      if (planned) return '<span class="ms-sub">規劃 ' + planned + ' 筆</span>';
       return '<span class="ms-sub">尚未規劃任務</span>';
     })() + '</td>'
       + '<td><div class="ms-actions">'
@@ -7831,6 +7908,8 @@ function saveMilestone() {
   });
   deleteChain.then(function() {
     return persistMilestone(payload, milestonePageProjId);
+  }).then(function() {
+    return syncMilestonePlanToLinkedTasks(payload, milestonePageProjId);
   }).then(function() {
     return syncTables(['milestones', 'tasks']);
   }).then(function() {
@@ -8813,7 +8892,15 @@ function confirmTaskReport() {
 
   apiPut('tasks', currentTaskId, taskFields).then(function() {
     cl('pp-td');
-    return syncTables(['tasks']);
+    return syncTables(['tasks']).then(function() {
+      return syncTaskFieldsIntoMilestones(currentTaskId, {
+        name: taskName,
+        status: status,
+        start: tdStart && tdStart.value ? tdStart.value : '',
+        due: tdDue && tdDue.value ? tdDue.value : '',
+        assignee: assigneeName || ''
+      });
+    });
   }).catch(function(err) {
     console.error(err);
     alert('儲存失敗：' + (err.message || '請確認 Lark 欄位設定'));
