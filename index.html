@@ -3469,10 +3469,13 @@ function paintGantt(key,proj,vs,ve,total,cw){
       var paint = ganttBarPaintStyle(bar, proj.color);
       var borderStyle = '';
       var barLabel = bar.design ? ('設計·' + bar.l) : bar.l;
+      var tipParts = [barLabel];
+      if (!bar.design && bar.desc) tipParts.push(bar.desc);
+      var barTip = tipParts.join('\n');
       var labelHtml = bar.done
         ? ('<span class="gbar-done-icon">✓</span><span style="text-decoration:line-through">' + escHtml(barLabel) + '</span>')
         : escHtml(barLabel);
-      bH+='<div class="gbar'+overdueClass+paint.extraClass+'" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:'+GANTT_BAR_H+'px;'+paint.bgStyle+borderStyle+'"'+clickAttr+' title="'+escAttr(barLabel)+'">'+labelHtml+'</div>';
+      bH+='<div class="gbar'+overdueClass+paint.extraClass+'" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:'+GANTT_BAR_H+'px;'+paint.bgStyle+borderStyle+'"'+clickAttr+' title="'+escAttr(barTip)+'">'+labelHtml+'</div>';
     });
     tmH+='<div class="gtr" style="width:'+tw+'px;height:'+rowH+'px">'+bH+'</div>';
   });
@@ -3542,7 +3545,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260723v3';
+var APP_BUILD = '20260723v4';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v4';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -6797,10 +6800,12 @@ function renderGanttFromData() {
         var tProg = parseProgressVal(tf['進度狀態'], tf['進度數值']);
         var dueDiff = getDueDayDiff(tf['預計完成日']);
         var tDone = tProg >= 100 || tf['進度狀態'] === '已完成';
+        var tDesc = fieldTextValue(tf['任務說明']) || fieldTextValue(tf['說明']) || '';
         bars.push({
           s: toDateStr(tStart),
           e: toDateStr(tDue),
           l: tName,
+          desc: tDesc,
           o: 1,
           c: color,
           id: t.record_id,
