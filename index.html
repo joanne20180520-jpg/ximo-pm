@@ -314,7 +314,7 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .bjlog{padding:3px 8px;border-radius:var(--rs);border:none;background:var(--report);color:#fff;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap}
 .bjlog:hover{background:var(--report-hover)}
 .pph-report{background:var(--report) !important}
-.pph-report h3{color:#fff !important;flex:1;min-width:0}
+.pph-report h3{color:#fff !important;flex:1;min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.35}
 .btn-report{background:var(--report) !important}
 .btn-report:hover{background:var(--report-hover) !important}
 .td-hdr-actions{display:flex;align-items:center;gap:8px}
@@ -559,7 +559,8 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .fg{margin-bottom:11px}
 .fg label{display:block;font-size:11px;font-weight:600;color:var(--t2);margin-bottom:3px}
 .fg input,.fg select,.fg textarea{width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;background:var(--sf2);color:var(--text);outline:none;font-family:inherit}
-.fg input:focus,.fg select:focus{border-color:var(--accent);background:#fff}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--accent);background:#fff}
+#nt-name,#td-name{resize:vertical;min-height:52px;line-height:1.45}
 .ntags{display:flex;gap:5px;flex-wrap:wrap}
 .ntag{padding:3px 10px;border-radius:20px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--sf2);color:var(--t2)}
 .ntag.on{background:#f5c518;border-color:#e0b000;color:#5a4200}
@@ -1195,12 +1196,12 @@ button.btn-loading::after{content:'…';margin-left:2px}
 
 <div class="po" id="pp-work"><div class="pp ppw"><div class="pph"><h3>建立標案的工作項目</h3><button class="ppc" onclick="cl('pp-work')">✕</button></div><div class="ppb"><div class="fg"><label>標案</label><select id="nw-proj" onchange="onNwProjChange()"></select></div><div class="wi-row-hdr"><span>工作項目名稱</span><span>開始日期</span><span>結束日期</span><span>負責夥伴</span><span>執行夥伴</span><span>可用成本</span><span>權重</span></div><div class="slist" id="sl"></div><p id="nw-wi-weight-remain" class="proc-wi-remain" style="margin:4px 0 8px"></p><button class="bads" onclick="addS()">＋ 新增工作項目</button></div><div class="ppf"><button class="bcan" onclick="cl('pp-work')">取消</button><button class="bpri" onclick="saveWorkItems()">新增</button></div></div></div>
 
-<div class="po" id="pp-task"><div class="pp"><div class="pph"><h3>建立新任務</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fg"><label>任務名稱</label><input type="text" id="nt-name" placeholder="拜訪OO茶主"></div><div class="fg"><label>任務說明</label><input type="text" id="nt-desc" placeholder="補充說明（選填）"></div><div class="fg"><label>負責人</label><select id="nt-assignee" data-members></select></div><div class="fg"><label>所屬工作項目</label><select id="nt-wi"></select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px"><div class="fg" style="margin:0"><label>開始日期</label><input type="date" id="nt-start"></div><div class="fg" style="margin:0"><label>預計完成日</label><input type="date" id="nt-due"></div></div><div class="fg"><label>進度狀態</label><select id="nt-status"></select></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri" onclick="saveTask()">新增</button></div></div></div>
+<div class="po" id="pp-task"><div class="pp"><div class="pph"><h3>建立新任務</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fg"><label>任務名稱</label><textarea id="nt-name" rows="2" placeholder="拜訪OO茶主"></textarea></div><div class="fg"><label>任務說明</label><input type="text" id="nt-desc" placeholder="補充說明（選填）"></div><div class="fg"><label>負責人</label><select id="nt-assignee" data-members></select></div><div class="fg"><label>所屬工作項目</label><select id="nt-wi"></select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px"><div class="fg" style="margin:0"><label>開始日期</label><input type="date" id="nt-start"></div><div class="fg" style="margin:0"><label>預計完成日</label><input type="date" id="nt-due"></div></div><div class="fg"><label>進度狀態</label><select id="nt-status"></select></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri" onclick="saveTask()">新增</button></div></div></div>
 
 <div class="po" id="pp-td"><div class="pp"><div class="pph pph-report" id="td-header"><h3 id="td-title">任務詳情</h3><div class="td-hdr-actions"><button type="button" class="td-open-report" onclick="openDailyLogFromTask()">開啟今日回報表</button><button type="button" class="ppc" onclick="cl('pp-td')">✕</button></div></div><div class="ppb">
   <div id="td-proj-tag" class="td-proj"></div>
   <div id="td-meta" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center"></div>
-  <div class="fg"><label>任務名稱</label><input type="text" id="td-name" placeholder="任務名稱" oninput="document.getElementById('td-title').textContent=this.value||'任務回報'"></div>
+  <div class="fg"><label>任務名稱</label><textarea id="td-name" rows="2" placeholder="任務名稱" oninput="document.getElementById('td-title').textContent=this.value||'任務回報'"></textarea></div>
   <div class="fg"><label>任務說明</label><input type="text" id="td-desc" placeholder="補充說明（選填）"></div>
   <div class="fg"><label>所屬工作項目</label><select id="td-wi"></select></div>
   <div class="fg"><label>負責人</label><select id="td-assignee" data-members></select></div>
