@@ -12746,8 +12746,10 @@ function deleteProject(id, name) {
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
       if (savedData) undoStack.push({ type: 'delete', table: 'projects', data: savedData });
+      showUndoToast('已刪除標案「' + (name || '未命名') + '」');
       optimisticDelete('projects', id, { failMsg: '刪除失敗', syncKeys: ['all'] }).catch(function() {
         if (savedData) undoStack.pop();
+        hideUndoToast();
       });
     }
   });
@@ -12763,8 +12765,10 @@ function deleteWorkItem(id, name) {
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
       if (savedData) undoStack.push({ type: 'delete', table: 'workitems', data: savedData });
+      showUndoToast('已刪除工作項目「' + (name || '未命名') + '」');
       optimisticDelete('workitems', id, { failMsg: '刪除失敗', syncKeys: ['workitems', 'tasks'] }).catch(function() {
         if (savedData) undoStack.pop();
+        hideUndoToast();
       });
     }
   });
@@ -12780,10 +12784,12 @@ function deleteTask(id, name) {
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
       if (savedData) undoStack.push({ type: 'delete', table: 'tasks', data: savedData });
+      showUndoToast('已刪除任務「' + (name || '未命名') + '」');
       optimisticDelete('tasks', id, { failMsg: '刪除失敗' }).then(function() {
         return unlinkDeletedTaskFromMilestones(id);
       }).catch(function() {
         if (savedData) undoStack.pop();
+        hideUndoToast();
       });
     }
   });
@@ -12801,8 +12807,10 @@ function deleteExpense(id, name) {
       if (savedData) undoStack.push({ type: 'delete', table: 'expenses', data: savedData });
       cl('pp-edit-exp');
       editingExpenseId = null;
+      showUndoToast('已刪除支出「' + (name || '支出明細') + '」');
       optimisticDelete('expenses', id, { failMsg: '刪除失敗' }).catch(function() {
         if (savedData) undoStack.pop();
+        hideUndoToast();
       });
     }
   });
@@ -12827,8 +12835,10 @@ function deleteDesign(id, name) {
       if (savedData) undoStack.push({ type: 'delete', table: 'designs', data: savedData });
       cl('pp-edit-des');
       editingDesignId = null;
+      showUndoToast('已刪除設計任務「' + (name || '設計任務') + '」');
       optimisticDelete('designs', id, { failMsg: '刪除失敗' }).catch(function() {
         if (savedData) undoStack.pop();
+        hideUndoToast();
       });
     }
   });
