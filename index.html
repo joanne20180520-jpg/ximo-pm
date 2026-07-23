@@ -504,7 +504,12 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .ms-proj-btn{border:none;background:#fff3cd;color:#7a5a00;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;cursor:pointer;margin-left:6px}
 .ms-proj-btn:hover{background:#ffe566}
 .ms-plan-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
-.ms-plan-row{border:1px solid var(--border);border-radius:8px;padding:10px;background:#faf9f7}
+.ms-plan-group{border:1px solid var(--border);border-radius:8px;padding:10px;background:#faf9f7;margin-bottom:10px}
+.ms-plan-group-hd{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.ms-plan-group-hd select{flex:1;min-width:140px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;background:#fff}
+.ms-plan-group-hd .ms-plan-del{flex-shrink:0}
+.ms-plan-group-tools{display:flex;gap:6px;margin-top:8px}
+.ms-plan-row{border:1px solid var(--border);border-radius:8px;padding:10px;background:#fff}
 .ms-plan-row-top{display:flex;gap:8px;align-items:center;margin-bottom:8px}
 .ms-plan-row-top input[type=text]{flex:1;min-width:0}
 .ms-plan-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1.2fr;gap:8px}
@@ -1271,19 +1276,18 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="fg" style="margin:0"><label>截止日</label><input type="date" id="ms-due"></div>
   </div>
   <div class="fg"><label>給付比例（選填）</label><input type="text" id="ms-pay" placeholder="40%"></div>
-  <div class="fg"><label>工作項目</label><select id="ms-wi"></select></div>
   <div class="fg"><label>最終成果（自己看的）</label><textarea id="ms-deliver" rows="2" placeholder="例：最終報告 3 份紙本＋1 份電子檔；審查通過後請款 40%"></textarea></div>
   <div class="fg" style="margin-bottom:6px">
-    <div style="display:flex;justify-content:flex-start;margin-bottom:8px">
-      <button type="button" class="bads" onclick="addMilestonePlanTaskRow()">＋ 新增任務</button>
+    <div id="ms-plan-groups"></div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button type="button" class="bads" onclick="addMilestonePlanGroup()">＋ 新增工作項目</button>
     </div>
-    <div id="ms-plan-tasks" class="ms-plan-list"></div>
   </div>
 </div><div class="ppf"><button class="bcan bdel-action" id="ms-del-btn" onclick="deleteMilestoneFromEditor()" style="display:none">刪除</button><button class="bcan" onclick="cl('pp-milestone')">取消</button><button class="bpri" onclick="saveMilestone()">儲存</button></div></div></div>
 
 <!-- 產生任務預覽 -->
 <div class="po" id="pp-ms-generate"><div class="pp" style="width:560px"><div class="pph"><h3>產生任務</h3><button class="ppc" onclick="cl('pp-ms-generate')">✕</button></div><div class="ppb">
-  <div class="dl-hint" style="margin:0 0 12px">會依里程碑內規劃的任務列產生（每列 1 筆）。尚未規劃者會略過。</div>
+  <div class="dl-hint" style="margin:0 0 12px">會依里程碑內各工作項目下規劃的任務列產生（每列 1 筆）。尚未規劃者會略過。</div>
   <div id="ms-generate-list"></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-ms-generate')">取消</button><button class="bpri" id="ms-generate-btn" onclick="confirmGenerateTasks()">確認產生</button></div></div></div>
 
@@ -6895,19 +6899,20 @@ function resolveWorkItemIdByNameForProj(projId, wiName) {
 
 function milestoneRecordToClient(rec) {
   var f = (rec && rec.fields) || {};
-  var plannedRaw = parseMilestoneFieldValue(f['規劃任務']);
-  var planned = normalizePlannedTasks(plannedRaw);
-  var taskIds = getLinkIds(f['已產生任務']);
-  if (!taskIds.length) {
-    taskIds = planned.map(function(t) { return t.taskId; }).filter(Boolean);
-  }
   var wiIds = getLinkIds(f['展開工作項目']);
   var wiName = '';
   if (wiIds.length) wiName = resolveWorkItemNameById(wiIds[0]) || getLinkText(f['展開工作項目']) || '';
   if (!wiName) wiName = fieldTextValue(f['展開工作項目']) || fieldTextValue(f['工作項目名稱']) || '';
+  var plannedGroups = parseMilestonePlanPayload(f['規劃任務'], wiName);
+  var planned = flattenMilestonePlanTasks({ plannedGroups: plannedGroups });
+  var taskIds = getLinkIds(f['已產生任務']);
+  if (!taskIds.length) {
+    taskIds = planned.map(function(t) { return t.taskId; }).filter(Boolean);
+  }
   var projIds = getLinkIds(f['所屬標案']);
   var dueRaw = f['截止日'];
   var startRaw = f['開始日期'] != null && f['開始日期'] !== '' ? f['開始日期'] : f['開始日'];
+  var first = plannedGroups[0] || {};
   return {
     id: rec.record_id,
     recordId: rec.record_id,
@@ -6919,9 +6924,10 @@ function milestoneRecordToClient(rec) {
     dueDate: dueRaw ? tsToDateInput(dueRaw) : '',
     payPct: f['給付比例'] || '',
     deliverable: f['最終成果'] || '',
-    workItemName: wiName,
-    workItemId: wiIds[0] || '',
+    workItemName: first.workItemName || wiName,
+    workItemId: first.workItemId || wiIds[0] || '',
     notes: f['備註'] || '',
+    plannedGroups: plannedGroups,
     plannedTasks: planned,
     taskIds: taskIds,
     clientId: f['客戶端ID'] || ''
@@ -6929,6 +6935,8 @@ function milestoneRecordToClient(rec) {
 }
 
 function clientMilestoneToFields(ms, projId) {
+  var groups = ensureMilestoneGroups(ms);
+  var flat = flattenMilestonePlanTasks({ plannedGroups: groups });
   var fields = {
     '里程碑名稱': ms.name || '',
     '所屬標案': projId ? [projId] : [],
@@ -6936,17 +6944,19 @@ function clientMilestoneToFields(ms, projId) {
     '狀態': ms.status || '未開始',
     '給付比例': ms.payPct || '',
     '最終成果': ms.deliverable || '',
-    '規劃任務': JSON.stringify(ms.plannedTasks || []),
+    '規劃任務': JSON.stringify({ version: 2, groups: groups }),
     '備註': ms.notes || ''
   };
   if (ms.startDate) fields['開始日期'] = dateInputToTs(ms.startDate);
   else fields['開始日期'] = null;
   if (ms.dueDate) fields['截止日'] = dateInputToTs(ms.dueDate);
   else fields['截止日'] = null;
-  var wiId = ms.workItemId || resolveWorkItemIdByNameForProj(projId, ms.workItemName);
-  if (wiId) fields['展開工作項目'] = [wiId];
-  var taskIds = (ms.taskIds || []).filter(Boolean);
-  if (taskIds.length) fields['已產生任務'] = taskIds;
+  var firstWiId = groups[0] && (groups[0].workItemId || resolveWorkItemIdByNameForProj(projId, groups[0].workItemName));
+  if (firstWiId) fields['展開工作項目'] = [firstWiId];
+  var taskIds = (ms.taskIds || flat.map(function(t) { return t.taskId; })).filter(Boolean);
+  var uniq = [];
+  taskIds.forEach(function(id) { if (uniq.indexOf(id) < 0) uniq.push(id); });
+  if (uniq.length) fields['已產生任務'] = uniq;
   if (ms.clientId) fields['客戶端ID'] = ms.clientId;
   return fields;
 }
@@ -6969,7 +6979,13 @@ function getMilestones(projId) {
   }
   // 備援：本機／舊標案欄位（尚未遷移到獨立表時）
   var all = readAllMilestonesLocal();
-  return (all[projId] || []).slice();
+  return (all[projId] || []).map(function(m) {
+    var groups = ensureMilestoneGroups(m);
+    return Object.assign({}, m, {
+      plannedGroups: groups,
+      plannedTasks: flattenMilestonePlanTasks({ plannedGroups: groups })
+    });
+  });
 }
 
 function persistMilestone(ms, projId) {
@@ -7036,6 +7052,8 @@ function milestoneTypeLabel(type) {
 }
 
 function resolveMilestoneWorkItemName(ms) {
+  var labels = milestoneWorkItemLabels(ms);
+  if (labels.length) return labels.join('、');
   if (ms && ms.workItemName) return String(ms.workItemName).trim();
   if (milestoneDefaultWiName) return milestoneDefaultWiName;
   return '';
@@ -7131,6 +7149,8 @@ function formatMsDate(val) {
 function milestoneTaskRowFromRecord(rec) {
   if (!rec) return null;
   var f = rec.fields || {};
+  var wiIds = getLinkIds(f['所屬工作項目']);
+  var wiName = wiIds.length ? (resolveWorkItemNameById(wiIds[0]) || '') : '';
   return {
     kind: 'task',
     taskId: rec.record_id,
@@ -7139,20 +7159,23 @@ function milestoneTaskRowFromRecord(rec) {
     progress: parseProgressVal(f['進度狀態'], f['進度數值']),
     assignee: personName(f['負責人']) || '—',
     start: f['開始日期'] ? fmtDate(f['開始日期']) : '—',
-    due: f['預計完成日'] ? fmtDate(f['預計完成日']) : '—'
+    due: f['預計完成日'] ? fmtDate(f['預計完成日']) : '—',
+    wiName: wiName
   };
 }
 
 function getMilestoneTaskRows(ms) {
   var rows = [];
   var seen = {};
-  (ms.plannedTasks || []).forEach(function(pt) {
+  flattenMilestonePlanTasks(ms).forEach(function(pt) {
     if (!pt) return;
     if (pt.taskId) {
       var rec = tasksData.find(function(t) { return t.record_id === pt.taskId; });
       if (rec) {
         seen[pt.taskId] = 1;
-        rows.push(milestoneTaskRowFromRecord(rec));
+        var row = milestoneTaskRowFromRecord(rec);
+        if (row && pt.workItemName) row.wiName = pt.workItemName;
+        rows.push(row);
         return;
       }
     }
@@ -7165,7 +7188,8 @@ function getMilestoneTaskRows(ms) {
       progress: parseProgressVal(pt.status, null),
       assignee: pt.assignee || '—',
       start: formatMsDate(pt.start),
-      due: formatMsDate(pt.due)
+      due: formatMsDate(pt.due),
+      wiName: pt.workItemName || ''
     });
   });
   (ms.taskIds || []).forEach(function(tid) {
@@ -7218,7 +7242,7 @@ function renderMilestonesPage() {
     + '<th>里程碑</th><th>開始</th><th>截止</th><th>給付</th><th>狀態</th><th>任務</th><th></th>'
     + '</tr></thead><tbody>';
   list.forEach(function(ms) {
-    var pendingPlan = (ms.plannedTasks || []).filter(function(t) { return t && t.name && !t.taskId; }).length;
+    var pendingPlan = milestonePendingPlanTasks(ms).length;
     var statusCls = ms.status === '已完成' ? ' done' : '';
     var wiLabel = resolveMilestoneWorkItemName(ms) || '—';
     var taskRows = getMilestoneTaskRows(ms);
@@ -7234,7 +7258,7 @@ function renderMilestonesPage() {
       + '<td>' + (ms.payPct ? '<span class="ms-tag pay">' + escHtml(ms.payPct) + '</span>' : '—') + '</td>'
       + '<td><span class="ms-tag' + statusCls + '">' + escHtml(ms.status || '未開始') + '</span></td>'
       + '<td>' + (function() {
-      var planned = (ms.plannedTasks && ms.plannedTasks.length) ? ms.plannedTasks.length : 0;
+      var planned = milestonePlanTaskCount(ms);
       var done = (ms.taskIds && ms.taskIds.length) ? ms.taskIds.length : 0;
       if (done) return '<span class="ms-tag task">已產生 ' + done + ' 筆</span>' + (planned ? '<div class="ms-sub">規劃 ' + planned + ' 筆</div>' : '');
       if (planned) return '<span class="ms-sub">規劃 ' + planned + ' 筆 · 尚未產生</span>';
@@ -7250,12 +7274,13 @@ function renderMilestonesPage() {
         html += '<div class="ms-sub-empty">尚無任務。可點「編輯」規劃任務後再產生。</div>';
       } else {
         html += '<table class="ms-sub-table"><thead><tr>'
-          + '<th>名稱</th><th>狀態</th><th>進度</th><th>負責人</th><th>開始</th><th>結束</th>'
+          + '<th>名稱</th><th>工作項目</th><th>狀態</th><th>進度</th><th>負責人</th><th>開始</th><th>結束</th>'
           + '</tr></thead><tbody>';
         taskRows.forEach(function(row) {
           var tidAttr = row.taskId ? escAttr(row.taskId) : '';
           html += '<tr class="ms-task-row" title="點擊編輯" onclick="event.stopPropagation();openMilestoneTaskRow(\'' + ms.id + '\',\'' + tidAttr + '\')">'
             + '<td style="font-weight:500">' + escHtml(row.name) + (row.kind === 'plan' ? ' <span class="ms-sub">（規劃中）</span>' : '') + '</td>'
+            + '<td>' + escHtml(row.wiName || '—') + '</td>'
             + '<td>' + escHtml(row.status || '未開始') + '</td>'
             + '<td>' + (row.progress || 0) + '%</td>'
             + '<td>' + escHtml(row.assignee || '—') + '</td>'
@@ -7279,8 +7304,11 @@ function renderMilestonesPage() {
   area.innerHTML = html;
 }
 
-function fillMilestoneWiSelect(projId, selectedName) {
-  var sel = document.getElementById('ms-wi');
+function newPlanGroupId() {
+  return 'pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+}
+
+function fillMilestoneWiSelectEl(sel, projId, selectedName) {
   if (!sel) return;
   var proj = projectsData.find(function(p) { return p.record_id === projId; });
   var names = [];
@@ -7326,26 +7354,87 @@ function normalizePlannedTasks(list) {
   });
 }
 
-function defaultPlannedTasksForMilestone(msName, dueDate) {
-  var due = dueDate || '';
-  var start = '';
-  if (due) start = tsToDateInput(dateInputToTs(due) - 14 * 86400000);
-  var base = msName || '里程碑';
-  return normalizePlannedTasks([
-    { name: base + '：蒐集資料', start: start, due: due, status: '未開始' },
-    { name: base + '：撰寫初稿', start: start, due: due, status: '未開始' },
-    { name: base + '：內部審核', start: start, due: due, status: '未開始' },
-    { name: base + '：定稿／印製', start: start, due: due, status: '未開始' },
-    { name: base + '：正式送件', start: start, due: due, status: '未開始' }
-  ]);
+function normalizePlannedGroups(groups) {
+  return (groups || []).map(function(g) {
+    return {
+      id: g.id || newPlanGroupId(),
+      workItemName: g.workItemName || '',
+      workItemId: g.workItemId || '',
+      tasks: normalizePlannedTasks(g.tasks || [])
+    };
+  });
+}
+
+function emptyMilestonePlanGroup(wiName) {
+  return {
+    id: newPlanGroupId(),
+    workItemName: wiName || milestoneDefaultWiName || '',
+    workItemId: '',
+    tasks: []
+  };
+}
+
+function parseMilestonePlanPayload(raw, fallbackWiName) {
+  if (!raw) return normalizePlannedGroups([emptyMilestonePlanGroup(fallbackWiName)]);
+  try {
+    var parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (parsed && Array.isArray(parsed.groups)) return normalizePlannedGroups(parsed.groups);
+    if (Array.isArray(parsed) && parsed.length && parsed[0] && Array.isArray(parsed[0].tasks)) {
+      return normalizePlannedGroups(parsed);
+    }
+    if (Array.isArray(parsed)) {
+      return normalizePlannedGroups([{
+        id: newPlanGroupId(),
+        workItemName: fallbackWiName || '',
+        workItemId: '',
+        tasks: parsed
+      }]);
+    }
+  } catch (e) {}
+  return normalizePlannedGroups([emptyMilestonePlanGroup(fallbackWiName)]);
+}
+
+function ensureMilestoneGroups(ms) {
+  if (ms && ms.plannedGroups && ms.plannedGroups.length) {
+    return normalizePlannedGroups(ms.plannedGroups);
+  }
+  var tasks = normalizePlannedTasks((ms && ms.plannedTasks) || []);
+  return normalizePlannedGroups([{
+    id: newPlanGroupId(),
+    workItemName: (ms && ms.workItemName) || milestoneDefaultWiName || '',
+    workItemId: (ms && ms.workItemId) || '',
+    tasks: tasks
+  }]);
+}
+
+function flattenMilestonePlanTasks(ms) {
+  var out = [];
+  ensureMilestoneGroups(ms).forEach(function(g) {
+    (g.tasks || []).forEach(function(t) {
+      out.push(Object.assign({}, t, {
+        workItemName: g.workItemName || '',
+        workItemId: g.workItemId || ''
+      }));
+    });
+  });
+  return out;
 }
 
 function milestonePlanTaskCount(ms) {
-  return (ms && ms.plannedTasks && ms.plannedTasks.length) ? ms.plannedTasks.length : 0;
+  return flattenMilestonePlanTasks(ms).length;
 }
 
 function milestonePendingPlanTasks(ms) {
-  return (ms.plannedTasks || []).filter(function(t) { return t.name && !t.taskId; });
+  return flattenMilestonePlanTasks(ms).filter(function(t) { return t.name && !t.taskId; });
+}
+
+function milestoneWorkItemLabels(ms) {
+  var labels = [];
+  ensureMilestoneGroups(ms).forEach(function(g) {
+    var n = (g.workItemName || '').trim();
+    if (n && labels.indexOf(n) < 0) labels.push(n);
+  });
+  return labels;
 }
 
 function fillMilestonePlanAssigneeSelect(sel, selected) {
@@ -7362,20 +7451,17 @@ function fillMilestonePlanAssigneeSelect(sel, selected) {
   }
 }
 
-function renderMilestonePlanTasks(tasks) {
-  var box = document.getElementById('ms-plan-tasks');
-  if (!box) return;
+function renderMilestonePlanTaskRows(tasks) {
   var list = normalizePlannedTasks(tasks);
   if (!list.length) {
-    box.innerHTML = '<div class="ms-sub" style="padding:8px 0">尚未新增任務。</div>';
-    return;
+    return '<div class="ms-sub" style="padding:6px 0">尚未新增任務。</div>';
   }
   var html = '';
-  list.forEach(function(t, idx) {
+  list.forEach(function(t) {
     var statusOpts = PROGRESS_OPTIONS.map(function(o) {
       return '<option value="' + escAttr(o) + '"' + (o === t.status ? ' selected' : '') + '>' + escHtml(o) + '</option>';
     }).join('');
-    html += '<div class="ms-plan-row" data-ptid="' + escAttr(t.id) + '">'
+    html += '<div class="ms-plan-row" data-ptid="' + escAttr(t.id) + '"' + (t.taskId ? ' data-taskid="' + escAttr(t.taskId) + '"' : '') + '>'
       + '<div class="ms-plan-row-top">'
       + '<input type="text" class="ms-pt-name" placeholder="任務名稱" value="' + escAttr(t.name) + '">'
       + '<button type="button" class="ms-plan-del" onclick="removeMilestonePlanTaskRow(this)">刪除</button>'
@@ -7389,28 +7475,49 @@ function renderMilestonePlanTasks(tasks) {
       + (t.taskId ? '<div class="ms-sub" style="margin-top:6px">已產生任務</div>' : '')
       + '</div>';
   });
+  return html;
+}
+
+function renderMilestonePlanGroups(groups) {
+  var box = document.getElementById('ms-plan-groups');
+  if (!box) return;
+  var list = normalizePlannedGroups(groups);
+  if (!list.length) list = [emptyMilestonePlanGroup()];
+  var html = '';
+  list.forEach(function(g, gi) {
+    html += '<div class="ms-plan-group" data-pgid="' + escAttr(g.id) + '">'
+      + '<div class="ms-plan-group-hd">'
+      + '<select class="ms-pg-wi" title="工作項目"></select>'
+      + (list.length > 1 ? '<button type="button" class="ms-plan-del" onclick="removeMilestonePlanGroup(this)">刪除工作項目</button>' : '')
+      + '</div>'
+      + '<div class="ms-plan-list ms-pg-tasks">' + renderMilestonePlanTaskRows(g.tasks) + '</div>'
+      + '<div class="ms-plan-group-tools">'
+      + '<button type="button" class="bads" onclick="addMilestonePlanTaskRow(this)">＋ 新增任務</button>'
+      + '</div>'
+      + '</div>';
+  });
   box.innerHTML = html;
-  box.querySelectorAll('.ms-plan-row').forEach(function(row, i) {
-    fillMilestonePlanAssigneeSelect(row.querySelector('.ms-pt-assignee'), list[i].assignee);
+  box.querySelectorAll('.ms-plan-group').forEach(function(groupEl, i) {
+    var wiSel = groupEl.querySelector('.ms-pg-wi');
+    fillMilestoneWiSelectEl(wiSel, milestonePageProjId, list[i].workItemName || '');
+    groupEl.querySelectorAll('.ms-plan-row').forEach(function(row, ti) {
+      fillMilestonePlanAssigneeSelect(row.querySelector('.ms-pt-assignee'), (list[i].tasks[ti] || {}).assignee);
+    });
   });
 }
 
-function collectMilestonePlanTasksFromEditor() {
-  var box = document.getElementById('ms-plan-tasks');
-  if (!box) return [];
+function collectMilestonePlanTasksFromGroupEl(groupEl) {
   var out = [];
-  box.querySelectorAll('.ms-plan-row').forEach(function(row) {
-    var name = (row.querySelector('.ms-pt-name') || {}).value || '';
-    name = String(name).trim();
+  if (!groupEl) return out;
+  groupEl.querySelectorAll('.ms-plan-row').forEach(function(row) {
+    var name = String(((row.querySelector('.ms-pt-name') || {}).value || '')).trim();
     var start = (row.querySelector('.ms-pt-start') || {}).value || '';
     var due = (row.querySelector('.ms-pt-due') || {}).value || '';
     var status = (row.querySelector('.ms-pt-status') || {}).value || '未開始';
     var assigneeSel = row.querySelector('.ms-pt-assignee');
     var assignee = assigneeSel ? assigneeSel.value : '';
     var id = row.getAttribute('data-ptid') || newPlanTaskId();
-    var existingTaskId = '';
-    // keep taskId from previous save via data attr if we set it
-    existingTaskId = row.getAttribute('data-taskid') || '';
+    var existingTaskId = row.getAttribute('data-taskid') || '';
     if (!name && !start && !due) return;
     out.push({
       id: id,
@@ -7425,9 +7532,50 @@ function collectMilestonePlanTasksFromEditor() {
   return out;
 }
 
-function addMilestonePlanTaskRow() {
-  var current = collectMilestonePlanTasksFromEditor();
-  current.push({
+function collectMilestonePlanGroupsFromEditor() {
+  var box = document.getElementById('ms-plan-groups');
+  if (!box) return [emptyMilestonePlanGroup()];
+  var out = [];
+  box.querySelectorAll('.ms-plan-group').forEach(function(groupEl) {
+    var wiSel = groupEl.querySelector('.ms-pg-wi');
+    var wiName = wiSel ? String(wiSel.value || '').trim() : '';
+    out.push({
+      id: groupEl.getAttribute('data-pgid') || newPlanGroupId(),
+      workItemName: wiName,
+      workItemId: resolveWorkItemIdByNameForProj(milestonePageProjId, wiName),
+      tasks: collectMilestonePlanTasksFromGroupEl(groupEl)
+    });
+  });
+  return out.length ? out : [emptyMilestonePlanGroup()];
+}
+
+function addMilestonePlanGroup() {
+  var groups = collectMilestonePlanGroupsFromEditor();
+  groups.push(emptyMilestonePlanGroup(milestoneDefaultWiName || ''));
+  renderMilestonePlanGroups(groups);
+}
+
+function removeMilestonePlanGroup(btn) {
+  var groups = collectMilestonePlanGroupsFromEditor();
+  var groupEl = btn && btn.closest ? btn.closest('.ms-plan-group') : null;
+  if (!groupEl || groups.length <= 1) return;
+  var gid = groupEl.getAttribute('data-pgid');
+  groups = groups.filter(function(g) { return g.id !== gid; });
+  if (!groups.length) groups = [emptyMilestonePlanGroup()];
+  renderMilestonePlanGroups(groups);
+}
+
+function addMilestonePlanTaskRow(btn) {
+  var groups = collectMilestonePlanGroupsFromEditor();
+  var groupEl = btn && btn.closest ? btn.closest('.ms-plan-group') : null;
+  var gid = groupEl ? groupEl.getAttribute('data-pgid') : '';
+  var target = groups.find(function(g) { return g.id === gid; }) || groups[0];
+  if (!target) {
+    groups = [emptyMilestonePlanGroup()];
+    target = groups[0];
+  }
+  target.tasks = normalizePlannedTasks(target.tasks || []);
+  target.tasks.push({
     id: newPlanTaskId(),
     name: '',
     start: '',
@@ -7436,17 +7584,21 @@ function addMilestonePlanTaskRow() {
     assignee: '',
     taskId: ''
   });
-  renderMilestonePlanTasks(current);
+  renderMilestonePlanGroups(groups);
 }
 
 function removeMilestonePlanTaskRow(btn) {
+  var groups = collectMilestonePlanGroupsFromEditor();
   var row = btn && btn.closest ? btn.closest('.ms-plan-row') : null;
-  if (!row) return;
-  row.remove();
-  var box = document.getElementById('ms-plan-tasks');
-  if (box && !box.querySelector('.ms-plan-row')) {
-    box.innerHTML = '<div class="ms-sub" style="padding:8px 0">尚未新增任務。</div>';
-  }
+  var groupEl = btn && btn.closest ? btn.closest('.ms-plan-group') : null;
+  if (!row || !groupEl) return;
+  var gid = groupEl.getAttribute('data-pgid');
+  var ptid = row.getAttribute('data-ptid');
+  groups.forEach(function(g) {
+    if (g.id !== gid) return;
+    g.tasks = (g.tasks || []).filter(function(t) { return t.id !== ptid; });
+  });
+  renderMilestonePlanGroups(groups);
 }
 
 function openMilestoneEditor(msId) {
@@ -7457,8 +7609,7 @@ function openMilestoneEditor(msId) {
   editingMilestoneId = msId || null;
   var title = document.getElementById('ms-edit-title');
   var delBtn = document.getElementById('ms-del-btn');
-  fillMilestoneWiSelect(milestonePageProjId, '');
-  var planned = [];
+  var groups = [];
   if (msId) {
     var ms = getMilestones(milestonePageProjId).find(function(m) { return m.id === msId; });
     if (!ms) return;
@@ -7471,12 +7622,7 @@ function openMilestoneEditor(msId) {
     document.getElementById('ms-start').value = ms.startDate || '';
     document.getElementById('ms-pay').value = ms.payPct || '';
     document.getElementById('ms-deliver').value = ms.deliverable || ms.notes || '';
-    fillMilestoneWiSelect(milestonePageProjId, ms.workItemName || milestoneDefaultWiName || '');
-    planned = normalizePlannedTasks(ms.plannedTasks || []);
-    // 相容舊資料：只有 taskIds、沒有 plannedTasks 時，不自動塞範本，避免覆蓋
-    if (!planned.length && !(ms.taskIds && ms.taskIds.length)) {
-      planned = defaultPlannedTasksForMilestone(ms.name, ms.dueDate);
-    }
+    groups = ensureMilestoneGroups(ms);
   } else {
     if (title) title.textContent = '新增里程碑';
     if (delBtn) delBtn.style.display = 'none';
@@ -7487,21 +7633,9 @@ function openMilestoneEditor(msId) {
     document.getElementById('ms-start').value = '';
     document.getElementById('ms-pay').value = '';
     document.getElementById('ms-deliver').value = '';
-    fillMilestoneWiSelect(milestonePageProjId, milestoneDefaultWiName || '');
-    planned = [];
+    groups = [emptyMilestonePlanGroup(milestoneDefaultWiName || '')];
   }
-  renderMilestonePlanTasks(planned);
-  // restore taskId markers
-  if (msId) {
-    var ms2 = getMilestones(milestonePageProjId).find(function(m) { return m.id === msId; });
-    var pts = normalizePlannedTasks((ms2 && ms2.plannedTasks) || planned);
-    var box = document.getElementById('ms-plan-tasks');
-    if (box) {
-      box.querySelectorAll('.ms-plan-row').forEach(function(row, i) {
-        if (pts[i] && pts[i].taskId) row.setAttribute('data-taskid', pts[i].taskId);
-      });
-    }
-  }
+  renderMilestonePlanGroups(groups);
   op('pp-milestone');
 }
 
@@ -7509,18 +7643,31 @@ function saveMilestone() {
   if (!milestonePageProjId) return;
   var name = document.getElementById('ms-name').value.trim();
   if (!name) { alert('請填寫里程碑名稱'); return; }
-  var planned = collectMilestonePlanTasksFromEditor().filter(function(t) { return !!t.name; });
+  var groups = collectMilestonePlanGroupsFromEditor().map(function(g) {
+    return {
+      id: g.id,
+      workItemName: g.workItemName || '',
+      workItemId: g.workItemId || resolveWorkItemIdByNameForProj(milestonePageProjId, g.workItemName),
+      tasks: (g.tasks || []).filter(function(t) { return !!t.name; })
+    };
+  }).filter(function(g) {
+    return g.workItemName || (g.tasks && g.tasks.length);
+  });
+  if (!groups.length) groups = [emptyMilestonePlanGroup(milestoneDefaultWiName || '')];
   var oldMs = null;
   if (editingMilestoneId) {
     oldMs = getMilestones(milestonePageProjId).find(function(m) { return m.id === editingMilestoneId; });
     var oldMap = {};
-    (oldMs && oldMs.plannedTasks || []).forEach(function(t) {
+    flattenMilestonePlanTasks(oldMs || {}).forEach(function(t) {
       if (t && t.id && t.taskId) oldMap[t.id] = t.taskId;
     });
-    planned.forEach(function(t) {
-      if (!t.taskId && oldMap[t.id]) t.taskId = oldMap[t.id];
+    groups.forEach(function(g) {
+      (g.tasks || []).forEach(function(t) {
+        if (!t.taskId && oldMap[t.id]) t.taskId = oldMap[t.id];
+      });
     });
   }
+  var flat = flattenMilestonePlanTasks({ plannedGroups: groups });
   var payload = {
     id: editingMilestoneId || newMilestoneId(),
     recordId: oldMs && (oldMs.recordId || oldMs.id),
@@ -7532,11 +7679,12 @@ function saveMilestone() {
     dueDate: document.getElementById('ms-due').value,
     payPct: document.getElementById('ms-pay').value.trim(),
     deliverable: document.getElementById('ms-deliver').value.trim(),
-    workItemName: document.getElementById('ms-wi').value.trim(),
-    workItemId: resolveWorkItemIdByNameForProj(milestonePageProjId, document.getElementById('ms-wi').value.trim()),
+    workItemName: (groups[0] && groups[0].workItemName) || '',
+    workItemId: (groups[0] && groups[0].workItemId) || '',
     notes: '',
-    plannedTasks: planned,
-    taskIds: planned.map(function(t) { return t.taskId; }).filter(Boolean)
+    plannedGroups: groups,
+    plannedTasks: flat,
+    taskIds: flat.map(function(t) { return t.taskId; }).filter(Boolean)
   };
   if (payload.recordId && String(payload.recordId).indexOf('rec') === 0) {
     payload.id = payload.recordId;
@@ -7691,7 +7839,7 @@ function openGenerateTasksPreview(ids) {
     return milestonePendingPlanTasks(ms).length > 0;
   });
   if (!targets.length) {
-    alert('沒有可產生的任務。請先編輯里程碑，在框內新增 3～5 筆任務後再產生。');
+    alert('沒有可產生的任務。請先編輯里程碑，在各工作項目下新增任務後再產生。');
     return;
   }
   msGenerateIds = targets.map(function(ms) { return ms.id; });
@@ -7700,17 +7848,21 @@ function openGenerateTasksPreview(ids) {
   var html = '';
   targets.forEach(function(ms) {
     var pending = milestonePendingPlanTasks(ms);
-    var wiLabel = resolveMilestoneWorkItemName(ms) || '履約執行（自動建立）';
     html += '<div class="tt-issue-row" style="cursor:default">'
       + '<div class="tt-issue-main">'
-      + '<div class="tt-issue-name">' + escHtml(ms.name) + ' · 將產生 ' + pending.length + ' 筆</div>'
-      + '<div class="tt-issue-meta">任務放入：' + escHtml(wiLabel) + '</div>'
-      + pending.map(function(t) {
-        return '<div class="ms-sub">· ' + escHtml(t.name)
-          + (t.due ? ('（' + escHtml(t.due.replace(/-/g, '/')) + '）') : '')
-          + '</div>';
-      }).join('')
-      + '</div></div>';
+      + '<div class="tt-issue-name">' + escHtml(ms.name) + ' · 將產生 ' + pending.length + ' 筆</div>';
+    ensureMilestoneGroups(ms).forEach(function(g) {
+      var gPending = (g.tasks || []).filter(function(t) { return t && t.name && !t.taskId; });
+      if (!gPending.length) return;
+      var wiLabel = (g.workItemName || '').trim() || '履約執行（自動建立）';
+      html += '<div class="tt-issue-meta" style="margin-top:6px">工作項目：' + escHtml(wiLabel) + '</div>'
+        + gPending.map(function(t) {
+          return '<div class="ms-sub">· ' + escHtml(t.name)
+            + (t.due ? ('（' + escHtml(t.due.replace(/-/g, '/')) + '）') : '')
+            + '</div>';
+        }).join('');
+    });
+    html += '</div></div>';
   });
   box.innerHTML = html;
   op('pp-ms-generate');
@@ -7750,6 +7902,21 @@ function expandTaskGroupsByNames(wiNames) {
   });
 }
 
+function resolveWorkItemIdForMilestoneGroup(proj, group) {
+  var wiId = (group && group.workItemId) || '';
+  if (wiId) {
+    var wi = workitemsData.find(function(w) { return w.record_id === wiId; });
+    if (wi && getLinkIds((wi.fields || {})['所屬標案']).indexOf(proj.record_id) >= 0) {
+      return Promise.resolve(wiId);
+    }
+    // 備援：有些 WI 只透過標案「工作項目」關聯
+    if (wi && getWorkitemsForProject(proj).some(function(w) { return w.record_id === wiId; })) {
+      return Promise.resolve(wiId);
+    }
+  }
+  return findWorkItemIdByName(proj, (group && group.workItemName) || '');
+}
+
 function confirmGenerateTasks() {
   if (!milestonePageProjId || !msGenerateIds.length) return;
   var proj = projectsData.find(function(p) { return p.record_id === milestonePageProjId; });
@@ -7765,35 +7932,46 @@ function confirmGenerateTasks() {
     chain = chain.then(function() {
       var ms = list.find(function(m) { return m.id === msId; });
       if (!ms) return;
-      ms.plannedTasks = normalizePlannedTasks(ms.plannedTasks || []);
-      var pending = milestonePendingPlanTasks(ms);
-      if (!pending.length) return;
-      var wiName = resolveMilestoneWorkItemName(ms);
-      return findWorkItemIdByName(proj, wiName).then(function(wiId) {
-        if (!wiId) throw new Error('無法建立工作項目：' + (wiName || ms.name || ''));
-        wiUsed[wiName || '履約執行'] = 1;
-        var inner = Promise.resolve();
-        pending.forEach(function(plan) {
-          inner = inner.then(function() {
-            return optimisticCreate('tasks', buildTaskFieldsFromPlanItem(plan, wiId, pmPerson), { failMsg: '建立任務失敗' }).then(function(res) {
-              var tid = extractClientRecordId(res);
-              if (!tid) {
-                var hit = tasksData.find(function(t) {
-                  return getLinkIds(t.fields['所屬工作項目']).indexOf(wiId) >= 0
-                    && (t.fields['任務名稱'] || '') === plan.name;
+      ms.plannedGroups = ensureMilestoneGroups(ms);
+      var pendingAll = milestonePendingPlanTasks(ms);
+      if (!pendingAll.length) return;
+      var inner = Promise.resolve();
+      ms.plannedGroups.forEach(function(group) {
+        var pending = (group.tasks || []).filter(function(t) { return t && t.name && !t.taskId; });
+        if (!pending.length) return;
+        inner = inner.then(function() {
+          return resolveWorkItemIdForMilestoneGroup(proj, group).then(function(wiId) {
+            if (!wiId) throw new Error('無法建立工作項目：' + (group.workItemName || ms.name || ''));
+            group.workItemId = wiId;
+            group.workItemName = group.workItemName || resolveWorkItemNameById(wiId) || '履約執行';
+            wiUsed[group.workItemName] = 1;
+            var taskChain = Promise.resolve();
+            pending.forEach(function(plan) {
+              taskChain = taskChain.then(function() {
+                return optimisticCreate('tasks', buildTaskFieldsFromPlanItem(plan, wiId, pmPerson), { failMsg: '建立任務失敗' }).then(function(res) {
+                  var tid = extractClientRecordId(res);
+                  if (!tid) {
+                    var hit = tasksData.find(function(t) {
+                      return getLinkIds(t.fields['所屬工作項目']).indexOf(wiId) >= 0
+                        && (t.fields['任務名稱'] || '') === plan.name;
+                    });
+                    tid = hit ? hit.record_id : '';
+                  }
+                  plan.taskId = tid || plan.taskId || '';
+                  ms.taskIds = ms.taskIds || [];
+                  if (plan.taskId && ms.taskIds.indexOf(plan.taskId) < 0) ms.taskIds.push(plan.taskId);
+                  created++;
                 });
-                tid = hit ? hit.record_id : '';
-              }
-              plan.taskId = tid || plan.taskId || '';
-              ms.taskIds = ms.taskIds || [];
-              if (plan.taskId && ms.taskIds.indexOf(plan.taskId) < 0) ms.taskIds.push(plan.taskId);
-              created++;
+              });
             });
+            return taskChain;
           });
         });
-        return inner.then(function() {
-          ms.workItemName = wiName || ms.workItemName || '';
-        });
+      });
+      return inner.then(function() {
+        ms.plannedTasks = flattenMilestonePlanTasks(ms);
+        ms.workItemName = (ms.plannedGroups[0] && ms.plannedGroups[0].workItemName) || ms.workItemName || '';
+        ms.workItemId = (ms.plannedGroups[0] && ms.plannedGroups[0].workItemId) || ms.workItemId || '';
       });
     });
   });
