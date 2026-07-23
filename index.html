@@ -3627,8 +3627,8 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260723v5';
-var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v4';
+var APP_BUILD = '20260723v6';
+var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v5';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
 var AUTH_CACHE_MAX_AGE = 10 * 60 * 1000;
@@ -3701,6 +3701,11 @@ function expandSyncKeys(input) {
 
 function applyPartialTable(key, part) {
   var records = (part && part.records) || [];
+  // 有錯誤且沒資料時，不要用空陣列蓋掉畫面上既有資料（避免工作項目突然消失）
+  if (part && part.error && !records.length) {
+    console.warn('略過空資料表（API 錯誤）', key, part.error);
+    return;
+  }
   switch (key) {
     case 'projects': projectsData = records; break;
     case 'workitems': workitemsData = records; break;
@@ -5781,14 +5786,24 @@ function renderDeferredViews(keys) {
 
 function applyBootstrapPayload(payload) {
   if (!payload) return;
-  if (payload.projects) projectsData = (payload.projects.records) || [];
-  if (payload.workitems) workitemsData = (payload.workitems.records) || [];
-  if (payload.tasks) tasksData = (payload.tasks.records) || [];
-  if (payload.expenses) expensesData = (payload.expenses.records) || [];
-  if (payload.designs) designsData = (payload.designs.records) || [];
-  if (payload.journal) journalData = (payload.journal.records) || [];
-  if (payload.members) membersData = (payload.members.records) || [];
-  if (payload.milestones) milestonesData = (payload.milestones.records) || [];
+  function take(key, setter) {
+    var part = payload[key];
+    if (!part) return;
+    var records = part.records || [];
+    if (part.error && !records.length) {
+      console.warn('略過空資料表（快取／API 錯誤）', key, part.error);
+      return;
+    }
+    setter(records);
+  }
+  take('projects', function(r) { projectsData = r; });
+  take('workitems', function(r) { workitemsData = r; });
+  take('tasks', function(r) { tasksData = r; });
+  take('expenses', function(r) { expensesData = r; });
+  take('designs', function(r) { designsData = r; });
+  take('journal', function(r) { journalData = r; });
+  take('members', function(r) { membersData = r; });
+  take('milestones', function(r) { milestonesData = r; });
   pruneSelectedProjects();
   hydrateMilestonesFromProjects();
 }
