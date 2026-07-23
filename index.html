@@ -6948,7 +6948,7 @@ function clientMilestoneToFields(ms, projId) {
   var taskIds = (ms.taskIds || flat.map(function(t) { return t.taskId; })).filter(Boolean);
   var uniq = [];
   taskIds.forEach(function(id) { if (uniq.indexOf(id) < 0) uniq.push(id); });
-  if (uniq.length) fields['已產生任務'] = uniq;
+  fields['已產生任務'] = uniq;
   if (ms.clientId) fields['客戶端ID'] = ms.clientId;
   return fields;
 }
@@ -7014,6 +7014,76 @@ function persistMilestone(ms, projId) {
   }).catch(function(err) {
     milestoneBackendSyncOk = false;
     throw err;
+  });
+}
+
+function milestoneContainsTaskId(ms, taskId) {
+  if (!ms || !taskId) return false;
+  if ((ms.taskIds || []).indexOf(taskId) >= 0) return true;
+  return flattenMilestonePlanTasks(ms).some(function(t) { return t && t.taskId === taskId; });
+}
+
+function stripTaskIdFromMilestone(ms, taskId) {
+  if (!ms || !taskId) return ms;
+  var groups = ensureMilestoneGroups(ms).map(function(g) {
+    return {
+      id: g.id,
+      workItemName: g.workItemName || '',
+      workItemId: g.workItemId || '',
+      tasks: (g.tasks || []).filter(function(t) { return !t || t.taskId !== taskId; })
+    };
+  });
+  ms.plannedGroups = groups;
+  ms.plannedTasks = flattenMilestonePlanTasks({ plannedGroups: groups });
+  ms.taskIds = (ms.taskIds || []).filter(function(id) { return id !== taskId; });
+  if (groups[0]) {
+    ms.workItemName = groups[0].workItemName || ms.workItemName || '';
+    ms.workItemId = groups[0].workItemId || ms.workItemId || '';
+  }
+  return ms;
+}
+
+/** 左側／任務列表刪除任務後，同步從履約規劃拿掉對應列 */
+function unlinkDeletedTaskFromMilestones(taskId) {
+  if (!taskId) return Promise.resolve();
+  var saves = [];
+  var seen = {};
+  (milestonesData || []).forEach(function(rec) {
+    var ms = milestoneRecordToClient(rec);
+    if (!milestoneContainsTaskId(ms, taskId)) return;
+    stripTaskIdFromMilestone(ms, taskId);
+    seen[ms.id] = 1;
+    saves.push(persistMilestone(ms, ms.projectId).catch(function(err) {
+      console.warn('同步履約里程碑失敗', ms.id, err);
+    }));
+  });
+  try {
+    var allLocal = readAllMilestonesLocal();
+    Object.keys(allLocal || {}).forEach(function(projId) {
+      var changed = false;
+      var list = (allLocal[projId] || []).map(function(m) {
+        if (seen[m.id] || seen[m.recordId]) return m;
+        if (!milestoneContainsTaskId(m, taskId)) return m;
+        changed = true;
+        var copy;
+        try { copy = JSON.parse(JSON.stringify(m)); } catch (e) { copy = Object.assign({}, m); }
+        return stripTaskIdFromMilestone(copy, taskId);
+      });
+      if (changed) {
+        saveMilestonesLocal(projId, list);
+        list.forEach(function(m) {
+          if (m.recordId || (m.id && String(m.id).indexOf('rec') === 0)) {
+            if (seen[m.id] || seen[m.recordId]) return;
+            saves.push(persistMilestone(m, projId).catch(function(err) {
+              console.warn('同步本機履約里程碑失敗', m.id, err);
+            }));
+          }
+        });
+      }
+    });
+  } catch (e) {}
+  return Promise.all(saves).then(function() {
+    if (typeof renderMilestonesPage === 'function') renderMilestonesPage();
   });
 }
 
@@ -12557,7 +12627,9 @@ function deleteTask(id, name) {
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
       if (savedData) undoStack.push({ type: 'delete', table: 'tasks', data: savedData });
-      optimisticDelete('tasks', id, { failMsg: '刪除失敗' }).catch(function() {
+      optimisticDelete('tasks', id, { failMsg: '刪除失敗' }).then(function() {
+        return unlinkDeletedTaskFromMilestones(id);
+      }).catch(function() {
         if (savedData) undoStack.pop();
       });
     }
