@@ -1564,7 +1564,22 @@ function syncAiComposerBounds() {
 if (typeof window !== 'undefined') {
   window.addEventListener('resize', syncAiComposerBounds);
 }
-function tgp(row){row.classList.toggle('open');row.nextElementSibling.classList.toggle('open');}
+function tgp(row, e) {
+  if (e) {
+    e.stopPropagation();
+    e.preventDefault();
+  }
+  if (!row) return;
+  row.classList.toggle('open');
+  var body = row.nextElementSibling;
+  if (body) body.classList.toggle('open');
+  var pi = row.closest ? row.closest('.pi') : null;
+  var projId = pi && pi.getAttribute('data-proj-id');
+  if (projId) {
+    if (row.classList.contains('open')) expandedProjectIds[projId] = 1;
+    else delete expandedProjectIds[projId];
+  }
+}
 function sw(btn,id){
   document.querySelectorAll('.tbar-tab').forEach(function(t){t.classList.remove('active');});
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
@@ -6001,6 +6016,8 @@ function clearProjectSelection() {
   saveSelectedProjects();
   refreshAllFilteredViews();
 }
+var expandedProjectIds = {};
+
 function buildProjectCardHtml(rec, color) {
   var f = rec.fields;
   var name = f['標案名稱'] || '未命名';
@@ -6008,6 +6025,7 @@ function buildProjectCardHtml(rec, color) {
   var progress = getProjectProgressPct(rec);
   var meta = pmName || '';
   var workitems = getWorkitemsForProject(rec);
+  var isOpen = !!expandedProjectIds[rec.record_id];
   var subHTML = '';
   workitems.forEach(function(wi) {
     var wf = wi.fields;
@@ -6029,8 +6047,8 @@ function buildProjectCardHtml(rec, color) {
       + (daysStr ? '<span class="si-remain">' + daysStr + '</span>' : '')
       + '</div></div>';
   });
-  return '<div class="pi">'
-    + '<div class="pr" style="background:' + color + '" onclick="tgp(this)">'
+  return '<div class="pi" data-proj-id="' + escAttr(rec.record_id) + '">'
+    + '<div class="pr' + (isOpen ? ' open' : '') + '" style="background:' + color + '" onclick="tgp(this, event)">'
     + '<div class="pr-main">'
     + '<div class="pr-name">' + escHtml(name) + '</div>'
     + '<div class="pr-sub">'
@@ -6046,7 +6064,7 @@ function buildProjectCardHtml(rec, color) {
     + '<button type="button" class="bdel" title="刪除標案" onclick="event.stopPropagation();deleteProject(\'' + rec.record_id + '\',\'' + escAttr(name).replace(/'/g, "\\'") + '\')">×</button>'
     + '<span class="arr" title="展開工作項目">▶</span>'
     + '</div></div></div>'
-    + '<div class="sl2">' + subHTML + '</div></div>';
+    + '<div class="sl2' + (isOpen ? ' open' : '') + '">' + subHTML + '</div></div>';
 }
 function syncTruncatedTitle(el, fullText) {
   if (!el) return;
@@ -6112,6 +6130,7 @@ function renderProjects() {
 var TASK_GROUP_STORAGE_KEY = 'ximo-task-group-mode';
 var taskGroupMode = 'due';
 var currentTaskFilterProj = '';
+var expandedTaskGroupKeys = {};
 
 function initTaskGroupMode() {
   try {
@@ -6137,10 +6156,26 @@ function setTaskGroupMode(mode, btn) {
   renderTasks();
 }
 
+function taskGroupExpandKey(hdr) {
+  if (!hdr) return '';
+  if (hdr.classList.contains('tgl-person')) {
+    var title = hdr.querySelector('[title]');
+    return 'person:' + ((title && title.getAttribute('title')) || '');
+  }
+  if (hdr.classList.contains('tgl-wi')) {
+    return 'wi:' + (hdr.getAttribute('data-wi') || '') + '|' + (hdr.getAttribute('data-proj') || '');
+  }
+  return '';
+}
+
 function toggleTaskGroup(hdr, e) {
   if (e) e.stopPropagation();
   if (!hdr) return;
   hdr.classList.toggle('open');
+  var key = taskGroupExpandKey(hdr);
+  if (!key) return;
+  if (hdr.classList.contains('open')) expandedTaskGroupKeys[key] = 1;
+  else delete expandedTaskGroupKeys[key];
 }
 
 function getFilteredTaskItems() {
@@ -6222,7 +6257,9 @@ function renderTaskRow(t, opts) {
 function renderWorkitemGroup(group, opts) {
   opts = opts || {};
   var wiKey = group.wiId || '__none__';
-  var html = '<div class="tgl tgl-wi" data-proj="' + escAttr(group.projName) + '" data-wi="' + escAttr(wiKey) + '" onclick="toggleTaskGroup(this, event)">';
+  var expandKey = 'wi:' + wiKey + '|' + (group.projName || '');
+  var isOpen = !!expandedTaskGroupKeys[expandKey];
+  var html = '<div class="tgl tgl-wi' + (isOpen ? ' open' : '') + '" data-proj="' + escAttr(group.projName) + '" data-wi="' + escAttr(wiKey) + '" onclick="toggleTaskGroup(this, event)">';
   html += '<span class="tgl-arrow">▶</span>';
   html += '<span class="tgd" style="background:' + projColorByName(group.projName) + '"></span>';
   html += '<span title="' + escAttr(group.wiName) + '">' + escHtml(group.wiName) + '</span>';
@@ -6245,7 +6282,10 @@ function refreshTaskGroupVisibility() {
       });
     }
     hdr.style.display = visible ? '' : 'none';
-    if (body) body.style.display = visible ? '' : 'none';
+    if (body) {
+      if (!visible) body.style.display = 'none';
+      else body.style.removeProperty('display');
+    }
   });
   document.querySelectorAll('#task-list-body .tgl-person').forEach(function(hdr) {
     var body = hdr.nextElementSibling;
@@ -6256,7 +6296,10 @@ function refreshTaskGroupVisibility() {
       });
     }
     hdr.style.display = visible ? '' : 'none';
-    if (body) body.style.display = visible ? '' : 'none';
+    if (body) {
+      if (!visible) body.style.display = 'none';
+      else body.style.removeProperty('display');
+    }
   });
 }
 
@@ -7688,7 +7731,12 @@ function collectMilestonePlanTasksFromGroupEl(groupEl) {
     var due = (row.querySelector('.ms-pt-due') || {}).value || '';
     var status = (row.querySelector('.ms-pt-status') || {}).value || '未開始';
     var assigneeSel = row.querySelector('.ms-pt-assignee');
-    var assignee = assigneeSel ? assigneeSel.value : '';
+    var assignee = '';
+    if (assigneeSel && assigneeSel.selectedIndex >= 0) {
+      var opt = assigneeSel.options[assigneeSel.selectedIndex];
+      assignee = (opt && (opt.textContent || opt.text) || assigneeSel.value || '').trim();
+      if (/^ou_|^on_/i.test(assignee)) assignee = formatMilestoneAssigneeLabel(assigneeSel.value) || assignee;
+    }
     var id = row.getAttribute('data-ptid') || newPlanTaskId();
     var existingTaskId = row.getAttribute('data-taskid') || '';
     if (!name && !start && !due) return;
