@@ -7041,25 +7041,42 @@ function fillMilestoneDefaultWiSelect() {
   var sel = document.getElementById('ms-default-wi');
   if (!sel) return;
   var prev = milestoneDefaultWiName || sel.value;
-  var html = '<option value="">—</option>';
+  var names = [];
   var proj = milestonePageProjId
     ? projectsData.find(function(p) { return p.record_id === milestonePageProjId; })
     : null;
   if (proj) {
     getWorkitemsForProject(proj).forEach(function(wi) {
       var n = wi.fields['工作項目名稱'] || '';
-      if (!n) return;
+      if (n) names.push(n);
+    });
+  }
+  var html = '';
+  if (!names.length) {
+    html = '<option value="">—</option>';
+  } else {
+    names.forEach(function(n) {
       html += '<option value="' + escAttr(n) + '">' + escHtml(n) + '</option>';
     });
   }
   sel.innerHTML = html;
   if (prev) {
     for (var i = 0; i < sel.options.length; i++) {
-      if (sel.options[i].value === prev) { sel.selectedIndex = i; milestoneDefaultWiName = prev; return; }
+      if (sel.options[i].value === prev) {
+        sel.selectedIndex = i;
+        milestoneDefaultWiName = prev;
+        return;
+      }
     }
   }
-  sel.value = '';
-  milestoneDefaultWiName = '';
+  // 預設第一項工作項目
+  if (names.length) {
+    sel.selectedIndex = 0;
+    milestoneDefaultWiName = names[0];
+  } else {
+    sel.value = '';
+    milestoneDefaultWiName = '';
+  }
 }
 
 function onMilestoneDefaultWiChange() {
