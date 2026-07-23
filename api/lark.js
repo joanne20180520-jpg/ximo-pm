@@ -341,7 +341,8 @@ const TABLE_PROFILES = {
     payments:  'tblv9SmBvbhxNftU',
     designs:   'tblc3a8IofsGlbKu',
     journal:   'tblVs9L5WAJcE2a3',
-    members:   'tblIHdb6u6S2xdJH'
+    members:   'tblIHdb6u6S2xdJH',
+    milestones: 'tblhESKN2KGGx9zx'
   },
   yd: {
     projects:  'tblM49Vzl0ZgKGDa',
@@ -351,7 +352,8 @@ const TABLE_PROFILES = {
     payments:  'tblxn7BG7bllcpk0',
     designs:   'tblGJkK7Vqpkeh7A',
     journal:   'tbl4Q2bKqkfGm0t6',
-    members:   'tblrXjQ5GOLfzWrQ'
+    members:   'tblrXjQ5GOLfzWrQ',
+    milestones: 'tblhESKN2KGGx9zx'
   }
 };
 
@@ -375,8 +377,8 @@ function buildTables() {
 const TABLES = buildTables();
 // AI 分析表——不放進 TABLE_PROFILES，因為只有這個 Base 有這張表
 TABLES.ai_analysis = (process.env.LARK_TABLE_AI_ANALYSIS || 'tblzMPq8qJ0SiPnN').trim();
-// 履約里程碑表（選配）：設 LARK_TABLE_MILESTONES 後可獨立同步；未設時前端會寫入標案「履約里程碑」欄位
-TABLES.milestones = (process.env.LARK_TABLE_MILESTONES || '').trim();
+// 履約里程碑獨立表（可用 LARK_TABLE_MILESTONES 覆寫）
+TABLES.milestones = (process.env.LARK_TABLE_MILESTONES || TABLES.milestones || 'tblhESKN2KGGx9zx').trim();
 const PAYMENTS_TABLE_MAIN = (process.env.LARK_TABLE_PAYMENTS_MAIN || '').trim();
 const PAYMENTS_TABLE_ACCOUNTING = (process.env.LARK_TABLE_PAYMENTS_ACCOUNTING || '').trim();
 
@@ -394,6 +396,7 @@ function getBackendBitableConfig() {
     const envKey = 'LARK_TABLE_BACKEND_' + key.toUpperCase();
     tables[key] = (process.env[envKey] || profile[key] || '').trim();
   });
+  tables.milestones = (process.env.LARK_TABLE_BACKEND_MILESTONES || process.env.LARK_TABLE_MILESTONES || tables.milestones || TABLES.milestones || '').trim();
   return { appToken: appToken, tables: tables };
 }
 
@@ -432,7 +435,8 @@ const TABLE_NAME_KEYWORDS = {
   designs: ['設計', 'design'],
   members: ['人員', '成員', 'member'],
   journal: ['日誌', 'journal', '工作日誌'],
-  payments: ['付款', '金費']
+  payments: ['付款', '金費'],
+  milestones: ['履約', '里程碑', 'milestone']
 };
 
 function formatBitableWriteError(cfg, err) {
@@ -1997,14 +2001,20 @@ function makeWikiLink(url) {
 
 async function gatherProjectRelatedFullScan(token, projectId, cfg, readOpts) {
   const appToken = cfg.appToken;
-  const [projects, workitems, tasks, expenses, designs, journalAll] = await Promise.all([
+  const jobs = [
     getRecords(token, cfg.tables.projects, appToken, readOpts),
     getRecords(token, cfg.tables.workitems, appToken, readOpts),
     getRecords(token, cfg.tables.tasks, appToken, readOpts),
     getRecords(token, cfg.tables.expenses, appToken, readOpts),
     getRecords(token, cfg.tables.designs, appToken, readOpts),
     getRecords(token, cfg.tables.journal, appToken, readOpts)
-  ]);
+  ];
+  if (cfg.tables.milestones) {
+    jobs.push(getRecords(token, cfg.tables.milestones, appToken, readOpts).catch(function() { return []; }));
+  } else {
+    jobs.push(Promise.resolve([]));
+  }
+  const [projects, workitems, tasks, expenses, designs, journalAll, milestonesAll] = await Promise.all(jobs);
   const proj = projects.find(function(p) { return p.record_id === projectId; });
   if (!proj) throw new Error('找不到標案');
 
@@ -2024,6 +2034,9 @@ async function gatherProjectRelatedFullScan(token, projectId, cfg, readOpts) {
     return getLinkIds(d.fields['所屬工作項目']).some(function(id) { return wiIdSet[id]; });
   });
   const journal = journalAll.filter(function(r) { return journalBelongsToProject(r, projectId); });
+  const milestonesRel = (milestonesAll || []).filter(function(m) {
+    return getLinkIds((m.fields || {})['所屬標案']).indexOf(projectId) >= 0;
+  });
 
   return {
     project: proj,
@@ -2031,7 +2044,8 @@ async function gatherProjectRelatedFullScan(token, projectId, cfg, readOpts) {
     tasks: tasksRel,
     expenses: expensesRel,
     designs: designsRel,
-    journal: journal
+    journal: journal,
+    milestones: milestonesRel
   };
 }
 
@@ -2054,14 +2068,17 @@ async function gatherProjectRelatedScoped(token, projectId, cfg, readOpts, appTo
   const wiIdSet = {};
   wiIds.forEach(function(id) { wiIdSet[id] = 1; });
 
-  const [tasksRel, expensesByWi, expensesByProjA, expensesByProjB, journalByA, journalByB, designsRel] = await Promise.all([
+  const [tasksRel, expensesByWi, expensesByProjA, expensesByProjB, journalByA, journalByB, designsRel, milestonesRel] = await Promise.all([
     searchRecordsByLinkFieldsAny(token, cfg.tables.tasks, '所屬工作項目', wiIds, appToken, readOpts),
     searchRecordsByLinkFieldsAny(token, cfg.tables.expenses, '所屬工作項目', wiIds, appToken, readOpts),
     searchRecordsByLinkFieldsAny(token, cfg.tables.expenses, '所數標案', [projectId], appToken, readOpts),
     searchRecordsByLinkFieldsAny(token, cfg.tables.expenses, '所屬標案', [projectId], appToken, readOpts),
     searchRecordsByLinkFieldsAny(token, cfg.tables.journal, '所屬標案', [projectId], appToken, readOpts),
     searchRecordsByLinkFieldsAny(token, cfg.tables.journal, '所屬專案', [projectId], appToken, readOpts),
-    searchRecordsByLinkFieldsAny(token, cfg.tables.designs, '所屬工作項目', wiIds, appToken, readOpts)
+    searchRecordsByLinkFieldsAny(token, cfg.tables.designs, '所屬工作項目', wiIds, appToken, readOpts),
+    cfg.tables.milestones
+      ? searchRecordsByLinkFieldsAny(token, cfg.tables.milestones, '所屬標案', [projectId], appToken, readOpts).catch(function() { return []; })
+      : Promise.resolve([])
   ]);
   const expensesRel = mergeRecordsById(expensesByWi, expensesByProjA, expensesByProjB).filter(function(e) {
     var ewiIds = getLinkIds(e.fields['所屬工作項目']);
@@ -2078,7 +2095,8 @@ async function gatherProjectRelatedScoped(token, projectId, cfg, readOpts, appTo
     tasks: tasksRel,
     expenses: expensesRel,
     designs: designsRel,
-    journal: journal
+    journal: journal,
+    milestones: milestonesRel || []
   };
 }
 
@@ -2896,7 +2914,7 @@ function softenArchiveFieldsList(fieldsList, fieldMeta, level) {
       return stripArchiveFieldsByTypes(fields, fieldMeta, { 3: 1, 4: 1, 11: 1, 15: 1 });
     }
     const out = {};
-    const keepKeys = ['標案名稱', '工作項目名稱', '任務名稱', '支出細項', '設計項目名稱', '標題', '名稱'];
+    const keepKeys = ['標案名稱', '工作項目名稱', '任務名稱', '支出細項', '設計項目名稱', '里程碑名稱', '標題', '名稱'];
     keepKeys.forEach(function(k) {
       if (fields[k] !== undefined && fields[k] !== null && fields[k] !== '') out[k] = fields[k];
     });
@@ -3053,10 +3071,33 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
     }
   }
 
+  if (tableMap.milestones && bundle.milestones && bundle.milestones.length) {
+    const msSchemas = await getTableFieldSchemas(wikiToken, targetApp, tableMap.milestones, fieldCache);
+    const msAllowed = msSchemas.allowedSet;
+    const msMeta = msSchemas.fieldMeta;
+    const msFieldsList = [];
+    for (let mi = 0; mi < bundle.milestones.length; mi++) {
+      const m = bundle.milestones[mi];
+      const overrides = {};
+      if (msAllowed['所屬標案']) overrides['所屬標案'] = [newProjId];
+      const oldWi = getLinkIds((m.fields || {})['展開工作項目'])[0];
+      if (oldWi && wiMap[oldWi] && msAllowed['展開工作項目']) overrides['展開工作項目'] = [wiMap[oldWi]];
+      const built = await buildEnrichedArchiveFields(token, m.fields, msAllowed, msMeta, overrides);
+      if (built.fields['已產生任務']) delete built.fields['已產生任務'];
+      msFieldsList.push(built.fields);
+    }
+    await batchCreateArchiveRecords(wikiToken, targetApp, tableMap.milestones, msFieldsList, '履約里程碑', msMeta);
+  }
+
   return { copied: true, newProjectId: newProjId, targetAppToken: targetApp, wikiUrl: finalWikiUrl, wikiFolderUrl: target.wikiFolderUrl || wikiUrl };
 }
 
-function countMilestonesInProject(proj) {
+function countMilestonesInBundle(bundle) {
+  if (bundle && bundle.milestones && bundle.milestones.length) return bundle.milestones.length;
+  return countMilestonesInProjectField(bundle && bundle.project);
+}
+
+function countMilestonesInProjectField(proj) {
   if (!proj || !proj.fields) return 0;
   const raw = proj.fields['履約里程碑'] || proj.fields['里程碑'] || '';
   if (!raw) return 0;
@@ -3071,7 +3112,7 @@ function countMilestonesInProject(proj) {
 async function archiveProject(token, projectId, wikiUrl, userAccessToken) {
   const bundle = await gatherProjectRelated(token, projectId);
   const name = bundle.project.fields['標案名稱'] || '';
-  const milestoneCount = countMilestonesInProject(bundle.project);
+  const milestoneCount = countMilestonesInBundle(bundle);
   const summary = '工作項目 ' + bundle.workitems.length + ' 筆、任務 ' + bundle.tasks.length
     + ' 筆、支出 ' + bundle.expenses.length + ' 筆、設計 ' + bundle.designs.length
     + ' 筆、履約里程碑 ' + milestoneCount + ' 筆';
@@ -3993,7 +4034,7 @@ async function checkMemberAuthorization(userAccessToken) {
   };
 }
 
-const BOOTSTRAP_TABLE_KEYS = ['projects', 'workitems', 'tasks', 'expenses', 'designs', 'journal', 'members'];
+const BOOTSTRAP_TABLE_KEYS = ['projects', 'workitems', 'tasks', 'expenses', 'designs', 'journal', 'members', 'milestones'];
 
 async function fetchTableRecordsSafe(token, tableKey) {
   const tableId = tableIdFor(tableKey);
