@@ -1195,12 +1195,13 @@ button.btn-loading::after{content:'…';margin-left:2px}
 
 <div class="po" id="pp-work"><div class="pp ppw"><div class="pph"><h3>建立標案的工作項目</h3><button class="ppc" onclick="cl('pp-work')">✕</button></div><div class="ppb"><div class="fg"><label>標案</label><select id="nw-proj" onchange="onNwProjChange()"></select></div><div class="wi-row-hdr"><span>工作項目名稱</span><span>開始日期</span><span>結束日期</span><span>負責夥伴</span><span>執行夥伴</span><span>可用成本</span><span>權重</span></div><div class="slist" id="sl"></div><p id="nw-wi-weight-remain" class="proc-wi-remain" style="margin:4px 0 8px"></p><button class="bads" onclick="addS()">＋ 新增工作項目</button></div><div class="ppf"><button class="bcan" onclick="cl('pp-work')">取消</button><button class="bpri" onclick="saveWorkItems()">新增</button></div></div></div>
 
-<div class="po" id="pp-task"><div class="pp"><div class="pph"><h3>建立新任務</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fg"><label>任務名稱</label><input type="text" id="nt-name" placeholder="拜訪OO茶主"></div><div class="fg"><label>負責人</label><select id="nt-assignee" data-members></select></div><div class="fg"><label>所屬工作項目</label><select id="nt-wi"></select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px"><div class="fg" style="margin:0"><label>開始日期</label><input type="date" id="nt-start"></div><div class="fg" style="margin:0"><label>預計完成日</label><input type="date" id="nt-due"></div></div><div class="fg"><label>進度狀態</label><select id="nt-status"></select></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri" onclick="saveTask()">新增</button></div></div></div>
+<div class="po" id="pp-task"><div class="pp"><div class="pph"><h3>建立新任務</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fg"><label>任務名稱</label><input type="text" id="nt-name" placeholder="拜訪OO茶主"></div><div class="fg"><label>任務說明</label><input type="text" id="nt-desc" placeholder="補充說明（選填）"></div><div class="fg"><label>負責人</label><select id="nt-assignee" data-members></select></div><div class="fg"><label>所屬工作項目</label><select id="nt-wi"></select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px"><div class="fg" style="margin:0"><label>開始日期</label><input type="date" id="nt-start"></div><div class="fg" style="margin:0"><label>預計完成日</label><input type="date" id="nt-due"></div></div><div class="fg"><label>進度狀態</label><select id="nt-status"></select></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri" onclick="saveTask()">新增</button></div></div></div>
 
 <div class="po" id="pp-td"><div class="pp"><div class="pph pph-report" id="td-header"><h3 id="td-title">任務詳情</h3><div class="td-hdr-actions"><button type="button" class="td-open-report" onclick="openDailyLogFromTask()">開啟今日回報表</button><button type="button" class="ppc" onclick="cl('pp-td')">✕</button></div></div><div class="ppb">
   <div id="td-proj-tag" class="td-proj"></div>
   <div id="td-meta" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center"></div>
   <div class="fg"><label>任務名稱</label><input type="text" id="td-name" placeholder="任務名稱" oninput="document.getElementById('td-title').textContent=this.value||'任務回報'"></div>
+  <div class="fg"><label>任務說明</label><input type="text" id="td-desc" placeholder="補充說明（選填）"></div>
   <div class="fg"><label>所屬工作項目</label><select id="td-wi"></select></div>
   <div class="fg"><label>負責人</label><select id="td-assignee" data-members></select></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
@@ -9052,11 +9053,13 @@ function confirmTaskReport() {
   var status = document.getElementById('td-status').value;
   var taskName = (document.getElementById('td-name').value || '').trim();
   if (!taskName) { alert('請填寫任務名稱'); return; }
+  var taskDesc = (document.getElementById('td-desc') && document.getElementById('td-desc').value || '').trim();
   var assigneeSel = document.getElementById('td-assignee');
   var assigneeName = (assigneeSel && assigneeSel.value) || ctx.assignee || '';
 
   var taskFields = {
     '任務名稱': taskName,
+    '任務說明': taskDesc,
     '進度狀態': status,
     '進度數值': parseProgressVal(status, null)
   };
@@ -9085,6 +9088,7 @@ function confirmTaskReport() {
   if (taskFields['進度狀態'] !== undefined) oldFields['進度狀態'] = oldRec.fields['進度狀態'] || '';
   if (taskFields['進度數值'] !== undefined) oldFields['進度數值'] = oldRec.fields['進度數值'] || 0;
   if (taskFields['任務名稱'] !== undefined) oldFields['任務名稱'] = oldRec.fields['任務名稱'] || '';
+  if (taskFields['任務說明'] !== undefined) oldFields['任務說明'] = oldRec.fields['任務說明'] || '';
   if (taskFields['所屬工作項目'] !== undefined) oldFields['所屬工作項目'] = oldRec.fields['所屬工作項目'];
   if (taskFields['開始日期'] !== undefined) oldFields['開始日期'] = oldRec.fields['開始日期'];
   if (taskFields['預計完成日'] !== undefined) oldFields['預計完成日'] = oldRec.fields['預計完成日'];
@@ -9116,6 +9120,8 @@ function openNewTaskFromContext() {
   preparePopup('pp-task');
   document.getElementById('nt-name').value = '';
   document.getElementById('nt-name').placeholder = '輸入全新任務名稱…';
+  var ntDesc = document.getElementById('nt-desc');
+  if (ntDesc) ntDesc.value = '';
   if (ctx) {
     if (ctx.wiId) document.getElementById('nt-wi').value = ctx.wiId;
     if (ctx.assignee) document.getElementById('nt-assignee').value = ctx.assignee;
@@ -9147,6 +9153,8 @@ function openTaskDetail(taskId) {
   document.getElementById('td-title').textContent = ctx.f['任務名稱'] || '任務詳情';
   var tdNameEl = document.getElementById('td-name');
   if (tdNameEl) tdNameEl.value = ctx.f['任務名稱'] || '';
+  var tdDescEl = document.getElementById('td-desc');
+  if (tdDescEl) tdDescEl.value = fieldTextValue(ctx.f['任務說明']) || fieldTextValue(ctx.f['說明']) || '';
   var wiSel = document.getElementById('td-wi');
   if (wiSel) {
     fillTaskDetailWiSelect(wiSel);
@@ -13172,6 +13180,7 @@ function saveWorkItems() {
 
 function saveTask() {
   var name = document.getElementById('nt-name').value.trim();
+  var desc = (document.getElementById('nt-desc') && document.getElementById('nt-desc').value || '').trim();
   var wiId = document.getElementById('nt-wi').value;
   var assignee = document.getElementById('nt-assignee').value;
   var start = document.getElementById('nt-start').value;
@@ -13186,6 +13195,7 @@ function saveTask() {
     '進度狀態': status,
     '進度數值': parseProgressVal(status, null)
   };
+  if (desc) fields['任務說明'] = desc;
   if (start) fields['開始日期'] = dateInputToTs(start);
   if (due) fields['預計完成日'] = dateInputToTs(due);
   var person = larkPerson(assignee);
@@ -13193,6 +13203,8 @@ function saveTask() {
 
   cl('pp-task');
   document.getElementById('nt-name').value = '';
+  var ntDesc = document.getElementById('nt-desc');
+  if (ntDesc) ntDesc.value = '';
   optimisticCreate('tasks', fields, { failMsg: '新增失敗' }).catch(function() {});
 }
 
