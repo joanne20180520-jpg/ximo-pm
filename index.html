@@ -1211,14 +1211,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="fg" style="margin:0"><label>開始日期</label><input type="date" id="td-start"></div>
     <div class="fg" style="margin:0"><label>預計完成日</label><input type="date" id="td-due"></div>
   </div>
-  <div class="fg"><label>今日回報分類</label><div class="td-cats" id="td-cats">
-    <span class="td-cat active" data-cat="doing" onclick="pickTaskReportCat(this)">進行中</span>
-    <span class="td-cat" data-cat="done" onclick="pickTaskReportCat(this)">今日完成</span>
-    <span class="td-cat block" data-cat="block" onclick="pickTaskReportCat(this)">卡關</span>
-    <span class="td-cat" data-cat="tomorrow" onclick="pickTaskReportCat(this)">明日預計</span>
-  </div></div>
-  <div class="fg"><label>進度狀態</label><select id="td-status" onchange="onTaskReportStatusChange()"></select></div>
-  <div class="fg"><label>補充說明</label><textarea id="td-note" rows="3" placeholder="寫進今日回報的補充說明…"></textarea></div>
+  <div class="fg"><label>進度狀態</label><select id="td-status"></select></div>
   <div class="fg">
     <label>附件</label>
     <div class="attach-dropzone" id="td-attach-zone" onclick="if(event.target.id!=='td-attach-file')document.getElementById('td-attach-file').click()" ondragover="onTaskAttachDragOver(event)" ondragleave="onTaskAttachDragLeave(event)" ondrop="onTaskAttachDrop(event)">
@@ -1227,7 +1220,6 @@ button.btn-loading::after{content:'…';margin-left:2px}
     </div>
     <div id="td-attach-list"></div>
   </div>
-  <div class="fg td-block-box" id="td-block-wrap" style="display:none"><label>卡關原因</label><textarea id="td-block-reason" rows="2" placeholder="說明卡在哪、需要誰協助…"></textarea></div>
   <button class="bads" style="margin-top:4px" onclick="openNewTaskFromContext()">＋ 建立新任務</button>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-td')">取消</button><button class="bpri btn-report" id="td-confirm-btn" onclick="confirmTaskReport()">確認儲存</button></div></div></div>
 
@@ -6919,7 +6911,7 @@ function milestoneRecordToClient(rec) {
     projectId: projIds[0] || '',
     name: f['里程碑名稱'] || '',
     type: f['類型'] || '其他',
-    status: f['狀態'] || '未開始',
+    status: normalizeMilestoneStatus(f['狀態']),
     startDate: startRaw ? tsToDateInput(startRaw) : '',
     dueDate: dueRaw ? tsToDateInput(dueRaw) : '',
     payPct: f['給付比例'] || '',
@@ -6941,7 +6933,7 @@ function clientMilestoneToFields(ms, projId) {
     '里程碑名稱': ms.name || '',
     '所屬標案': projId ? [projId] : [],
     '類型': ms.type || '其他',
-    '狀態': ms.status || '未開始',
+    '狀態': normalizeMilestoneStatus(ms.status),
     '給付比例': ms.payPct || '',
     '最終成果': ms.deliverable || '',
     '規劃任務': JSON.stringify({ version: 2, groups: groups }),
@@ -7049,6 +7041,22 @@ function newMilestoneId() {
 
 function milestoneTypeLabel(type) {
   return type || '其他';
+}
+
+var MILESTONE_STATUS_OPTIONS = ['未開始', '進行中', '已送審', '已完成'];
+
+function normalizeMilestoneStatus(raw) {
+  var s = fieldTextValue(raw);
+  if (MILESTONE_STATUS_OPTIONS.indexOf(s) >= 0) return s;
+  return '未開始';
+}
+
+function setMilestoneStatusSelect(value) {
+  var sel = document.getElementById('ms-status');
+  if (!sel) return;
+  var v = normalizeMilestoneStatus(value);
+  sel.value = v;
+  if (sel.value !== v) sel.selectedIndex = 0;
 }
 
 function resolveMilestoneWorkItemName(ms) {
@@ -7617,7 +7625,7 @@ function openMilestoneEditor(msId) {
     if (delBtn) delBtn.style.display = '';
     document.getElementById('ms-name').value = ms.name || '';
     document.getElementById('ms-type').value = ms.type || '交付物';
-    document.getElementById('ms-status').value = ms.status || '未開始';
+    setMilestoneStatusSelect(ms.status);
     document.getElementById('ms-due').value = ms.dueDate || '';
     document.getElementById('ms-start').value = ms.startDate || '';
     document.getElementById('ms-pay').value = ms.payPct || '';
@@ -7628,7 +7636,7 @@ function openMilestoneEditor(msId) {
     if (delBtn) delBtn.style.display = 'none';
     document.getElementById('ms-name').value = '';
     document.getElementById('ms-type').value = '交付物';
-    document.getElementById('ms-status').value = '未開始';
+    setMilestoneStatusSelect('未開始');
     document.getElementById('ms-due').value = '';
     document.getElementById('ms-start').value = '';
     document.getElementById('ms-pay').value = '';
@@ -7674,7 +7682,7 @@ function saveMilestone() {
     clientId: (oldMs && oldMs.clientId) || (!editingMilestoneId ? newMilestoneId() : ''),
     name: name,
     type: document.getElementById('ms-type').value,
-    status: document.getElementById('ms-status').value,
+    status: normalizeMilestoneStatus(document.getElementById('ms-status').value),
     startDate: document.getElementById('ms-start').value,
     dueDate: document.getElementById('ms-due').value,
     payPct: document.getElementById('ms-pay').value.trim(),
@@ -7694,13 +7702,41 @@ function saveMilestone() {
   } else {
     payload.recordId = '';
   }
+  var removedTaskIds = [];
+  if (oldMs) {
+    var keep = {};
+    (payload.taskIds || []).forEach(function(id) { keep[id] = 1; });
+    flattenMilestonePlanTasks(oldMs).forEach(function(t) {
+      if (t && t.taskId && !keep[t.taskId]) removedTaskIds.push(t.taskId);
+    });
+    (oldMs.taskIds || []).forEach(function(id) {
+      if (id && !keep[id] && removedTaskIds.indexOf(id) < 0) removedTaskIds.push(id);
+    });
+  }
   cl('pp-milestone');
   editingMilestoneId = null;
-  persistMilestone(payload, milestonePageProjId).then(function() {
-    return syncTables(['milestones']);
+  var deleteChain = Promise.resolve();
+  removedTaskIds.forEach(function(tid) {
+    deleteChain = deleteChain.then(function() {
+      if (!tid) return;
+      var arr = getTableArray('tasks');
+      if (arr) {
+        setTableArray('tasks', arr.filter(function(r) { return r.record_id !== tid; }));
+        commitLocalTable('tasks');
+      }
+      return apiDelete('tasks', tid).catch(function(err) {
+        console.warn('刪除已移除的規劃任務失敗', tid, err);
+      });
+    });
+  });
+  deleteChain.then(function() {
+    return persistMilestone(payload, milestonePageProjId);
+  }).then(function() {
+    return syncTables(['milestones', 'tasks']);
   }).then(function() {
     renderMilestonesPage();
     renderProjects();
+    if (typeof renderTasks === 'function') renderTasks();
   }).catch(function(err) {
     // 寫表失敗時仍存本機，避免資料遺失
     var list = getMilestones(milestonePageProjId);
@@ -8620,68 +8656,10 @@ function confirmTaskReport() {
   if (!ctx) return;
 
   var status = document.getElementById('td-status').value;
-  var note = (document.getElementById('td-note').value || '').trim();
-  var blockReason = (document.getElementById('td-block-reason').value || '').trim();
-  var category = taskReportCategory || 'doing';
   var taskName = (document.getElementById('td-name').value || '').trim();
   if (!taskName) { alert('請填寫任務名稱'); return; }
   var assigneeSel = document.getElementById('td-assignee');
   var assigneeName = (assigneeSel && assigneeSel.value) || ctx.assignee || '';
-  var author = assigneeName;
-  var today = new Date();
-  today.setHours(0, 0, 0, 0);
-  var todayStart = today.getTime();
-  var existingJournal = findDailyJournalRecord(todayStart, author, currentTaskId, 'task');
-  var existingReasonMap = parseBlockReasons(existingJournal);
-  var reasonById = {};
-  Object.keys(existingReasonMap.byId).forEach(function(k) { reasonById[k] = existingReasonMap.byId[k]; });
-
-  if (category === 'block' && !blockReason && !existingReasonMap.byId[currentTaskId] && !existingReasonMap.legacy) {
-    alert('分類為卡關時，請填寫卡關原因');
-    return;
-  }
-
-  if (status === '已完成' || parseProgressVal(status, null) >= 100) category = 'done';
-  if (category === 'done') {
-    status = '已完成';
-  } else {
-    status = normalizeReportStatusForCategory(status, category, taskReportOriginalStatus);
-  }
-  syncReportStatusSelect('td-status', category, taskReportOriginalStatus);
-  setTaskReportCategory(category);
-
-  var merged = mergeTaskIntoJournalCategories(existingJournal, currentTaskId, category);
-  if (category === 'block' && blockReason) reasonById[currentTaskId] = blockReason;
-  else if (category !== 'block') delete reasonById[currentTaskId];
-  var journalFields = {
-    '日期': todayStart,
-    '進行中任務': merged.doing,
-    '已完成今日任務': merged.done,
-    '卡關任務': merged.block,
-    '明日預計任務': merged.tomorrow
-  };
-  var encodedReasons = encodeBlockReasons(reasonById);
-  if (encodedReasons) journalFields['卡關原因'] = encodedReasons;
-  var baseNote = existingJournal ? journalPlainNote(existingJournal) : '';
-  if (note) {
-    var catLabels = { doing: '進行中', done: '今日完成', block: '卡關', tomorrow: '明日預計' };
-    var noteLine = '/ ' + ctx.projName + ' · ' + taskName + (note ? '：' + note : '');
-    baseNote = baseNote ? (baseNote + '\n' + noteLine) : ('【' + (catLabels[category] || '進行中') + '】\n' + noteLine);
-  }
-  applyJournalDesignData(journalFields, baseNote, existingJournal ? parseDesignCategories(existingJournal) : emptyDesignCategories(), mergeJournalNoteMaps(existingJournal, {
-    taskNotes: (function() { var m = {}; m[currentTaskId] = note; return m; })()
-  }));
-
-  var pid = findProjectIdByName(ctx.projName);
-  if (pid) {
-    var projIds = getJournalProjIds(existingJournal).slice();
-    if (projIds.indexOf(pid) < 0) projIds.push(pid);
-    setJournalProjIds(journalFields, projIds);
-  }
-
-  var reporter = larkPerson(author);
-  if (reporter) journalFields['回報人'] = reporter;
-  else if (author && author !== '（未指定）') journalFields['回報人'] = author;
 
   var taskFields = {
     '任務名稱': taskName,
@@ -8695,7 +8673,9 @@ function confirmTaskReport() {
   var tdStart = document.getElementById('td-start');
   var tdDue = document.getElementById('td-due');
   if (tdStart && tdStart.value) taskFields['開始日期'] = dateInputToTs(tdStart.value);
+  else taskFields['開始日期'] = null;
   if (tdDue && tdDue.value) taskFields['預計完成日'] = dateInputToTs(tdDue.value);
+  else taskFields['預計完成日'] = null;
   var pendingAttach = taskPendingAttachments[currentTaskId] || [];
   if (pendingAttach.length) {
     taskFields['附件'] = pendingAttach.map(function(a) {
@@ -8717,16 +8697,9 @@ function confirmTaskReport() {
   if (taskFields['負責人'] !== undefined) oldFields['負責人'] = oldRec.fields['負責人'];
   undoStack.push({ type: 'update', table: 'tasks', recordId: currentTaskId, data: oldFields });
 
-  var journalPromise = existingJournal
-    ? apiPut('journal', existingJournal.record_id, journalFields)
-    : apiPost('journal', journalFields);
-
-  Promise.all([
-    journalPromise,
-    apiPut('tasks', currentTaskId, taskFields)
-  ]).then(function() {
+  apiPut('tasks', currentTaskId, taskFields).then(function() {
     cl('pp-td');
-    return syncTables(['journal', 'tasks']);
+    return syncTables(['tasks']);
   }).catch(function(err) {
     console.error(err);
     alert('儲存失敗：' + (err.message || '請確認 Lark 欄位設定'));
@@ -8754,15 +8727,12 @@ function openNewTaskFromContext() {
 
 function openDailyLogFromTask() {
   if (!currentTaskId) return;
+  var statusEl = document.getElementById('td-status');
   dailyLogTaskExtras[currentTaskId] = {
-    note: document.getElementById('td-note').value.trim(),
-    status: document.getElementById('td-status').value,
-    category: taskReportCategory
+    note: '',
+    status: statusEl ? statusEl.value : '',
+    category: 'doing'
   };
-  var blockEl = document.getElementById('td-block-reason');
-  if (blockEl && blockEl.value.trim()) {
-    dailyLogTaskExtras[currentTaskId].blockReason = blockEl.value.trim();
-  }
   openDailyLog(currentTaskId);
 }
 
@@ -8771,8 +8741,8 @@ function openTaskDetail(taskId) {
   if (!ctx) return;
   currentTaskId = taskId;
   taskReportOriginalStatus = ctx.f['進度狀態'] || '未開始';
-  taskReportCategory = getTodayJournalCategory(taskId, ctx.assignee);
-  document.getElementById('td-title').textContent = ctx.f['任務名稱'] || '任務回報';
+  taskReportCategory = 'doing';
+  document.getElementById('td-title').textContent = ctx.f['任務名稱'] || '任務詳情';
   var tdNameEl = document.getElementById('td-name');
   if (tdNameEl) tdNameEl.value = ctx.f['任務名稱'] || '';
   var wiSel = document.getElementById('td-wi');
@@ -8818,23 +8788,12 @@ function openTaskDetail(taskId) {
   var tdDueEl = document.getElementById('td-due');
   if (tdStartEl) tdStartEl.value = ctx.startTs ? tsToDateInput(ctx.startTs) : '';
   if (tdDueEl) tdDueEl.value = ctx.dueTs ? tsToDateInput(ctx.dueTs) : '';
-  document.querySelectorAll('#td-cats .td-cat').forEach(function(c) {
-    c.classList.toggle('active', c.dataset.cat === taskReportCategory);
-  });
-  toggleTdBlockReason();
   var sel = document.getElementById('td-status');
   sel.innerHTML = PROGRESS_OPTIONS.map(function(o) {
     return '<option' + (o === (ctx.f['進度狀態'] || '') ? ' selected' : '') + '>' + o + '</option>';
   }).join('');
-  syncReportStatusSelect('td-status', taskReportCategory, taskReportOriginalStatus);
-  document.getElementById('td-note').value = getTodayJournalItemNote(taskId, ctx.assignee, 'task');
   taskPendingAttachments[taskId] = normalizeTaskAttachments(ctx.f['附件']);
   renderTaskAttachList();
-  var today = new Date();
-  today.setHours(0, 0, 0, 0);
-  var existingJournal = findDailyJournalRecord(today.getTime(), ctx.assignee);
-  var blockEl = document.getElementById('td-block-reason');
-  if (blockEl) blockEl.value = getBlockReasonForTask(existingJournal, taskId);
   updateTaskDetailDueBadge();
   applyDetailPopupPermissions('pp-td');
   op('pp-td');
@@ -9746,16 +9705,15 @@ function openDailyLog(preselectId, preselectKind) {
       blockReason: ddBlock ? ddBlock.value.trim() : ''
     };
   } else if (preselectId) {
-    var tdNote = document.getElementById('td-note');
     var tdStatus = document.getElementById('td-status');
-    var tdBlock = document.getElementById('td-block-reason');
-    dailyLogTaskExtras = {};
-    dailyLogTaskExtras[preselectId] = {
-      note: tdNote ? tdNote.value.trim() : '',
-      status: tdStatus ? tdStatus.value : '',
-      category: taskReportCategory || 'doing',
-      blockReason: tdBlock ? tdBlock.value.trim() : ''
-    };
+    if (!dailyLogTaskExtras[preselectId]) {
+      dailyLogTaskExtras = {};
+      dailyLogTaskExtras[preselectId] = {
+        note: '',
+        status: tdStatus ? tdStatus.value : '',
+        category: 'doing'
+      };
+    }
   } else {
     dailyLogTaskExtras = {};
     dailyLogDesignExtras = {};
