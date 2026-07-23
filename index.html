@@ -424,6 +424,9 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .gbar-done-icon{flex-shrink:0;margin-right:4px;font-size:10px;font-weight:700;text-decoration:none;color:#666}
 .gbar:hover:not(.gbar-done){z-index:4;filter:brightness(1.08)}
 .gbar.gbar-done:hover{z-index:2}
+.gantt-tip{display:none;position:fixed;z-index:9000;max-width:min(320px,70vw);padding:8px 10px;border-radius:8px;background:#1a1916;color:#fff;font-size:12px;line-height:1.45;box-shadow:0 8px 24px rgba(0,0,0,.28);pointer-events:none;white-space:pre-wrap;word-break:break-word}
+.gantt-tip-name{font-weight:700;margin:0}
+.gantt-tip-desc{margin-top:4px;font-weight:400;color:rgba(255,255,255,.88);font-size:11px;line-height:1.4}
 .tline{position:absolute;top:0;bottom:0;width:2px;background:var(--report);z-index:5;pointer-events:none}
 .tlineh{position:absolute;top:0;width:2px;height:52px;background:var(--report);z-index:5;pointer-events:none}
 .gb.week-fit .gsw{overflow-x:hidden}
@@ -3469,13 +3472,15 @@ function paintGantt(key,proj,vs,ve,total,cw){
       var paint = ganttBarPaintStyle(bar, proj.color);
       var borderStyle = '';
       var barLabel = bar.design ? ('設計·' + bar.l) : bar.l;
-      var tipParts = [barLabel];
-      if (!bar.design && bar.desc) tipParts.push(bar.desc);
-      var barTip = tipParts.join('\n');
+      var tipName = barLabel || '';
+      var tipDesc = (!bar.design && bar.desc) ? String(bar.desc) : '';
       var labelHtml = bar.done
         ? ('<span class="gbar-done-icon">✓</span><span style="text-decoration:line-through">' + escHtml(barLabel) + '</span>')
         : escHtml(barLabel);
-      bH+='<div class="gbar'+overdueClass+paint.extraClass+'" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:'+GANTT_BAR_H+'px;'+paint.bgStyle+borderStyle+'"'+clickAttr+' title="'+escAttr(barTip)+'">'+labelHtml+'</div>';
+      bH+='<div class="gbar'+overdueClass+paint.extraClass+'" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:'+GANTT_BAR_H+'px;'+paint.bgStyle+borderStyle+'"'+clickAttr
+        +' data-tip-name="'+escAttr(tipName)+'"'
+        +(tipDesc ? (' data-tip-desc="'+escAttr(tipDesc)+'"') : '')
+        +'>'+labelHtml+'</div>';
     });
     tmH+='<div class="gtr" style="width:'+tw+'px;height:'+rowH+'px">'+bH+'</div>';
   });
@@ -3498,6 +3503,83 @@ function paintGantt(key,proj,vs,ve,total,cw){
     var lead=vMode==='quarter'?Math.floor(sw2.clientWidth*0.25):200;
     sw2.scrollLeft=Math.min(maxScroll,Math.max(0,tx-lead));
   }
+  bindGanttTipEvents();
+}
+
+var ganttTipTimer = null;
+function ensureGanttTipEl() {
+  var el = document.getElementById('gantt-tip');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'gantt-tip';
+  el.className = 'gantt-tip';
+  el.setAttribute('role', 'tooltip');
+  document.body.appendChild(el);
+  return el;
+}
+function hideGanttTip() {
+  if (ganttTipTimer) { clearTimeout(ganttTipTimer); ganttTipTimer = null; }
+  var tip = document.getElementById('gantt-tip');
+  if (tip) tip.style.display = 'none';
+}
+function positionGanttTip(tip, clientX, clientY) {
+  tip.style.display = 'block';
+  tip.style.left = '0px';
+  tip.style.top = '0px';
+  var rect = tip.getBoundingClientRect();
+  var x = clientX + 14;
+  var y = clientY + 16;
+  if (x + rect.width > window.innerWidth - 8) x = Math.max(8, clientX - rect.width - 12);
+  if (y + rect.height > window.innerHeight - 8) y = Math.max(8, clientY - rect.height - 12);
+  tip.style.left = x + 'px';
+  tip.style.top = y + 'px';
+}
+function showGanttTip(barEl, clientX, clientY) {
+  if (!barEl) return;
+  var name = barEl.getAttribute('data-tip-name') || '';
+  var desc = barEl.getAttribute('data-tip-desc') || '';
+  if (!name && !desc) { hideGanttTip(); return; }
+  var tip = ensureGanttTipEl();
+  var html = '';
+  if (name) html += '<div class="gantt-tip-name">' + escHtml(name) + '</div>';
+  if (desc) html += '<div class="gantt-tip-desc">' + escHtml(desc) + '</div>';
+  tip.innerHTML = html;
+  positionGanttTip(tip, clientX, clientY);
+}
+function bindGanttTipEvents() {
+  var area = document.getElementById('gantt-area');
+  if (!area || area._ganttTipBound) return;
+  area._ganttTipBound = true;
+  area.addEventListener('pointerover', function(e) {
+    var bar = e.target.closest && e.target.closest('.gbar');
+    if (!bar || !area.contains(bar)) return;
+    if (ganttTipTimer) clearTimeout(ganttTipTimer);
+    // 幾乎立即顯示，略延遲避免快速掃過時閃爍
+    ganttTipTimer = setTimeout(function() {
+      ganttTipTimer = null;
+      showGanttTip(bar, e.clientX, e.clientY);
+    }, 40);
+  });
+  area.addEventListener('pointermove', function(e) {
+    var tip = document.getElementById('gantt-tip');
+    if (!tip || tip.style.display === 'none') return;
+    var bar = e.target.closest && e.target.closest('.gbar');
+    if (!bar) return;
+    positionGanttTip(tip, e.clientX, e.clientY);
+  });
+  area.addEventListener('pointerout', function(e) {
+    var bar = e.target.closest && e.target.closest('.gbar');
+    if (!bar) return;
+    var related = e.relatedTarget;
+    if (related && bar.contains(related)) return;
+    if (related && related.closest && related.closest('.gbar')) {
+      // 移到另一條任務：讓 pointerover 接手
+      return;
+    }
+    hideGanttTip();
+  });
+  area.addEventListener('scroll', hideGanttTip, true);
+  area.addEventListener('pointerdown', hideGanttTip);
 }
 
 function updLabel(){
@@ -3545,7 +3627,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260723v4';
+var APP_BUILD = '20260723v5';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v4';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -6359,7 +6441,7 @@ function getFilteredTaskItems() {
     if (projRec && !isProjectSelected(projRec)) return;
     var progress = parseProgressVal(f['進度狀態'], f['進度數值']);
     var assignee = personName(f['負責人']) || '未指定';
-    var descRaw = fieldTextValue(f['任務說明']) || fieldTextValue(f['說明']) || '';
+    var descRaw = taskDescFromFields(f);
     var titleParts = splitTaskTitleDesc(f['任務名稱'] || '未命名', descRaw);
     items.push({
       id: rec.record_id,
@@ -6800,7 +6882,7 @@ function renderGanttFromData() {
         var tProg = parseProgressVal(tf['進度狀態'], tf['進度數值']);
         var dueDiff = getDueDayDiff(tf['預計完成日']);
         var tDone = tProg >= 100 || tf['進度狀態'] === '已完成';
-        var tDesc = fieldTextValue(tf['任務說明']) || fieldTextValue(tf['說明']) || '';
+        var tDesc = taskDescFromFields(tf);
         bars.push({
           s: toDateStr(tStart),
           e: toDateStr(tDue),
@@ -9185,7 +9267,7 @@ function openTaskDetail(taskId) {
   var tdNameEl = document.getElementById('td-name');
   if (tdNameEl) tdNameEl.value = ctx.f['任務名稱'] || '';
   var tdDescEl = document.getElementById('td-desc');
-  if (tdDescEl) tdDescEl.value = fieldTextValue(ctx.f['任務說明']) || fieldTextValue(ctx.f['說明']) || '';
+  if (tdDescEl) tdDescEl.value = taskDescFromFields(ctx.f);
   var wiSel = document.getElementById('td-wi');
   if (wiSel) {
     fillTaskDetailWiSelect(wiSel);
@@ -12378,6 +12460,37 @@ function fieldTextValue(raw) {
     if (raw.text_arr && raw.text_arr[0]) return String(raw.text_arr[0]).trim();
   }
   return String(raw).trim();
+}
+
+/** 較完整的純文字擷取（Lark 文字／富文本陣列） */
+function fieldPlainText(raw) {
+  if (raw === undefined || raw === null || raw === '') return '';
+  if (typeof raw === 'string' || typeof raw === 'number') return String(raw).trim();
+  if (Array.isArray(raw)) {
+    return raw.map(function(x) {
+      if (x == null) return '';
+      if (typeof x === 'string' || typeof x === 'number') return String(x);
+      if (typeof x === 'object') {
+        if (x.text != null) return String(x.text);
+        if (x.name != null) return String(x.name);
+        if (x.content != null) return fieldPlainText(x.content);
+        if (Array.isArray(x.text_arr)) return x.text_arr.join('');
+      }
+      return fieldTextValue(x);
+    }).join('').trim();
+  }
+  if (typeof raw === 'object') {
+    if (raw.text != null) return String(raw.text).trim();
+    if (raw.name != null) return String(raw.name).trim();
+    if (raw.content != null) return fieldPlainText(raw.content);
+    if (Array.isArray(raw.text_arr)) return raw.text_arr.join('').trim();
+  }
+  return fieldTextValue(raw);
+}
+
+function taskDescFromFields(f) {
+  f = f || {};
+  return fieldPlainText(f['任務說明']) || fieldPlainText(f['說明']) || '';
 }
 
 var PROJECT_DISPLAY_STATUSES = ['未開始', '進行中', '封存'];
