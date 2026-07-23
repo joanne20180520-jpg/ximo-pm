@@ -989,10 +989,13 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div id="pg-ms" class="page">
       <div class="ms-toolbar">
         <select id="ms-proj-select" onchange="onMilestoneProjChange()"></select>
+        <select id="ms-default-wi" title="產生任務時預設放入的工作項目" onchange="onMilestoneDefaultWiChange()">
+          <option value="">預設工作項目：自動</option>
+        </select>
         <button type="button" class="badd" onclick="openMilestoneEditor()">＋ 新增里程碑</button>
         <button type="button" class="tbtn" onclick="loadMilestoneSamples()">載入範例</button>
         <button type="button" class="bpri" onclick="openGenerateTasksPreview()">一鍵產生任務</button>
-        <span class="ms-hint">先建里程碑（對應合約給付條件），再一鍵展開為工作項目＋任務</span>
+        <span class="ms-hint">里程碑屬標案；產生任務時會放入指定工作項目（可先選上方「預設工作項目」如 test）</span>
       </div>
       <div class="ms-area" id="ms-area">
         <div class="ms-empty">請先從上方選擇標案</div>
@@ -1249,14 +1252,14 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="fg" style="margin:0"><label>截止日</label><input type="date" id="ms-due"></div>
     <div class="fg" style="margin:0"><label>給付比例（選填）</label><input type="text" id="ms-pay" placeholder="30%"></div>
   </div>
-  <div class="fg"><label>歸屬工作項目</label><select id="ms-wi"><option value="">（自動建立「履約執行」）</option></select></div>
+  <div class="fg"><label>展開任務時放入的工作項目</label><select id="ms-wi"><option value="">（用上方預設／自動建立「履約執行」）</option></select></div>
   <div class="fg"><label>交付／給付條件</label><textarea id="ms-deliver" rows="3" placeholder="例：紙本 8 份＋電子檔，審查通過後請款"></textarea></div>
   <div class="fg"><label>備註</label><input type="text" id="ms-notes" placeholder="內部備註"></div>
 </div><div class="ppf"><button class="bcan bdel-action" id="ms-del-btn" onclick="deleteMilestoneFromEditor()" style="display:none">刪除</button><button class="bcan" onclick="cl('pp-milestone')">取消</button><button class="bpri" onclick="saveMilestone()">儲存</button></div></div></div>
 
 <!-- 一鍵產生任務預覽 -->
 <div class="po" id="pp-ms-generate"><div class="pp" style="width:520px"><div class="pph"><h3>一鍵產生任務</h3><button class="ppc" onclick="cl('pp-ms-generate')">✕</button></div><div class="ppb">
-  <div class="dl-hint" style="margin:0 0 12px">系統會為每個里程碑建立任務；若沒有對應工作項目，會自動新增「履約執行」。</div>
+  <div class="dl-hint" style="margin:0 0 12px">每個里程碑會建立 1 筆任務，並放入指定的工作項目。若選了上方「預設工作項目」，尚未指定者會全部掛到那裡。</div>
   <div id="ms-generate-list"></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-ms-generate')">取消</button><button class="bpri" id="ms-generate-btn" onclick="confirmGenerateTasks()">確認產生</button></div></div></div>
 
@@ -3505,7 +3508,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260722v3';
+var APP_BUILD = '20260722v4';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v4';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -6769,6 +6772,7 @@ function saveTaskTimeInline(taskId) {
 // ── 履約里程碑（原型：本機儲存，之後可改 Lark 表）──
 var MILESTONES_STORAGE_KEY = 'ximo-milestones-v1';
 var milestonePageProjId = null;
+var milestoneDefaultWiName = '';
 var editingMilestoneId = null;
 var msGenerateIds = [];
 
@@ -6802,6 +6806,42 @@ function milestoneTypeLabel(type) {
   return type || '其他';
 }
 
+function resolveMilestoneWorkItemName(ms) {
+  if (ms && ms.workItemName) return String(ms.workItemName).trim();
+  if (milestoneDefaultWiName) return milestoneDefaultWiName;
+  return '';
+}
+
+function fillMilestoneDefaultWiSelect() {
+  var sel = document.getElementById('ms-default-wi');
+  if (!sel) return;
+  var prev = milestoneDefaultWiName || sel.value;
+  var html = '<option value="">預設工作項目：自動（依各里程碑／履約執行）</option>';
+  var proj = milestonePageProjId
+    ? projectsData.find(function(p) { return p.record_id === milestonePageProjId; })
+    : null;
+  if (proj) {
+    getWorkitemsForProject(proj).forEach(function(wi) {
+      var n = wi.fields['工作項目名稱'] || '';
+      if (!n) return;
+      html += '<option value="' + escAttr(n) + '">預設工作項目：' + escHtml(n) + '</option>';
+    });
+  }
+  sel.innerHTML = html;
+  if (prev) {
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === prev) { sel.selectedIndex = i; milestoneDefaultWiName = prev; return; }
+    }
+  }
+  sel.value = '';
+  milestoneDefaultWiName = '';
+}
+
+function onMilestoneDefaultWiChange() {
+  var sel = document.getElementById('ms-default-wi');
+  milestoneDefaultWiName = sel ? String(sel.value || '').trim() : '';
+}
+
 function fillMilestoneProjSelect() {
   var sel = document.getElementById('ms-proj-select');
   if (!sel) return;
@@ -6818,11 +6858,14 @@ function fillMilestoneProjSelect() {
     selectedProjectIds.forEach(function(id) { sel.value = id; });
   }
   milestonePageProjId = sel.value || null;
+  fillMilestoneDefaultWiSelect();
 }
 
 function onMilestoneProjChange() {
   var sel = document.getElementById('ms-proj-select');
   milestonePageProjId = sel ? sel.value : null;
+  milestoneDefaultWiName = '';
+  fillMilestoneDefaultWiSelect();
   renderMilestonesPage();
 }
 
@@ -6846,7 +6889,7 @@ function renderMilestonesPage() {
   var projName = proj ? (proj.fields['標案名稱'] || '未命名') : '標案';
   var list = getMilestones(projId);
   if (!list.length) {
-    area.innerHTML = '<div class="ms-empty"><strong>' + escHtml(projName) + '</strong><br>尚無里程碑。<br>可點「載入範例」看示範，或「＋ 新增里程碑」手動建立。</div>';
+    area.innerHTML = '<div class="ms-empty"><strong>' + escHtml(projName) + '</strong><br>尚無里程碑。<br>可先選上方「預設工作項目」（例如 test），再點「載入範例」或「＋ 新增里程碑」。</div>';
     return;
   }
   var html = '<table class="ms-table"><thead><tr>'
@@ -6855,10 +6898,11 @@ function renderMilestonesPage() {
   list.forEach(function(ms) {
     var hasTask = ms.taskIds && ms.taskIds.length;
     var statusCls = ms.status === '已完成' ? ' done' : '';
+    var wiLabel = resolveMilestoneWorkItemName(ms) || '自動：履約執行';
     html += '<tr>'
       + '<td><div class="ms-name">' + escHtml(ms.name || '未命名') + '</div>'
       + '<div class="ms-sub"><span class="ms-tag">' + escHtml(milestoneTypeLabel(ms.type)) + '</span>'
-      + (ms.workItemName ? escHtml(ms.workItemName) : '自動：履約執行') + '</div>'
+      + '任務放入：' + escHtml(wiLabel) + '</div>'
       + (ms.deliverable ? '<div class="ms-sub">' + escHtml(ms.deliverable) + '</div>' : '')
       + '</td>'
       + '<td>' + (ms.dueDate ? escHtml(ms.dueDate.replace(/-/g, '/')) : '—') + '</td>'
@@ -6878,7 +6922,7 @@ function fillMilestoneWiSelect(projId, selectedName) {
   var sel = document.getElementById('ms-wi');
   if (!sel) return;
   var proj = projectsData.find(function(p) { return p.record_id === projId; });
-  var html = '<option value="">（自動建立「履約執行」）</option>';
+  var html = '<option value="">（用上方預設／自動建立「履約執行」）</option>';
   if (proj) {
     getWorkitemsForProject(proj).forEach(function(wi) {
       var n = wi.fields['工作項目名稱'] || '';
@@ -6887,6 +6931,7 @@ function fillMilestoneWiSelect(projId, selectedName) {
   }
   sel.innerHTML = html;
   if (selectedName) sel.value = selectedName;
+  else if (milestoneDefaultWiName) sel.value = milestoneDefaultWiName;
 }
 
 function openMilestoneEditor(msId) {
@@ -6910,7 +6955,7 @@ function openMilestoneEditor(msId) {
     document.getElementById('ms-pay').value = ms.payPct || '';
     document.getElementById('ms-deliver').value = ms.deliverable || '';
     document.getElementById('ms-notes').value = ms.notes || '';
-    fillMilestoneWiSelect(milestonePageProjId, ms.workItemName || '');
+    fillMilestoneWiSelect(milestonePageProjId, ms.workItemName || milestoneDefaultWiName || '');
   } else {
     if (title) title.textContent = '新增里程碑';
     if (delBtn) delBtn.style.display = 'none';
@@ -6921,6 +6966,7 @@ function openMilestoneEditor(msId) {
     document.getElementById('ms-pay').value = '';
     document.getElementById('ms-deliver').value = '';
     document.getElementById('ms-notes').value = '';
+    fillMilestoneWiSelect(milestonePageProjId, milestoneDefaultWiName || '');
   }
   op('pp-milestone');
 }
@@ -6970,15 +7016,33 @@ function deleteMilestoneFromEditor() {
 function loadMilestoneSamples() {
   if (!milestonePageProjId) { alert('請先選擇標案'); return; }
   if (getMilestones(milestonePageProjId).length && !confirm('此標案已有里程碑，要覆蓋為範例資料嗎？')) return;
+  var defaultWi = milestoneDefaultWiName || '';
+  if (!defaultWi) {
+    var useTest = confirm('尚未選「預設工作項目」。\n\n按「確定」：範例任務全部掛到「test」（若沒有會自動建立）\n按「取消」：依類型分別掛到「期中報告／活動執行／期末報告」');
+    defaultWi = useTest ? 'test' : '';
+  }
   var samples = [
-    { id: newMilestoneId(), name: '第一次期中報告', type: '交付物', status: '未開始', dueDate: '2026-07-31', payPct: '30%', deliverable: '紙本 8 份＋電子檔，審查通過後請款', workItemName: '期中報告', notes: '', taskIds: [] },
-    { id: newMilestoneId(), name: '期中審查會議', type: '審查會', status: '未開始', dueDate: '2026-08-15', payPct: '', deliverable: '會前 2 天提供簡報可編輯檔', workItemName: '期中報告', notes: '', taskIds: [] },
-    { id: newMilestoneId(), name: '第二次期中報告', type: '交付物', status: '未開始', dueDate: '2026-11-16', payPct: '30%', deliverable: '紙本 8 份＋電子檔', workItemName: '期中報告', notes: '', taskIds: [] },
-    { id: newMilestoneId(), name: '頒獎典禮活動', type: '活動', status: '未開始', dueDate: '2026-06-17', payPct: '', deliverable: '活動前 30 天送公文案＋活動企劃書審查', workItemName: '活動執行', notes: '', taskIds: [] },
-    { id: newMilestoneId(), name: '活動後成果素材', type: '交付物', status: '未開始', dueDate: '2026-07-22', payPct: '', deliverable: '活動結束後 3 日曆天內提供 30 張以上照片影片', workItemName: '活動執行', notes: '', taskIds: [] },
-    { id: newMilestoneId(), name: '最終報告', type: '交付物', status: '未開始', dueDate: '2026-12-05', payPct: '40%', deliverable: '最終報告 3 份紙本＋1 份電子檔', workItemName: '期末報告', notes: '', taskIds: [] }
+    { id: newMilestoneId(), name: '第一次期中報告', type: '交付物', status: '未開始', dueDate: '2026-07-31', payPct: '30%', deliverable: '紙本 8 份＋電子檔，審查通過後請款', workItemName: defaultWi || '期中報告', notes: '', taskIds: [] },
+    { id: newMilestoneId(), name: '期中審查會議', type: '審查會', status: '未開始', dueDate: '2026-08-15', payPct: '', deliverable: '會前 2 天提供簡報可編輯檔', workItemName: defaultWi || '期中報告', notes: '', taskIds: [] },
+    { id: newMilestoneId(), name: '第二次期中報告', type: '交付物', status: '未開始', dueDate: '2026-11-16', payPct: '30%', deliverable: '紙本 8 份＋電子檔', workItemName: defaultWi || '期中報告', notes: '', taskIds: [] },
+    { id: newMilestoneId(), name: '頒獎典禮活動', type: '活動', status: '未開始', dueDate: '2026-06-17', payPct: '', deliverable: '活動前 30 天送公文案＋活動企劃書審查', workItemName: defaultWi || '活動執行', notes: '', taskIds: [] },
+    { id: newMilestoneId(), name: '活動後成果素材', type: '交付物', status: '未開始', dueDate: '2026-07-22', payPct: '', deliverable: '活動結束後 3 日曆天內提供 30 張以上照片影片', workItemName: defaultWi || '活動執行', notes: '', taskIds: [] },
+    { id: newMilestoneId(), name: '最終報告', type: '交付物', status: '未開始', dueDate: '2026-12-05', payPct: '40%', deliverable: '最終報告 3 份紙本＋1 份電子檔', workItemName: defaultWi || '期末報告', notes: '', taskIds: [] }
   ];
   saveMilestones(milestonePageProjId, samples);
+  if (defaultWi === 'test' && !milestoneDefaultWiName) {
+    milestoneDefaultWiName = 'test';
+    fillMilestoneDefaultWiSelect();
+    var dsel = document.getElementById('ms-default-wi');
+    if (dsel) {
+      var has = false;
+      for (var i = 0; i < dsel.options.length; i++) {
+        if (dsel.options[i].value === 'test') { has = true; break; }
+      }
+      if (!has) dsel.insertAdjacentHTML('beforeend', '<option value="test">預設工作項目：test</option>');
+      dsel.value = 'test';
+    }
+  }
   renderMilestonesPage();
   renderProjects();
 }
@@ -7000,7 +7064,7 @@ function findWorkItemIdByName(proj, wiName) {
     if (found) return Promise.resolve(found.record_id);
   }
   var fallback = wis.find(function(wi) { return (wi.fields['工作項目名稱'] || '') === '履約執行'; });
-  if (fallback) return Promise.resolve(fallback.record_id);
+  if (fallback && !target) return Promise.resolve(fallback.record_id);
   var createName = target || '履約執行';
   var fields = {
     '工作項目名稱': createName,
@@ -7015,6 +7079,13 @@ function findWorkItemIdByName(proj, wiName) {
         return (w.fields['工作項目名稱'] || '') === createName;
       });
       id = wi ? wi.record_id : '';
+    }
+    if (id && proj && proj.fields) {
+      var existing = getWiIds(proj.fields).slice();
+      if (existing.indexOf(id) < 0) {
+        existing.push(id);
+        optimisticUpdate('projects', proj.record_id, { '工作項目': existing }, { skipSync: true, failMsg: '更新標案工作項目失敗' }).catch(function() {});
+      }
     }
     return id;
   });
@@ -7059,11 +7130,11 @@ function openGenerateTasksPreview(ids) {
   if (!box) return;
   var html = '';
   targets.forEach(function(ms) {
-    var wiLabel = ms.workItemName || '履約執行（自動建立）';
+    var wiLabel = resolveMilestoneWorkItemName(ms) || '履約執行（自動建立）';
     html += '<div class="tt-issue-row" style="cursor:default">'
       + '<div class="tt-issue-main">'
       + '<div class="tt-issue-name">' + escHtml(ms.name) + '</div>'
-      + '<div class="tt-issue-meta">工作項目：' + escHtml(wiLabel)
+      + '<div class="tt-issue-meta">任務放入：' + escHtml(wiLabel)
       + (ms.dueDate ? (' · 截止 ' + escHtml(ms.dueDate.replace(/-/g, '/'))) : '')
       + '</div>'
       + (ms.deliverable ? '<div class="ms-sub">' + escHtml(ms.deliverable) + '</div>' : '')
@@ -7088,6 +7159,25 @@ function goToScheduleAfterMilestoneTasks(projId) {
   if (tab) sw(tab, 'pg-s');
 }
 
+function expandTaskGroupsByNames(wiNames) {
+  var wanted = {};
+  (wiNames || []).forEach(function(n) {
+    if (n) wanted[n] = 1;
+  });
+  document.querySelectorAll('#task-list-body .tgl-wi').forEach(function(hdr) {
+    var title = hdr.querySelector('[title]');
+    var name = title ? title.getAttribute('title') : '';
+    if (!name) {
+      var spans = hdr.querySelectorAll('span');
+      for (var i = 0; i < spans.length; i++) {
+        var t = (spans[i].textContent || '').trim();
+        if (t && t !== '▶' && !/^\d+$/.test(t)) { name = t; break; }
+      }
+    }
+    if (wanted[name]) hdr.classList.add('open');
+  });
+}
+
 function confirmGenerateTasks() {
   if (!milestonePageProjId || !msGenerateIds.length) return;
   var proj = projectsData.find(function(p) { return p.record_id === milestonePageProjId; });
@@ -7098,12 +7188,15 @@ function confirmGenerateTasks() {
   var pmPerson = getProjectPmPerson(proj);
   var chain = Promise.resolve();
   var created = 0;
+  var wiUsed = {};
   msGenerateIds.forEach(function(msId) {
     chain = chain.then(function() {
       var ms = list.find(function(m) { return m.id === msId; });
       if (!ms || (ms.taskIds && ms.taskIds.length)) return;
-      return findWorkItemIdByName(proj, ms.workItemName).then(function(wiId) {
-        if (!wiId) throw new Error('無法建立工作項目：' + (ms.name || ''));
+      var wiName = resolveMilestoneWorkItemName(ms);
+      return findWorkItemIdByName(proj, wiName).then(function(wiId) {
+        if (!wiId) throw new Error('無法建立工作項目：' + (wiName || ms.name || ''));
+        wiUsed[wiName || '履約執行'] = 1;
         return optimisticCreate('tasks', buildTaskFieldsFromMilestone(ms, wiId, pmPerson), { failMsg: '建立任務失敗' }).then(function(res) {
           var tid = extractClientRecordId(res);
           if (!tid) {
@@ -7116,6 +7209,7 @@ function confirmGenerateTasks() {
           }
           ms.taskIds = ms.taskIds || [];
           if (tid && ms.taskIds.indexOf(tid) < 0) ms.taskIds.push(tid);
+          ms.workItemName = wiName || ms.workItemName || '';
           created++;
         });
       });
@@ -7128,8 +7222,10 @@ function confirmGenerateTasks() {
     renderMilestonesPage();
     goToScheduleAfterMilestoneTasks(milestonePageProjId);
     updateTaskTimeBadge();
+    var wiList = Object.keys(wiUsed);
+    expandTaskGroupsByNames(wiList);
     var projName = proj.fields['標案名稱'] || '標案';
-    alert('已產生 ' + created + ' 筆任務。\n已切換到「時程管理」，並勾選標案「' + projName + '」。\n請在中間任務清單展開工作項目群組（如：期中報告、活動執行）查看。');
+    alert('已產生 ' + created + ' 筆任務。\n放入工作項目：' + (wiList.join('、') || '—') + '\n已切換到「時程管理」並勾選「' + projName + '」。\n請在中間任務清單展開上述工作項目查看。');
   }).catch(function(err) {
     alert('產生任務失敗：' + (err.message || '請稍後再試'));
   }).finally(function() {
