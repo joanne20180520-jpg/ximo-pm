@@ -7337,7 +7337,7 @@ function getMilestoneTaskRows(ms) {
       name: pt.name,
       status: pt.status || '未開始',
       progress: parseProgressVal(pt.status, null),
-      assignee: pt.assignee || '—',
+      assignee: formatMilestoneAssigneeLabel(pt.assignee),
       start: formatMsDate(pt.start),
       due: formatMsDate(pt.due),
       wiName: pt.workItemName || ''
@@ -7353,6 +7353,23 @@ function getMilestoneTaskRows(ms) {
     }
   });
   return rows;
+}
+
+function formatMilestoneAssigneeLabel(raw) {
+  if (!raw) return '—';
+  var s = String(raw).trim();
+  if (!s) return '—';
+  if (/^ou_|^on_/i.test(s)) {
+    var found = '';
+    Object.keys(membersMap || {}).forEach(function(name) {
+      var m = membersMap[name];
+      if (m && m.id === s) {
+        if (!found || name.length > found.length) found = name;
+      }
+    });
+    return found || '—';
+  }
+  return s;
 }
 
 function toggleMilestoneExpand(msId, ev) {
@@ -7411,12 +7428,13 @@ function renderMilestonesPage() {
       + (pendingPlan ? '<div class="ms-sub">' + pendingPlan + '筆尚未產生任務</div>' : '')
       + '</td>'
       + '<td>' + (function() {
-      var planned = milestonePlanTaskCount(ms);
       var generated = flattenMilestonePlanTasks(ms).filter(function(t) { return t && t.taskId; }).length;
       if (!generated && (ms.taskIds || []).length) generated = ms.taskIds.length;
-      if (generated) return '<span class="ms-tag task">已產生 ' + generated + ' 筆</span>'
-        + (planned > generated ? '<div class="ms-sub">規劃共 ' + planned + ' 筆</div>' : '');
-      if (planned) return '<span class="ms-sub">規劃 ' + planned + ' 筆</span>';
+      if (generated) {
+        return '<span class="ms-tag task">已產生 ' + generated + ' 筆</span>'
+          + (pendingPlan ? '<div class="ms-sub">規劃中 ' + pendingPlan + ' 筆</div>' : '');
+      }
+      if (pendingPlan) return '<span class="ms-sub">規劃中 ' + pendingPlan + ' 筆</span>';
       return '<span class="ms-sub">尚未規劃任務</span>';
     })() + '</td>'
       + '<td><div class="ms-actions">'
