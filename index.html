@@ -3733,6 +3733,7 @@ function syncTables(tableKeys) {
 // ── 復原堆疊 ──
 var undoStack = [];
 var undoToastTimer = null;
+var pendingHardDeletes = {};
 
 function showUndoToast(msg) {
   var toast = document.getElementById('undo-toast');
@@ -3752,12 +3753,128 @@ function hideUndoToast() {
   if (undoToastTimer) clearTimeout(undoToastTimer);
 }
 
+/** 先從畫面移除，5 秒後才真正打 API 刪除；期間可復原 */
+function softDeleteForUndo(table, recordId, opts) {
+  opts = opts || {};
+  var arr = getTableArray(table);
+  if (!arr) {
+    return apiDelete(table, recordId).then(function(res) {
+      if (!opts.skipSync) syncTables(opts.syncKeys || [table]);
+      return res;
+    });
+  }
+  var idx = -1;
+  var rec = null;
+  for (var i = 0; i < arr.length; i++) {
+    if (arr[i].record_id === recordId) {
+      idx = i;
+      rec = arr[i];
+      break;
+    }
+  }
+  if (!rec) return Promise.reject(new Error('找不到資料'));
+  var snapshot;
+  try { snapshot = JSON.parse(JSON.stringify(rec)); } catch (e) { snapshot = rec; }
+  setTableArray(table, arr.filter(function(r) { return r.record_id !== recordId; }));
+  commitLocalTable(table);
+  undoStack = undoStack.filter(function(u) {
+    return !(u && u.type === 'delete' && u.recordId === recordId && u.table === table);
+  });
+  undoStack.push({
+    type: 'delete',
+    table: table,
+    recordId: recordId,
+    index: idx,
+    record: snapshot,
+    data: snapshot.fields || {}
+  });
+  if (pendingHardDeletes[recordId]) {
+    clearTimeout(pendingHardDeletes[recordId].timer);
+  }
+  pendingHardDeletes[recordId] = {
+    table: table,
+    opts: opts,
+    timer: setTimeout(function() {
+      finalizeHardDelete(recordId);
+    }, 5000)
+  };
+  showUndoToast(opts.toastMsg || '已刪除');
+  return Promise.resolve();
+}
+
+function finalizeHardDelete(recordId) {
+  var pending = pendingHardDeletes[recordId];
+  delete pendingHardDeletes[recordId];
+  if (!pending) return;
+  undoStack = undoStack.filter(function(u) {
+    return !(u && u.type === 'delete' && u.recordId === recordId && u.table === pending.table);
+  });
+  apiDelete(pending.table, recordId).then(function() {
+    var next = Promise.resolve();
+    if (typeof pending.opts.onHardDelete === 'function') {
+      next = Promise.resolve(pending.opts.onHardDelete(recordId));
+    }
+    return next.then(function() {
+      if (!pending.opts.skipSync) {
+        return syncTables(pending.opts.syncKeys || [pending.table]);
+      }
+    });
+  }).catch(function(err) {
+    console.warn('確認刪除失敗', recordId, err);
+  });
+}
+
+function fieldsForRecreate(fields) {
+  var out = {};
+  var skip = {
+    '記錄ID': 1, 'record_id': 1, '自動編號': 1
+  };
+  Object.keys(fields || {}).forEach(function(k) {
+    if (skip[k]) return;
+    var v = fields[k];
+    if (v === undefined || v === null || v === '') return;
+    // 略過公式／查找常見空物件
+    if (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length) return;
+    out[k] = v;
+  });
+  return out;
+}
+
 function undoLast() {
   var last = undoStack.pop();
   if (!last) return;
   hideUndoToast();
   if (last.type === 'delete') {
-    apiPost(last.table, last.data).then(function() {
+    var pending = last.recordId ? pendingHardDeletes[last.recordId] : null;
+    if (pending) {
+      clearTimeout(pending.timer);
+      delete pendingHardDeletes[last.recordId];
+    }
+    if (last.record && getTableArray(last.table)) {
+      var arr = getTableArray(last.table).slice();
+      var copy;
+      try { copy = JSON.parse(JSON.stringify(last.record)); } catch (e) { copy = last.record; }
+      var idx = typeof last.index === 'number' ? last.index : 0;
+      if (idx < 0) idx = 0;
+      if (idx > arr.length) idx = arr.length;
+      // 若已存在同 id（同步搶先加回），先移除再插入
+      arr = arr.filter(function(r) { return r.record_id !== last.recordId; });
+      if (idx > arr.length) idx = arr.length;
+      arr.splice(idx, 0, copy);
+      setTableArray(last.table, arr);
+      commitLocalTable(last.table);
+      if (!pending) {
+        // 已打過 API 刪除：重新建立一筆
+        optimisticCreate(last.table, fieldsForRecreate(last.data || copy.fields || {}), {
+          failMsg: '復原失敗',
+          syncKeys: [last.table]
+        }).catch(function(err) {
+          alert('復原失敗：' + (err.message || '請稍後再試'));
+        });
+      }
+      return;
+    }
+    apiPost(last.table, fieldsForRecreate(last.data)).then(function() {
       syncTables([last.table]);
     }).catch(function(err) { alert('復原失敗：' + err.message); });
   } else if (last.type === 'update') {
@@ -3772,10 +3889,10 @@ function undoLast() {
       return;
     }
     var list = getMilestones(last.projectId);
-    var idx = typeof last.index === 'number' ? last.index : list.length;
-    if (idx < 0) idx = 0;
-    if (idx > list.length) idx = list.length;
-    list.splice(idx, 0, last.milestone);
+    var midx = typeof last.index === 'number' ? last.index : list.length;
+    if (midx < 0) midx = 0;
+    if (midx > list.length) midx = list.length;
+    list.splice(midx, 0, last.milestone);
     saveMilestonesLocal(last.projectId, list);
     renderMilestonesPage();
     renderProjects();
@@ -12744,12 +12861,12 @@ function deleteProject(id, name) {
     body: '確定要刪除這個標案嗎？<br><span class="confirm-name">「' + name + '」</span>',
     okText: '刪除',
     onOk: function() {
-      var savedData = rec ? Object.assign({}, rec.fields) : null;
-      if (savedData) undoStack.push({ type: 'delete', table: 'projects', data: savedData });
-      showUndoToast('已刪除標案「' + (name || '未命名') + '」');
-      optimisticDelete('projects', id, { failMsg: '刪除失敗', syncKeys: ['all'] }).catch(function() {
-        if (savedData) undoStack.pop();
-        hideUndoToast();
+      softDeleteForUndo('projects', id, {
+        toastMsg: '已刪除標案「' + (name || '未命名') + '」',
+        syncKeys: ['all'],
+        failMsg: '刪除失敗'
+      }).catch(function(err) {
+        alert('刪除失敗：' + (err.message || '請稍後再試'));
       });
     }
   });
@@ -12763,12 +12880,12 @@ function deleteWorkItem(id, name) {
     body: '確定要刪除這個工作項目嗎？<br><span class="confirm-name">「' + name + '」</span>',
     okText: '刪除',
     onOk: function() {
-      var savedData = rec ? Object.assign({}, rec.fields) : null;
-      if (savedData) undoStack.push({ type: 'delete', table: 'workitems', data: savedData });
-      showUndoToast('已刪除工作項目「' + (name || '未命名') + '」');
-      optimisticDelete('workitems', id, { failMsg: '刪除失敗', syncKeys: ['workitems', 'tasks'] }).catch(function() {
-        if (savedData) undoStack.pop();
-        hideUndoToast();
+      softDeleteForUndo('workitems', id, {
+        toastMsg: '已刪除工作項目「' + (name || '未命名') + '」',
+        syncKeys: ['workitems', 'tasks'],
+        failMsg: '刪除失敗'
+      }).catch(function(err) {
+        alert('刪除失敗：' + (err.message || '請稍後再試'));
       });
     }
   });
@@ -12782,14 +12899,14 @@ function deleteTask(id, name) {
     body: '確定要刪除這個任務嗎？<br><span class="confirm-name">「' + name + '」</span>',
     okText: '刪除',
     onOk: function() {
-      var savedData = rec ? Object.assign({}, rec.fields) : null;
-      if (savedData) undoStack.push({ type: 'delete', table: 'tasks', data: savedData });
-      showUndoToast('已刪除任務「' + (name || '未命名') + '」');
-      optimisticDelete('tasks', id, { failMsg: '刪除失敗' }).then(function() {
-        return unlinkDeletedTaskFromMilestones(id);
-      }).catch(function() {
-        if (savedData) undoStack.pop();
-        hideUndoToast();
+      softDeleteForUndo('tasks', id, {
+        toastMsg: '已刪除任務「' + (name || '未命名') + '」',
+        failMsg: '刪除失敗',
+        onHardDelete: function(taskId) {
+          return unlinkDeletedTaskFromMilestones(taskId);
+        }
+      }).catch(function(err) {
+        alert('刪除失敗：' + (err.message || '請稍後再試'));
       });
     }
   });
@@ -12803,14 +12920,13 @@ function deleteExpense(id, name) {
     body: '確定要刪除這筆支出嗎？<br><span class="confirm-name">「' + escHtml(name) + '」</span>',
     okText: '刪除',
     onOk: function() {
-      var savedData = rec ? Object.assign({}, rec.fields) : null;
-      if (savedData) undoStack.push({ type: 'delete', table: 'expenses', data: savedData });
       cl('pp-edit-exp');
       editingExpenseId = null;
-      showUndoToast('已刪除支出「' + (name || '支出明細') + '」');
-      optimisticDelete('expenses', id, { failMsg: '刪除失敗' }).catch(function() {
-        if (savedData) undoStack.pop();
-        hideUndoToast();
+      softDeleteForUndo('expenses', id, {
+        toastMsg: '已刪除支出「' + (name || '支出明細') + '」',
+        failMsg: '刪除失敗'
+      }).catch(function(err) {
+        alert('刪除失敗：' + (err.message || '請稍後再試'));
       });
     }
   });
@@ -12831,14 +12947,13 @@ function deleteDesign(id, name) {
     body: '確定要刪除這筆設計任務嗎？<br><span class="confirm-name">「' + escHtml(name) + '」</span>',
     okText: '刪除',
     onOk: function() {
-      var savedData = rec ? Object.assign({}, rec.fields) : null;
-      if (savedData) undoStack.push({ type: 'delete', table: 'designs', data: savedData });
       cl('pp-edit-des');
       editingDesignId = null;
-      showUndoToast('已刪除設計任務「' + (name || '設計任務') + '」');
-      optimisticDelete('designs', id, { failMsg: '刪除失敗' }).catch(function() {
-        if (savedData) undoStack.pop();
-        hideUndoToast();
+      softDeleteForUndo('designs', id, {
+        toastMsg: '已刪除設計任務「' + (name || '設計任務') + '」',
+        failMsg: '刪除失敗'
+      }).catch(function(err) {
+        alert('刪除失敗：' + (err.message || '請稍後再試'));
       });
     }
   });
