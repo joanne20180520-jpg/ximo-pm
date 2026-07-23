@@ -375,6 +375,8 @@ function buildTables() {
 const TABLES = buildTables();
 // AI 分析表——不放進 TABLE_PROFILES，因為只有這個 Base 有這張表
 TABLES.ai_analysis = (process.env.LARK_TABLE_AI_ANALYSIS || 'tblzMPq8qJ0SiPnN').trim();
+// 履約里程碑表（選配）：設 LARK_TABLE_MILESTONES 後可獨立同步；未設時前端會寫入標案「履約里程碑」欄位
+TABLES.milestones = (process.env.LARK_TABLE_MILESTONES || '').trim();
 const PAYMENTS_TABLE_MAIN = (process.env.LARK_TABLE_PAYMENTS_MAIN || '').trim();
 const PAYMENTS_TABLE_ACCOUNTING = (process.env.LARK_TABLE_PAYMENTS_ACCOUNTING || '').trim();
 
@@ -716,13 +718,15 @@ const ARCHIVE_TABLE_KEYWORDS = {
   workitems: ['工作項目', 'workitem'],
   tasks: ['任務', 'task'],
   expenses: ['支出', 'expense', '費用'],
-  designs: ['設計', 'design']
+  designs: ['設計', 'design'],
+  milestones: ['履約', '里程碑', 'milestone']
 };
 
 const OPERATIONAL_TABLE_KEYWORDS = Object.assign({}, ARCHIVE_TABLE_KEYWORDS, {
   members: ['人員', '成員', 'member', '用戶', '員工'],
   journal: ['日誌', 'journal', '工作日誌'],
-  payments: ['付款', '金費']
+  payments: ['付款', '金費'],
+  milestones: ['履約', '里程碑', 'milestone']
 });
 
 const bitableConfigResolveCache = {};
@@ -1668,11 +1672,15 @@ async function resolveArchiveTableMap(accessToken, appToken) {
   const tables = await listBitableTables(accessToken, appToken);
   const map = {};
   const missing = [];
-  Object.keys(ARCHIVE_TABLE_KEYWORDS).forEach(function(key) {
+  // 履約里程碑為選配：範本尚未建表時不阻擋封存（會改從標案欄位帶出）
+  const requiredKeys = Object.keys(ARCHIVE_TABLE_KEYWORDS).filter(function(k) { return k !== 'milestones'; });
+  requiredKeys.forEach(function(key) {
     const matched = matchArchiveTableByKeywords(tables, ARCHIVE_TABLE_KEYWORDS[key]);
     if (matched) map[key] = matched.table_id;
     else missing.push(key);
   });
+  const msMatched = matchArchiveTableByKeywords(tables, ARCHIVE_TABLE_KEYWORDS.milestones || []);
+  if (msMatched) map.milestones = msMatched.table_id;
   if (missing.length) {
     const avail = tables.map(function(t) { return t.name; }).join('、');
     throw new Error('目標多維表格缺少資料表（' + missing.join('、') + '）。現有：' + avail);
@@ -3048,10 +3056,25 @@ async function copyProjectBundleToWikiBase(token, bundle, wikiUrl, wikiToken) {
   return { copied: true, newProjectId: newProjId, targetAppToken: targetApp, wikiUrl: finalWikiUrl, wikiFolderUrl: target.wikiFolderUrl || wikiUrl };
 }
 
+function countMilestonesInProject(proj) {
+  if (!proj || !proj.fields) return 0;
+  const raw = proj.fields['履約里程碑'] || proj.fields['里程碑'] || '';
+  if (!raw) return 0;
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (Array.isArray(parsed)) return parsed.length;
+    if (parsed && Array.isArray(parsed.items)) return parsed.items.length;
+  } catch (e) {}
+  return 0;
+}
+
 async function archiveProject(token, projectId, wikiUrl, userAccessToken) {
   const bundle = await gatherProjectRelated(token, projectId);
   const name = bundle.project.fields['標案名稱'] || '';
-  const summary = '工作項目 ' + bundle.workitems.length + ' 筆、任務 ' + bundle.tasks.length + ' 筆、支出 ' + bundle.expenses.length + ' 筆、設計 ' + bundle.designs.length + ' 筆';
+  const milestoneCount = countMilestonesInProject(bundle.project);
+  const summary = '工作項目 ' + bundle.workitems.length + ' 筆、任務 ' + bundle.tasks.length
+    + ' 筆、支出 ' + bundle.expenses.length + ' 筆、設計 ' + bundle.designs.length
+    + ' 筆、履約里程碑 ' + milestoneCount + ' 筆';
 
   if (!String(userAccessToken || '').trim()) {
     return {
@@ -3062,7 +3085,8 @@ async function archiveProject(token, projectId, wikiUrl, userAccessToken) {
         workitems: bundle.workitems.length,
         tasks: bundle.tasks.length,
         expenses: bundle.expenses.length,
-        designs: bundle.designs.length
+        designs: bundle.designs.length,
+        milestones: milestoneCount
       },
       copiedToWikiBase: false,
       wikiUrl: wikiUrl,
@@ -3088,7 +3112,8 @@ async function archiveProject(token, projectId, wikiUrl, userAccessToken) {
         workitems: bundle.workitems.length,
         tasks: bundle.tasks.length,
         expenses: bundle.expenses.length,
-        designs: bundle.designs.length
+        designs: bundle.designs.length,
+        milestones: milestoneCount
       },
       copiedToWikiBase: false,
       wikiUrl: wikiUrl,
@@ -3147,7 +3172,8 @@ async function archiveProject(token, projectId, wikiUrl, userAccessToken) {
       workitems: bundle.workitems.length,
       tasks: bundle.tasks.length,
       expenses: bundle.expenses.length,
-      designs: bundle.designs.length
+      designs: bundle.designs.length,
+      milestones: milestoneCount
     },
     copiedToWikiBase: copiedToWiki,
     wikiUrl: finalWikiUrl,

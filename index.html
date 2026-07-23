@@ -995,7 +995,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <button type="button" class="badd" onclick="openMilestoneEditor()">＋ 新增里程碑</button>
         <button type="button" class="tbtn" onclick="loadMilestoneSamples()">載入範例</button>
         <button type="button" class="bpri" onclick="openGenerateTasksPreview()">一鍵產生任務</button>
-        <span class="ms-hint">里程碑屬標案；產生任務時會放入指定工作項目（可先選上方「預設工作項目」如 test）</span>
+        <span class="ms-hint">里程碑屬標案並同步後台；產生任務時放入指定工作項目（可先選「預設工作項目」如 test）</span>
       </div>
       <div class="ms-area" id="ms-area">
         <div class="ms-empty">請先從上方選擇標案</div>
@@ -3508,7 +3508,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260722v4';
+var APP_BUILD = '20260722v5';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v4';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -5515,6 +5515,7 @@ function applyBootstrapPayload(payload) {
   if (payload.journal) journalData = (payload.journal.records) || [];
   if (payload.members) membersData = (payload.members.records) || [];
   pruneSelectedProjects();
+  hydrateMilestonesFromProjects();
 }
 
 function renderAllFromBootstrap() {
@@ -6769,12 +6770,14 @@ function saveTaskTimeInline(taskId) {
   });
 }
 
-// ── 履約里程碑（原型：本機儲存，之後可改 Lark 表）──
+// ── 履約里程碑（本機快取 + 同步標案後台欄位「履約里程碑」）──
 var MILESTONES_STORAGE_KEY = 'ximo-milestones-v1';
+var MILESTONE_PROJECT_FIELD = '履約里程碑';
 var milestonePageProjId = null;
 var milestoneDefaultWiName = '';
 var editingMilestoneId = null;
 var msGenerateIds = [];
+var milestoneBackendSyncOk = null; // null=未知, true=已同步後台, false=欄位不存在或失敗
 
 function readAllMilestones() {
   try {
@@ -6785,10 +6788,69 @@ function readAllMilestones() {
   }
 }
 
+function parseMilestoneFieldValue(raw) {
+  if (!raw) return [];
+  try {
+    var parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && Array.isArray(parsed.items)) return parsed.items;
+  } catch (e) {}
+  return [];
+}
+
+function hydrateMilestonesFromProjects() {
+  var all = readAllMilestones();
+  var changed = false;
+  projectsData.forEach(function(proj) {
+    if (!proj || !proj.record_id) return;
+    var fromField = parseMilestoneFieldValue(proj.fields && proj.fields[MILESTONE_PROJECT_FIELD]);
+    if (!fromField.length) return;
+    var local = all[proj.record_id] || [];
+    // 後台有資料時優先採用（跨裝置／封存來源）
+    if (!local.length || JSON.stringify(local) !== JSON.stringify(fromField)) {
+      all[proj.record_id] = fromField;
+      changed = true;
+    }
+  });
+  if (changed) {
+    try { localStorage.setItem(MILESTONES_STORAGE_KEY, JSON.stringify(all)); } catch (e) {}
+  }
+}
+
 function getMilestones(projId) {
   if (!projId) return [];
   var all = readAllMilestones();
   return (all[projId] || []).slice();
+}
+
+function syncMilestonesToProjectBackend(projId, list) {
+  if (!projId) return Promise.resolve(false);
+  var payload = JSON.stringify(list || []);
+  var fields = {};
+  fields[MILESTONE_PROJECT_FIELD] = payload;
+  // 同步寫入本機 projectsData，讓封存／畫面立刻看得到
+  var proj = projectsData.find(function(p) { return p.record_id === projId; });
+  if (proj) {
+    proj.fields = proj.fields || {};
+    proj.fields[MILESTONE_PROJECT_FIELD] = payload;
+  }
+  return optimisticUpdate('projects', projId, fields, {
+    skipSync: true,
+    failMsg: '履約里程碑同步後台失敗'
+  }).then(function() {
+    milestoneBackendSyncOk = true;
+    if (document.getElementById('pg-ms') && document.getElementById('pg-ms').classList.contains('active')) {
+      renderMilestonesPage();
+    }
+    return true;
+  }).catch(function(err) {
+    milestoneBackendSyncOk = false;
+    console.warn('履約里程碑未能寫入標案欄位「' + MILESTONE_PROJECT_FIELD + '」', err);
+    if (document.getElementById('pg-ms') && document.getElementById('pg-ms').classList.contains('active')) {
+      renderMilestonesPage();
+    }
+    return false;
+  });
 }
 
 function saveMilestones(projId, list) {
@@ -6796,6 +6858,7 @@ function saveMilestones(projId, list) {
   var all = readAllMilestones();
   all[projId] = list || [];
   try { localStorage.setItem(MILESTONES_STORAGE_KEY, JSON.stringify(all)); } catch (e) {}
+  syncMilestonesToProjectBackend(projId, list || []);
 }
 
 function newMilestoneId() {
@@ -6889,7 +6952,7 @@ function renderMilestonesPage() {
   var projName = proj ? (proj.fields['標案名稱'] || '未命名') : '標案';
   var list = getMilestones(projId);
   if (!list.length) {
-    area.innerHTML = '<div class="ms-empty"><strong>' + escHtml(projName) + '</strong><br>尚無里程碑。<br>可先選上方「預設工作項目」（例如 test），再點「載入範例」或「＋ 新增里程碑」。</div>';
+    area.innerHTML = '<div class="ms-empty"><strong>' + escHtml(projName) + '</strong><br>尚無里程碑。<br>可先選上方「預設工作項目」（例如 test），再點「載入範例」或「＋ 新增里程碑」。<br><span style="color:#8a6d00">里程碑會同步到標案後台欄位「履約里程碑」，封存時一併帶走。</span></div>';
     return;
   }
   var html = '<table class="ms-table"><thead><tr>'
@@ -6915,6 +6978,13 @@ function renderMilestonesPage() {
       + '</div></td></tr>';
   });
   html += '</tbody></table>';
+  if (milestoneBackendSyncOk === false) {
+    html += '<div class="ms-empty" style="padding:12px;text-align:left;background:#fff8e6;border:1px solid #f0d78c;border-radius:8px;margin-top:10px">'
+      + '尚未同步到後台。請在 Lark 標案表新增<strong>多行文字</strong>欄位「履約里程碑」，之後儲存里程碑就會寫入後台並可隨標案封存。'
+      + '</div>';
+  } else if (milestoneBackendSyncOk === true) {
+    html += '<div class="ms-sub" style="margin-top:8px;padding:0 2px">已同步標案後台欄位「履約里程碑」</div>';
+  }
   area.innerHTML = html;
 }
 
