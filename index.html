@@ -6343,7 +6343,7 @@ function renderTasks() {
       var wiGroups = groupTasksByWorkitem(byAssignee[name]);
       var sortedWi = Object.keys(wiGroups).map(function(k) { return wiGroups[k]; })
         .sort(function(a, b) { return a.earliestDue - b.earliestDue; });
-      html += '<div class="tgl tgl-person" onclick="toggleTaskGroup(this, event)">';
+      html += '<div class="tgl tgl-person' + (expandedTaskGroupKeys['person:' + name] ? ' open' : '') + '" onclick="toggleTaskGroup(this, event)">';
       html += '<span class="tgl-arrow">▶</span>';
       html += '<span class="av ' + avatarClass(name) + '">' + personInitial(name) + '</span>';
       html += '<span title="' + escAttr(name) + '">' + escHtml(name) + '</span>';
