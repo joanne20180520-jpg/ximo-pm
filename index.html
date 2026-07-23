@@ -156,7 +156,7 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .ti:hover .bdel{opacity:1}
 .ti .bdel:hover{color:#c0392b;background:#fff3f3}
 .tn{font-size:13px;font-weight:700;color:var(--text);line-height:1.35;padding-right:14px}
-.tdesc{font-size:11px;font-weight:500;margin-top:3px;line-height:1.4;padding-right:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tdesc{font-size:11px;font-weight:600;margin-top:3px;line-height:1.4;padding-right:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ti-foot{display:flex;justify-content:flex-end;margin-top:8px}
 .ti-assignee{font-size:11px;color:var(--t3);line-height:1.2}
 .tpb{height:2px;background:var(--border);border-radius:1px;margin-top:5px;overflow:hidden}
@@ -5233,6 +5233,22 @@ function projColorByName(name) {
     if ((projectsData[i].fields['標案名稱'] || '') === name) return PROJECT_COLORS[i % PROJECT_COLORS.length];
   }
   return '#888';
+}
+
+/** 標案主色偏深，調亮後當任務說明字色才看得出是綠／藍等 */
+function projDescColorByName(name) {
+  var hex = String(projColorByName(name) || '#888').replace('#', '');
+  if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+  if (hex.length !== 6) return '#2d6a4f';
+  var r = parseInt(hex.slice(0, 2), 16);
+  var g = parseInt(hex.slice(2, 4), 16);
+  var b = parseInt(hex.slice(4, 6), 16);
+  // 往白色混 28%，保留色相但明顯亮於標題黑字
+  var mix = 0.28;
+  r = Math.min(255, Math.round(r + (255 - r) * mix));
+  g = Math.min(255, Math.round(g + (255 - g) * mix));
+  b = Math.min(255, Math.round(b + (255 - b) * mix));
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
 function fmt(ts) {
