@@ -156,7 +156,7 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .ti:hover .bdel{opacity:1}
 .ti .bdel:hover{color:#c0392b;background:#fff3f3}
 .tn{font-size:13px;font-weight:700;color:var(--text);line-height:1.35;padding-right:14px}
-.tdesc{font-size:11px;font-weight:500;color:var(--text);margin-top:3px;line-height:1.4;padding-right:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tdesc{font-size:11px;font-weight:500;margin-top:3px;line-height:1.4;padding-right:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ti-foot{display:flex;justify-content:flex-end;margin-top:8px}
 .ti-assignee{font-size:11px;color:var(--t3);line-height:1.2}
 .tpb{height:2px;background:var(--border);border-radius:1px;margin-top:5px;overflow:hidden}
@@ -6382,7 +6382,8 @@ function renderTaskRow(t, opts) {
   html += '<button type="button" class="bdel" title="刪除任務" onclick="event.stopPropagation();deleteTask(\'' + t.id + '\',\'' + escAttr(t.name).replace(/'/g, "\\'") + '\')">×</button>';
   html += '<div class="tn">' + escHtml(t.name) + '</div>';
   if (t.desc) {
-    html += '<div class="tdesc" title="' + escAttr(t.desc) + '">' + escHtml(t.desc) + '</div>';
+    var descColor = projColorByName(t.projName) || 'var(--text)';
+    html += '<div class="tdesc" style="color:' + descColor + '" title="' + escAttr(t.desc) + '">' + escHtml(t.desc) + '</div>';
   }
   if (!opts.hideAssignee) {
     html += '<div class="ti-foot"><span class="ti-assignee">' + escHtml(t.assigneeShort || shortPersonLabel(t.assignee)) + '</span></div>';
