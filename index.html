@@ -7797,6 +7797,20 @@ function deleteMilestoneFromEditor() {
     }
   }
   if (!removed) return;
+  var msName = removed.name || document.getElementById('ms-name').value.trim() || '未命名';
+  showConfirm({
+    type: 'del',
+    title: '刪除里程碑',
+    body: '確定要刪除這個里程碑嗎？<br><span class="confirm-name">「' + escHtml(msName) + '」</span>',
+    okText: '刪除',
+    onOk: function() {
+      doDeleteMilestoneFromEditor(list, idx, removed);
+    }
+  });
+}
+
+function doDeleteMilestoneFromEditor(list, idx, removed) {
+  if (!removed) return;
   var snapshot;
   try { snapshot = JSON.parse(JSON.stringify(removed)); } catch (e) { snapshot = removed; }
   var recordId = removed.recordId || (String(removed.id).indexOf('rec') === 0 ? removed.id : '');
@@ -7818,7 +7832,7 @@ function deleteMilestoneFromEditor() {
     }).then(function() {
       renderMilestonesPage();
       renderProjects();
-      showUndoToast('已刪除里程碑「' + (snapshot.name || '未命名') + '」（5 秒內可復原）');
+      showUndoToast('已刪除里程碑「' + (snapshot.name || '未命名') + '」');
     }).catch(function() {
       undoStack.pop();
     });
@@ -7831,7 +7845,7 @@ function deleteMilestoneFromEditor() {
   editingMilestoneId = null;
   renderMilestonesPage();
   renderProjects();
-  showUndoToast('已刪除里程碑「' + (snapshot.name || '未命名') + '」（5 秒內可復原）');
+  showUndoToast('已刪除里程碑「' + (snapshot.name || '未命名') + '」');
 }
 
 function getProjectPmPerson(proj) {
