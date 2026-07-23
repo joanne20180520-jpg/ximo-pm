@@ -1274,10 +1274,9 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>工作項目</label><select id="ms-wi"></select></div>
   <div class="fg"><label>最終成果（自己看的）</label><textarea id="ms-deliver" rows="2" placeholder="例：最終報告 3 份紙本＋1 份電子檔；審查通過後請款 40%"></textarea></div>
   <div class="fg" style="margin-bottom:6px">
-    <label style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-      <span>此里程碑要產生的任務（可加 3～5 筆）</span>
+    <div style="display:flex;justify-content:flex-start;margin-bottom:8px">
       <button type="button" class="bads" onclick="addMilestonePlanTaskRow()">＋ 新增任務</button>
-    </label>
+    </div>
     <div id="ms-plan-tasks" class="ms-plan-list"></div>
   </div>
 </div><div class="ppf"><button class="bcan bdel-action" id="ms-del-btn" onclick="deleteMilestoneFromEditor()" style="display:none">刪除</button><button class="bcan" onclick="cl('pp-milestone')">取消</button><button class="bpri" onclick="saveMilestone()">儲存</button></div></div></div>
@@ -7429,11 +7428,11 @@ function collectMilestonePlanTasksFromEditor() {
 function addMilestonePlanTaskRow() {
   var current = collectMilestonePlanTasksFromEditor();
   var due = (document.getElementById('ms-due') || {}).value || '';
-  var start = due ? tsToDateInput(dateInputToTs(due) - 14 * 86400000) : '';
-  var msName = (document.getElementById('ms-name') || {}).value || '任務';
+  var start = (document.getElementById('ms-start') || {}).value || '';
+  if (!start && due) start = tsToDateInput(dateInputToTs(due) - 14 * 86400000);
   current.push({
     id: newPlanTaskId(),
-    name: msName + '：新任務',
+    name: '',
     start: start,
     due: due,
     status: '未開始',
@@ -7532,6 +7531,7 @@ function saveMilestone() {
     name: name,
     type: document.getElementById('ms-type').value,
     status: document.getElementById('ms-status').value,
+    startDate: document.getElementById('ms-start').value,
     dueDate: document.getElementById('ms-due').value,
     payPct: document.getElementById('ms-pay').value.trim(),
     deliverable: document.getElementById('ms-deliver').value.trim(),
