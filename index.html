@@ -7568,9 +7568,24 @@ function removeMilestonePlanGroup(btn) {
   var groupEl = btn && btn.closest ? btn.closest('.ms-plan-group') : null;
   if (!groupEl || groups.length <= 1) return;
   var gid = groupEl.getAttribute('data-pgid');
-  groups = groups.filter(function(g) { return g.id !== gid; });
-  if (!groups.length) groups = [emptyMilestonePlanGroup()];
-  renderMilestonePlanGroups(groups);
+  var target = groups.find(function(g) { return g.id === gid; });
+  var wiName = (target && target.workItemName) || '這個工作項目';
+  var taskCount = target && target.tasks ? target.tasks.length : 0;
+  var hasGenerated = target && (target.tasks || []).some(function(t) { return t && t.taskId; });
+  var extra = '';
+  if (hasGenerated) extra = '<br><span style="color:var(--t3);font-size:12px">儲存後，已產生的任務也會一併刪除。</span>';
+  else if (taskCount) extra = '<br><span style="color:var(--t3);font-size:12px">內含 ' + taskCount + ' 筆規劃任務。</span>';
+  showConfirm({
+    type: 'del',
+    title: '刪除工作項目',
+    body: '確定要刪除這個工作項目嗎？<br><span class="confirm-name">「' + escHtml(wiName) + '」</span>' + extra,
+    okText: '刪除',
+    onOk: function() {
+      var next = collectMilestonePlanGroupsFromEditor().filter(function(g) { return g.id !== gid; });
+      if (!next.length) next = [emptyMilestonePlanGroup()];
+      renderMilestonePlanGroups(next);
+    }
+  });
 }
 
 function addMilestonePlanTaskRow(btn) {
@@ -7602,11 +7617,26 @@ function removeMilestonePlanTaskRow(btn) {
   if (!row || !groupEl) return;
   var gid = groupEl.getAttribute('data-pgid');
   var ptid = row.getAttribute('data-ptid');
-  groups.forEach(function(g) {
-    if (g.id !== gid) return;
-    g.tasks = (g.tasks || []).filter(function(t) { return t.id !== ptid; });
+  var taskId = row.getAttribute('data-taskid') || '';
+  var nameEl = row.querySelector('.ms-pt-name');
+  var taskName = (nameEl && nameEl.value.trim()) || '未命名任務';
+  var extra = taskId
+    ? '<br><span style="color:var(--t3);font-size:12px">儲存後，工作項目內已產生的任務也會一併刪除。</span>'
+    : '';
+  showConfirm({
+    type: 'del',
+    title: '刪除任務',
+    body: '確定要刪除這個任務嗎？<br><span class="confirm-name">「' + escHtml(taskName) + '」</span>' + extra,
+    okText: '刪除',
+    onOk: function() {
+      var next = collectMilestonePlanGroupsFromEditor();
+      next.forEach(function(g) {
+        if (g.id !== gid) return;
+        g.tasks = (g.tasks || []).filter(function(t) { return t.id !== ptid; });
+      });
+      renderMilestonePlanGroups(next);
+    }
   });
-  renderMilestonePlanGroups(groups);
 }
 
 function openMilestoneEditor(msId) {
