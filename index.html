@@ -1011,8 +1011,10 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div id="pg-ms" class="page">
       <div class="ms-toolbar">
         <select id="ms-proj-select" onchange="onMilestoneProjChange()"></select>
-        <button type="button" class="badd" onclick="openMilestoneEditor()">＋ 新增里程碑</button>
-        <button type="button" class="bpri" onclick="openGenerateTasksPreview()">一鍵產生任務</button>
+        <select id="ms-default-wi" title="新增里程碑時預設的工作項目" onchange="onMilestoneDefaultWiChange()">
+          <option value="">工作項目：自動（履約執行）</option>
+        </select>
+        <button type="button" class="bpri" onclick="openMilestoneEditor()">＋ 新增里程碑</button>
       </div>
       <div class="ms-area" id="ms-area">
         <div class="ms-empty">請先從上方選擇標案</div>
@@ -1269,7 +1271,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="fg" style="margin:0"><label>截止日</label><input type="date" id="ms-due"></div>
     <div class="fg" style="margin:0"><label>給付比例（選填）</label><input type="text" id="ms-pay" placeholder="40%"></div>
   </div>
-  <div class="fg"><label>展開任務時放入的工作項目</label><select id="ms-wi"><option value="">（用上方預設／自動建立「履約執行」）</option></select></div>
+  <div class="fg"><label>工作項目</label><select id="ms-wi"><option value="">（自動建立「履約執行」）</option></select></div>
   <div class="fg"><label>最終成果（自己看的）</label><textarea id="ms-deliver" rows="2" placeholder="例：最終報告 3 份紙本＋1 份電子檔；審查通過後請款 40%"></textarea></div>
   <div class="fg" style="margin-bottom:6px">
     <label style="display:flex;align-items:center;justify-content:space-between;gap:8px">
@@ -1280,9 +1282,9 @@ button.btn-loading::after{content:'…';margin-left:2px}
   </div>
 </div><div class="ppf"><button class="bcan bdel-action" id="ms-del-btn" onclick="deleteMilestoneFromEditor()" style="display:none">刪除</button><button class="bcan" onclick="cl('pp-milestone')">取消</button><button class="bpri" onclick="saveMilestone()">儲存</button></div></div></div>
 
-<!-- 一鍵產生任務預覽 -->
-<div class="po" id="pp-ms-generate"><div class="pp" style="width:560px"><div class="pph"><h3>一鍵產生任務</h3><button class="ppc" onclick="cl('pp-ms-generate')">✕</button></div><div class="ppb">
-  <div class="dl-hint" style="margin:0 0 12px">會依各里程碑內規劃的任務列產生（每列 1 筆）。尚未規劃者會略過。</div>
+<!-- 產生任務預覽 -->
+<div class="po" id="pp-ms-generate"><div class="pp" style="width:560px"><div class="pph"><h3>產生任務</h3><button class="ppc" onclick="cl('pp-ms-generate')">✕</button></div><div class="ppb">
+  <div class="dl-hint" style="margin:0 0 12px">會依里程碑內規劃的任務列產生（每列 1 筆）。尚未規劃者會略過。</div>
   <div id="ms-generate-list"></div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-ms-generate')">取消</button><button class="bpri" id="ms-generate-btn" onclick="confirmGenerateTasks()">確認產生</button></div></div></div>
 
@@ -6824,6 +6826,7 @@ function saveTaskTimeInline(taskId) {
 var MILESTONES_STORAGE_KEY = 'ximo-milestones-v1';
 var MILESTONE_PROJECT_FIELD = '履約里程碑';
 var milestonePageProjId = null;
+var milestoneDefaultWiName = '';
 var editingMilestoneId = null;
 var msGenerateIds = [];
 var milestoneExpandedIds = {};
@@ -7031,7 +7034,38 @@ function milestoneTypeLabel(type) {
 
 function resolveMilestoneWorkItemName(ms) {
   if (ms && ms.workItemName) return String(ms.workItemName).trim();
+  if (milestoneDefaultWiName) return milestoneDefaultWiName;
   return '';
+}
+
+function fillMilestoneDefaultWiSelect() {
+  var sel = document.getElementById('ms-default-wi');
+  if (!sel) return;
+  var prev = milestoneDefaultWiName || sel.value;
+  var html = '<option value="">工作項目：自動（履約執行）</option>';
+  var proj = milestonePageProjId
+    ? projectsData.find(function(p) { return p.record_id === milestonePageProjId; })
+    : null;
+  if (proj) {
+    getWorkitemsForProject(proj).forEach(function(wi) {
+      var n = wi.fields['工作項目名稱'] || '';
+      if (!n) return;
+      html += '<option value="' + escAttr(n) + '">工作項目：' + escHtml(n) + '</option>';
+    });
+  }
+  sel.innerHTML = html;
+  if (prev) {
+    for (var i = 0; i < sel.options.length; i++) {
+      if (sel.options[i].value === prev) { sel.selectedIndex = i; milestoneDefaultWiName = prev; return; }
+    }
+  }
+  sel.value = '';
+  milestoneDefaultWiName = '';
+}
+
+function onMilestoneDefaultWiChange() {
+  var sel = document.getElementById('ms-default-wi');
+  milestoneDefaultWiName = sel ? String(sel.value || '').trim() : '';
 }
 
 function fillMilestoneProjSelect() {
@@ -7050,11 +7084,14 @@ function fillMilestoneProjSelect() {
     selectedProjectIds.forEach(function(id) { sel.value = id; });
   }
   milestonePageProjId = sel.value || null;
+  fillMilestoneDefaultWiSelect();
 }
 
 function onMilestoneProjChange() {
   var sel = document.getElementById('ms-proj-select');
   milestonePageProjId = sel ? sel.value : null;
+  milestoneDefaultWiName = '';
+  fillMilestoneDefaultWiSelect();
   renderMilestonesPage();
 }
 
@@ -7234,6 +7271,7 @@ function fillMilestoneWiSelect(projId, selectedName) {
   }
   sel.innerHTML = html;
   if (selectedName) sel.value = selectedName;
+  else if (milestoneDefaultWiName) sel.value = milestoneDefaultWiName;
 }
 
 function newPlanTaskId() {
@@ -7401,7 +7439,7 @@ function openMilestoneEditor(msId) {
     document.getElementById('ms-due').value = ms.dueDate || '';
     document.getElementById('ms-pay').value = ms.payPct || '';
     document.getElementById('ms-deliver').value = ms.deliverable || ms.notes || '';
-    fillMilestoneWiSelect(milestonePageProjId, ms.workItemName || '');
+    fillMilestoneWiSelect(milestonePageProjId, ms.workItemName || milestoneDefaultWiName || '');
     planned = normalizePlannedTasks(ms.plannedTasks || []);
     // 相容舊資料：只有 taskIds、沒有 plannedTasks 時，不自動塞範本，避免覆蓋
     if (!planned.length && !(ms.taskIds && ms.taskIds.length)) {
@@ -7416,7 +7454,7 @@ function openMilestoneEditor(msId) {
     document.getElementById('ms-due').value = '';
     document.getElementById('ms-pay').value = '';
     document.getElementById('ms-deliver').value = '';
-    fillMilestoneWiSelect(milestonePageProjId, '');
+    fillMilestoneWiSelect(milestonePageProjId, milestoneDefaultWiName || '');
     planned = [];
   }
   renderMilestonePlanTasks(planned);
