@@ -1012,7 +1012,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
       <div class="ms-toolbar">
         <select id="ms-proj-select" onchange="onMilestoneProjChange()"></select>
         <select id="ms-default-wi" title="新增里程碑時預設的工作項目" onchange="onMilestoneDefaultWiChange()">
-          <option value="">工作項目：自動（履約執行）</option>
+          <option value="">—</option>
         </select>
         <button type="button" class="bpri" onclick="openMilestoneEditor()">＋ 新增里程碑</button>
       </div>
@@ -7042,7 +7042,7 @@ function fillMilestoneDefaultWiSelect() {
   var sel = document.getElementById('ms-default-wi');
   if (!sel) return;
   var prev = milestoneDefaultWiName || sel.value;
-  var html = '<option value="">工作項目：自動（履約執行）</option>';
+  var html = '<option value="">—</option>';
   var proj = milestonePageProjId
     ? projectsData.find(function(p) { return p.record_id === milestonePageProjId; })
     : null;
@@ -7050,7 +7050,7 @@ function fillMilestoneDefaultWiSelect() {
     getWorkitemsForProject(proj).forEach(function(wi) {
       var n = wi.fields['工作項目名稱'] || '';
       if (!n) return;
-      html += '<option value="' + escAttr(n) + '">工作項目：' + escHtml(n) + '</option>';
+      html += '<option value="' + escAttr(n) + '">' + escHtml(n) + '</option>';
     });
   }
   sel.innerHTML = html;
