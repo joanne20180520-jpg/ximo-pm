@@ -1201,7 +1201,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
 
 <div class="po" id="pp-task"><div class="pp"><div class="pph"><h3>建立新任務</h3><button class="ppc" onclick="cl('pp-task')">✕</button></div><div class="ppb"><div class="fg"><label>任務名稱</label><input type="text" id="nt-name" placeholder="拜訪OO茶主"></div><div class="fg"><label>負責人</label><select id="nt-assignee" data-members></select></div><div class="fg"><label>所屬工作項目</label><select id="nt-wi"></select></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px"><div class="fg" style="margin:0"><label>開始日期</label><input type="date" id="nt-start"></div><div class="fg" style="margin:0"><label>預計完成日</label><input type="date" id="nt-due"></div></div><div class="fg"><label>進度狀態</label><select id="nt-status"></select></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-task')">取消</button><button class="bpri" onclick="saveTask()">新增</button></div></div></div>
 
-<div class="po" id="pp-td"><div class="pp"><div class="pph pph-report" id="td-header"><h3 id="td-title">任務回報</h3><div class="td-hdr-actions"><button type="button" class="td-open-report" onclick="openDailyLogFromTask()">開啟今日回報表</button><button type="button" class="ppc" onclick="cl('pp-td')">✕</button></div></div><div class="ppb">
+<div class="po" id="pp-td"><div class="pp"><div class="pph pph-report" id="td-header"><h3 id="td-title">任務詳情</h3><div class="td-hdr-actions"><button type="button" class="td-open-report" onclick="openDailyLogFromTask()">開啟今日回報表</button><button type="button" class="ppc" onclick="cl('pp-td')">✕</button></div></div><div class="ppb">
   <div id="td-proj-tag" class="td-proj"></div>
   <div id="td-meta" style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center"></div>
   <div class="fg"><label>任務名稱</label><input type="text" id="td-name" placeholder="任務名稱" oninput="document.getElementById('td-title').textContent=this.value||'任務回報'"></div>
@@ -12474,7 +12474,7 @@ function deleteProject(id, name) {
   showConfirm({
     type: 'del',
     title: '刪除標案',
-    body: '確定要刪除這個標案嗎？<br><span class="confirm-name">「' + name + '」</span>刪除後 5 秒內可點「復原」還原。',
+    body: '確定要刪除這個標案嗎？<br><span class="confirm-name">「' + name + '」</span>',
     okText: '刪除',
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
@@ -12491,7 +12491,7 @@ function deleteWorkItem(id, name) {
   showConfirm({
     type: 'del',
     title: '刪除工作項目',
-    body: '確定要刪除這個工作項目嗎？<br><span class="confirm-name">「' + name + '」</span>刪除後 5 秒內可點「復原」還原。',
+    body: '確定要刪除這個工作項目嗎？<br><span class="confirm-name">「' + name + '」</span>',
     okText: '刪除',
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
@@ -12508,7 +12508,7 @@ function deleteTask(id, name) {
   showConfirm({
     type: 'del',
     title: '刪除任務',
-    body: '確定要刪除這個任務嗎？<br><span class="confirm-name">「' + name + '」</span>刪除後 5 秒內可點「復原」還原。',
+    body: '確定要刪除這個任務嗎？<br><span class="confirm-name">「' + name + '」</span>',
     okText: '刪除',
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
@@ -12525,7 +12525,7 @@ function deleteExpense(id, name) {
   showConfirm({
     type: 'del',
     title: '刪除支出明細',
-    body: '確定要刪除這筆支出嗎？<br><span class="confirm-name">「' + escHtml(name) + '」</span>刪除後 5 秒內可點「復原」還原。',
+    body: '確定要刪除這筆支出嗎？<br><span class="confirm-name">「' + escHtml(name) + '」</span>',
     okText: '刪除',
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
@@ -12551,7 +12551,7 @@ function deleteDesign(id, name) {
   showConfirm({
     type: 'del',
     title: '刪除設計任務單',
-    body: '確定要刪除這筆設計任務嗎？<br><span class="confirm-name">「' + escHtml(name) + '」</span>刪除後 5 秒內可點「復原」還原。',
+    body: '確定要刪除這筆設計任務嗎？<br><span class="confirm-name">「' + escHtml(name) + '」</span>',
     okText: '刪除',
     onOk: function() {
       var savedData = rec ? Object.assign({}, rec.fields) : null;
