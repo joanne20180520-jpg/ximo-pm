@@ -7367,7 +7367,7 @@ function renderMilestonePlanTasks(tasks) {
   if (!box) return;
   var list = normalizePlannedTasks(tasks);
   if (!list.length) {
-    box.innerHTML = '<div class="ms-sub" style="padding:8px 0">尚未新增任務。點右上「＋ 新增任務」加入 3～5 筆。</div>';
+    box.innerHTML = '<div class="ms-sub" style="padding:8px 0">尚未新增任務。</div>';
     return;
   }
   var html = '';
@@ -7427,14 +7427,11 @@ function collectMilestonePlanTasksFromEditor() {
 
 function addMilestonePlanTaskRow() {
   var current = collectMilestonePlanTasksFromEditor();
-  var due = (document.getElementById('ms-due') || {}).value || '';
-  var start = (document.getElementById('ms-start') || {}).value || '';
-  if (!start && due) start = tsToDateInput(dateInputToTs(due) - 14 * 86400000);
   current.push({
     id: newPlanTaskId(),
     name: '',
-    start: start,
-    due: due,
+    start: '',
+    due: '',
     status: '未開始',
     assignee: '',
     taskId: ''
@@ -7448,7 +7445,7 @@ function removeMilestonePlanTaskRow(btn) {
   row.remove();
   var box = document.getElementById('ms-plan-tasks');
   if (box && !box.querySelector('.ms-plan-row')) {
-    box.innerHTML = '<div class="ms-sub" style="padding:8px 0">尚未新增任務。點右上「＋ 新增任務」加入 3～5 筆。</div>';
+    box.innerHTML = '<div class="ms-sub" style="padding:8px 0">尚未新增任務。</div>';
   }
 }
 
@@ -11249,7 +11246,7 @@ function collectMemberRoleTokens(fields) {
 function isDesignerRoleToken(raw) {
   var r = String(raw || '').trim();
   if (!r) return false;
-  if (r === '設計師' || r === '设计师') return true;
+  if (r === '設計師' || r === '设计师' || r === '設計' || r === '设计') return true;
   return r.toLowerCase() === 'designer';
 }
 
@@ -11481,14 +11478,25 @@ function getMemberNames() {
   return names.sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
 }
 
-/** 下拉選單：value 用 open_id（穩定），label 用顯示名（避免選 A 存成 B）；管理員不列入 */
-function getMemberSelectOptions() {
+/** 下拉選單：value 用 open_id（穩定），label 用顯示名；管理員不列入。
+ *  opts.designersOnly=true → 只列設計師（給「設計師」欄位）
+ *  預設 → 排除設計師與管理員（工作項目／任務等一般選單）
+ */
+function getMemberSelectOptions(opts) {
+  opts = opts || {};
+  var designersOnly = !!opts.designersOnly;
   var byId = {};
   var nameOnly = [];
   Object.keys(membersMap).forEach(function(name) {
     var m = membersMap[name];
     if (!m) return;
     if (m.hideFromSelects || m.role === '管理員') return;
+    var isDesigner = isDesignerRoleToken(m.role) || m.role === '設計師';
+    if (designersOnly) {
+      if (!isDesigner) return;
+    } else if (isDesigner) {
+      return;
+    }
     var id = String(m.id || '').trim();
     if (id && /^ou_|^on_/i.test(id)) {
       if (!byId[id] || name.length > byId[id].length) byId[id] = name;
@@ -12497,9 +12505,12 @@ function refreshFormSelects() {
   // also refresh edit selects if they exist
   if (document.getElementById('td-wi')) refreshEditSelects();
   var memberOpts = getMemberSelectOptions();
+  var designerOpts = getMemberSelectOptions({ designersOnly: true });
   document.querySelectorAll('select[data-members]').forEach(function(sel) {
     if (sel.id === 'dl-author') return;
-    fillSelectOptions(sel, memberOpts.labels, memberOpts.values);
+    var mode = (sel.getAttribute('data-members') || '').trim();
+    var opts = mode === 'designer' ? designerOpts : memberOpts;
+    fillSelectOptions(sel, opts.labels, opts.values);
   });
   var projSel = document.getElementById('nw-proj');
   if (projSel) {
