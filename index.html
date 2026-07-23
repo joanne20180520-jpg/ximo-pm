@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta http-equiv="Cache-Control" content="public, max-age=60">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>璽墨 專案管理系統</title>
 <style>
 :root {
@@ -155,8 +157,8 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .ti .bdel{position:absolute;right:6px;top:6px;background:var(--sf2);color:var(--t3);opacity:0}
 .ti:hover .bdel{opacity:1}
 .ti .bdel:hover{color:#c0392b;background:#fff3f3}
-.tn{font-size:13px;font-weight:700;color:var(--text);line-height:1.35;padding-right:14px;word-break:keep-all}
-.tdesc{font-size:11px;font-weight:400;margin-top:3px;line-height:1.4;padding-right:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tn{font-size:13px;font-weight:700;color:var(--text);line-height:1.4;padding-right:14px;word-break:keep-all;overflow-wrap:break-word}
+.tdesc{font-size:11px;font-weight:normal !important;margin-top:3px;line-height:1.4;padding-right:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ti-foot{display:flex;justify-content:flex-end;margin-top:8px}
 .ti-assignee{font-size:11px;color:var(--t3);line-height:1.2}
 .tpb{height:2px;background:var(--border);border-radius:1px;margin-top:5px;overflow:hidden}
@@ -3540,7 +3542,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260723v2';
+var APP_BUILD = '20260723v3';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v4';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -6315,9 +6317,10 @@ function shortPersonLabel(name) {
   return Array.from(s).slice(0, 3).join('');
 }
 
-/** 任務名稱顯示：空白處強制換行 */
+/** 任務名稱顯示：任何空白（含全形／不換行空白）都強制換行 */
 function formatTaskNameHtml(name) {
-  return escHtml(String(name || '')).replace(/[ \u3000]+/g, '<br>');
+  var s = escHtml(String(name || '').replace(/\r\n|\r|\n/g, ' '));
+  return s.replace(/[\s\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]+/g, '<br>');
 }
 
 /** 任務名稱／說明：優先用「任務說明」欄；否則若名稱含換行，第一行當名稱、其餘當說明 */
