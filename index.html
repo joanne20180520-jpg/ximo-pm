@@ -148,21 +148,17 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .tgl>span:not(.tc):not(.tgl-arrow):not(.tgd):not(.av){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tgd{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .tc{background:var(--sf2);border-radius:8px;padding:1px 5px;font-size:9px;color:var(--t3);font-weight:600;margin-left:auto;flex-shrink:0}
-.ti{padding:7px 9px;border-radius:var(--rs);cursor:pointer;margin-bottom:5px;background:var(--sf2);border:1px solid var(--border);transition:border-color .1s,background .1s;position:relative}
-.ti-compact{padding:6px 9px}
-.ti-compact .tit{align-items:center}
+.ti{padding:8px 10px;border-radius:var(--rs);cursor:pointer;margin-bottom:5px;background:var(--sf2);border:1px solid var(--border);transition:border-color .1s,background .1s;position:relative}
+.ti-compact{padding:7px 10px}
 .ti-compact .tn{font-size:12px}
 .ti:hover{border-color:var(--t3);background:#fff}
 .ti .bdel{position:absolute;right:6px;top:6px;background:var(--sf2);color:var(--t3);opacity:0}
 .ti:hover .bdel{opacity:1}
 .ti .bdel:hover{color:#c0392b;background:#fff3f3}
-.tit{display:flex;align-items:flex-start;justify-content:space-between;gap:5px}
-.tn{font-size:13px;font-weight:600}
-.tm{font-size:11px;color:var(--t3);margin-top:1px}
-.tr2{text-align:right;flex-shrink:0}
-.td2{font-size:11px;font-weight:600}
-.tds{font-size:10px;color:var(--warn);font-weight:700}
-.tds-done{color:var(--report)!important}
+.tn{font-size:13px;font-weight:700;color:var(--text);line-height:1.35;padding-right:14px}
+.tdesc{font-size:11px;font-weight:500;color:var(--text);margin-top:3px;line-height:1.4;padding-right:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ti-foot{display:flex;justify-content:flex-end;margin-top:8px}
+.ti-assignee{font-size:11px;color:var(--t3);line-height:1.2}
 .tpb{height:2px;background:var(--border);border-radius:1px;margin-top:5px;overflow:hidden}
 .tpf{height:100%;border-radius:1px}
 .ftag{padding:2px 7px;border-radius:20px;font-size:10px;cursor:pointer;border:1px solid var(--border);white-space:nowrap;color:var(--t2);background:var(--sf2);transition:all .15s;flex-shrink:0}
@@ -6294,6 +6290,25 @@ function toggleTaskGroup(hdr, e) {
   else delete expandedTaskGroupKeys[key];
 }
 
+/** 負責人顯示名：只取前三字（例：陳沁怡_xm00204 → 陳沁怡） */
+function shortPersonLabel(name) {
+  var s = String(name || '').trim();
+  if (!s || s === '未指定') return s || '未指定';
+  return Array.from(s).slice(0, 3).join('');
+}
+
+/** 任務名稱／說明：優先用「任務說明」欄；否則若名稱含換行，第一行當名稱、其餘當說明 */
+function splitTaskTitleDesc(name, descField) {
+  var desc = String(descField || '').trim();
+  var raw = String(name || '').trim() || '未命名';
+  if (desc) return { name: raw, desc: desc };
+  var parts = raw.split(/\r?\n/).map(function(s) { return s.trim(); }).filter(Boolean);
+  if (parts.length >= 2) {
+    return { name: parts[0], desc: parts.slice(1).join(' ') };
+  }
+  return { name: raw, desc: '' };
+}
+
 function getFilteredTaskItems() {
   var wiMap = {};
   workitemsData.forEach(function(wi) {
@@ -6314,10 +6329,15 @@ function getFilteredTaskItems() {
     if (projRec && !isProjectVisible(projRec)) return;
     if (projRec && !isProjectSelected(projRec)) return;
     var progress = parseProgressVal(f['進度狀態'], f['進度數值']);
+    var assignee = personName(f['負責人']) || '未指定';
+    var descRaw = fieldTextValue(f['任務說明']) || fieldTextValue(f['說明']) || '';
+    var titleParts = splitTaskTitleDesc(f['任務名稱'] || '未命名', descRaw);
     items.push({
       id: rec.record_id,
-      name: f['任務名稱'] || '未命名',
-      assignee: personName(f['負責人']) || '未指定',
+      name: titleParts.name,
+      desc: titleParts.desc,
+      assignee: assignee,
+      assigneeShort: shortPersonLabel(assignee),
       wiName: wi ? wi.name : '未分類',
       dueTs: f['預計完成日'],
       dueFull: f['預計完成日'] ? fmtDate(f['預計完成日']) : '—',
@@ -6358,14 +6378,13 @@ function renderTaskRow(t, opts) {
   var html = '';
   html += '<div class="ti' + (compact ? ' ti-compact' : '') + '" data-proj="' + escAttr(t.projName) + '" onclick="openTaskDetail(\'' + t.id + '\')">';
   html += '<button type="button" class="bdel" title="刪除任務" onclick="event.stopPropagation();deleteTask(\'' + t.id + '\',\'' + escAttr(t.name).replace(/'/g, "\\'") + '\')">×</button>';
-  html += '<div class="tit"><div><div class="tn">' + escHtml(t.name) + '</div>';
-  if (!opts.hideAssignee) {
-    html += '<div class="tm">' + escHtml(t.assignee) + '</div>';
+  html += '<div class="tn">' + escHtml(t.name) + '</div>';
+  if (t.desc) {
+    html += '<div class="tdesc" title="' + escAttr(t.desc) + '">' + escHtml(t.desc) + '</div>';
   }
-  html += '</div>';
-  var remainDone = t.progress >= 100 || t.status === '已完成';
-  var remainCls = remainDone ? ' tds-done' : '';
-  html += '<div class="tr2"><div class="td2">' + escHtml(t.dueFull) + '</div><div class="tds' + remainCls + '">' + escHtml(t.remain) + '</div></div></div>';
+  if (!opts.hideAssignee) {
+    html += '<div class="ti-foot"><span class="ti-assignee">' + escHtml(t.assigneeShort || shortPersonLabel(t.assignee)) + '</span></div>';
+  }
   html += '</div>';
   return html;
 }
