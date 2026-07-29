@@ -3683,13 +3683,38 @@ function fieldTextValue(raw) {
   return String(raw).trim();
 }
 
+function normalizePersonNameKey(s) {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[_＿\-－]+/g, '');
+}
+
+/** 去掉常見員工代碼後綴，例如 吳詩涵__YDXM25 → 吳詩涵 */
+function personNameCore(s) {
+  return String(s || '')
+    .trim()
+    .replace(/[_\s＿]*[A-Za-z]{0,8}\d{2,}[A-Za-z0-9]*$/u, '')
+    .replace(/[_\s＿]+$/g, '')
+    .trim();
+}
+
 function namesMatch(a, b) {
   if (!a || !b) return false;
-  a = String(a).trim().toLowerCase().replace(/\s+/g, ' ');
-  b = String(b).trim().toLowerCase().replace(/\s+/g, ' ');
+  a = String(a).trim();
+  b = String(b).trim();
   if (!a || !b) return false;
   if (a === b) return true;
-  return a.indexOf(b) >= 0 || b.indexOf(a) >= 0;
+  const na = normalizePersonNameKey(a);
+  const nb = normalizePersonNameKey(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.indexOf(nb) >= 0 || nb.indexOf(na) >= 0) return true;
+  const ca = normalizePersonNameKey(personNameCore(a));
+  const cb = normalizePersonNameKey(personNameCore(b));
+  if (ca && cb && (ca === cb || ca.indexOf(cb) >= 0 || cb.indexOf(ca) >= 0)) return true;
+  return false;
 }
 
 function collectPersonFromValue(val, ids, names) {
@@ -3971,9 +3996,10 @@ async function buildTablesCheckReport() {
   };
 }
 
-async function getMembersRecords(token) {
+async function getMembersRecords(token, opts) {
+  opts = opts || {};
   const now = Date.now();
-  if (_membersRecordsCache && _membersRecordsCache.expiresAt > now) {
+  if (!opts.bypassCache && _membersRecordsCache && _membersRecordsCache.expiresAt > now) {
     return _membersRecordsCache.records;
   }
   const cfg = getOperationalBitableConfig();
@@ -3997,7 +4023,8 @@ async function checkMemberAuthorization(userAccessToken) {
   const tenantToken = await getToken();
   let members;
   try {
-    members = await getMembersRecords(tenantToken);
+    // 登入權限檢查不走快取，避免剛加入人員表卻仍被擋
+    members = await getMembersRecords(tenantToken, { bypassCache: true });
   } catch (err) {
     if (isTableConfigError(err)) {
       return {

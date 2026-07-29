@@ -4189,29 +4189,22 @@ function showAuthGateLogin(msg, sub) {
 }
 
 function attemptAutoLogin(force) {
-  if (loginFlowActive) return Promise.resolve(false);
+  if (loginFlowActive || loginAuthInProgress) return Promise.resolve(false);
   if (autoLoginAttempted && !force) return Promise.resolve(false);
   autoLoginAttempted = true;
-  loginFlowActive = true;
   clearLoginError();
+  // 開啟系統時直接走 Lark 登入,失敗才顯示手動按鈕
   return loadLarkAppConfig().then(function(cfg) {
     if (!cfg.appId) {
       showAuthGate('login', '無法自動登入', 'Lark 應用未設定（缺少 App ID）', null);
       preloadAuthUrl();
       return false;
     }
-    if (isLikelyLarkClient()) {
-      showAuthGateLogin();
-      return false;
-    }
-    showAuthGateLogin();
-    return false;
+    return startBrowserLarkLogin();
   }).catch(function(err) {
     showAuthGate('login', '登入失敗', err.message || '請點擊下方按鈕重試', null);
     preloadAuthUrl();
     return false;
-  }).finally(function() {
-    loginFlowActive = false;
   });
 }
 
@@ -4874,7 +4867,21 @@ function namesMatch(a, b) {
   b = String(b).trim();
   if (!a || !b) return false;
   if (a === b) return true;
-  return a.indexOf(b) >= 0 || b.indexOf(a) >= 0;
+  function key(s) {
+    return String(s || '').toLowerCase().replace(/\s+/g, '').replace(/[_＿\-－]+/g, '');
+  }
+  function core(s) {
+    return String(s || '').trim().replace(/[_\s＿]*[A-Za-z]{0,8}\d{2,}[A-Za-z0-9]*$/u, '').replace(/[_\s＿]+$/g, '').trim();
+  }
+  var na = key(a);
+  var nb = key(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.indexOf(nb) >= 0 || nb.indexOf(na) >= 0) return true;
+  var ca = key(core(a));
+  var cb = key(core(b));
+  if (ca && cb && (ca === cb || ca.indexOf(cb) >= 0 || cb.indexOf(ca) >= 0)) return true;
+  return false;
 }
 function isRecordMine(fields, kind) {
   var u = getCurrentLoginUser();
