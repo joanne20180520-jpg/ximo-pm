@@ -11127,7 +11127,7 @@ function renderJournalDashboard(area) {
     var n = journalPersonName(rec);
     if (n) nameSet[n] = 1;
   });
-  // 應填日報人員：來自「人員資料」（非回報人／負責人）；免日報、設計師不列空卡
+  // 應填日報人員：來自「人員資料」（非回報人／負責人）；免日報、設計師不列空卡；PM／管理員要列
   var names = getJournalStaffNames();
   if (!names.length) names = Object.keys(nameSet).filter(isJournalStaffName);
   Object.keys(nameSet).forEach(function(n) {
@@ -11950,9 +11950,10 @@ function isJournalExemptToken(raw) {
 }
 
 function memberSkipsJournal(fields) {
+  // 僅「免日報」標籤或設計師免寫；PM／管理員都要寫日報
   var tokens = collectMemberRoleTokens(fields);
   for (var i = 0; i < tokens.length; i++) {
-    if (isDesignerRoleToken(tokens[i]) || isJournalExemptToken(tokens[i]) || isAdminRoleToken(tokens[i])) return true;
+    if (isDesignerRoleToken(tokens[i]) || isJournalExemptToken(tokens[i])) return true;
   }
   return false;
 }
@@ -11966,7 +11967,7 @@ function memberHidesFromSelects(fields) {
 }
 
 function resolveMemberRole(fields) {
-  // 「免日報」只影響日報名單；「管理員」全頁權限但不進人員選單；「設計師」限縮頁面
+  // 「免日報」只影響日報名單；「管理員」全頁權限但不進一般人員選單（仍要寫日報）；「設計師」限縮頁面
   var tokens = collectMemberRoleTokens(fields);
   for (var i = 0; i < tokens.length; i++) {
     if (isAdminRoleToken(tokens[i])) return '管理員';
@@ -11984,7 +11985,7 @@ function isDesignerMember(name) {
 
 function isJournalStaffName(name) {
   if (!name || name === '—' || name === '（未指定）') return false;
-  // 直接依「人員資料」判定免日報／設計師，不依賴回報人或任務負責人
+  // 直接依「人員資料」判定免日報／設計師；管理員若無「免日報」仍要寫
   for (var i = 0; i < membersData.length; i++) {
     var f = membersData[i].fields || {};
     var hit = false;
@@ -11993,12 +11994,11 @@ function isJournalStaffName(name) {
       if (person.id && membersMap[name] && membersMap[name].id && person.id === membersMap[name].id) hit = true;
     });
     if (!hit) continue;
-    if (memberSkipsJournal(f) || resolveMemberRole(f) === '設計師' || resolveMemberRole(f) === '管理員') return false;
+    if (memberSkipsJournal(f) || resolveMemberRole(f) === '設計師') return false;
   }
   var m = membersMap[name];
   if (m) {
     if (m.skipJournal) return false;
-    if (m.hideFromSelects || m.role === '管理員') return false;
     if (isDesignerRoleToken(m.role)) return false;
     if (m.id) {
       var keys = Object.keys(membersMap);
@@ -12019,7 +12019,7 @@ function getJournalStaffNames() {
     var f = m.fields || {};
     if (memberSkipsJournal(f)) return;
     var role = resolveMemberRole(f);
-    if (role === '設計師' || role === '管理員') return;
+    if (role === '設計師') return;
     forEachMemberAccountPerson(f, function(person) {
       if (!person.name || seen[person.name]) return;
       seen[person.name] = 1;

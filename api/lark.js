@@ -3831,7 +3831,7 @@ function isAdminRoleToken(raw) {
 }
 
 function getMemberRole(fields) {
-  // 「免日報」不影響登入權限；「管理員」全頁權限；僅「設計師」限縮可看頁面
+  // 「免日報」不影響登入權限（只影響日報應填名單）；「管理員」全頁權限且仍要寫日報；僅「設計師」限縮可看頁面
   const tokens = collectMemberRoleTokens(fields);
   for (let i = 0; i < tokens.length; i++) {
     if (isAdminRoleToken(tokens[i])) return '管理員';
