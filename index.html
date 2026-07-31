@@ -1386,6 +1386,16 @@ button.btn-loading::after{content:'…';margin-left:2px}
 </div>
 </div><div class="ppf"><button class="bcan bdel-action" id="ed-del-btn" onclick="deleteDesignFromEdit()">刪除</button><button class="bcan" onclick="cl('pp-edit-des')">取消</button><button class="bpri" onclick="saveEditDesign()">儲存</button></div></div></div>
 
+<!-- 新增設計版本 -->
+<div class="po" id="pp-des-ver"><div class="pp"><div class="pph"><h3 id="dv-title">新增版本</h3><button class="ppc" onclick="cl('pp-des-ver')">✕</button></div><div class="ppb">
+  <div class="fg"><label>所屬設計</label><input type="text" id="dv-design-name" readonly style="background:#f0eeea"></div>
+  <div class="fg"><label>版本</label><input type="text" id="dv-version" readonly style="background:#f0eeea"></div>
+  <div class="fg"><label>稿件連結（Lark 雲端）</label><input type="url" id="dv-link" placeholder="https://… 或貼上雲端檔案連結" data-des-ver-role="designer"></div>
+  <div class="fg"><label>設計師備註</label><textarea id="dv-designer-note" rows="3" placeholder="尺寸、色稿說明…" data-des-ver-role="designer"></textarea></div>
+  <div class="fg"><label>PM 回饋</label><textarea id="dv-pm-note" rows="3" placeholder="修改意見…" data-des-ver-role="pm"></textarea></div>
+  <div class="fg"><label>提交日期</label><input type="date" id="dv-date" onchange="onOptionalDateClear(this)" data-des-ver-role="both"></div>
+</div><div class="ppf"><button class="bcan" onclick="cl('pp-des-ver')">取消</button><button class="bpri" onclick="saveDesignVersion()">新增版本</button></div></div></div>
+
 <!-- 付款預覽（元頂集團格式） -->
 <div class="po" id="pp-prev" style="align-items:flex-start;padding-top:20px">
   <div class="pp pp-pay">
@@ -3721,7 +3731,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260731v1';
+var APP_BUILD = '20260731v2';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12073,6 +12083,21 @@ function unfinalizeDesign(designId) {
   });
 }
 
+var addingDesignVersionId = null;
+
+function applyDesignVersionFormPermissions() {
+  var isDesigner = currentUserRole === '設計師';
+  var isPm = isPMRole();
+  document.querySelectorAll('#pp-des-ver [data-des-ver-role]').forEach(function(el) {
+    var role = el.getAttribute('data-des-ver-role') || 'both';
+    var can = isAdminRole() || role === 'both';
+    if (role === 'designer') can = isAdminRole() || isDesigner || isPm;
+    if (role === 'pm') can = isAdminRole() || isPm;
+    if (isDesigner && role === 'pm') can = false;
+    el.disabled = !can;
+  });
+}
+
 function openAddDesignVersion(designId) {
   if (!designId) return;
   var rec = designsData.find(function(r) { return r.record_id === designId; });
@@ -12081,31 +12106,59 @@ function openAddDesignVersion(designId) {
     alert('已定稿，無法新增版本。請管理員改回未定稿。');
     return;
   }
+  if (!(isPMRole() || currentUserRole === '設計師')) {
+    alert('僅設計師／PM 可新增版本');
+    return;
+  }
+  addingDesignVersionId = designId;
   var versions = getVersionsForDesign(designId);
   var label = nextDesignVersionLabel(versions);
-  var note = '';
-  var link = '';
-  if (currentUserRole === '設計師' || isPMRole()) {
-    note = prompt('設計師備註（可留空）', '') || '';
+  document.getElementById('dv-design-name').value = getDesignDisplayName(rec.fields) || '設計項目';
+  document.getElementById('dv-version').value = label;
+  document.getElementById('dv-link').value = '';
+  document.getElementById('dv-designer-note').value = '';
+  document.getElementById('dv-pm-note').value = '';
+  var today = new Date();
+  document.getElementById('dv-date').value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+  document.getElementById('dv-title').textContent = '新增版本（' + label + '）';
+  applyDesignVersionFormPermissions();
+  op('pp-des-ver');
+}
+
+function saveDesignVersion() {
+  if (!addingDesignVersionId) return;
+  if (!(isPMRole() || currentUserRole === '設計師')) return;
+  var rec = designsData.find(function(r) { return r.record_id === addingDesignVersionId; });
+  if (!rec) return;
+  if (isDesignFinalized(rec.fields)) {
+    alert('已定稿，無法新增版本。');
+    return;
   }
-  link = prompt('稿件連結（Lark 雲端網址，可留空）', '') || '';
+  var label = (document.getElementById('dv-version').value || '').trim() || nextDesignVersionLabel(getVersionsForDesign(addingDesignVersionId));
+  var link = (document.getElementById('dv-link').value || '').trim();
+  var dNote = (document.getElementById('dv-designer-note').value || '').trim();
+  var pNote = (document.getElementById('dv-pm-note').value || '').trim();
+  var dateVal = (document.getElementById('dv-date').value || '').trim();
   var fields = {
     '版本': label,
-    '所屬設計項目': [designId],
-    '提交日期': Date.now()
+    '所屬設計項目': [addingDesignVersionId]
   };
-  if (note.trim()) fields['設計師備註'] = note.trim();
-  if (link.trim()) fields['稿件連結'] = link.trim();
-  optimisticCreate('design_versions', fields, {
-    failMsg: '新增版本失敗'
-  }).then(function() {
-    designExpandedIds[designId] = true;
-    return syncTables(['design_versions', 'designs']);
-  }).then(function() {
-    renderDesigns();
-  }).catch(function() {
-    renderDesigns();
-  });
+  if (link) fields['稿件連結'] = link;
+  if (dNote) fields['設計師備註'] = dNote;
+  if (pNote && isPMRole()) fields['PM 回饋'] = pNote;
+  if (dateVal) applyOptionalDateField(fields, '提交日期', dateVal);
+  else fields['提交日期'] = Date.now();
+
+  var designId = addingDesignVersionId;
+  cl('pp-des-ver');
+  addingDesignVersionId = null;
+  optimisticCreate('design_versions', fields, { failMsg: '新增版本失敗' })
+    .then(function() {
+      designExpandedIds[designId] = true;
+      return syncTables(['design_versions', 'designs']);
+    })
+    .then(function() { renderDesigns(); })
+    .catch(function() { renderDesigns(); });
 }
 
 function renderDesigns() {
