@@ -3894,7 +3894,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260731v18';
+var APP_BUILD = '20260731v19';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -13765,10 +13765,8 @@ function designBoolFromField(val) {
 function getDesignFieldAny(f, names) {
   f = f || {};
   for (var i = 0; i < names.length; i++) {
-    if (f[names[i]] !== undefined && f[names[i]] !== null && f[names[i]] !== '') return f[names[i]];
-  }
-  for (var j = 0; j < names.length; j++) {
-    if (Object.prototype.hasOwnProperty.call(f, names[j])) return f[names[j]];
+    // 必須包含 false：後台取消勾選後 Lark 會回 false，不可略過
+    if (Object.prototype.hasOwnProperty.call(f, names[i])) return f[names[i]];
   }
   return undefined;
 }
@@ -13776,6 +13774,27 @@ function getDesignFieldAny(f, names) {
 var DESIGN_PM_CHECK_KEYS = ['PM主管內容審核', 'PM主管內容檢核'];
 var DESIGN_LEAD_CHECK_KEYS = ['設計主管圖面檢核', '設計主管圖面審核'];
 
+
+
+function refreshDesignSignChecksFromRecord(rec) {
+  var f = (rec && rec.fields) || {};
+  setDesignSelectBool('ed-design-check', getDesignFieldAny(f, DESIGN_LEAD_CHECK_KEYS));
+  setDesignSelectBool('ed-pm-check', getDesignFieldAny(f, DESIGN_PM_CHECK_KEYS));
+}
+
+function refreshOpenDesignDrawerFromServer() {
+  if (!editingDesignId) return Promise.resolve();
+  var id = editingDesignId;
+  return syncTables(['designs']).then(function() {
+    if (editingDesignId !== id) return;
+    var rec = designsData.find(function(r) { return r.record_id === id; });
+    if (!rec) return;
+    refreshDesignSignChecksFromRecord(rec);
+    var finalEl = document.getElementById('ed-final-status');
+    if (finalEl) finalEl.value = (rec.fields && rec.fields['定稿狀態']) || '未定稿';
+    applyEditDesignPermissions();
+  }).catch(function() {});
+}
 
 function setDesignSelectBool(id, val) {
   var el = document.getElementById(id);
@@ -13826,10 +13845,8 @@ function toggleDesignSignCheck(id) {
   var fields = {};
   if (id === 'ed-pm-check') {
     fields['PM主管內容審核'] = true;
-    fields['PM主管內容檢核'] = true;
   } else if (id === 'ed-design-check') {
     fields['設計主管圖面檢核'] = true;
-    fields['設計主管圖面審核'] = true;
   } else {
     return;
   }
@@ -13837,6 +13854,7 @@ function toggleDesignSignCheck(id) {
   optimisticUpdate('designs', editingDesignId, fields, { failMsg: '簽核寫入失敗' })
     .then(function() {
       showUndoToast('已簽核並同步到 Base');
+      return refreshOpenDesignDrawerFromServer();
     })
     .catch(function() {
       hidden.value = 'false';
@@ -13996,6 +14014,8 @@ function openEditDesign(desId) {
   }
   applyEditDesignPermissions();
   openDesignDrawer();
+  // 後台若取消簽核／定稿，開側欄時強制跟 Base 對齊
+  refreshOpenDesignDrawerFromServer();
 }
 
 function openDesignDrawer() {
@@ -14096,11 +14116,9 @@ function collectDesignDrawerFields() {
     '材質': document.getElementById('ed-material').value.trim(),
     '加工項目': document.getElementById('ed-process').value.trim(),
     '設計主管圖面檢核': readDesignSelectBool('ed-design-check'),
-    '設計主管圖面審核': readDesignSelectBool('ed-design-check'),
     '數量': document.getElementById('ed-qty').value.trim(),
     'NAS路徑位置': document.getElementById('ed-path').value.trim(),
     'PM主管內容審核': readDesignSelectBool('ed-pm-check'),
-    'PM主管內容檢核': readDesignSelectBool('ed-pm-check'),
     '發包廠商': document.getElementById('ed-vendor').value.trim(),
     '稅收': document.getElementById('ed-tax').value.trim(),
     '發票抬頭': document.getElementById('ed-invoice').value.trim(),
