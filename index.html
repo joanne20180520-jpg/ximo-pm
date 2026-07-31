@@ -619,7 +619,7 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .des-drawer .fg{display:grid;grid-template-columns:118px 1fr;gap:6px 12px;align-items:start;margin-bottom:10px}
 .des-drawer .fg label{margin:0;padding-top:7px;line-height:1.3}
 .des-drawer .fg textarea{min-height:52px}
-.dt tr.des-row{cursor:default}
+.dt tr.des-row{cursor:pointer}
 .dt tr.des-row:hover td{background:var(--sf2)}
 .des-name-text{font-weight:600}
 .dt td.des-act{width:40px;text-align:center;padding-right:8px}
@@ -3885,7 +3885,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260731v11';
+var APP_BUILD = '20260731v12';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12788,7 +12788,7 @@ function renderDesigns() {
       var finalBadge = d.finalized
         ? '<span class="ds ds-final">已定稿</span>'
         : '<span class="ds ds-draft">未定稿</span>';
-      rows += '<tr class="erow des-row">'
+      rows += '<tr class="erow des-row" onclick="openEditDesign(\'' + d.id + '\')" title="點擊編輯規格">'
         + '<td style="font-weight:500;white-space:nowrap">'
         + '<button type="button" class="des-toggle" onclick="toggleDesignExpand(\'' + d.id + '\',event)" title="展開版本">' + (expanded ? '▼' : '▶') + '</button> '
         + '<span class="des-name-text">' + escHtml(d.name) + '</span>'
