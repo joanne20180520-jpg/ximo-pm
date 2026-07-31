@@ -1424,11 +1424,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>設計師</label><select id="eb-designer" data-members="designer" data-des-role="pm"></select></div>
   <div class="fg"><label>進度狀態</label><select id="eb-status" data-des-role="both"></select></div>
   <div class="fg"><label>定稿狀態</label>
-  <select id="eb-final-status" data-des-role="pm">
-    <option value="未定稿">未定稿</option>
-    <option value="已定稿">已定稿</option>
-  </select>
-  <div style="font-size:10px;color:var(--t3);margin-top:4px">PM 可改；版本區最新版旁也可定稿。改回未定稿請至 Base（管理員）。</div>
+  <input type="text" id="eb-final-status" readonly style="background:#f0eeea">
+  <div style="font-size:10px;color:var(--t3);margin-top:4px">由此不改定稿。請展開版本，在最新版旁勾「定稿」；勾了＝已定稿，沒勾＝未定稿。取消請至 Base。</div>
 </div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-des-basic')">取消</button><button class="bpri" id="eb-save-btn" onclick="saveEditDesignBasic()">儲存</button></div></div></div>
 
@@ -1493,7 +1490,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
           </div>
         </div>
         <div class="fg"><label>定稿時間</label><input type="date" id="ed-final" onchange="onOptionalDateClear(this)" data-des-role="pm"></div>
-        <div class="fg"><label>定稿狀態</label><input type="text" id="ed-final-status" readonly style="background:#f0eeea" title="請在列表點「定稿狀態」或版本區定稿勾選修改"></div>
+        <div class="fg"><label>定稿狀態</label><input type="text" id="ed-final-status" readonly style="background:#f0eeea" title="請展開版本，在最新版旁勾選定稿"></div>
       </div>
     </div>
     <div class="des-acc" data-acc="money" data-owner="designer">
@@ -3895,7 +3892,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260731v13';
+var APP_BUILD = '20260731v14';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12370,14 +12367,7 @@ function finalizeDesign(designId) {
   optimisticUpdate('designs', designId, fields, { failMsg: '定稿失敗' })
     .then(function() {
       renderDesigns();
-      showUndoToast('已定稿');
-      // Base 若尚未建「定稿狀態」欄，重整後會變回未定稿
-      setTimeout(function() {
-        var rec = designsData.find(function(r) { return r.record_id === designId; });
-        if (rec && !isDesignFinalized(rec.fields)) {
-          alert('定稿未寫入 Base：請在「設計需求」表新增單選欄位「定稿狀態」（選項：未定稿／已定稿）後再試。');
-        }
-      }, 2500);
+      showUndoToast('已定稿（Base 已同步；取消請至 Base）');
     })
     .catch(function() { renderDesigns(); });
 }
@@ -12810,7 +12800,7 @@ function renderDesigns() {
         + '<td class="des-cell-edit" onclick="openEditDesignBasic(\'' + d.id + '\',event)" title="編輯負責PM">' + renderDesignPersonCell(d.pm) + '</td>'
         + '<td class="des-cell-edit" onclick="openEditDesignBasic(\'' + d.id + '\',event)" title="編輯設計師">' + renderDesignPersonCell(d.designer) + '</td>'
         + '<td class="des-cell-edit" onclick="openEditDesignBasic(\'' + d.id + '\',event)" title="編輯進度狀態">' + renderDesignProgressCell(d.progressStatus || d.status, d.progressNum) + '</td>'
-        + '<td class="des-cell-edit" onclick="openEditDesignBasic(\'' + d.id + '\',event)" title="編輯定稿狀態">' + finalBadge + '</td>'
+        + '<td title="由版本列「定稿」勾選決定：有勾＝已定稿，沒勾＝未定稿">' + finalBadge + '</td>'
         + '<td>' + d.nextStep.html + '</td>'
         + '<td class="des-act"><button type="button" class="des-drawer-btn" title="填寫規格詳情" onclick="event.stopPropagation();openEditDesign(\'' + d.id + '\')">☰</button></td>'
         + '</tr>';
@@ -13837,7 +13827,7 @@ function saveEditDesignBasic() {
   showConfirm({
     type: 'edit',
     title: '確認修改',
-    body: '確定儲存主類別／指派／進度／定稿嗎？<br><span class="confirm-name">「' + escHtml(packed.name) + '」</span>',
+    body: '確定儲存主類別／指派／進度嗎？<br><span class="confirm-name">「' + escHtml(packed.name) + '」</span>',
     okText: '儲存',
     onOk: function() {
       if (oldFields) undoStack.push({ type: 'update', table: 'designs', recordId: editingDesignId, data: oldFields });
@@ -13993,13 +13983,6 @@ function collectDesignBasicFields(prefix) {
   var designer = larkPerson(document.getElementById(prefix + '-designer').value);
   if (pm) fields['負責PM'] = pm;
   if (designer) fields['設計師'] = designer;
-  var finalEl = document.getElementById(prefix + '-final-status');
-  if (finalEl && finalEl.value) {
-    fields['定稿狀態'] = finalEl.value === '已定稿' ? '已定稿' : '未定稿';
-    if (fields['定稿狀態'] === '已定稿') {
-      fields['定稿時間'] = Date.now();
-    }
-  }
   return { name: name, wiId: wiId, fields: fields };
 }
 
