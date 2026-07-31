@@ -339,7 +339,8 @@ const TABLE_PROFILES = {
     tasks:     'tbl7mC8KaVVXQOVG',
     expenses:  'tblsUdkQN56T6Jnk',
     payments:  'tblv9SmBvbhxNftU',
-    designs:   'tblc3a8IofsGlbKu',
+    designs:   'tbluS9ppqTwA72vd',
+    design_versions: 'tblAL5SlqdzByAPg',
     journal:   'tblVs9L5WAJcE2a3',
     members:   'tblIHdb6u6S2xdJH',
     milestones: 'tblhESKN2KGGx9zx'
@@ -350,7 +351,8 @@ const TABLE_PROFILES = {
     tasks:     'tblqmQCM0N5KFtBH',
     expenses:  'tbl72u0sONmWjZn2',
     payments:  'tblxn7BG7bllcpk0',
-    designs:   'tblGJkK7Vqpkeh7A',
+    designs:   'tblgtz8A3sqbaj6C',
+    design_versions: 'tblmOSQnOUlh0xTW',
     journal:   'tbl4Q2bKqkfGm0t6',
     members:   'tblrXjQ5GOLfzWrQ',
     milestones: 'tblhESKN2KGGx9zx'
@@ -432,7 +434,8 @@ const TABLE_NAME_KEYWORDS = {
   workitems: ['工作項目', 'workitem'],
   tasks: ['任務', 'task'],
   expenses: ['支出', 'expense', '費用'],
-  designs: ['設計', 'design'],
+  designs: ['設計需求', '設計', 'design'],
+  design_versions: ['設計版本', '版本紀錄'],
   members: ['人員', '成員', 'member'],
   journal: ['日誌', 'journal', '工作日誌'],
   payments: ['付款', '金費'],
@@ -722,7 +725,8 @@ const ARCHIVE_TABLE_KEYWORDS = {
   workitems: ['工作項目', 'workitem'],
   tasks: ['任務', 'task'],
   expenses: ['支出', 'expense', '費用'],
-  designs: ['設計', 'design'],
+  designs: ['設計需求', '設計', 'design'],
+  design_versions: ['設計版本', '版本紀錄'],
   milestones: ['履約', '里程碑', 'milestone']
 };
 
@@ -730,7 +734,8 @@ const OPERATIONAL_TABLE_KEYWORDS = Object.assign({}, ARCHIVE_TABLE_KEYWORDS, {
   members: ['人員', '成員', 'member', '用戶', '員工'],
   journal: ['日誌', 'journal', '工作日誌'],
   payments: ['付款', '金費'],
-  milestones: ['履約', '里程碑', 'milestone']
+  milestones: ['履約', '里程碑', 'milestone'],
+  design_versions: ['設計版本', '版本紀錄']
 });
 
 const bitableConfigResolveCache = {};
@@ -2805,7 +2810,7 @@ function summarizeDesignsForTool(designs) {
   return (designs || []).map(function(d) {
     const f = d.fields || {};
     return {
-      name: f['設計項目名稱'] || '未命名',
+      name: f['主類別'] || f['設計項目名稱'] || '未命名',
       status: f['進度狀態'] || '未開始',
       designer: personDisplayName(f['設計師']) || '未指定',
       budget: f['預算金費'] || f['預算'] || 0,
@@ -2914,7 +2919,7 @@ function softenArchiveFieldsList(fieldsList, fieldMeta, level) {
       return stripArchiveFieldsByTypes(fields, fieldMeta, { 3: 1, 4: 1, 11: 1, 15: 1 });
     }
     const out = {};
-    const keepKeys = ['標案名稱', '工作項目名稱', '任務名稱', '支出細項', '設計項目名稱', '里程碑名稱', '標題', '名稱'];
+    const keepKeys = ['標案名稱', '工作項目名稱', '任務名稱', '支出細項', '主類別', '設計項目名稱', '里程碑名稱', '標題', '名稱'];
     keepKeys.forEach(function(k) {
       if (fields[k] !== undefined && fields[k] !== null && fields[k] !== '') out[k] = fields[k];
     });
@@ -4061,7 +4066,7 @@ async function checkMemberAuthorization(userAccessToken) {
   };
 }
 
-const BOOTSTRAP_TABLE_KEYS = ['projects', 'workitems', 'tasks', 'expenses', 'designs', 'journal', 'members', 'milestones'];
+const BOOTSTRAP_TABLE_KEYS = ['projects', 'workitems', 'tasks', 'expenses', 'designs', 'design_versions', 'journal', 'members', 'milestones'];
 
 async function fetchTableRecordsSafe(token, tableKey) {
   const tableId = tableIdFor(tableKey);
