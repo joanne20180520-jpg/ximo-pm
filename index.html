@@ -3731,7 +3731,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260731v2';
+var APP_BUILD = '20260731v3';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -11943,6 +11943,67 @@ function isDesignFinalized(f) {
   return s === '已定稿' || s === '定稿';
 }
 
+/** 下一步日期：需求交付 → 初稿 → 定稿 → 發包 → 到貨 */
+function getDesignFieldTs(f, key, altKey) {
+  f = f || {};
+  if (f[key] != null && f[key] !== '') return f[key];
+  if (altKey && f[altKey] != null && f[altKey] !== '') return f[altKey];
+  return null;
+}
+
+function getDesignNextStepInfo(f, designId) {
+  f = f || {};
+  var pct = parseProgressVal(f['進度狀態'], f['進度數值']);
+  var finalized = isDesignFinalized(f);
+  var done = designBoolFromField(f['已完成']) || pct >= 100 || String(f['進度狀態'] || '') === '已完成';
+  var hasVersions = designId ? getVersionsForDesign(designId).length > 0 : false;
+  var stepKey = '初稿時間';
+  var stepLabel = '初稿';
+  var altKey = '初稿交付日';
+
+  if (done) {
+    stepKey = '到貨時間';
+    stepLabel = '到貨';
+    altKey = '成品交付日';
+  } else if (finalized) {
+    if (getDesignFieldTs(f, '發包時間')) {
+      stepKey = '到貨時間';
+      stepLabel = '到貨';
+      altKey = '成品交付日';
+    } else {
+      stepKey = '發包時間';
+      stepLabel = '發包';
+      altKey = '';
+    }
+  } else if (hasVersions || pct >= 50) {
+    stepKey = '定稿時間';
+    stepLabel = '定稿';
+    altKey = '完稿交付日';
+  } else if (getDesignFieldTs(f, '需求交付') && !getDesignFieldTs(f, '初稿時間', '初稿交付日')) {
+    stepKey = '需求交付';
+    stepLabel = '需求交付';
+    altKey = '';
+  } else if (pct > 0) {
+    stepKey = '初稿時間';
+    stepLabel = '初稿';
+    altKey = '初稿交付日';
+  } else if (getDesignFieldTs(f, '需求交付')) {
+    stepKey = '需求交付';
+    stepLabel = '需求交付';
+    altKey = '';
+  }
+
+  var ts = getDesignFieldTs(f, stepKey, altKey);
+  return {
+    label: stepLabel,
+    ts: ts,
+    text: ts ? fmtDate(ts) : '—',
+    html: ts
+      ? ('<div style="font-weight:600">' + escHtml(fmtDate(ts)) + '</div><div style="font-size:10px;color:var(--t3)">' + escHtml(stepLabel) + '</div>')
+      : ('<div style="color:var(--t3)">—</div><div style="font-size:10px;color:var(--t3)">' + escHtml(stepLabel) + '</div>')
+  };
+}
+
 function getVersionsForDesign(designId) {
   var list = [];
   (designVersionsData || []).forEach(function(rec) {
@@ -12189,7 +12250,7 @@ function renderDesigns() {
       status: getDesignProgressStatus(f),
       progressStatus: f['進度狀態'] || '',
       progressNum: f['進度數值'],
-      draft: f['初稿時間'] ? fmtDate(f['初稿時間']) : (f['初稿交付日'] ? fmtDate(f['初稿交付日']) : '—'),
+      nextStep: getDesignNextStepInfo(f, rec.record_id),
       finalized: isDesignFinalized(f),
       finalStatus: f['定稿狀態'] || '未定稿'
     });
@@ -12219,14 +12280,14 @@ function renderDesigns() {
         + '<td>' + escHtml(d.designer) + '</td>'
         + '<td>' + buildProgressStatusBadge(d.progressStatus || d.status, d.progressNum) + '</td>'
         + '<td>' + finalBadge + '</td>'
-        + '<td>' + d.draft + '</td>'
+        + '<td>' + d.nextStep.html + '</td>'
         + '</tr>';
       if (expanded) {
         rows += '<tr class="des-exp-row"><td colspan="7">' + renderDesignVersionPanel(d.id, d.finalized) + '</td></tr>';
       }
     });
     return header
-      + '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>主類別</th><th>所屬工作項目</th><th>負責PM</th><th>設計師</th><th>進度狀態</th><th>定稿狀態</th><th>初稿時間</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+      + '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>主類別</th><th>所屬工作項目</th><th>負責PM</th><th>設計師</th><th>進度狀態</th><th>定稿狀態</th><th>下一步日期</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }
 
   var html = '';
