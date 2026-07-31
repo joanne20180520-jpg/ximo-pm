@@ -1485,7 +1485,12 @@ function normalizeArchiveFieldValue(meta, val) {
   if (t === 2) return normalizeArchiveNumberValue(val);
   if (t === 3) return normalizeArchiveSelectValue(val);
   if (t === 4) return normalizeArchiveMultiSelectValue(val);
-  if (t === 7) return typeof val === 'boolean' ? val : null;
+  if (t === 7) {
+    if (typeof val === 'boolean') return val;
+    if (val === 1 || val === '1' || val === 'true' || val === '是' || val === '已簽核' || val === '已檢核') return true;
+    if (val === 0 || val === '0' || val === 'false' || val === '否' || val === '未簽核' || val === '待檢核' || val === '未檢核') return false;
+    return null;
+  }
   if (t === 13) {
     if (typeof val === 'string') return val;
     return null;
@@ -1709,9 +1714,18 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
     '申請人': ['申請人員', 'Applicant', '申请人']
   };
   // yd 工作項目表欄位為「可用成本未稅」；前端仍寫「可用成本」
+  // 設計需求：審核／檢核、路徑欄位名稱在不同 Base 可能不一致
   const fieldAliases = Object.assign({
     '可用成本': ['可用成本未稅'],
-    '可用成本未稅': ['可用成本']
+    '可用成本未稅': ['可用成本'],
+    'PM主管內容審核': ['PM主管內容檢核'],
+    'PM主管內容檢核': ['PM主管內容審核'],
+    '設計主管圖面檢核': ['設計主管圖面審核'],
+    '設計主管圖面審核': ['設計主管圖面檢核'],
+    'NAS路徑位置': ['路徑位置'],
+    '路徑位置': ['NAS路徑位置'],
+    '備註': ['備註（工作細項說明）'],
+    '備註（工作細項說明）': ['備註']
   }, paymentAliases);
   const src = Object.assign({}, fields);
   Object.keys(fieldAliases).forEach(function(canonical) {
