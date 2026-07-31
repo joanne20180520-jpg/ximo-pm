@@ -3892,7 +3892,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260731v15';
+var APP_BUILD = '20260731v16';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -4956,15 +4956,34 @@ function avatarClass(name) {
   return n % 2 ? 'avl' : 'avy';
 }
 function parseProgressVal(status, num) {
+  // 狀態文案優先：暫停／未開始不要被舊的進度數值蓋成百分比
+  if (status === '已完成') return 100;
+  if (status === '未開始' || status === '待開始' || status === '暫停') return 0;
   if (typeof num === 'number' && num > 0) {
     var n = num <= 1 ? Math.round(num * 100) : Math.round(num);
     return Math.min(100, n);
   }
   if (!status) return 0;
-  if (status === '已完成') return 100;
-  if (status === '未開始' || status === '待開始' || status === '暫停') return 0;
   var m = String(status).match(/(\d+)/);
   return m ? parseInt(m[1], 10) : 0;
+}
+function formatProgressLabel(status, num) {
+  var s = status != null ? String(status).trim() : '';
+  if (s === '暫停') return '暫停';
+  if (s === '已完成' || s === '完成') return '已完成';
+  if (s === '未開始' || s === '待開始') return '未開始';
+  if (s) return s;
+  var pct = parseProgressVal(null, num);
+  if (pct >= 100) return '已完成';
+  if (pct > 0) return '進行中' + pct + '%';
+  return '未開始';
+}
+function formatProgressMetaText(status, num) {
+  var label = formatProgressLabel(status, num);
+  if (label === '暫停' || label === '已完成' || label === '未開始') return label;
+  if (/^進行中\d+%$/.test(label) || /%$/.test(label)) return label;
+  var pct = parseProgressVal(status, num);
+  return label || (pct + '%');
 }
 function getDesignProgressStatus(f) {
   f = f || {};
@@ -4977,7 +4996,7 @@ function getDesignProgressStatus(f) {
 }
 function buildProgressStatusBadge(status, num) {
   var pct = parseProgressVal(status, num);
-  var label = status || (pct >= 100 ? '已完成' : pct > 0 ? '進行中' + pct + '%' : '未開始');
+  var label = formatProgressLabel(status, num);
   var cls = 'ds';
   if (label === '暫停') cls += ' ds-pause';
   else if (pct >= 100 || label === '已完成') cls += ' ds-done';
@@ -9101,7 +9120,7 @@ function openDesignDetail(desId) {
     '<span style="font-size:11px;background:var(--sf2);padding:2px 8px;border-radius:20px">' + ctx.wiName + '</span>'
     + '<span class="av ' + avatarClass(ctx.designer) + '">' + personInitial(ctx.designer) + '</span>'
     + '<span style="font-size:12px;color:var(--t2)">' + ctx.designer + ' · PM ' + ctx.pm + ' · ' + dateRange + '</span>'
-    + '<span style="font-size:11px;color:var(--t3)">' + ctx.progress + '%</span>';
+    + '<span style="font-size:11px;color:var(--t3)">' + escHtml(formatProgressMetaText(ctx.f['進度狀態'] || getDesignProgressStatus(ctx.f), ctx.f['進度數值'])) + '</span>';
   var ddDraft = document.getElementById('dd-draft');
   var ddFinal = document.getElementById('dd-final');
   var ddDeliver = document.getElementById('dd-deliver');
@@ -9601,7 +9620,7 @@ function openTaskDetail(taskId) {
     '<span style="font-size:11px;background:var(--sf2);padding:2px 8px;border-radius:20px">' + escHtml(ctx.wiName) + '</span>'
     + '<span style="font-size:12px;color:var(--t2)">' + escHtml(dateRange) + '</span>'
     + remain
-    + '<span style="font-size:11px;color:var(--t3)">' + ctx.progress + '%</span>';
+    + '<span style="font-size:11px;color:var(--t3)">' + escHtml(formatProgressMetaText(ctx.f['進度狀態'], ctx.f['進度數值'])) + '</span>';
   var assigneeSel = document.getElementById('td-assignee');
   if (assigneeSel) {
     var mOpts = getMemberSelectOptions();
@@ -12729,16 +12748,20 @@ function renderDesignPersonCell(name) {
 }
 
 function renderDesignProgressCell(status, num) {
+  var label = formatProgressLabel(status, num);
+  if (label === '暫停') {
+    return '<span class="ds ds-pause">暫停</span>';
+  }
+  if (label === '未開始') {
+    return '<span class="ds ds-pending">未開始</span>';
+  }
+  if (label === '已完成') {
+    return '<span class="ds ds-done">已完成</span>';
+  }
   var pct = parseProgressVal(status, num);
   if (pct == null || isNaN(pct)) pct = 0;
   pct = Math.max(0, Math.min(100, Math.round(pct)));
-  if (pct <= 0 && (!status || status === '未開始')) {
-    return '<span class="ds ds-pending">未開始</span>';
-  }
-  if (pct >= 100 || status === '已完成') {
-    return '<span class="ds ds-done">已完成</span>';
-  }
-  return '<div class="des-progress"><span class="des-progress-track"><span class="des-progress-fill" style="width:' + pct + '%"></span></span><span class="des-progress-label">' + pct + '%</span></div>';
+  return '<div class="des-progress"><span class="des-progress-track"><span class="des-progress-fill" style="width:' + pct + '%"></span></span><span class="des-progress-label">' + escHtml(label.indexOf('%') >= 0 ? label : (pct + '%')) + '</span></div>';
 }
 
 function renderDesigns() {
