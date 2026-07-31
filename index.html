@@ -3894,7 +3894,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260731v17';
+var APP_BUILD = '20260731v18';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -14039,11 +14039,16 @@ function designDrawerOwnerMatches(owner) {
 function applyEditDesignPermissions() {
   applyDesignFormPermissions('#pp-edit-des');
   var roleKey = isAdminRole() ? 'admin' : (currentUserRole === '設計師' ? 'designer' : 'pm');
-  document.querySelectorAll('#pp-edit-des .des-acc').forEach(function(acc) {
+  document.querySelectorAll('#pp-edit-des .des-acc').forEach(function(acc, idx) {
     var owner = acc.getAttribute('data-owner') || 'pm';
     var mine = isAdminRole() || owner === 'both' || owner === roleKey;
-    // Demo：本角色區塊預設展開；非本角色收合＋唯讀（管理員全開）
-    var open = isAdminRole() || owner === 'both' || owner === roleKey;
+    // PM：展開 PM／共同；設計師：展開設計師／共同；管理員：只展開第一個
+    var open = false;
+    if (roleKey === 'admin') {
+      open = idx === 0;
+    } else {
+      open = owner === roleKey || owner === 'both';
+    }
     acc.classList.toggle('open', open);
     acc.classList.toggle('locked', !mine);
     var chev = acc.querySelector('.des-acc-chev');
