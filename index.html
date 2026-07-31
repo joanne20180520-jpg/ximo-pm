@@ -1425,7 +1425,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>進度狀態</label><select id="eb-status" data-des-role="both"></select></div>
   <div class="fg"><label>定稿狀態</label>
   <input type="text" id="eb-final-status" readonly style="background:#f0eeea">
-  <div style="font-size:10px;color:var(--t3);margin-top:4px">由此不改定稿。請展開版本，在最新版旁勾「定稿」；勾了＝已定稿，沒勾＝未定稿。取消請至 Base。</div>
+  <div style="font-size:10px;color:var(--t3);margin-top:4px">由此不改定稿。請展開版本，在最新版旁勾「定稿」；勾了＝已定稿，沒勾＝未定稿。若需改為未定稿請通知管理員。</div>
 </div>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-des-basic')">取消</button><button class="bpri" id="eb-save-btn" onclick="saveEditDesignBasic()">儲存</button></div></div></div>
 
@@ -3892,7 +3892,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260731v14';
+var APP_BUILD = '20260731v15';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12292,7 +12292,7 @@ function renderDesignVersionPanel(designId, finalized) {
       var actionBtns = '';
       if (isLatest) {
         if (finalized) {
-          actionBtns += '<div class="des-confirm-cell"><button type="button" class="des-confirm-btn on" disabled title="已定稿（取消請至 Base）">✓</button><span class="des-confirm-label">定稿</span></div>';
+          actionBtns += '<div class="des-confirm-cell"><button type="button" class="des-confirm-btn on" disabled title="已定稿（若需改為未定稿請通知管理員）">✓</button><span class="des-confirm-label">定稿</span></div>';
         } else if (isPMRole()) {
           actionBtns += '<div class="des-confirm-cell"><button type="button" class="des-confirm-btn" onclick="event.stopPropagation();finalizeDesign(\'' + designId + '\')" title="定稿" aria-label="定稿"></button><span class="des-confirm-label">定稿</span></div>';
         } else {
@@ -12320,7 +12320,10 @@ function renderDesignVersionPanel(designId, finalized) {
     actions += '<button class="bsm" onclick="event.stopPropagation();openAddDesignVersion(\'' + designId + '\')">＋ 新增版本（' + escHtml(nextDesignVersionLabel(versions)) + '）</button>';
   }
   if (finalized) {
-    actions += '<span class="ds ds-final">已定稿（版本鎖定；改回請至 Base）</span>';
+    actions += '<span class="ds ds-final">已定稿（版本鎖定；若需改為未定稿請通知管理員）</span>';
+    if (isAdminRole()) {
+      actions += '<button class="bsm" onclick="event.stopPropagation();unfinalizeDesign(\'' + designId + '\')">改回未定稿</button>';
+    }
   }
   actions += '</div>';
   return '<div class="des-ver-wrap">' + rows + actions + '</div>';
@@ -12367,7 +12370,7 @@ function finalizeDesign(designId) {
   optimisticUpdate('designs', designId, fields, { failMsg: '定稿失敗' })
     .then(function() {
       renderDesigns();
-      showUndoToast('已定稿（Base 已同步；取消請至 Base）');
+      showUndoToast('已定稿（若需改為未定稿請通知管理員）');
     })
     .catch(function() { renderDesigns(); });
 }
@@ -12380,17 +12383,12 @@ function unfinalizeDesign(designId) {
     body: '確定改回未定稿？改回後才可繼續編輯版本。',
     okText: '改回未定稿',
     onOk: function() {
-      var fields = { '定稿狀態': '未定稿' };
-      apiPut('designs', designId, fields).then(function() {
-        var rec = designsData.find(function(r) { return r.record_id === designId; });
-        if (rec) {
-          rec.fields = rec.fields || {};
-          rec.fields['定稿狀態'] = '未定稿';
-        }
-        renderDesigns();
-      }).catch(function(err) {
-        alert('解除定稿失敗：' + (err.message || '請稍後再試'));
-      });
+      optimisticUpdate('designs', designId, { '定稿狀態': '未定稿' }, { failMsg: '解除定稿失敗' })
+        .then(function() {
+          renderDesigns();
+          showUndoToast('已改回未定稿');
+        })
+        .catch(function() { renderDesigns(); });
     }
   });
 }
