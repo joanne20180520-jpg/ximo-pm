@@ -1725,7 +1725,9 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
     'NAS路徑位置': ['路徑位置'],
     '路徑位置': ['NAS路徑位置'],
     '備註': ['備註（工作細項說明）'],
-    '備註（工作細項說明）': ['備註']
+    '備註（工作細項說明）': ['備註'],
+    '設計師備註時間': ['設計師備註更新時間'],
+    'PM 回饋時間': ['PM回饋時間', 'PM 回饋更新時間']
   }, paymentAliases);
   const src = Object.assign({}, fields);
   Object.keys(fieldAliases).forEach(function(canonical) {

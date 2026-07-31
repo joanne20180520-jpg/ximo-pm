@@ -580,6 +580,8 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .des-sticky.empty.des-sticky-d:hover:not(:disabled){border-color:#2d6a4f;color:#1a7a45;background:#f3faf6}
 .des-sticky.empty.des-sticky-p:hover:not(:disabled){border-color:#b06000;color:#b06000;background:#fffaf2}
 .des-sticky-hint{font-size:11px;font-weight:600}
+.des-sticky-body{display:block;white-space:pre-wrap;word-break:break-word}
+.des-sticky-time{display:block;text-align:right;font-size:10px;opacity:.65;margin-top:6px;font-variant-numeric:tabular-nums;font-weight:600;letter-spacing:.02em}
 .des-ver-chip.editable{cursor:pointer;transition:background .12s,color .12s}
 .des-ver-chip.editable:hover{background:var(--c2);color:#fff}
 .pp-note{width:420px}
@@ -3892,7 +3894,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260731v16';
+var APP_BUILD = '20260731v17';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12280,11 +12282,59 @@ function canEditDesignVersionRecord(finalized) {
   return isPMRole() || currentUserRole === '設計師' || isAdminRole();
 }
 
-function renderDesignStickyNote(text, kind, versionId, designId, finalized) {
+var DESIGN_NOTE_TS_RE = /\n?‖ximo-ts:(\d+)‖\s*$/;
+
+function parseDesignNotePayload(raw) {
+  raw = raw == null ? '' : String(raw);
+  var m = raw.match(DESIGN_NOTE_TS_RE);
+  if (m) {
+    return {
+      text: raw.replace(DESIGN_NOTE_TS_RE, '').replace(/\s+$/, ''),
+      ts: parseInt(m[1], 10) || null
+    };
+  }
+  return { text: raw.replace(/\s+$/, ''), ts: null };
+}
+
+function packDesignNotePayload(text, ts) {
+  var clean = parseDesignNotePayload(text).text.trim();
+  if (!clean) return '';
+  var t = ts || Date.now();
+  return clean + '\n‖ximo-ts:' + t + '‖';
+}
+
+function designNoteTimeField(field) {
+  if (field === '設計師備註') return '設計師備註時間';
+  if (field === 'PM 回饋') return 'PM 回饋時間';
+  return '';
+}
+
+function resolveDesignNoteTs(vf, field, packedText) {
+  vf = vf || {};
+  var timeKey = designNoteTimeField(field);
+  var fromField = timeKey ? parseTs(vf[timeKey]) : null;
+  if (fromField) return fromField.getTime();
+  var parsed = parseDesignNotePayload(packedText);
+  return parsed.ts || null;
+}
+
+function fmtNoteTime(val) {
+  var d = parseTs(val);
+  if (!d) return '';
+  return String(d.getMonth() + 1).padStart(2, '0') + '/'
+    + String(d.getDate()).padStart(2, '0') + ' '
+    + String(d.getHours()).padStart(2, '0') + ':'
+    + String(d.getMinutes()).padStart(2, '0');
+}
+
+function renderDesignStickyNote(text, kind, versionId, designId, finalized, versionFields) {
   var field = kind === 'd' ? '設計師備註' : 'PM 回饋';
   var can = canEditDesignVersionNote(field) && (!(finalized) || isAdminRole());
   var cls = 'des-sticky ' + (kind === 'd' ? 'des-sticky-d' : 'des-sticky-p');
-  var raw = (text == null ? '' : String(text)).trim();
+  var parsed = parseDesignNotePayload(text);
+  var raw = (parsed.text || '').trim();
+  var ts = resolveDesignNoteTs(versionFields, field, text);
+  var timeHtml = ts ? '<span class="des-sticky-time">' + escHtml(fmtNoteTime(ts)) + '</span>' : '';
   if (!raw) {
     if (!can) {
       if (kind === 'p') return '<span class="des-note-wait">等待PM回饋...</span>';
@@ -12292,10 +12342,11 @@ function renderDesignStickyNote(text, kind, versionId, designId, finalized) {
     }
     return '<button type="button" class="' + cls + ' empty" title="點擊寫備註" onclick="event.stopPropagation();openDesignVersionNote(\'' + versionId + '\',\'' + designId + '\',\'' + field + '\')"><span class="des-sticky-hint">＋ 寫備註</span></button>';
   }
+  var body = '<span class="des-sticky-body">' + escHtml(raw) + '</span>' + timeHtml;
   if (can) {
-    return '<button type="button" class="' + cls + '" title="點擊編輯備註" onclick="event.stopPropagation();openDesignVersionNote(\'' + versionId + '\',\'' + designId + '\',\'' + field + '\')">' + escHtml(raw) + '</button>';
+    return '<button type="button" class="' + cls + '" title="點擊編輯備註" onclick="event.stopPropagation();openDesignVersionNote(\'' + versionId + '\',\'' + designId + '\',\'' + field + '\')">' + body + '</button>';
   }
-  return '<div class="' + cls + '" style="cursor:default">' + escHtml(raw) + '</div>';
+  return '<div class="' + cls + '" style="cursor:default">' + body + '</div>';
 }
 
 function renderDesignVersionPanel(designId, finalized) {
@@ -12326,8 +12377,8 @@ function renderDesignVersionPanel(designId, finalized) {
       rows += '<tr>'
         + '<td><span class="' + chipCls + '"' + chipAttr + '>' + escHtml(verLabel) + '</span></td>'
         + '<td>' + formatDesignAttachmentCell(vf['稿件連結']) + '</td>'
-        + '<td>' + renderDesignStickyNote(vf['設計師備註'], 'd', ver.record_id, designId, finalized) + '</td>'
-        + '<td>' + renderDesignStickyNote(vf['PM 回饋'], 'p', ver.record_id, designId, finalized) + '</td>'
+        + '<td>' + renderDesignStickyNote(vf['設計師備註'], 'd', ver.record_id, designId, finalized, vf) + '</td>'
+        + '<td>' + renderDesignStickyNote(vf['PM 回饋'], 'p', ver.record_id, designId, finalized, vf) + '</td>'
         + '<td>' + (vf['提交日期'] ? fmtDate(vf['提交日期']) : '—') + '</td>'
         + '<td style="white-space:nowrap">' + actionBtns + '</td>'
         + '</tr>';
@@ -12588,8 +12639,8 @@ function fillDesignVersionForm(designRec, versionRec, titleText, saveText) {
   else linkVal = String(linkVal);
   if (/^https?:\/\//i.test(linkVal)) document.getElementById('dv-link').value = linkVal;
   else document.getElementById('dv-link').value = '';
-  document.getElementById('dv-designer-note').value = f['設計師備註'] || '';
-  document.getElementById('dv-pm-note').value = f['PM 回饋'] || '';
+  document.getElementById('dv-designer-note').value = parseDesignNotePayload(f['設計師備註'] || '').text;
+  document.getElementById('dv-pm-note').value = parseDesignNotePayload(f['PM 回饋'] || '').text;
   document.getElementById('dv-date').value = f['提交日期'] ? tsToDateInput(f['提交日期']) : '';
   document.getElementById('dv-title').textContent = titleText;
   var saveBtn = document.getElementById('dv-save-btn');
@@ -12657,7 +12708,7 @@ function openDesignVersionNote(versionId, designId, field) {
   var isDesignerNote = field === '設計師備註';
   document.getElementById('dn-title').textContent = isDesignerNote ? '設計師備註' : 'PM 回饋';
   document.getElementById('dn-sub').textContent = (verRec.fields || {})['版本'] || '版本';
-  document.getElementById('dn-text').value = (verRec.fields || {})[field] || '';
+  document.getElementById('dn-text').value = parseDesignNotePayload((verRec.fields || {})[field] || '').text;
   var box = document.getElementById('pp-des-note-box');
   if (box) {
     box.classList.remove('pp-note-d', 'pp-note-p');
@@ -12676,8 +12727,11 @@ function saveDesignVersionNote() {
   var versionId = designNoteCtx.versionId;
   var designId = designNoteCtx.designId;
   var textVal = (document.getElementById('dn-text').value || '').trim();
+  var now = Date.now();
   var fields = {};
-  fields[field] = textVal;
+  fields[field] = textVal ? packDesignNotePayload(textVal, now) : '';
+  var timeKey = designNoteTimeField(field);
+  if (timeKey) fields[timeKey] = textVal ? now : null;
   cl('pp-des-note');
   designNoteCtx = null;
   optimisticUpdate('design_versions', versionId, fields, { failMsg: '備註儲存失敗' })
@@ -12721,8 +12775,25 @@ function saveDesignVersion() {
     if (Array.isArray(origLink)) fields['稿件連結'] = [];
     else fields['稿件連結'] = '';
   }
-  if (canEditDesignVersionNote('設計師備註')) fields['設計師備註'] = dNote;
-  if (canEditDesignVersionNote('PM 回饋')) fields['PM 回饋'] = pNote;
+  var nowTs = Date.now();
+  var prevVer = editingDesignVersionRecId
+    ? ((designVersionsData || []).find(function(r) { return r.record_id === editingDesignVersionRecId; }) || null)
+    : null;
+  var prevF = (prevVer && prevVer.fields) || {};
+  if (canEditDesignVersionNote('設計師備註')) {
+    var prevD = parseDesignNotePayload(prevF['設計師備註'] || '');
+    var dTs = (dNote && prevD.text === dNote && prevD.ts) ? prevD.ts : (dNote ? nowTs : null);
+    fields['設計師備註'] = dNote ? packDesignNotePayload(dNote, dTs || nowTs) : '';
+    if (dNote) fields['設計師備註時間'] = dTs || nowTs;
+    else fields['設計師備註時間'] = null;
+  }
+  if (canEditDesignVersionNote('PM 回饋')) {
+    var prevP = parseDesignNotePayload(prevF['PM 回饋'] || '');
+    var pTs = (pNote && prevP.text === pNote && prevP.ts) ? prevP.ts : (pNote ? nowTs : null);
+    fields['PM 回饋'] = pNote ? packDesignNotePayload(pNote, pTs || nowTs) : '';
+    if (pNote) fields['PM 回饋時間'] = pTs || nowTs;
+    else fields['PM 回饋時間'] = null;
+  }
   if (dateVal) applyOptionalDateField(fields, '提交日期', dateVal);
   else if (!editingDesignVersionRecId) fields['提交日期'] = Date.now();
 
