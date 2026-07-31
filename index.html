@@ -659,6 +659,14 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .des-confirm-btn.on{background:#2d6a4f;border-color:#2d6a4f;color:#fff}
 .des-confirm-btn:disabled{opacity:.55;cursor:default}
 .des-confirm-label{font-size:9px;color:var(--t3);font-weight:600}
+.des-sign-wrap{display:flex;align-items:center;gap:9px}
+.des-sign-check{width:22px;height:22px;flex:none;border-radius:6px;border:1.5px solid var(--border);background:#fff;color:#fff;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;font-size:13px;line-height:1;font-family:inherit}
+.des-sign-check.on{background:#2d6a4f;border-color:#2d6a4f}
+.des-sign-check:disabled{cursor:default;opacity:.9}
+.des-sign-check:not(.on):disabled{opacity:.55;background:var(--sf2)}
+.des-sign-status{font-size:12px;color:var(--t2)}
+#pp-des-ver .ppf{display:flex;align-items:center;gap:8px}
+#pp-des-ver .ppf .bdel-action{margin-right:auto}
 .des-note-wait{color:var(--t3);font-style:italic;font-size:11px}
 
 #design-area > div[style*="font-size:12px"]{font-size:13px !important}
@@ -1455,13 +1463,25 @@ button.btn-loading::after{content:'…';margin-left:2px}
       <div class="des-acc-body">
         <div class="fg"><label>材質</label><input type="text" id="ed-material" data-des-role="designer"></div>
         <div class="fg"><label>加工項目</label><input type="text" id="ed-process" data-des-role="designer"></div>
-        <div class="fg"><label>設計主管圖面檢核</label><select id="ed-design-check" data-des-role="designer"><option value="false">待檢核</option><option value="true">已檢核</option></select></div>
+        <div class="fg"><label>設計主管圖面檢核</label>
+        <div class="des-sign-wrap">
+          <button type="button" class="des-sign-check" id="ed-design-check-btn" data-des-role="designer" onclick="toggleDesignSignCheck('ed-design-check')" aria-label="設計主管圖面檢核"></button>
+          <span class="des-sign-status" id="ed-design-check-status">未簽核</span>
+          <input type="hidden" id="ed-design-check" value="false">
+        </div>
+      </div>
       </div>
     </div>
     <div class="des-acc" data-acc="pm" data-owner="pm">
       <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">PM審核與定稿</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
-        <div class="fg"><label>PM主管內容審核</label><select id="ed-pm-check" data-des-role="pm"><option value="false">待檢核</option><option value="true">已檢核</option></select></div>
+        <div class="fg"><label>PM主管內容審核</label>
+        <div class="des-sign-wrap">
+          <button type="button" class="des-sign-check" id="ed-pm-check-btn" data-des-role="pm" onclick="toggleDesignSignCheck('ed-pm-check')" aria-label="PM主管內容審核"></button>
+          <span class="des-sign-status" id="ed-pm-check-status">未簽核</span>
+          <input type="hidden" id="ed-pm-check" value="false">
+        </div>
+      </div>
         <div class="fg"><label>定稿時間</label><input type="date" id="ed-final" onchange="onOptionalDateClear(this)" data-des-role="pm"></div>
         <div class="fg"><label>定稿狀態</label><input type="text" id="ed-final-status" readonly style="background:#f0eeea"></div>
       </div>
@@ -1517,7 +1537,11 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>設計師備註</label><textarea id="dv-designer-note" rows="3" placeholder="尺寸、色稿說明…" data-des-ver-role="designer"></textarea></div>
   <div class="fg"><label>PM 回饋</label><textarea id="dv-pm-note" rows="3" placeholder="修改意見…" data-des-ver-role="pm"></textarea></div>
   <div class="fg"><label>提交日期</label><input type="date" id="dv-date" onchange="onOptionalDateClear(this)" data-des-ver-role="both"></div>
-</div><div class="ppf"><button class="bcan" onclick="closeDesignVersionPopup()">取消</button><button class="bpri" id="dv-save-btn" onclick="saveDesignVersion()">新增版本</button></div></div></div>
+</div><div class="ppf">
+  <button class="bcan bdel-action" id="dv-del-btn" style="display:none" onclick="deleteDesignVersionFromEdit()">刪除此版本</button>
+  <button class="bcan" onclick="closeDesignVersionPopup()">取消</button>
+  <button class="bpri" id="dv-save-btn" onclick="saveDesignVersion()">新增版本</button>
+</div></div></div>
 
 <!-- 版本便條備註 -->
 <div class="po" id="pp-des-note"><div class="pp pp-note" id="pp-des-note-box"><div class="pph"><h3 id="dn-title">備註</h3><button class="ppc" onclick="cl('pp-des-note')">✕</button></div><div class="ppb">
@@ -3861,7 +3885,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260731v10';
+var APP_BUILD = '20260731v11';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12261,15 +12285,12 @@ function renderDesignVersionPanel(designId, finalized) {
       var actionBtns = '';
       if (isLatest) {
         if (finalized) {
-          actionBtns += '<div class="des-confirm-cell"><button type="button" class="des-confirm-btn on"' + (isAdminRole() ? ' onclick="event.stopPropagation();unfinalizeDesign(\'' + designId + '\')" title="改回未定稿"' : ' disabled') + '>✓</button><span class="des-confirm-label">定稿</span></div>';
+          actionBtns += '<div class="des-confirm-cell"><button type="button" class="des-confirm-btn on" disabled title="已定稿（取消請至 Base）">✓</button><span class="des-confirm-label">定稿</span></div>';
         } else if (isPMRole()) {
           actionBtns += '<div class="des-confirm-cell"><button type="button" class="des-confirm-btn" onclick="event.stopPropagation();finalizeDesign(\'' + designId + '\')" title="定稿" aria-label="定稿"></button><span class="des-confirm-label">定稿</span></div>';
         } else {
           actionBtns += '<div class="des-confirm-cell"><button type="button" class="des-confirm-btn" disabled></button><span class="des-confirm-label">定稿</span></div>';
         }
-      }
-      if (isAdminRole()) {
-        actionBtns += '<button class="bsm" style="color:#c0392b;border-color:#f0c7c7;background:#fff5f5;margin-top:4px" onclick="event.stopPropagation();deleteDesignVersion(\'' + ver.record_id + '\',\'' + designId + '\',\'' + escAttr(vf['版本'] || ('V' + (idx + 1))).replace(/'/g, '') + '\')">刪除此版本</button>';
       }
       var verLabel = vf['版本'] || ('V' + (idx + 1));
       var chipCls = 'des-ver-chip' + (canEditDesignVersionRecord(finalized) ? ' editable' : '');
@@ -12292,13 +12313,19 @@ function renderDesignVersionPanel(designId, finalized) {
     actions += '<button class="bsm" onclick="event.stopPropagation();openAddDesignVersion(\'' + designId + '\')">＋ 新增版本（' + escHtml(nextDesignVersionLabel(versions)) + '）</button>';
   }
   if (finalized) {
-    actions += '<span class="ds ds-final">已定稿（版本鎖定）</span>';
-    if (isAdminRole()) {
-      actions += '<button class="bsm" onclick="event.stopPropagation();unfinalizeDesign(\'' + designId + '\')">改回未定稿</button>';
-    }
+    actions += '<span class="ds ds-final">已定稿（版本鎖定；改回請至 Base）</span>';
   }
   actions += '</div>';
   return '<div class="des-ver-wrap">' + rows + actions + '</div>';
+}
+
+function deleteDesignVersionFromEdit() {
+  if (!isAdminRole() || !editingDesignVersionRecId || !addingDesignVersionId) return;
+  var label = (document.getElementById('dv-version') && document.getElementById('dv-version').value) || '版本';
+  var versionId = editingDesignVersionRecId;
+  var designId = addingDesignVersionId;
+  closeDesignVersionPopup();
+  deleteDesignVersion(versionId, designId, label);
 }
 
 function deleteDesignVersion(versionId, designId, label) {
@@ -12548,6 +12575,10 @@ function fillDesignVersionForm(designRec, versionRec, titleText, saveText) {
   document.getElementById('dv-title').textContent = titleText;
   var saveBtn = document.getElementById('dv-save-btn');
   if (saveBtn) saveBtn.textContent = saveText;
+  var delBtn = document.getElementById('dv-del-btn');
+  if (delBtn) {
+    delBtn.style.display = (isAdminRole() && !!editingDesignVersionRecId) ? '' : 'none';
+  }
   applyDesignVersionFormPermissions();
   var zone = document.getElementById('dv-attach-zone');
   if (zone) zone.style.pointerEvents = canUploadDesVerAttach() ? '' : 'none';
@@ -13636,11 +13667,47 @@ function setDesignSelectBool(id, val) {
   var el = document.getElementById(id);
   if (!el) return;
   el.value = designBoolFromField(val) ? 'true' : 'false';
+  syncDesignSignCheckUi(id);
 }
 
 function readDesignSelectBool(id) {
   var el = document.getElementById(id);
   return !!(el && el.value === 'true');
+}
+
+function syncDesignSignCheckUi(id) {
+  var hidden = document.getElementById(id);
+  var btn = document.getElementById(id + '-btn');
+  var status = document.getElementById(id + '-status');
+  if (!hidden || !btn) return;
+  var on = hidden.value === 'true';
+  btn.classList.toggle('on', on);
+  btn.textContent = on ? '✓' : '';
+  if (status) status.textContent = on ? '已簽核' : '未簽核';
+  if (on) {
+    btn.disabled = true;
+    return;
+  }
+  var acc = btn.closest('.des-acc');
+  if (acc && acc.classList.contains('locked')) {
+    btn.disabled = true;
+    return;
+  }
+  var role = btn.getAttribute('data-des-role') || 'pm';
+  var can = canEditDesignRole(role);
+  if (currentUserRole === '設計師' && role === 'pm') can = false;
+  if (currentUserRole === '設計師' && (role === 'designer' || role === 'both')) can = true;
+  if (isAdminRole()) can = true;
+  btn.disabled = !can;
+}
+
+function toggleDesignSignCheck(id) {
+  var hidden = document.getElementById(id);
+  var btn = document.getElementById(id + '-btn');
+  if (!hidden || !btn || btn.disabled) return;
+  if (hidden.value === 'true') return;
+  hidden.value = 'true';
+  syncDesignSignCheckUi(id);
 }
 
 function canEditDesignRole(role) {
@@ -13850,11 +13917,13 @@ function applyEditDesignPermissions() {
     if (lock) lock.hidden = mine;
     acc.style.display = '';
     if (!mine) {
-      acc.querySelectorAll('input, select, textarea').forEach(function(el) {
+      acc.querySelectorAll('input, select, textarea, button.des-sign-check').forEach(function(el) {
         el.disabled = true;
       });
     }
   });
+  syncDesignSignCheckUi('ed-design-check');
+  syncDesignSignCheckUi('ed-pm-check');
 }
 
 function collectDesignBasicFields(prefix) {
