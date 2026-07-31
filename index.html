@@ -619,7 +619,7 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .des-drawer .fg{display:grid;grid-template-columns:118px 1fr;gap:6px 12px;align-items:start;margin-bottom:10px}
 .des-drawer .fg label{margin:0;padding-top:7px;line-height:1.3}
 .des-drawer .fg textarea{min-height:52px}
-.dt tr.des-row{cursor:pointer}
+.dt tr.des-row{cursor:default}
 .dt tr.des-row:hover td{background:var(--sf2)}
 .des-name-text{font-weight:600}
 .dt td.des-act{width:40px;text-align:center;padding-right:8px}
@@ -643,6 +643,24 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 #pg-d .des-sticky-hint{font-size:12px}
 #pg-d .bsm{font-size:12px}
 #pg-d .des-item-sub{font-size:12px;color:var(--t3);margin-left:18px;margin-top:2px}
+
+.des-acc.locked .des-acc-body{background:var(--sf2);border-radius:8px;margin:0 8px 8px;padding:8px 10px}
+.des-acc-lock{font-size:10px;color:var(--t3);font-weight:600;margin-left:4px}
+.des-person{display:inline-flex;align-items:center;gap:5px;max-width:100%}
+.des-person .av{width:18px;height:18px;font-size:9px}
+.des-progress{display:flex;align-items:center;gap:8px;min-width:90px}
+.des-progress-track{flex:1;height:6px;border-radius:99px;background:var(--border);overflow:hidden;min-width:48px}
+.des-progress-fill{height:100%;border-radius:99px;background:var(--accent)}
+.des-progress-label{font-size:11px;color:var(--t2);font-variant-numeric:tabular-nums;flex-shrink:0}
+.des-ver-file{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--c2);background:#e4ecf3;padding:3px 8px;border-radius:6px;text-decoration:none;max-width:100%}
+.des-ver-file:hover{text-decoration:underline}
+.des-confirm-cell{display:flex;flex-direction:column;align-items:center;gap:2px}
+.des-confirm-btn{width:28px;height:28px;border-radius:6px;border:1.5px solid var(--border);background:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:14px;color:transparent;padding:0}
+.des-confirm-btn.on{background:#2d6a4f;border-color:#2d6a4f;color:#fff}
+.des-confirm-btn:disabled{opacity:.55;cursor:default}
+.des-confirm-label{font-size:9px;color:var(--t3);font-weight:600}
+.des-note-wait{color:var(--t3);font-style:italic;font-size:11px}
+
 #design-area > div[style*="font-size:12px"]{font-size:13px !important}
 
 .des-sec{font-size:11px;font-weight:700;color:var(--t2);margin:10px 0 6px;padding-top:6px;border-top:1px solid var(--border)}
@@ -1410,8 +1428,18 @@ button.btn-loading::after{content:'…';margin-left:2px}
     </div>
   </div>
   <div class="des-drawer-body" id="pp-edit-des">
-    <div class="des-acc open" data-acc="req">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▼</span><span class="des-acc-title">需求規格</span><span class="des-acc-owner">PM填</span></button>
+    <div class="des-acc" data-acc="basic" data-owner="pm">
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">指派與進度</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
+      <div class="des-acc-body">
+        <div class="fg"><label>主類別</label><input type="text" id="ed-name" data-des-role="pm"></div>
+        <div class="fg"><label>所屬工作項目</label><select id="ed-wi" data-des-role="pm"></select></div>
+        <div class="fg"><label>負責PM</label><select id="ed-pm" data-members data-des-role="pm"></select></div>
+        <div class="fg"><label>設計師</label><select id="ed-designer" data-members="designer" data-des-role="pm"></select></div>
+        <div class="fg"><label>進度狀態</label><select id="ed-status" data-des-role="both"></select></div>
+      </div>
+    </div>
+    <div class="des-acc" data-acc="req" data-owner="pm">
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">需求規格</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
         <div class="fg"><label>項目</label><input type="text" id="ed-item" data-des-role="pm"></div>
         <div class="fg"><label>尺寸</label><input type="text" id="ed-size" data-des-role="pm"></div>
@@ -1422,40 +1450,45 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <div class="fg"><label>初稿時間</label><input type="date" id="ed-draft" onchange="onOptionalDateClear(this)" data-des-role="pm"></div>
       </div>
     </div>
-    <div class="des-acc" data-acc="make">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">製作規格</span><span class="des-acc-owner">設計師填</span></button>
+    <div class="des-acc" data-acc="make" data-owner="designer">
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">製作規格</span><span class="des-acc-owner">設計師填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
         <div class="fg"><label>材質</label><input type="text" id="ed-material" data-des-role="designer"></div>
         <div class="fg"><label>加工項目</label><input type="text" id="ed-process" data-des-role="designer"></div>
         <div class="fg"><label>設計主管圖面檢核</label><select id="ed-design-check" data-des-role="designer"><option value="false">待檢核</option><option value="true">已檢核</option></select></div>
-        <div class="fg"><label>發包時間</label><input type="date" id="ed-outsource-date" onchange="onOptionalDateClear(this)" data-des-role="designer"></div>
-        <div class="fg"><label>到貨時間</label><input type="date" id="ed-arrive" onchange="onOptionalDateClear(this)" data-des-role="designer"></div>
-        <div class="fg"><label>數量</label><input type="text" id="ed-qty" data-des-role="designer"></div>
-        <div class="fg"><label>NAS路徑位置</label><input type="text" id="ed-path" data-des-role="designer"></div>
       </div>
     </div>
-    <div class="des-acc" data-acc="pm">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">PM審核與定稿</span><span class="des-acc-owner">PM填</span></button>
+    <div class="des-acc" data-acc="pm" data-owner="pm">
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">PM審核與定稿</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
         <div class="fg"><label>PM主管內容審核</label><select id="ed-pm-check" data-des-role="pm"><option value="false">待檢核</option><option value="true">已檢核</option></select></div>
         <div class="fg"><label>定稿時間</label><input type="date" id="ed-final" onchange="onOptionalDateClear(this)" data-des-role="pm"></div>
         <div class="fg"><label>定稿狀態</label><input type="text" id="ed-final-status" readonly style="background:#f0eeea"></div>
       </div>
     </div>
-    <div class="des-acc" data-acc="money">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">發包資訊</span><span class="des-acc-owner">設計師填</span></button>
+    <div class="des-acc" data-acc="money" data-owner="designer">
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">發包資訊</span><span class="des-acc-owner">設計師填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
         <div class="fg"><label>發包廠商</label><input type="text" id="ed-vendor" data-des-role="designer"></div>
         <div class="fg"><label>價格</label><input type="text" class="money-input" id="ed-price" placeholder="NT$0" data-des-role="designer"></div>
         <div class="fg"><label>稅收</label><input type="text" id="ed-tax" data-des-role="designer"></div>
-        <div class="fg"><label>發票抬頭</label><textarea id="ed-invoice" rows="2" data-des-role="pm"></textarea></div>
+        <div class="fg"><label>發票抬頭</label><textarea id="ed-invoice" rows="2" data-des-role="designer"></textarea></div>
         <div class="fg"><label>已完成</label><select id="ed-done" data-des-role="designer"><option value="false">否</option><option value="true">是</option></select></div>
       </div>
     </div>
-    <div class="des-acc" data-acc="note">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">備註</span><span class="des-acc-owner">共同</span></button>
+    <div class="des-acc" data-acc="deliver" data-owner="designer">
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">到貨與交付</span><span class="des-acc-owner">設計師填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
-        <div class="fg"><label>備註（詢價可寫這裡）</label><textarea id="ed-remark" rows="3" data-des-role="both"></textarea></div>
+        <div class="fg"><label>發包時間</label><input type="date" id="ed-outsource-date" onchange="onOptionalDateClear(this)" data-des-role="designer"></div>
+        <div class="fg"><label>到貨時間</label><input type="date" id="ed-arrive" onchange="onOptionalDateClear(this)" data-des-role="designer"></div>
+        <div class="fg"><label>數量</label><input type="text" id="ed-qty" data-des-role="designer"></div>
+        <div class="fg"><label>NAS路徑位置</label><input type="text" id="ed-path" data-des-role="designer"></div>
+      </div>
+    </div>
+    <div class="des-acc" data-acc="note" data-owner="both">
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">備註（工作細項說明）</span><span class="des-acc-owner">共同</span></button>
+      <div class="des-acc-body">
+        <div class="fg"><label>備註（詢價可寫這裡）</label><textarea id="ed-remark" rows="3" placeholder="如：設計師詢價，PM再回填價格" data-des-role="both"></textarea></div>
       </div>
     </div>
   </div>
@@ -3828,7 +3861,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260731v9';
+var APP_BUILD = '20260731v10';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12158,7 +12191,7 @@ function formatDesignAttachmentCell(val) {
       var name = (file && (file.name || file.file_name)) || ('檔案' + (i + 1));
       var token = file && (file.file_token || file.token);
       if (token) {
-        return '<a class="des-file-link" href="#" onclick="event.stopPropagation();downloadDesignAttachment(\'' + escHtml(token) + '\',\'' + escHtml(name).replace(/'/g, '') + '\')">' + escHtml(name) + '</a>';
+        return '<a class="des-ver-file" href="#" onclick="event.stopPropagation();downloadDesignAttachment(\'' + escHtml(token) + '\',\'' + escHtml(name).replace(/'/g, '') + '\')" title="' + escHtml(name) + '">' + escHtml(name.length > 18 ? name.slice(0, 18) + '…' : name) + '</a>';
       }
       return escHtml(name);
     }).join('<br>');
@@ -12203,7 +12236,10 @@ function renderDesignStickyNote(text, kind, versionId, designId, finalized) {
   var cls = 'des-sticky ' + (kind === 'd' ? 'des-sticky-d' : 'des-sticky-p');
   var raw = (text == null ? '' : String(text)).trim();
   if (!raw) {
-    if (!can) return '<span style="color:var(--t3)">—</span>';
+    if (!can) {
+      if (kind === 'p') return '<span class="des-note-wait">等待PM回饋...</span>';
+      return '<span class="des-note-wait">—</span>';
+    }
     return '<button type="button" class="' + cls + ' empty" title="點擊寫備註" onclick="event.stopPropagation();openDesignVersionNote(\'' + versionId + '\',\'' + designId + '\',\'' + field + '\')"><span class="des-sticky-hint">＋ 寫備註</span></button>';
   }
   if (can) {
@@ -12216,18 +12252,24 @@ function renderDesignVersionPanel(designId, finalized) {
   var versions = getVersionsForDesign(designId);
   var rows = '';
   if (!versions.length) {
-    rows = '<div class="empty-versions" style="color:var(--t3);font-size:11px;padding:4px 0">尚無版本紀錄</div>';
+    rows = '<div class="empty-versions" style="color:var(--t3);font-size:12px;padding:8px 4px">尚無版本，等待設計師建立第一版。</div>';
   } else {
     rows = '<table class="des-ver-table"><thead><tr><th>版本</th><th>稿件連結</th><th>設計師備註</th><th>PM 回饋</th><th>提交日期</th><th></th></tr></thead><tbody>';
     versions.forEach(function(ver, idx) {
       var vf = ver.fields || {};
       var isLatest = idx === versions.length - 1;
       var actionBtns = '';
-      if (isLatest && !finalized && isPMRole()) {
-        actionBtns += '<button class="bsm" style="background:var(--report);color:#fff;border-color:var(--report)" onclick="event.stopPropagation();finalizeDesign(\'' + designId + '\')">定稿</button>';
+      if (isLatest) {
+        if (finalized) {
+          actionBtns += '<div class="des-confirm-cell"><button type="button" class="des-confirm-btn on"' + (isAdminRole() ? ' onclick="event.stopPropagation();unfinalizeDesign(\'' + designId + '\')" title="改回未定稿"' : ' disabled') + '>✓</button><span class="des-confirm-label">定稿</span></div>';
+        } else if (isPMRole()) {
+          actionBtns += '<div class="des-confirm-cell"><button type="button" class="des-confirm-btn" onclick="event.stopPropagation();finalizeDesign(\'' + designId + '\')" title="定稿" aria-label="定稿"></button><span class="des-confirm-label">定稿</span></div>';
+        } else {
+          actionBtns += '<div class="des-confirm-cell"><button type="button" class="des-confirm-btn" disabled></button><span class="des-confirm-label">定稿</span></div>';
+        }
       }
       if (isAdminRole()) {
-        actionBtns += '<button class="bsm" style="color:#c0392b;border-color:#f0c7c7;background:#fff5f5;margin-left:4px" onclick="event.stopPropagation();deleteDesignVersion(\'' + ver.record_id + '\',\'' + designId + '\',\'' + escAttr(vf['版本'] || ('V' + (idx + 1))).replace(/'/g, '') + '\')">刪除此版本</button>';
+        actionBtns += '<button class="bsm" style="color:#c0392b;border-color:#f0c7c7;background:#fff5f5;margin-top:4px" onclick="event.stopPropagation();deleteDesignVersion(\'' + ver.record_id + '\',\'' + designId + '\',\'' + escAttr(vf['版本'] || ('V' + (idx + 1))).replace(/'/g, '') + '\')">刪除此版本</button>';
       }
       var verLabel = vf['版本'] || ('V' + (idx + 1));
       var chipCls = 'des-ver-chip' + (canEditDesignVersionRecord(finalized) ? ' editable' : '');
@@ -12648,6 +12690,26 @@ function saveDesignVersion() {
     .catch(function() { renderDesigns(); });
 }
 
+
+function renderDesignPersonCell(name) {
+  var n = (name || '').trim();
+  if (!n) return '<span style="color:var(--t3)">—</span>';
+  return '<span class="des-person"><span class="av ' + avatarClass(n) + '">' + personInitial(n) + '</span><span>' + escHtml(n) + '</span></span>';
+}
+
+function renderDesignProgressCell(status, num) {
+  var pct = parseProgressVal(status, num);
+  if (pct == null || isNaN(pct)) pct = 0;
+  pct = Math.max(0, Math.min(100, Math.round(pct)));
+  if (pct <= 0 && (!status || status === '未開始')) {
+    return '<span class="ds ds-pending">未開始</span>';
+  }
+  if (pct >= 100 || status === '已完成') {
+    return '<span class="ds ds-done">已完成</span>';
+  }
+  return '<div class="des-progress"><span class="des-progress-track"><span class="des-progress-fill" style="width:' + pct + '%"></span></span><span class="des-progress-label">' + pct + '%</span></div>';
+}
+
 function renderDesigns() {
   var area = document.getElementById('design-area');
   if (!area) return;
@@ -12695,26 +12757,26 @@ function renderDesigns() {
       var finalBadge = d.finalized
         ? '<span class="ds ds-final">已定稿</span>'
         : '<span class="ds ds-draft">未定稿</span>';
-      rows += '<tr class="erow des-row" onclick="openEditDesignBasic(\'' + d.id + '\',event)" title="點擊編輯主類別／指派／進度">'
+      rows += '<tr class="erow des-row">'
         + '<td style="font-weight:500;white-space:nowrap">'
         + '<button type="button" class="des-toggle" onclick="toggleDesignExpand(\'' + d.id + '\',event)" title="展開版本">' + (expanded ? '▼' : '▶') + '</button> '
         + '<span class="des-name-text">' + escHtml(d.name) + '</span>'
         + (d.item ? '<div class="des-item-sub">' + escHtml(d.item) + '</div>' : '')
         + '</td>'
         + '<td>' + escHtml(d.wiName) + '</td>'
-        + '<td>' + escHtml(d.pm) + '</td>'
-        + '<td>' + escHtml(d.designer) + '</td>'
-        + '<td>' + buildProgressStatusBadge(d.progressStatus || d.status, d.progressNum) + '</td>'
+        + '<td>' + renderDesignPersonCell(d.pm) + '</td>'
+        + '<td>' + renderDesignPersonCell(d.designer) + '</td>'
+        + '<td>' + renderDesignProgressCell(d.progressStatus || d.status, d.progressNum) + '</td>'
         + '<td>' + finalBadge + '</td>'
         + '<td>' + d.nextStep.html + '</td>'
-        + '<td class="des-act"><button type="button" class="des-drawer-btn" title="資料填寫" onclick="event.stopPropagation();openEditDesign(\'' + d.id + '\')">☰</button></td>'
+        + '<td class="des-act"><button type="button" class="des-drawer-btn" title="查看規格詳情" onclick="event.stopPropagation();openEditDesign(\'' + d.id + '\')">☰</button></td>'
         + '</tr>';
       if (expanded) {
         rows += '<tr class="des-exp-row"><td colspan="8">' + renderDesignVersionPanel(d.id, d.finalized) + '</td></tr>';
       }
     });
     return header
-      + '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>主類別</th><th>所屬工作項目</th><th>負責PM</th><th>設計師</th><th>進度狀態</th><th>定稿狀態</th><th>下一步日期</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+      + '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>設計項目名稱</th><th>所屬工作項目</th><th>負責PM</th><th>設計師</th><th>進度狀態</th><th>定稿狀態</th><th>下一步日期</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }
 
   var html = '';
@@ -13674,6 +13736,21 @@ function openEditDesign(desId) {
   editingDesignId = desId;
   var f = rec.fields || {};
   refreshFormSelects();
+  document.getElementById('ed-name').value = getDesignDisplayName(f);
+  var wiIds = getLinkIds(f['所屬工作項目']);
+  var wiSel = document.getElementById('ed-wi');
+  if (wiSel && wiIds[0]) wiSel.value = wiIds[0];
+  selectMemberOption(document.getElementById('ed-pm'), f['負責PM']);
+  selectMemberOption(document.getElementById('ed-designer'), f['設計師']);
+  var statusSel = document.getElementById('ed-status');
+  if (statusSel) {
+    fillSelectOptions(statusSel, PROGRESS_OPTIONS);
+    var progStatus = f['進度狀態'] || getDesignProgressStatus(f);
+    statusSel.value = progStatus;
+    for (var k = 0; k < statusSel.options.length; k++) {
+      if (statusSel.options[k].value === progStatus) { statusSel.selectedIndex = k; break; }
+    }
+  }
   document.getElementById('ed-item').value = f['項目'] || '';
   document.getElementById('ed-size').value = f['尺寸'] || '';
   document.getElementById('ed-side').value = f['單雙面'] || '';
@@ -13749,30 +13826,34 @@ function toggleDesignAcc(btn) {
   if (chev) chev.textContent = open ? '▼' : '▶';
 }
 
+function designDrawerOwnerMatches(owner) {
+  if (isAdminRole()) return true;
+  if (owner === 'both') return true;
+  if (owner === 'pm') return isPMRole();
+  if (owner === 'designer') return currentUserRole === '設計師' || isPMRole();
+  return false;
+}
+
 function applyEditDesignPermissions() {
   applyDesignFormPermissions('#pp-edit-des');
-  var designerOnly = currentUserRole === '設計師' && !isPMRole() && !isAdminRole();
-  var firstOpen = null;
+  var roleKey = isAdminRole() ? 'admin' : (currentUserRole === '設計師' ? 'designer' : 'pm');
   document.querySelectorAll('#pp-edit-des .des-acc').forEach(function(acc) {
-    var inputs = acc.querySelectorAll('[data-des-role]');
-    var anyEnabled = false;
-    inputs.forEach(function(el) {
-      if (!el.disabled) anyEnabled = true;
-    });
-    if (designerOnly && !anyEnabled) {
-      acc.style.display = 'none';
-      acc.classList.remove('open');
-      return;
-    }
-    acc.style.display = '';
-    if (anyEnabled && !firstOpen) firstOpen = acc;
-  });
-  document.querySelectorAll('#pp-edit-des .des-acc').forEach(function(acc) {
-    if (acc.style.display === 'none') return;
-    var open = acc === firstOpen;
+    var owner = acc.getAttribute('data-owner') || 'pm';
+    var mine = isAdminRole() || owner === 'both' || owner === roleKey;
+    // Demo：本角色區塊預設展開；非本角色收合＋唯讀（管理員全開）
+    var open = isAdminRole() || owner === 'both' || owner === roleKey;
     acc.classList.toggle('open', open);
+    acc.classList.toggle('locked', !mine);
     var chev = acc.querySelector('.des-acc-chev');
     if (chev) chev.textContent = open ? '▼' : '▶';
+    var lock = acc.querySelector('.des-acc-lock');
+    if (lock) lock.hidden = mine;
+    acc.style.display = '';
+    if (!mine) {
+      acc.querySelectorAll('input, select, textarea').forEach(function(el) {
+        el.disabled = true;
+      });
+    }
   });
 }
 
@@ -13794,6 +13875,9 @@ function collectDesignBasicFields(prefix) {
 }
 
 function collectDesignDrawerFields() {
+  var name = (document.getElementById('ed-name') && document.getElementById('ed-name').value || '').trim();
+  var wiId = document.getElementById('ed-wi') ? document.getElementById('ed-wi').value : '';
+  var status = document.getElementById('ed-status') ? (document.getElementById('ed-status').value || '未開始') : '未開始';
   var fields = {
     '項目': document.getElementById('ed-item').value.trim(),
     '尺寸': document.getElementById('ed-size').value.trim(),
@@ -13810,8 +13894,16 @@ function collectDesignDrawerFields() {
     '稅收': document.getElementById('ed-tax').value.trim(),
     '發票抬頭': document.getElementById('ed-invoice').value.trim(),
     '已完成': readDesignSelectBool('ed-done'),
-    '備註': document.getElementById('ed-remark').value.trim()
+    '備註': document.getElementById('ed-remark').value.trim(),
+    '進度狀態': status,
+    '進度數值': parseProgressVal(status, null)
   };
+  if (name) fields['主類別'] = name;
+  if (wiId) fields['所屬工作項目'] = [wiId];
+  var pm = document.getElementById('ed-pm') ? larkPerson(document.getElementById('ed-pm').value) : null;
+  var designer = document.getElementById('ed-designer') ? larkPerson(document.getElementById('ed-designer').value) : null;
+  if (pm) fields['負責PM'] = pm;
+  if (designer) fields['設計師'] = designer;
   var price = parseMoney(document.getElementById('ed-price').value);
   if (price) fields['價格'] = price;
   else fields['價格'] = 0;
@@ -14300,7 +14392,7 @@ function refreshFormSelects() {
       workitemsData.map(function(w){ return w.record_id; })
     );
   }
-  ['ds-wi', 'eb-wi'].forEach(function(id) {
+  ['ds-wi', 'eb-wi', 'ed-wi'].forEach(function(id) {
     var sel = document.getElementById(id);
     if (sel) {
       fillSelectOptions(sel,
@@ -14328,7 +14420,7 @@ function refreshFormSelects() {
   if (statusSel) {
     fillSelectOptions(statusSel, PROGRESS_OPTIONS);
   }
-  ['ds-status', 'eb-status'].forEach(function(id) {
+  ['ds-status', 'eb-status', 'ed-status'].forEach(function(id) {
     var sel = document.getElementById(id);
     if (sel) fillSelectOptions(sel, PROGRESS_OPTIONS);
   });
