@@ -3924,7 +3924,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260803v10';
+var APP_BUILD = '20260803v11';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12314,15 +12314,14 @@ function toggleDesignExpand(designId, ev) {
 
 function canEditDesignVersionNote(field) {
   if (isAdminRole()) return true;
-  if (field === '設計師備註') return isDesignerRole();
+  if (field === '設計師備註') return isDesignerLikeRole();
   if (field === 'PM 回饋') return isPMRole() && !isDesignLeadRole();
   return false;
 }
 
 function canEditDesignVersionRecord(finalized) {
   if (finalized && !isAdminRole()) return false;
-  if (isDesignLeadRole()) return false;
-  return isAdminRole() || isPMRole() || isDesignerRole();
+  return isAdminRole() || isPMRole() || isDesignerLikeRole();
 }
 
 
@@ -12424,8 +12423,7 @@ function renderDesignRemarkThread() {
 }
 
 function addDesignRemarkNote() {
-  if (isDesignLeadRole()) return;
-  if (!(isPMRole() || isDesignerRole() || isAdminRole())) return;
+  if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return;
   if (!editingDesignId) return;
   var input = document.getElementById('ed-remark-input');
   var text = input ? String(input.value || '').trim() : '';
@@ -12565,7 +12563,7 @@ function renderDesignVersionPanel(designId, finalized) {
     rows += '</tbody></table>';
   }
   var actions = '<div class="des-ver-actions">';
-  if (!finalized && (isPMRole() || isDesignerRole())) {
+  if (!finalized && (isPMRole() || isDesignerLikeRole())) {
     actions += '<button class="bsm" onclick="event.stopPropagation();openAddDesignVersion(\'' + designId + '\')">＋ 新增版本（' + escHtml(nextDesignVersionLabel(versions)) + '）</button>';
   }
   if (finalized) {
@@ -12700,7 +12698,7 @@ function renderDesVerAttachList() {
     var dlBtn = item.file_token
       ? '<button type="button" class="attach-item-link" onclick="event.stopPropagation();downloadDesignAttachment(\'' + escAttr(item.file_token) + '\',\'' + escAttr(item.name || '') + '\')">下載</button>'
       : '';
-    var canRemove = isAdminRole() || isPMRole() || isDesignerRole();
+    var canRemove = isAdminRole() || isPMRole() || isDesignerLikeRole();
     var rmBtn = canRemove
       ? '<button type="button" class="attach-item-remove" title="移除" onclick="event.stopPropagation();removeDesVerAttachment(' + idx + ')">×</button>'
       : '';
@@ -12710,7 +12708,7 @@ function renderDesVerAttachList() {
 }
 
 function canUploadDesVerAttach() {
-  return isAdminRole() || isPMRole() || isDesignerRole();
+  return isAdminRole() || isPMRole() || isDesignerLikeRole();
 }
 
 function onDesVerAttachSelect(fileList) {
@@ -12793,7 +12791,7 @@ function removeDesVerAttachment(index) {
 }
 
 function applyDesignVersionFormPermissions() {
-  var isDesigner = isDesignerRole();
+  var isDesigner = isDesignerLikeRole();
   var isPm = isPMRole() && !isDesignLeadRole();
   document.querySelectorAll('#pp-des-ver [data-des-ver-role]').forEach(function(el) {
     var role = el.getAttribute('data-des-ver-role') || 'both';
@@ -12843,8 +12841,8 @@ function openAddDesignVersion(designId) {
     showConfirm({ type: 'edit', title: '無法新增版本', body: '已定稿，無法新增版本。請管理員改回未定稿。', okText: '知道了', hideCancel: true, onOk: function() {} });
     return;
   }
-  if (!(isPMRole() || isDesignerRole())) {
-    showConfirm({ type: 'edit', title: '權限不足', body: '僅設計師／PM 可新增版本。', okText: '知道了', hideCancel: true, onOk: function() {} });
+  if (!(isPMRole() || isDesignerLikeRole())) {
+    showConfirm({ type: 'edit', title: '權限不足', body: '僅設計師／設計主管／PM 可新增版本。', okText: '知道了', hideCancel: true, onOk: function() {} });
     return;
   }
   addingDesignVersionId = designId;
@@ -12926,7 +12924,7 @@ function saveDesignVersionNote() {
 
 function saveDesignVersion() {
   if (!addingDesignVersionId) return;
-  if (!(isPMRole() || isDesignerRole() || isAdminRole())) return;
+  if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return;
   var rec = designsData.find(function(r) { return r.record_id === addingDesignVersionId; });
   if (!rec) return;
   var finalized = isDesignFinalized(rec.fields);
@@ -14060,11 +14058,10 @@ function toggleDesignSignCheck(id) {
 function canEditDesignRole(role) {
   if (role === 'design_lead') return isDesignLeadRole();
   if (role === 'admin_sign') return isAdminRole();
-  if (isDesignLeadRole()) return false;
   if (isAdminRole()) return true;
-  if (role === 'both') return isPMRole() || isDesignerRole();
+  if (role === 'both') return isPMRole() || isDesignerLikeRole();
   if (role === 'pm') return isPMRole();
-  if (role === 'designer') return isDesignerRole();
+  if (role === 'designer') return isDesignerLikeRole();
   return false;
 }
 
@@ -14080,7 +14077,7 @@ function applyDesignFormPermissions(rootSel) {
   if (rootSel === '#pp-edit-des') saveBtn = document.querySelector('#des-drawer .des-drawer-foot .bpri');
   if (!saveBtn) saveBtn = root.querySelector('.ppf .bpri');
   // 設計主管主要勾選簽核（即時寫入）；側欄儲存給 PM／設計師／管理員
-  if (saveBtn) saveBtn.style.display = (isAdminRole() || isPMRole() || isDesignerRole()) ? '' : 'none';
+  if (saveBtn) saveBtn.style.display = (isAdminRole() || isPMRole() || isDesignerLikeRole()) ? '' : 'none';
   var delBtn = document.getElementById('ed-del-btn');
   if (delBtn) delBtn.style.display = isAdminRole() ? '' : 'none';
 }
@@ -14256,16 +14253,16 @@ function toggleDesignAcc(btn) {
 
 function designDrawerOwnerMatches(owner) {
   if (isAdminRole()) return true;
-  if (owner === 'both') return !isDesignLeadRole();
+  if (owner === 'both') return isPMRole() || isDesignerLikeRole();
   if (owner === 'signoff') return isDesignLeadRole() || isAdminRole();
   if (owner === 'pm') return isPMRole();
-  if (owner === 'designer') return isDesignerRole();
+  if (owner === 'designer') return isDesignerLikeRole();
   return false;
 }
 
 function applyEditDesignPermissions() {
   applyDesignFormPermissions('#pp-edit-des');
-  var roleKey = isAdminRole() ? 'admin' : (isDesignLeadRole() ? 'signoff' : (isDesignerRole() ? 'designer' : 'pm'));
+  var roleKey = isAdminRole() ? 'admin' : (isDesignerLikeRole() ? 'designer' : 'pm');
   document.querySelectorAll('#pp-edit-des .des-acc').forEach(function(acc, idx) {
     var owner = acc.getAttribute('data-owner') || 'pm';
     var mine = false;
@@ -14273,7 +14270,8 @@ function applyEditDesignPermissions() {
       // 管理員可看全部；簽核區可操作 PM 主管審核
       mine = true;
     } else if (isDesignLeadRole()) {
-      mine = owner === 'signoff' || owner === 'both';
+      // 設計主管＝設計師權限＋主管簽核
+      mine = owner === 'signoff' || owner === 'designer' || owner === 'both';
     } else if (isDesignerRole()) {
       mine = owner === 'designer' || owner === 'both';
     } else {
@@ -14282,8 +14280,8 @@ function applyEditDesignPermissions() {
     var open = false;
     if (roleKey === 'admin') {
       open = idx === 0;
-    } else if (roleKey === 'signoff') {
-      open = owner === 'signoff';
+    } else if (isDesignLeadRole()) {
+      open = owner === 'signoff' || owner === 'designer' || owner === 'both';
     } else {
       open = owner === roleKey || owner === 'both';
     }
@@ -14371,8 +14369,7 @@ function collectDesignFormFields(prefix) {
 }
 
 function saveEditDesign() {
-  if (isDesignLeadRole()) return;
-  if (!(isPMRole() || isDesignerRole() || isAdminRole())) return;
+  if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return;
   if (!editingDesignId) return;
   var fields = collectDesignDrawerFields();
   var rec = designsData.find(function(r) { return r.record_id === editingDesignId; });
