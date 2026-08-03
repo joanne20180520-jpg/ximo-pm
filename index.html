@@ -1911,10 +1911,14 @@ function sw(btn,id){
 
 var DEEP_LINK_STORAGE_KEY = 'ximo-deeplink-page';
 var DEEP_LINK_DESIGN_KEY = 'ximo-deeplink-design';
+var DEEP_LINK_TASK_KEY = 'ximo-deeplink-task';
 var DEEP_LINK_PAGES = {
   // 時程管理（任務期限）
   schedule: 'pg-s',
   gantt: 'pg-s',
+  task: 'pg-s',
+  tasks: 'pg-s',
+  '任務': 'pg-s',
   '時程管理': 'pg-s',
   '時程': 'pg-s',
   // 履約里程碑
@@ -1951,14 +1955,22 @@ var DEEP_LINK_PAGES = {
   'AI分析': 'pg-ai'
 };
 
-function readDeepLinkDesignId(params) {
-  if (!params) return '';
-  // design 可能被 Lark AppLink 保留字吃掉，多別名相容
-  var raw = (params.get('designId') || params.get('des') || params.get('rec') || params.get('design') || params.get('recordId') || params.get('id') || '').trim();
+function extractRecId(raw) {
+  raw = String(raw || '').trim();
   if (!raw) return '';
-  // Base 有時帶完整 record URL，只取 rec... 段
   var m = raw.match(/rec[A-Za-z0-9]+/);
   return m ? m[0] : raw;
+}
+
+function readDeepLinkDesignId(params) {
+  if (!params) return '';
+  // 勿用通用 recordId／id，避免跟任務深連結衝突
+  return extractRecId(params.get('designId') || params.get('des') || params.get('design') || '');
+}
+
+function readDeepLinkTaskId(params) {
+  if (!params) return '';
+  return extractRecId(params.get('taskId') || params.get('task') || '');
 }
 
 function collectDeepLinkParams() {
@@ -1973,8 +1985,6 @@ function collectDeepLinkParams() {
       if (hash.indexOf('=') >= 0) {
         var hp = new URLSearchParams(hash);
         hp.forEach(function(v, k) { if (!params.get(k)) params.set(k, v); });
-      } else if (/^rec[A-Za-z0-9]+$/.test(hash)) {
-        params.set('designId', hash);
       }
     }
   } catch (e2) {}
@@ -1985,8 +1995,11 @@ function captureDeepLinkFromUrl() {
   try {
     var params = collectDeepLinkParams();
     var designId = readDeepLinkDesignId(params);
+    var taskId = readDeepLinkTaskId(params);
     if (designId) sessionStorage.setItem(DEEP_LINK_DESIGN_KEY, designId);
+    if (taskId) sessionStorage.setItem(DEEP_LINK_TASK_KEY, taskId);
     var page = (params.get('page') || params.get('tab') || '').trim();
+    if (!page && taskId) page = 'schedule';
     if (!page && designId) page = 'design';
     if (!page) return;
     var key = page.toLowerCase();
@@ -1996,7 +2009,7 @@ function captureDeepLinkFromUrl() {
   } catch (e) {}
 }
 
-function ensureDeepLinkDesignProjectSelected(rec) {
+function ensureDeepLinkWiProjectSelected(rec) {
   if (!rec) return;
   var wiIds = getLinkIds((rec.fields || {})['所屬工作項目']);
   var wiId = wiIds[0];
@@ -2004,7 +2017,6 @@ function ensureDeepLinkDesignProjectSelected(rec) {
   var wi = (workitemsData || []).find(function(r) { return r.record_id === wiId; });
   if (!wi) return;
   var projIds = getLinkIds((wi.fields || {})['所屬標案'] || (wi.fields || {})['標案']);
-  // 兼容不同欄位名
   if (!projIds.length) {
     Object.keys(wi.fields || {}).forEach(function(k) {
       if (/標案|项目|專案|Project/i.test(k) && !projIds.length) projIds = getLinkIds(wi.fields[k]);
@@ -2019,6 +2031,21 @@ function ensureDeepLinkDesignProjectSelected(rec) {
   }
 }
 
+function ensureDeepLinkDesignProjectSelected(rec) {
+  ensureDeepLinkWiProjectSelected(rec);
+}
+
+function clearDeepLinkQueryParams(extraKeys) {
+  if (!window.history.replaceState) return;
+  try {
+    var url = new URL(window.location.href);
+    var keys = ['design', 'designId', 'des', 'task', 'taskId', 'page', 'tab'].concat(extraKeys || []);
+    keys.forEach(function(k) { url.searchParams.delete(k); });
+    var qs = url.searchParams.toString();
+    window.history.replaceState({}, '', url.pathname + (qs ? '?' + qs : '') + url.hash);
+  } catch (e) {}
+}
+
 function applyDeepLinkDesign(retries) {
   retries = typeof retries === 'number' ? retries : 40;
   captureDeepLinkFromUrl();
@@ -2026,10 +2053,7 @@ function applyDeepLinkDesign(retries) {
   try { designId = sessionStorage.getItem(DEEP_LINK_DESIGN_KEY) || ''; } catch (e) {}
   if (!designId) designId = readDeepLinkDesignId(collectDeepLinkParams());
   if (!designId) {
-    if (retries > 0) {
-      // Lark 側邊欄有時稍晚才帶上 query
-      setTimeout(function() { applyDeepLinkDesign(retries - 1); }, 300);
-    }
+    if (retries > 0) setTimeout(function() { applyDeepLinkDesign(retries - 1); }, 300);
     return;
   }
   try { sessionStorage.setItem(DEEP_LINK_DESIGN_KEY, designId); } catch (e2) {}
@@ -2050,14 +2074,37 @@ function applyDeepLinkDesign(retries) {
   designExpandedIds[designId] = true;
   renderDesigns();
   setTimeout(function() { openEditDesign(designId); }, 80);
-  if (window.history.replaceState) {
-    try {
-      var url = new URL(window.location.href);
-      ['design', 'designId', 'des', 'rec', 'recordId', 'id', 'page', 'tab'].forEach(function(k) { url.searchParams.delete(k); });
-      var qs = url.searchParams.toString();
-      window.history.replaceState({}, '', url.pathname + (qs ? '?' + qs : '') + url.hash);
-    } catch (e5) {}
+  clearDeepLinkQueryParams();
+}
+
+function applyDeepLinkTask(retries) {
+  retries = typeof retries === 'number' ? retries : 40;
+  captureDeepLinkFromUrl();
+  var taskId = '';
+  try { taskId = sessionStorage.getItem(DEEP_LINK_TASK_KEY) || ''; } catch (e) {}
+  if (!taskId) taskId = readDeepLinkTaskId(collectDeepLinkParams());
+  if (!taskId) {
+    if (retries > 0) setTimeout(function() { applyDeepLinkTask(retries - 1); }, 300);
+    return;
   }
+  try { sessionStorage.setItem(DEEP_LINK_TASK_KEY, taskId); } catch (e2) {}
+  var rec = (tasksData || []).find(function(r) { return r.record_id === taskId; });
+  if (!rec) {
+    if (retries <= 0) {
+      try { sessionStorage.removeItem(DEEP_LINK_TASK_KEY); } catch (e3) {}
+      showUndoToast('找不到該任務（ID 可能無效或尚未同步）');
+      return;
+    }
+    if (!deferredDataReady) loadDeferredTables({ silent: true });
+    else if (retries % 8 === 0) syncTables(['tasks', 'workitems']);
+    setTimeout(function() { applyDeepLinkTask(retries - 1); }, 400);
+    return;
+  }
+  try { sessionStorage.removeItem(DEEP_LINK_TASK_KEY); } catch (e4) {}
+  ensureDeepLinkWiProjectSelected(rec);
+  try { renderTasks(); } catch (e5) {}
+  setTimeout(function() { openTaskDetail(taskId); }, 80);
+  clearDeepLinkQueryParams();
 }
 
 function applyDeepLinkPage() {
@@ -2065,17 +2112,22 @@ function applyDeepLinkPage() {
     captureDeepLinkFromUrl();
     var pageId = sessionStorage.getItem(DEEP_LINK_STORAGE_KEY) || '';
     var designId = '';
+    var taskId = '';
     try { designId = sessionStorage.getItem(DEEP_LINK_DESIGN_KEY) || ''; } catch (e0) {}
-    if (!designId) designId = readDeepLinkDesignId(collectDeepLinkParams());
+    try { taskId = sessionStorage.getItem(DEEP_LINK_TASK_KEY) || ''; } catch (e1) {}
+    var params = collectDeepLinkParams();
+    if (!designId) designId = readDeepLinkDesignId(params);
+    if (!taskId) taskId = readDeepLinkTaskId(params);
     if (!pageId) {
-      var params = collectDeepLinkParams();
       var page = (params.get('page') || params.get('tab') || '').trim();
+      if (!page && taskId) page = 'schedule';
       if (!page && designId) page = 'design';
       var key = page.toLowerCase();
       pageId = DEEP_LINK_PAGES[page] || DEEP_LINK_PAGES[key] || '';
     }
     if (!pageId) {
-      if (designId) applyDeepLinkDesign();
+      if (taskId) applyDeepLinkTask();
+      else if (designId) applyDeepLinkDesign();
       return;
     }
     sessionStorage.removeItem(DEEP_LINK_STORAGE_KEY);
@@ -2083,6 +2135,7 @@ function applyDeepLinkPage() {
     if (!btn) return;
     sw(btn, pageId);
     if (pageId === 'pg-d') applyDeepLinkDesign();
+    if (pageId === 'pg-s') applyDeepLinkTask();
     if (window.history.replaceState) {
       var url = new URL(window.location.href);
       url.searchParams.delete('page');
@@ -4032,7 +4085,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260803v17';
+var APP_BUILD = '20260803v18';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
