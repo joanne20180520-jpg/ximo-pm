@@ -582,6 +582,17 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .des-sticky-hint{font-size:11px;font-weight:600}
 .des-sticky-body{display:block;white-space:pre-wrap;word-break:break-word}
 .des-sticky-time{display:block;text-align:right;font-size:10px;opacity:.65;margin-top:6px;font-variant-numeric:tabular-nums;font-weight:600;letter-spacing:.02em}
+.des-remark-thread{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.des-remark-item{border-radius:7px;padding:8px 10px;font-size:12px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.des-remark-item--designer{background:#e8f6ee;color:#1a7a45;border:1px solid #cfe8d8}
+.des-remark-item--pm{background:#fff6e8;color:#b06000;border:1px solid #f0d9b0}
+.des-remark-item--unknown{background:var(--sf2);color:var(--t2);border:1px solid var(--border)}
+.des-remark-text{display:block}
+.des-remark-meta{display:block;text-align:right;font-size:10px;opacity:.7;margin-top:6px;font-variant-numeric:tabular-nums;font-weight:600}
+.des-remark-empty{font-size:12px;color:var(--t3);font-style:italic;padding:4px 0}
+.des-remark-composer{display:flex;gap:8px;align-items:center}
+.des-remark-composer input{flex:1;min-width:0;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;background:#fff}
+.des-remark-composer .bsm{flex:none;white-space:nowrap}
 .des-ver-chip.editable{cursor:pointer;transition:background .12s,color .12s}
 .des-ver-chip.editable:hover{background:var(--c2);color:#fff}
 .pp-note{width:420px}
@@ -1517,7 +1528,15 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="des-acc" data-acc="note" data-owner="both">
       <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">備註（工作細項說明）</span><span class="des-acc-owner">共同</span></button>
       <div class="des-acc-body">
-        <div class="fg"><label>備註（詢價可寫這裡）</label><textarea id="ed-remark" rows="3" placeholder="如：設計師詢價，PM再回填價格" data-des-role="both"></textarea></div>
+        <div class="fg" style="margin:0">
+          <label>備註（詢價可寫這裡）</label>
+          <div id="ed-remark-thread" class="des-remark-thread"></div>
+          <div class="des-remark-composer" id="ed-remark-composer">
+            <input type="text" id="ed-remark-input" placeholder="新增備註…（如：設計師詢價，PM再回填價格）" data-des-role="both" onkeydown="if(event.key==='Enter'){event.preventDefault();addDesignRemarkNote();}">
+            <button type="button" class="bsm" id="ed-remark-send" data-des-role="both" onclick="addDesignRemarkNote()">送出</button>
+          </div>
+          <input type="hidden" id="ed-remark" value="">
+        </div>
       </div>
     </div>
   </div>
@@ -3894,7 +3913,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260731v19';
+var APP_BUILD = '20260803v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12282,25 +12301,138 @@ function canEditDesignVersionRecord(finalized) {
   return isPMRole() || currentUserRole === '設計師' || isAdminRole();
 }
 
+
+var editingDesignRemarkItems = [];
+var DESIGN_REMARK_HEADER = '‖ximo-notes-v1‖';
+
+function getDesignRemarkAuthorRole() {
+  if (currentUserRole === '設計師') return 'designer';
+  return 'pm';
+}
+
+function getDesignRemarkAuthorName() {
+  var n = '';
+  try {
+    var auth = JSON.parse(localStorage.getItem(AUTH_CACHE_KEY) || 'null');
+    if (auth && auth.memberName) n = auth.memberName;
+  } catch (e) {}
+  if (!n) n = getLoginDisplayName();
+  return shortPersonLabel(n) || '未名';
+}
+
+function parseDesignRemarkThread(raw) {
+  raw = raw == null ? '' : String(raw).trim();
+  if (!raw) return [];
+  if (raw.indexOf(DESIGN_REMARK_HEADER) === 0) {
+    var body = raw.slice(DESIGN_REMARK_HEADER.length).replace(/^\n+/, '');
+    var items = [];
+    body.split(/\n+/).forEach(function(line) {
+      line = line.trim();
+      if (!line) return;
+      try {
+        var o = JSON.parse(line);
+        if (!o || (!o.x && !o.text)) return;
+        items.push({
+          role: o.r === 'd' || o.role === 'designer' ? 'designer' : (o.r === 'p' || o.role === 'pm' ? 'pm' : 'unknown'),
+          who: shortPersonLabel(o.w || o.who || ''),
+          ts: o.t || o.ts || null,
+          text: String(o.x || o.text || '').trim()
+        });
+      } catch (e) {}
+    });
+    return items.filter(function(it) { return !!it.text; });
+  }
+  // 舊純文字備註
+  return [{ role: 'unknown', who: '', ts: null, text: raw }];
+}
+
+function packDesignRemarkThread(items) {
+  items = (items || []).filter(function(it) { return it && String(it.text || '').trim(); });
+  if (!items.length) return '';
+  var lines = items.map(function(it) {
+    return JSON.stringify({
+      r: it.role === 'designer' ? 'd' : (it.role === 'pm' ? 'p' : 'u'),
+      w: shortPersonLabel(it.who || ''),
+      t: it.ts || Date.now(),
+      x: String(it.text || '').trim()
+    });
+  });
+  return DESIGN_REMARK_HEADER + '\n' + lines.join('\n');
+}
+
+function renderDesignRemarkThread() {
+  var box = document.getElementById('ed-remark-thread');
+  var hidden = document.getElementById('ed-remark');
+  if (!box) return;
+  if (hidden) hidden.value = packDesignRemarkThread(editingDesignRemarkItems);
+  if (!editingDesignRemarkItems.length) {
+    box.innerHTML = '<div class="des-remark-empty">尚無備註。</div>';
+    return;
+  }
+  box.innerHTML = editingDesignRemarkItems.map(function(it) {
+    var role = it.role === 'designer' ? 'designer' : (it.role === 'pm' ? 'pm' : 'unknown');
+    var metaParts = [];
+    if (it.who) metaParts.push(escHtml(shortPersonLabel(it.who)));
+    if (it.ts) metaParts.push(escHtml(fmtNoteTime(it.ts)));
+    var meta = metaParts.length ? '<span class="des-remark-meta">' + metaParts.join(' · ') + '</span>' : '';
+    return '<div class="des-remark-item des-remark-item--' + role + '">'
+      + '<span class="des-remark-text">' + escHtml(it.text) + '</span>'
+      + meta
+      + '</div>';
+  }).join('');
+}
+
+function addDesignRemarkNote() {
+  if (!(isPMRole() || currentUserRole === '設計師' || isAdminRole())) return;
+  if (!editingDesignId) return;
+  var input = document.getElementById('ed-remark-input');
+  var text = input ? String(input.value || '').trim() : '';
+  if (!text) return;
+  editingDesignRemarkItems.push({
+    role: getDesignRemarkAuthorRole(),
+    who: getDesignRemarkAuthorName(),
+    ts: Date.now(),
+    text: text
+  });
+  if (input) input.value = '';
+  renderDesignRemarkThread();
+  var packed = packDesignRemarkThread(editingDesignRemarkItems);
+  optimisticUpdate('designs', editingDesignId, { '備註': packed }, { failMsg: '備註儲存失敗' })
+    .then(function() { showUndoToast('備註已送出'); })
+    .catch(function() {});
+}
+
+
 var DESIGN_NOTE_TS_RE = /\n?‖ximo-ts:(\d+)‖\s*$/;
 
 function parseDesignNotePayload(raw) {
   raw = raw == null ? '' : String(raw);
-  var m = raw.match(DESIGN_NOTE_TS_RE);
-  if (m) {
-    return {
-      text: raw.replace(DESIGN_NOTE_TS_RE, '').replace(/\s+$/, ''),
-      ts: parseInt(m[1], 10) || null
-    };
+  var ts = null, who = '', role = '';
+  var mTs = raw.match(/\n?‖ximo-ts:(\d+)‖/);
+  if (mTs) ts = parseInt(mTs[1], 10) || null;
+  var mWho = raw.match(/‖ximo-who:([^‖]+)‖/);
+  if (mWho) who = String(mWho[1] || '').trim();
+  var mRole = raw.match(/‖ximo-role:(d|p|designer|pm)‖/);
+  if (mRole) {
+    role = (mRole[1] === 'd' || mRole[1] === 'designer') ? 'designer' : 'pm';
   }
-  return { text: raw.replace(/\s+$/, ''), ts: null };
+  var text = raw
+    .replace(/\n?‖ximo-ts:\d+‖/g, '')
+    .replace(/‖ximo-who:[^‖]*‖/g, '')
+    .replace(/‖ximo-role:[^‖]*‖/g, '')
+    .replace(/\s+$/, '');
+  return { text: text, ts: ts, who: who, role: role };
 }
 
-function packDesignNotePayload(text, ts) {
+function packDesignNotePayload(text, ts, who, role) {
   var clean = parseDesignNotePayload(text).text.trim();
   if (!clean) return '';
   var t = ts || Date.now();
-  return clean + '\n‖ximo-ts:' + t + '‖';
+  var out = clean + '\n‖ximo-ts:' + t + '‖';
+  if (who) out += '‖ximo-who:' + shortPersonLabel(who) + '‖';
+  if (role === 'designer' || role === 'd') out += '‖ximo-role:d‖';
+  else if (role === 'pm' || role === 'p') out += '‖ximo-role:p‖';
+  return out;
 }
 
 function designNoteTimeField(field) {
@@ -12334,7 +12466,10 @@ function renderDesignStickyNote(text, kind, versionId, designId, finalized, vers
   var parsed = parseDesignNotePayload(text);
   var raw = (parsed.text || '').trim();
   var ts = resolveDesignNoteTs(versionFields, field, text);
-  var timeHtml = ts ? '<span class="des-sticky-time">' + escHtml(fmtNoteTime(ts)) + '</span>' : '';
+  var metaParts = [];
+  if (parsed.who) metaParts.push(escHtml(shortPersonLabel(parsed.who)));
+  if (ts) metaParts.push(escHtml(fmtNoteTime(ts)));
+  var timeHtml = metaParts.length ? '<span class="des-sticky-time">' + metaParts.join(' · ') + '</span>' : '';
   if (!raw) {
     if (!can) {
       if (kind === 'p') return '<span class="des-note-wait">等待PM回饋...</span>';
@@ -12729,7 +12864,8 @@ function saveDesignVersionNote() {
   var textVal = (document.getElementById('dn-text').value || '').trim();
   var now = Date.now();
   var fields = {};
-  fields[field] = textVal ? packDesignNotePayload(textVal, now) : '';
+  var noteRole = field === '設計師備註' ? 'designer' : 'pm';
+  fields[field] = textVal ? packDesignNotePayload(textVal, now, getDesignRemarkAuthorName(), noteRole) : '';
   var timeKey = designNoteTimeField(field);
   if (timeKey) fields[timeKey] = textVal ? now : null;
   cl('pp-des-note');
@@ -12783,14 +12919,14 @@ function saveDesignVersion() {
   if (canEditDesignVersionNote('設計師備註')) {
     var prevD = parseDesignNotePayload(prevF['設計師備註'] || '');
     var dTs = (dNote && prevD.text === dNote && prevD.ts) ? prevD.ts : (dNote ? nowTs : null);
-    fields['設計師備註'] = dNote ? packDesignNotePayload(dNote, dTs || nowTs) : '';
+    fields['設計師備註'] = dNote ? packDesignNotePayload(dNote, dTs || nowTs, (prevD.text === dNote && prevD.who) ? prevD.who : getDesignRemarkAuthorName(), 'designer') : '';
     if (dNote) fields['設計師備註時間'] = dTs || nowTs;
     else fields['設計師備註時間'] = null;
   }
   if (canEditDesignVersionNote('PM 回饋')) {
     var prevP = parseDesignNotePayload(prevF['PM 回饋'] || '');
     var pTs = (pNote && prevP.text === pNote && prevP.ts) ? prevP.ts : (pNote ? nowTs : null);
-    fields['PM 回饋'] = pNote ? packDesignNotePayload(pNote, pTs || nowTs) : '';
+    fields['PM 回饋'] = pNote ? packDesignNotePayload(pNote, pTs || nowTs, (prevP.text === pNote && prevP.who) ? prevP.who : getDesignRemarkAuthorName(), 'pm') : '';
     if (pNote) fields['PM 回饋時間'] = pTs || nowTs;
     else fields['PM 回饋時間'] = null;
   }
@@ -13993,7 +14129,10 @@ function openEditDesign(desId) {
   document.getElementById('ed-tax').value = f['稅收'] != null ? String(f['稅收']) : '';
   document.getElementById('ed-invoice').value = f['發票抬頭'] || '';
   setDesignSelectBool('ed-done', f['已完成']);
-  document.getElementById('ed-remark').value = f['備註'] || '';
+  editingDesignRemarkItems = parseDesignRemarkThread(f['備註'] || '');
+  renderDesignRemarkThread();
+  var remarkInput = document.getElementById('ed-remark-input');
+  if (remarkInput) remarkInput.value = '';
   document.getElementById('ed-final-status').value = f['定稿狀態'] || '未定稿';
   var titleEl = document.getElementById('ddw-title');
   if (titleEl) titleEl.textContent = getDesignDisplayName(f) || '設計項目';
@@ -14123,7 +14262,7 @@ function collectDesignDrawerFields() {
     '稅收': document.getElementById('ed-tax').value.trim(),
     '發票抬頭': document.getElementById('ed-invoice').value.trim(),
     '已完成': readDesignSelectBool('ed-done'),
-    '備註': document.getElementById('ed-remark').value.trim(),
+    '備註': packDesignRemarkThread(editingDesignRemarkItems),
     '進度狀態': status,
     '進度數值': parseProgressVal(status, null)
   };
