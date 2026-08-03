@@ -1910,6 +1910,7 @@ function sw(btn,id){
 }
 
 var DEEP_LINK_STORAGE_KEY = 'ximo-deeplink-page';
+var DEEP_LINK_DESIGN_KEY = 'ximo-deeplink-design';
 var DEEP_LINK_PAGES = {
   // 時程管理（任務期限）
   schedule: 'pg-s',
@@ -1950,10 +1951,18 @@ var DEEP_LINK_PAGES = {
   'AI分析': 'pg-ai'
 };
 
+function readDeepLinkDesignId(params) {
+  if (!params) return '';
+  return (params.get('design') || params.get('designId') || params.get('recordId') || params.get('id') || '').trim();
+}
+
 function captureDeepLinkFromUrl() {
   try {
     var params = new URLSearchParams(window.location.search);
+    var designId = readDeepLinkDesignId(params);
+    if (designId) sessionStorage.setItem(DEEP_LINK_DESIGN_KEY, designId);
     var page = (params.get('page') || params.get('tab') || '').trim();
+    if (!page && designId) page = 'design';
     if (!page) return;
     var key = page.toLowerCase();
     var pageId = DEEP_LINK_PAGES[page] || DEEP_LINK_PAGES[key];
@@ -1962,24 +1971,66 @@ function captureDeepLinkFromUrl() {
   } catch (e) {}
 }
 
+function applyDeepLinkDesign(retries) {
+  retries = typeof retries === 'number' ? retries : 12;
+  var designId = '';
+  try { designId = sessionStorage.getItem(DEEP_LINK_DESIGN_KEY) || ''; } catch (e) {}
+  if (!designId) {
+    try {
+      designId = readDeepLinkDesignId(new URLSearchParams(window.location.search));
+    } catch (e2) {}
+  }
+  if (!designId) return;
+  var rec = (designsData || []).find(function(r) { return r.record_id === designId; });
+  if (!rec) {
+    if (retries <= 0) {
+      try { sessionStorage.removeItem(DEEP_LINK_DESIGN_KEY); } catch (e3) {}
+      return;
+    }
+    if (!deferredDataReady) loadDeferredTables({ silent: true });
+    setTimeout(function() { applyDeepLinkDesign(retries - 1); }, 400);
+    return;
+  }
+  try { sessionStorage.removeItem(DEEP_LINK_DESIGN_KEY); } catch (e4) {}
+  designExpandedIds[designId] = true;
+  renderDesigns();
+  setTimeout(function() { openEditDesign(designId); }, 60);
+  if (window.history.replaceState) {
+    try {
+      var url = new URL(window.location.href);
+      ['design', 'designId', 'recordId', 'id', 'page', 'tab'].forEach(function(k) { url.searchParams.delete(k); });
+      var qs = url.searchParams.toString();
+      window.history.replaceState({}, '', url.pathname + (qs ? '?' + qs : '') + url.hash);
+    } catch (e5) {}
+  }
+}
+
 function applyDeepLinkPage() {
   try {
     var pageId = sessionStorage.getItem(DEEP_LINK_STORAGE_KEY) || '';
+    var designId = '';
+    try { designId = sessionStorage.getItem(DEEP_LINK_DESIGN_KEY) || ''; } catch (e0) {}
     if (!pageId) {
       var params = new URLSearchParams(window.location.search);
       var page = (params.get('page') || params.get('tab') || '').trim();
+      if (!page && (designId || readDeepLinkDesignId(params))) page = 'design';
       var key = page.toLowerCase();
       pageId = DEEP_LINK_PAGES[page] || DEEP_LINK_PAGES[key] || '';
     }
-    if (!pageId) return;
+    if (!pageId) {
+      if (designId) applyDeepLinkDesign();
+      return;
+    }
     sessionStorage.removeItem(DEEP_LINK_STORAGE_KEY);
     var btn = document.querySelector('.tbar-tab[onclick*="' + pageId + '"]');
     if (!btn) return;
     sw(btn, pageId);
+    if (pageId === 'pg-d') applyDeepLinkDesign();
     if (window.history.replaceState) {
       var url = new URL(window.location.href);
       url.searchParams.delete('page');
       url.searchParams.delete('tab');
+      // design params cleared after openEditDesign succeeds
       var qs = url.searchParams.toString();
       window.history.replaceState({}, '', url.pathname + (qs ? '?' + qs : '') + url.hash);
     }
@@ -3925,7 +3976,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260803v13';
+var APP_BUILD = '20260803v15';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
