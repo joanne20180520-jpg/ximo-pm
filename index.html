@@ -1544,7 +1544,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
           <div class="des-remark-panel">
             <div id="ed-remark-thread" class="des-remark-thread"></div>
             <div class="des-remark-composer" id="ed-remark-composer">
-              <textarea id="ed-remark-input" rows="4" placeholder="新增備註…（如：設計師詢價，PM再回填價格）&#10;Ctrl／⌘ + Enter 送出" data-des-role="both" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();addDesignRemarkNote();}"></textarea>
+              <textarea id="ed-remark-input" rows="4" placeholder="Write a message..." data-des-role="both" onkeydown="if((event.ctrlKey||event.metaKey)&&event.key==='Enter'){event.preventDefault();addDesignRemarkNote();}"></textarea>
               <button type="button" class="bsm" id="ed-remark-send" data-des-role="both" onclick="addDesignRemarkNote()">送出</button>
             </div>
             <input type="hidden" id="ed-remark" value="">
@@ -3926,7 +3926,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260803v7';
+var APP_BUILD = '20260803v8';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
