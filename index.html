@@ -1483,25 +1483,32 @@ button.btn-loading::after{content:'…';margin-left:2px}
       <div class="des-acc-body">
         <div class="fg"><label>材質</label><input type="text" id="ed-material" data-des-role="designer"></div>
         <div class="fg"><label>加工項目</label><input type="text" id="ed-process" data-des-role="designer"></div>
+      </div>
+    </div>
+    <div class="des-acc" data-acc="signoff" data-owner="signoff">
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">主管審核</span><span class="des-acc-owner">主管填</span><span class="des-acc-lock" hidden>唯讀</span></button>
+      <div class="des-acc-body">
         <div class="fg"><label>設計主管圖面檢核</label>
           <div class="des-sign-wrap">
-            <button type="button" class="des-sign-check" id="ed-design-check-btn" data-des-role="designer" onclick="toggleDesignSignCheck('ed-design-check')" aria-label="設計主管圖面檢核"></button>
+            <button type="button" class="des-sign-check" id="ed-design-check-btn" data-des-role="design_lead" onclick="toggleDesignSignCheck('ed-design-check')" aria-label="設計主管圖面檢核"></button>
             <span class="des-sign-status" id="ed-design-check-status">未簽核</span>
             <input type="hidden" id="ed-design-check" value="false">
           </div>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px">僅設計主管可勾選</div>
+        </div>
+        <div class="fg"><label>PM主管內容審核</label>
+          <div class="des-sign-wrap">
+            <button type="button" class="des-sign-check" id="ed-pm-check-btn" data-des-role="admin_sign" onclick="toggleDesignSignCheck('ed-pm-check')" aria-label="PM主管內容審核"></button>
+            <span class="des-sign-status" id="ed-pm-check-status">未簽核</span>
+            <input type="hidden" id="ed-pm-check" value="false">
+          </div>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px">僅管理員可勾選（PM 不可勾）</div>
         </div>
       </div>
     </div>
     <div class="des-acc" data-acc="pm" data-owner="pm">
       <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">PM審核與定稿</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
-        <div class="fg"><label>PM主管內容審核</label>
-          <div class="des-sign-wrap">
-            <button type="button" class="des-sign-check" id="ed-pm-check-btn" data-des-role="pm" onclick="toggleDesignSignCheck('ed-pm-check')" aria-label="PM主管內容審核"></button>
-            <span class="des-sign-status" id="ed-pm-check-status">未簽核</span>
-            <input type="hidden" id="ed-pm-check" value="false">
-          </div>
-        </div>
         <div class="fg"><label>定稿時間</label><input type="date" id="ed-final" onchange="onOptionalDateClear(this)" data-des-role="pm"></div>
         <div class="fg"><label>定稿狀態</label><input type="text" id="ed-final-status" readonly style="background:#f0eeea" title="請展開版本，在最新版旁勾選定稿"></div>
       </div>
@@ -3913,7 +3920,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260803v3';
+var APP_BUILD = '20260803v4';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -4413,15 +4420,25 @@ var currentUserRole = 'PM';
 var ROLE_PAGES = {
   PM: ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
   '管理員': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
-  '設計師': ['pg-d']
+  '設計師': ['pg-d'],
+  '設計主管': ['pg-d']
 };
 
-function isPMRole() {
-  // PM、管理員皆可看全部頁面與新增；設計師才限縮
-  return currentUserRole !== '設計師';
-}
 function isAdminRole() {
   return currentUserRole === '管理員';
+}
+function isDesignLeadRole() {
+  return currentUserRole === '設計主管';
+}
+function isDesignerRole() {
+  return currentUserRole === '設計師';
+}
+function isDesignerLikeRole() {
+  return isDesignerRole() || isDesignLeadRole();
+}
+function isPMRole() {
+  // PM、管理員可看全部；設計師／設計主管限縮設計頁
+  return !isDesignerLikeRole();
 }
 
 function applyDetailPopupPermissions(popupId) {
@@ -4707,7 +4724,7 @@ function applyRolePermissions() {
     var pageId = m ? m[1] : '';
     btn.style.display = allowed.indexOf(pageId) >= 0 ? '' : 'none';
   });
-  if (role === '設計師') {
+  if (role === '設計師' || role === '設計主管') {
     document.body.classList.add('role-designer');
     var designTab = document.querySelector('.tbar-tab[onclick*="pg-d"]');
     if (designTab) sw(designTab, 'pg-d');
@@ -6041,11 +6058,11 @@ function fetchJsonWithTimeout(url, ms) {
 }
 
 function getCoreTableKeys() {
-  return currentUserRole === '設計師' ? CORE_TABLE_KEYS_DESIGNER.slice() : CORE_TABLE_KEYS_PM.slice();
+  return isDesignerLikeRole() ? CORE_TABLE_KEYS_DESIGNER.slice() : CORE_TABLE_KEYS_PM.slice();
 }
 
 function getDeferredTableKeys() {
-  return currentUserRole === '設計師' ? DEFERRED_TABLE_KEYS_DESIGNER.slice() : DEFERRED_TABLE_KEYS_PM.slice();
+  return isDesignerLikeRole() ? DEFERRED_TABLE_KEYS_DESIGNER.slice() : DEFERRED_TABLE_KEYS_PM.slice();
 }
 
 function applyPartialTables(payload, keys) {
@@ -6094,7 +6111,7 @@ function renderCoreShell() {
     }
     updateTodoLoginLabel();
     applyLoginUserToForms();
-    if (currentUserRole === '設計師') renderDesigns();
+    if (isDesignerLikeRole()) renderDesigns();
   } catch (renderErr) {
     console.error('核心畫面渲染失敗', renderErr);
     var pl = document.getElementById('pl-projects');
@@ -12291,14 +12308,15 @@ function toggleDesignExpand(designId, ev) {
 
 function canEditDesignVersionNote(field) {
   if (isAdminRole()) return true;
-  if (field === '設計師備註') return currentUserRole === '設計師' || isPMRole();
-  if (field === 'PM 回饋') return isPMRole();
+  if (field === '設計師備註') return isDesignerRole();
+  if (field === 'PM 回饋') return isPMRole() && !isDesignLeadRole();
   return false;
 }
 
 function canEditDesignVersionRecord(finalized) {
   if (finalized && !isAdminRole()) return false;
-  return isPMRole() || currentUserRole === '設計師' || isAdminRole();
+  if (isDesignLeadRole()) return false;
+  return isAdminRole() || isPMRole() || isDesignerRole();
 }
 
 
@@ -12306,7 +12324,7 @@ var editingDesignRemarkItems = [];
 var DESIGN_REMARK_HEADER = '‖ximo-notes-v1‖';
 
 function getDesignRemarkAuthorRole() {
-  if (currentUserRole === '設計師') return 'designer';
+  if (isDesignerRole() || isDesignLeadRole()) return 'designer';
   return 'pm';
 }
 
@@ -12323,7 +12341,8 @@ function getDesignRemarkAuthorName() {
       if (u) n = String(u.name || u.enName || '').trim();
     } catch (e2) {}
   }
-  if (!n && currentUserRole === '設計師') n = '設計師';
+  if (!n && isDesignerRole()) n = '設計師';
+  if (!n && isDesignLeadRole()) n = '設計主管';
   if (!n) n = 'PM';
   return shortPersonLabel(n) || '未名';
 }
@@ -12399,7 +12418,8 @@ function renderDesignRemarkThread() {
 }
 
 function addDesignRemarkNote() {
-  if (!(isPMRole() || currentUserRole === '設計師' || isAdminRole())) return;
+  if (isDesignLeadRole()) return;
+  if (!(isPMRole() || isDesignerRole() || isAdminRole())) return;
   if (!editingDesignId) return;
   var input = document.getElementById('ed-remark-input');
   var text = input ? String(input.value || '').trim() : '';
@@ -12539,7 +12559,7 @@ function renderDesignVersionPanel(designId, finalized) {
     rows += '</tbody></table>';
   }
   var actions = '<div class="des-ver-actions">';
-  if (!finalized && (isPMRole() || currentUserRole === '設計師')) {
+  if (!finalized && (isPMRole() || isDesignerRole())) {
     actions += '<button class="bsm" onclick="event.stopPropagation();openAddDesignVersion(\'' + designId + '\')">＋ 新增版本（' + escHtml(nextDesignVersionLabel(versions)) + '）</button>';
   }
   if (finalized) {
@@ -12674,7 +12694,7 @@ function renderDesVerAttachList() {
     var dlBtn = item.file_token
       ? '<button type="button" class="attach-item-link" onclick="event.stopPropagation();downloadDesignAttachment(\'' + escAttr(item.file_token) + '\',\'' + escAttr(item.name || '') + '\')">下載</button>'
       : '';
-    var canRemove = isPMRole() || currentUserRole === '設計師' || isAdminRole();
+    var canRemove = isAdminRole() || isPMRole() || isDesignerRole();
     var rmBtn = canRemove
       ? '<button type="button" class="attach-item-remove" title="移除" onclick="event.stopPropagation();removeDesVerAttachment(' + idx + ')">×</button>'
       : '';
@@ -12684,7 +12704,7 @@ function renderDesVerAttachList() {
 }
 
 function canUploadDesVerAttach() {
-  return isAdminRole() || isPMRole() || currentUserRole === '設計師';
+  return isAdminRole() || isPMRole() || isDesignerRole();
 }
 
 function onDesVerAttachSelect(fileList) {
@@ -12767,14 +12787,15 @@ function removeDesVerAttachment(index) {
 }
 
 function applyDesignVersionFormPermissions() {
-  var isDesigner = currentUserRole === '設計師';
-  var isPm = isPMRole();
+  var isDesigner = isDesignerRole();
+  var isPm = isPMRole() && !isDesignLeadRole();
   document.querySelectorAll('#pp-des-ver [data-des-ver-role]').forEach(function(el) {
     var role = el.getAttribute('data-des-ver-role') || 'both';
-    var can = isAdminRole() || role === 'both';
-    if (role === 'designer') can = isAdminRole() || isDesigner || isPm;
-    if (role === 'pm') can = isAdminRole() || isPm;
-    if (isDesigner && role === 'pm') can = false;
+    var can = false;
+    if (isAdminRole()) can = true;
+    else if (role === 'both') can = isDesigner || isPm;
+    else if (role === 'designer') can = isDesigner;
+    else if (role === 'pm') can = isPm;
     el.disabled = !can;
   });
 }
@@ -12816,7 +12837,7 @@ function openAddDesignVersion(designId) {
     showConfirm({ type: 'edit', title: '無法新增版本', body: '已定稿，無法新增版本。請管理員改回未定稿。', okText: '知道了', hideCancel: true, onOk: function() {} });
     return;
   }
-  if (!(isPMRole() || currentUserRole === '設計師')) {
+  if (!(isPMRole() || isDesignerRole())) {
     showConfirm({ type: 'edit', title: '權限不足', body: '僅設計師／PM 可新增版本。', okText: '知道了', hideCancel: true, onOk: function() {} });
     return;
   }
@@ -12899,7 +12920,7 @@ function saveDesignVersionNote() {
 
 function saveDesignVersion() {
   if (!addingDesignVersionId) return;
-  if (!(isPMRole() || currentUserRole === '設計師' || isAdminRole())) return;
+  if (!(isPMRole() || isDesignerRole() || isAdminRole())) return;
   var rec = designsData.find(function(r) { return r.record_id === addingDesignVersionId; });
   if (!rec) return;
   var finalized = isDesignFinalized(rec.fields);
@@ -13113,9 +13134,19 @@ function collectMemberRoleTokens(fields) {
   return tokens.filter(Boolean);
 }
 
+function isDesignLeadRoleToken(raw) {
+  var r = String(raw || '').trim();
+  if (!r) return false;
+  if (r === '設計主管' || r === '设计主管') return true;
+  if (r.indexOf('設計主管') >= 0 || r.indexOf('设计主管') >= 0) return true;
+  var lower = r.toLowerCase();
+  return lower === 'design_lead' || lower === 'design-lead' || lower === 'design lead' || lower === 'design supervisor';
+}
+
 function isDesignerRoleToken(raw) {
   var r = String(raw || '').trim();
   if (!r) return false;
+  if (isDesignLeadRoleToken(r)) return false;
   if (r === '設計師' || r === '设计师' || r === '設計' || r === '设计') return true;
   return r.toLowerCase() === 'designer';
 }
@@ -13142,7 +13173,7 @@ function memberSkipsJournal(fields) {
   // 僅「免日報」標籤或設計師免寫；PM／管理員都要寫日報
   var tokens = collectMemberRoleTokens(fields);
   for (var i = 0; i < tokens.length; i++) {
-    if (isDesignerRoleToken(tokens[i]) || isJournalExemptToken(tokens[i])) return true;
+    if (isDesignLeadRoleToken(tokens[i]) || isDesignerRoleToken(tokens[i]) || isJournalExemptToken(tokens[i])) return true;
   }
   return false;
 }
@@ -13160,6 +13191,9 @@ function resolveMemberRole(fields) {
   var tokens = collectMemberRoleTokens(fields);
   for (var i = 0; i < tokens.length; i++) {
     if (isAdminRoleToken(tokens[i])) return '管理員';
+  }
+  for (var k = 0; k < tokens.length; k++) {
+    if (isDesignLeadRoleToken(tokens[k])) return '設計主管';
   }
   for (var j = 0; j < tokens.length; j++) {
     if (isDesignerRoleToken(tokens[j])) return '設計師';
@@ -13969,6 +14003,12 @@ function readDesignSelectBool(id) {
   return !!(el && el.value === 'true');
 }
 
+function canToggleDesignSignCheck(id) {
+  if (id === 'ed-design-check') return isDesignLeadRole();
+  if (id === 'ed-pm-check') return isAdminRole();
+  return false;
+}
+
 function syncDesignSignCheckUi(id) {
   var hidden = document.getElementById(id);
   var btn = document.getElementById(id + '-btn');
@@ -13982,23 +14022,14 @@ function syncDesignSignCheckUi(id) {
     btn.disabled = true;
     return;
   }
-  var acc = btn.closest('.des-acc');
-  if (acc && acc.classList.contains('locked')) {
-    btn.disabled = true;
-    return;
-  }
-  var role = btn.getAttribute('data-des-role') || 'pm';
-  var can = canEditDesignRole(role);
-  if (currentUserRole === '設計師' && role === 'pm') can = false;
-  if (currentUserRole === '設計師' && (role === 'designer' || role === 'both')) can = true;
-  if (isAdminRole()) can = true;
-  btn.disabled = !can;
+  btn.disabled = !canToggleDesignSignCheck(id);
 }
 
 function toggleDesignSignCheck(id) {
   var hidden = document.getElementById(id);
   var btn = document.getElementById(id + '-btn');
   if (!hidden || !btn || btn.disabled) return;
+  if (!canToggleDesignSignCheck(id)) return;
   if (hidden.value === 'true') return;
   hidden.value = 'true';
   syncDesignSignCheckUi(id);
@@ -14024,10 +14055,13 @@ function toggleDesignSignCheck(id) {
 }
 
 function canEditDesignRole(role) {
+  if (role === 'design_lead') return isDesignLeadRole();
+  if (role === 'admin_sign') return isAdminRole();
+  if (isDesignLeadRole()) return false;
   if (isAdminRole()) return true;
-  if (role === 'both') return true;
+  if (role === 'both') return isPMRole() || isDesignerRole();
   if (role === 'pm') return isPMRole();
-  if (role === 'designer') return currentUserRole === '設計師' || isPMRole();
+  if (role === 'designer') return isDesignerRole();
   return false;
 }
 
@@ -14037,15 +14071,13 @@ function applyDesignFormPermissions(rootSel) {
   root.querySelectorAll('[data-des-role]').forEach(function(el) {
     var role = el.getAttribute('data-des-role') || 'pm';
     var can = canEditDesignRole(role);
-    // PM 角色也可填設計師欄位（實務上常代填），設計師不可填純 PM 欄
-    if (currentUserRole === '設計師' && role === 'pm') can = false;
-    if (currentUserRole === '設計師' && (role === 'designer' || role === 'both')) can = true;
     el.disabled = !can;
   });
   var saveBtn = null;
   if (rootSel === '#pp-edit-des') saveBtn = document.querySelector('#des-drawer .des-drawer-foot .bpri');
   if (!saveBtn) saveBtn = root.querySelector('.ppf .bpri');
-  if (saveBtn) saveBtn.style.display = (isAdminRole() || (isPMRole() && currentUserRole !== '設計師')) ? '' : 'none';
+  // 設計主管主要勾選簽核（即時寫入）；側欄儲存給 PM／設計師／管理員
+  if (saveBtn) saveBtn.style.display = (isAdminRole() || isPMRole() || isDesignerRole()) ? '' : 'none';
   var delBtn = document.getElementById('ed-del-btn');
   if (delBtn) delBtn.style.display = isAdminRole() ? '' : 'none';
 }
@@ -14056,8 +14088,8 @@ function openEditDesignBasic(desId, ev) {
     ev.stopPropagation();
   }
   if (!desId) return;
-  // 設計師不可開「編輯設計任務」；改開側欄填寫自己的區塊
-  if (currentUserRole === '設計師' && !isAdminRole()) {
+  // 設計師／設計主管不可開「編輯設計任務」；改開側欄
+  if (isDesignerLikeRole() && !isAdminRole()) {
     openEditDesign(desId);
     return;
   }
@@ -14089,7 +14121,7 @@ function openEditDesignBasic(desId, ev) {
   }
   applyDesignFormPermissions('#pp-des-basic');
   var saveBtn = document.getElementById('eb-save-btn');
-  if (saveBtn) saveBtn.style.display = (isPMRole() || currentUserRole === '設計師') ? '' : 'none';
+  if (saveBtn) saveBtn.style.display = (isAdminRole() || (isPMRole() && !isDesignLeadRole())) ? '' : 'none';
   op('pp-des-basic');
 }
 
@@ -14221,22 +14253,34 @@ function toggleDesignAcc(btn) {
 
 function designDrawerOwnerMatches(owner) {
   if (isAdminRole()) return true;
-  if (owner === 'both') return true;
+  if (owner === 'both') return !isDesignLeadRole();
+  if (owner === 'signoff') return isDesignLeadRole() || isAdminRole();
   if (owner === 'pm') return isPMRole();
-  if (owner === 'designer') return currentUserRole === '設計師' || isPMRole();
+  if (owner === 'designer') return isDesignerRole();
   return false;
 }
 
 function applyEditDesignPermissions() {
   applyDesignFormPermissions('#pp-edit-des');
-  var roleKey = isAdminRole() ? 'admin' : (currentUserRole === '設計師' ? 'designer' : 'pm');
+  var roleKey = isAdminRole() ? 'admin' : (isDesignLeadRole() ? 'signoff' : (isDesignerRole() ? 'designer' : 'pm'));
   document.querySelectorAll('#pp-edit-des .des-acc').forEach(function(acc, idx) {
     var owner = acc.getAttribute('data-owner') || 'pm';
-    var mine = isAdminRole() || owner === 'both' || owner === roleKey;
-    // PM：展開 PM／共同；設計師：展開設計師／共同；管理員：只展開第一個
+    var mine = false;
+    if (isAdminRole()) {
+      // 管理員可看全部；簽核區可操作 PM 主管審核
+      mine = true;
+    } else if (isDesignLeadRole()) {
+      mine = owner === 'signoff' || owner === 'both';
+    } else if (isDesignerRole()) {
+      mine = owner === 'designer' || owner === 'both';
+    } else {
+      mine = owner === 'pm' || owner === 'both';
+    }
     var open = false;
     if (roleKey === 'admin') {
       open = idx === 0;
+    } else if (roleKey === 'signoff') {
+      open = owner === 'signoff';
     } else {
       open = owner === roleKey || owner === 'both';
     }
@@ -14324,7 +14368,8 @@ function collectDesignFormFields(prefix) {
 }
 
 function saveEditDesign() {
-  if (!(isPMRole() || currentUserRole === '設計師')) return;
+  if (isDesignLeadRole()) return;
+  if (!(isPMRole() || isDesignerRole() || isAdminRole())) return;
   if (!editingDesignId) return;
   var fields = collectDesignDrawerFields();
   var rec = designsData.find(function(r) { return r.record_id === editingDesignId; });

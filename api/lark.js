@@ -3835,9 +3835,19 @@ function collectMemberRoleTokens(fields) {
   return tokens.filter(Boolean);
 }
 
+function isDesignLeadRoleToken(raw) {
+  const r = String(raw || '').trim();
+  if (!r) return false;
+  if (r === '設計主管' || r === '设计主管') return true;
+  if (r.indexOf('設計主管') >= 0 || r.indexOf('设计主管') >= 0) return true;
+  const lower = r.toLowerCase();
+  return lower === 'design_lead' || lower === 'design-lead' || lower === 'design lead' || lower === 'design supervisor';
+}
+
 function isDesignerRoleToken(raw) {
   const r = String(raw || '').trim();
   if (!r) return false;
+  if (isDesignLeadRoleToken(r)) return false;
   if (r === '設計師' || r === '设计师') return true;
   return r.toLowerCase() === 'designer';
 }
@@ -3852,10 +3862,13 @@ function isAdminRoleToken(raw) {
 }
 
 function getMemberRole(fields) {
-  // 「免日報」不影響登入權限（只影響日報應填名單）；「管理員」全頁權限且仍要寫日報；僅「設計師」限縮可看頁面
+  // 「免日報」不影響登入權限；管理員全頁；設計主管／設計師限縮設計頁
   const tokens = collectMemberRoleTokens(fields);
   for (let i = 0; i < tokens.length; i++) {
     if (isAdminRoleToken(tokens[i])) return '管理員';
+  }
+  for (let i = 0; i < tokens.length; i++) {
+    if (isDesignLeadRoleToken(tokens[i])) return '設計主管';
   }
   for (let i = 0; i < tokens.length; i++) {
     if (isDesignerRoleToken(tokens[i])) return '設計師';
