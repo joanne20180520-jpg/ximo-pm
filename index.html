@@ -1486,7 +1486,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
       </div>
     </div>
     <div class="des-acc" data-acc="signoff" data-owner="signoff">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">主管審核</span><span class="des-acc-owner">主管填</span><span class="des-acc-lock" hidden>唯讀</span></button>
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">設計＆PM 主管審核</span><span class="des-acc-owner">主管填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
         <div class="fg"><label>設計主管圖面檢核</label>
           <div class="des-sign-wrap">
@@ -1507,7 +1507,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
       </div>
     </div>
     <div class="des-acc" data-acc="pm" data-owner="pm">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">PM審核與定稿</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">定稿資訊</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
         <div class="fg"><label>定稿時間</label><input type="date" id="ed-final" onchange="onOptionalDateClear(this)" data-des-role="pm"></div>
         <div class="fg"><label>定稿狀態</label><input type="text" id="ed-final-status" readonly style="background:#f0eeea" title="請展開版本，在最新版旁勾選定稿"></div>
@@ -3920,7 +3920,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260803v5';
+var APP_BUILD = '20260803v6';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
