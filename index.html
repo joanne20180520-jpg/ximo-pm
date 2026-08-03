@@ -3913,7 +3913,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260803v1';
+var APP_BUILD = '20260803v2';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12314,10 +12314,26 @@ function getDesignRemarkAuthorName() {
   var n = '';
   try {
     var auth = JSON.parse(localStorage.getItem(AUTH_CACHE_KEY) || 'null');
-    if (auth && auth.memberName) n = auth.memberName;
+    if (auth && auth.memberName) n = String(auth.memberName).trim();
   } catch (e) {}
   if (!n) n = getLoginDisplayName();
+  if (!n) {
+    try {
+      var u = getCurrentLoginUser();
+      if (u) n = String(u.name || u.enName || '').trim();
+    } catch (e2) {}
+  }
+  if (!n && currentUserRole === '設計師') n = '設計師';
+  if (!n) n = 'PM';
   return shortPersonLabel(n) || '未名';
+}
+
+function resolveDesignStickyAuthor(parsed, kind, designId) {
+  if (parsed && parsed.who) return shortPersonLabel(parsed.who);
+  var des = designId ? designsData.find(function(r) { return r.record_id === designId; }) : null;
+  var f = (des && des.fields) || {};
+  if (kind === 'd') return shortPersonLabel(personName(f['設計師'])) || '設計';
+  return shortPersonLabel(personName(f['負責PM'])) || 'PM';
 }
 
 function parseDesignRemarkThread(raw) {
@@ -12428,10 +12444,11 @@ function packDesignNotePayload(text, ts, who, role) {
   var clean = parseDesignNotePayload(text).text.trim();
   if (!clean) return '';
   var t = ts || Date.now();
-  var out = clean + '\n‖ximo-ts:' + t + '‖';
-  if (who) out += '‖ximo-who:' + shortPersonLabel(who) + '‖';
+  var whoLabel = shortPersonLabel(who || getDesignRemarkAuthorName()) || '未名';
+  var out = clean + '\n‖ximo-ts:' + t + '‖‖ximo-who:' + whoLabel + '‖';
   if (role === 'designer' || role === 'd') out += '‖ximo-role:d‖';
   else if (role === 'pm' || role === 'p') out += '‖ximo-role:p‖';
+  else if (role) out += '‖ximo-role:' + (role === 'p' ? 'p' : 'd') + '‖';
   return out;
 }
 
@@ -12466,8 +12483,9 @@ function renderDesignStickyNote(text, kind, versionId, designId, finalized, vers
   var parsed = parseDesignNotePayload(text);
   var raw = (parsed.text || '').trim();
   var ts = resolveDesignNoteTs(versionFields, field, text);
+  var whoLabel = resolveDesignStickyAuthor(parsed, kind, designId);
   var metaParts = [];
-  if (parsed.who) metaParts.push(escHtml(shortPersonLabel(parsed.who)));
+  if (whoLabel) metaParts.push(escHtml(whoLabel));
   if (ts) metaParts.push(escHtml(fmtNoteTime(ts)));
   var timeHtml = metaParts.length ? '<span class="des-sticky-time">' + metaParts.join(' · ') + '</span>' : '';
   if (!raw) {
