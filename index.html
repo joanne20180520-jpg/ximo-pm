@@ -3976,7 +3976,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260803v15';
+var APP_BUILD = '20260803v16';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -14079,13 +14079,45 @@ function getDesignFieldAny(f, names) {
 
 var DESIGN_PM_CHECK_KEYS = ['PM主管內容審核', 'PM主管內容檢核'];
 var DESIGN_LEAD_CHECK_KEYS = ['設計主管圖面檢核', '設計主管圖面審核'];
+/** 剛勾選成功時鎖住 UI，避免 sync 舊資料把勾選蓋掉 */
+var pendingDesignSignLocks = {};
 
+function designSignLockKey(recordId, checkId) {
+  return String(recordId || '') + '::' + String(checkId || '');
+}
 
+function getDesignSignCheckValue(f, keys) {
+  f = f || {};
+  var saw = false;
+  var anyTrue = false;
+  for (var i = 0; i < keys.length; i++) {
+    if (!Object.prototype.hasOwnProperty.call(f, keys[i])) continue;
+    saw = true;
+    if (designBoolFromField(f[keys[i]])) anyTrue = true;
+  }
+  if (anyTrue) return true;
+  if (saw) return false;
+  return undefined;
+}
 
 function refreshDesignSignChecksFromRecord(rec) {
   var f = (rec && rec.fields) || {};
-  setDesignSelectBool('ed-design-check', getDesignFieldAny(f, DESIGN_LEAD_CHECK_KEYS));
-  setDesignSelectBool('ed-pm-check', getDesignFieldAny(f, DESIGN_PM_CHECK_KEYS));
+  var rid = rec && rec.record_id;
+  [['ed-design-check', DESIGN_LEAD_CHECK_KEYS], ['ed-pm-check', DESIGN_PM_CHECK_KEYS]].forEach(function(pair) {
+    var id = pair[0];
+    var keys = pair[1];
+    var serverOn = designBoolFromField(getDesignSignCheckValue(f, keys));
+    var lockKey = designSignLockKey(rid, id);
+    if (pendingDesignSignLocks[lockKey]) {
+      if (serverOn) delete pendingDesignSignLocks[lockKey];
+      else {
+        // 伺服器尚未跟上：維持已勾選
+        setDesignSelectBool(id, true);
+        return;
+      }
+    }
+    setDesignSelectBool(id, serverOn);
+  });
 }
 
 function refreshOpenDesignDrawerFromServer() {
@@ -14145,21 +14177,33 @@ function toggleDesignSignCheck(id) {
   hidden.value = 'true';
   syncDesignSignCheckUi(id);
   if (!editingDesignId) return;
+  var recordId = editingDesignId;
+  var lockKey = designSignLockKey(recordId, id);
+  pendingDesignSignLocks[lockKey] = Date.now();
   var fields = {};
   if (id === 'ed-pm-check') {
+    // 同時寫別名，normalize 會丟掉 Base 不存在的欄位
     fields['PM主管內容審核'] = true;
+    fields['PM主管內容檢核'] = true;
   } else if (id === 'ed-design-check') {
     fields['設計主管圖面檢核'] = true;
+    fields['設計主管圖面審核'] = true;
   } else {
+    delete pendingDesignSignLocks[lockKey];
     return;
   }
   btn.disabled = true;
-  optimisticUpdate('designs', editingDesignId, fields, { failMsg: '簽核寫入失敗' })
+  // skipSync：避免開側欄中的舊 sync 把剛勾選蓋回 false
+  optimisticUpdate('designs', recordId, fields, { failMsg: '簽核寫入失敗', skipSync: true })
     .then(function() {
       showUndoToast('已簽核並同步到 Base');
-      return refreshOpenDesignDrawerFromServer();
+      // 延遲再對齊 Base；期間用 pending lock 保住勾選狀態
+      setTimeout(function() {
+        if (editingDesignId === recordId) refreshOpenDesignDrawerFromServer();
+      }, 1200);
     })
     .catch(function() {
+      delete pendingDesignSignLocks[lockKey];
       hidden.value = 'false';
       syncDesignSignCheckUi(id);
     });
@@ -14290,12 +14334,12 @@ function openEditDesign(desId) {
   document.getElementById('ed-draft').value = f['初稿時間'] ? tsToDateInput(f['初稿時間']) : (f['初稿交付日'] ? tsToDateInput(f['初稿交付日']) : '');
   document.getElementById('ed-material').value = f['材質'] || '';
   document.getElementById('ed-process').value = f['加工項目'] || '';
-  setDesignSelectBool('ed-design-check', getDesignFieldAny(f, DESIGN_LEAD_CHECK_KEYS));
+  setDesignSelectBool('ed-design-check', getDesignSignCheckValue(f, DESIGN_LEAD_CHECK_KEYS));
   document.getElementById('ed-outsource-date').value = f['發包時間'] ? tsToDateInput(f['發包時間']) : '';
   document.getElementById('ed-arrive').value = f['到貨時間'] ? tsToDateInput(f['到貨時間']) : (f['成品交付日'] ? tsToDateInput(f['成品交付日']) : '');
   document.getElementById('ed-qty').value = f['數量'] != null ? String(f['數量']) : '';
   document.getElementById('ed-path').value = f['NAS路徑位置'] || f['路徑位置'] || '';
-  setDesignSelectBool('ed-pm-check', getDesignFieldAny(f, DESIGN_PM_CHECK_KEYS));
+  setDesignSelectBool('ed-pm-check', getDesignSignCheckValue(f, DESIGN_PM_CHECK_KEYS));
   document.getElementById('ed-final').value = f['定稿時間'] ? tsToDateInput(f['定稿時間']) : (f['完稿交付日'] ? tsToDateInput(f['完稿交付日']) : '');
   document.getElementById('ed-vendor').value = f['發包廠商'] || '';
   var price = parseFloat(f['價格']) || 0;
