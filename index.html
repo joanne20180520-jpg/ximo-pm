@@ -3925,7 +3925,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260803v12';
+var APP_BUILD = '20260803v13';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -13129,7 +13129,6 @@ function renderDesigns() {
         + '<td class="des-cell-name" style="font-weight:500;white-space:nowrap" onclick="toggleDesignExpand(\'' + d.id + '\',event)" title="展開版本紀錄">'
         + '<button type="button" class="des-toggle" title="展開版本">' + (expanded ? '▼' : '▶') + '</button> '
         + '<span class="des-name-text">' + escHtml(d.name) + '</span>'
-        + (d.item ? '<div class="des-item-sub">' + escHtml(d.item) + '</div>' : '')
         + '</td>'
         + '<td>' + escHtml(d.wiName) + '</td>'
         + '<td' + (canBasicEdit ? cellClick + ' title="編輯負責PM／設計師／進度"' : '') + '>' + renderDesignPersonCell(d.pm) + '</td>'
