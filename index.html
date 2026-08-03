@@ -675,6 +675,7 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .des-progress-label{font-size:11px;color:var(--t2);font-variant-numeric:tabular-nums;flex-shrink:0}
 .des-ver-file{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--c2);background:#e4ecf3;padding:3px 8px;border-radius:6px;text-decoration:none;max-width:100%}
 .des-ver-file:hover{text-decoration:underline}
+.des-ver-file.is-downloading,.attach-item-link.is-downloading{opacity:.65;pointer-events:none;cursor:wait;text-decoration:none}
 .des-confirm-cell{display:flex;flex-direction:column;align-items:center;gap:2px}
 .des-confirm-btn{width:28px;height:28px;border-radius:6px;border:1.5px solid var(--border);background:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:14px;color:transparent;padding:0}
 .des-confirm-btn.on{background:#2d6a4f;border-color:#2d6a4f;color:#fff}
@@ -12285,7 +12286,7 @@ function formatDesignAttachmentCell(val) {
       var name = (file && (file.name || file.file_name)) || ('檔案' + (i + 1));
       var token = file && (file.file_token || file.token);
       if (token) {
-        return '<a class="des-ver-file" href="#" onclick="event.stopPropagation();downloadDesignAttachment(\'' + escHtml(token) + '\',\'' + escHtml(name).replace(/'/g, '') + '\')" title="' + escHtml(name) + '">' + escHtml(name.length > 18 ? name.slice(0, 18) + '…' : name) + '</a>';
+        return '<a class="des-ver-file" href="#" data-file-token="' + escAttr(token) + '" data-file-name="' + escAttr(name) + '" onclick="event.preventDefault();event.stopPropagation();downloadDesignAttachment(this)" title="' + escHtml(name) + '">' + escHtml(name.length > 18 ? name.slice(0, 18) + '…' : name) + '</a>';
       }
       return escHtml(name);
     }).join('<br>');
@@ -12293,16 +12294,75 @@ function formatDesignAttachmentCell(val) {
   return '<span style="color:var(--t3)">—</span>';
 }
 
-function downloadDesignAttachment(fileToken, fileName) {
+var designAttachDownloading = {};
+
+function downloadDesignAttachment(fileTokenOrEl, fileName, triggerEl) {
+  var el = null;
+  var fileToken = '';
+  var name = '';
+  if (fileTokenOrEl && fileTokenOrEl.nodeType === 1) {
+    el = fileTokenOrEl;
+    fileToken = el.getAttribute('data-file-token') || '';
+    name = el.getAttribute('data-file-name') || el.getAttribute('title') || '';
+  } else {
+    fileToken = fileTokenOrEl || '';
+    name = fileName || '';
+    el = triggerEl && triggerEl.nodeType === 1 ? triggerEl : null;
+  }
   if (!fileToken) return;
+  if (designAttachDownloading[fileToken]) {
+    showUndoToast('下載準備中，請稍候…');
+    return;
+  }
+  designAttachDownloading[fileToken] = true;
+
+  var origText = el ? el.textContent : '';
+  if (el) {
+    el.classList.add('is-downloading');
+    el.textContent = '下載中…';
+  }
+  showUndoToast('下載準備中…');
+
+  // 同步開空白分頁，避免 async 後 window.open 被瀏覽器擋下、點了像沒反應
+  var pendingWin = null;
+  try { pendingWin = window.open('', '_blank'); } catch (e) { pendingWin = null; }
+  if (pendingWin) {
+    try {
+      pendingWin.document.write('<!doctype html><title>下載中</title><body style="font:14px/1.5 -apple-system,sans-serif;padding:28px;color:#555">檔案下載準備中，請稍候…</body>');
+      pendingWin.document.close();
+    } catch (e2) {}
+  }
+
   fetch(apiUrl('action=download-attachment&fileToken=' + encodeURIComponent(fileToken)))
     .then(function(r) { return r.json(); })
     .then(function(res) {
       if (!res || !res.url) throw new Error((res && res.error) || '找不到下載網址');
-      window.open(res.url, '_blank');
+      if (pendingWin && !pendingWin.closed) {
+        pendingWin.location = res.url;
+      } else {
+        var a = document.createElement('a');
+        a.href = res.url;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        if (name) a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      showUndoToast('已開始下載');
     })
     .catch(function(err) {
+      if (pendingWin && !pendingWin.closed) {
+        try { pendingWin.close(); } catch (e3) {}
+      }
       alert('下載失敗：' + (err.message || '請稍後再試'));
+    })
+    .finally(function() {
+      delete designAttachDownloading[fileToken];
+      if (el) {
+        el.classList.remove('is-downloading');
+        el.textContent = origText;
+      }
     });
 }
 
@@ -12696,7 +12756,7 @@ function renderDesVerAttachList() {
   items.forEach(function(item, idx) {
     var name = escHtml(item.name || '檔案');
     var dlBtn = item.file_token
-      ? '<button type="button" class="attach-item-link" onclick="event.stopPropagation();downloadDesignAttachment(\'' + escAttr(item.file_token) + '\',\'' + escAttr(item.name || '') + '\')">下載</button>'
+      ? '<button type="button" class="attach-item-link" data-file-token="' + escAttr(item.file_token) + '" data-file-name="' + escAttr(item.name || '') + '" onclick="event.stopPropagation();downloadDesignAttachment(this)">下載</button>'
       : '';
     var canRemove = isAdminRole() || isPMRole() || isDesignerLikeRole();
     var rmBtn = canRemove
