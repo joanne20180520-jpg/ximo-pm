@@ -3913,7 +3913,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260803v2';
+var APP_BUILD = '20260803v3';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -13036,16 +13036,23 @@ function renderDesigns() {
       var finalBadge = d.finalized
         ? '<span class="ds ds-final">已定稿</span>'
         : '<span class="ds ds-draft">未定稿</span>';
+      var canBasicEdit = isAdminRole() || (isPMRole() && currentUserRole !== '設計師');
+      var nameClick = canBasicEdit
+        ? ' class="des-cell-name" style="font-weight:500;white-space:nowrap" onclick="openEditDesignBasic(\'' + d.id + '\',event)" title="編輯主類別／指派／進度"'
+        : ' class="des-cell-name" style="font-weight:500;white-space:nowrap;cursor:pointer" onclick="openEditDesign(\'' + d.id + '\')" title="填寫規格詳情"';
+      var cellClick = canBasicEdit
+        ? ' class="des-cell-edit" onclick="openEditDesignBasic(\'' + d.id + '\',event)"'
+        : '';
       rows += '<tr class="erow des-row">'
-        + '<td class="des-cell-name" style="font-weight:500;white-space:nowrap" onclick="openEditDesignBasic(\'' + d.id + '\',event)" title="編輯主類別／指派／進度／定稿">'
+        + '<td' + nameClick + '>'
         + '<button type="button" class="des-toggle" onclick="toggleDesignExpand(\'' + d.id + '\',event)" title="展開版本">' + (expanded ? '▼' : '▶') + '</button> '
         + '<span class="des-name-text">' + escHtml(d.name) + '</span>'
         + (d.item ? '<div class="des-item-sub">' + escHtml(d.item) + '</div>' : '')
         + '</td>'
         + '<td>' + escHtml(d.wiName) + '</td>'
-        + '<td class="des-cell-edit" onclick="openEditDesignBasic(\'' + d.id + '\',event)" title="編輯負責PM">' + renderDesignPersonCell(d.pm) + '</td>'
-        + '<td class="des-cell-edit" onclick="openEditDesignBasic(\'' + d.id + '\',event)" title="編輯設計師">' + renderDesignPersonCell(d.designer) + '</td>'
-        + '<td class="des-cell-edit" onclick="openEditDesignBasic(\'' + d.id + '\',event)" title="編輯進度狀態">' + renderDesignProgressCell(d.progressStatus || d.status, d.progressNum) + '</td>'
+        + '<td' + (canBasicEdit ? cellClick + ' title="編輯負責PM"' : '') + '>' + renderDesignPersonCell(d.pm) + '</td>'
+        + '<td' + (canBasicEdit ? cellClick + ' title="編輯設計師"' : '') + '>' + renderDesignPersonCell(d.designer) + '</td>'
+        + '<td' + (canBasicEdit ? cellClick + ' title="編輯進度狀態"' : '') + '>' + renderDesignProgressCell(d.progressStatus || d.status, d.progressNum) + '</td>'
         + '<td title="由版本列「定稿」勾選決定：有勾＝已定稿，沒勾＝未定稿">' + finalBadge + '</td>'
         + '<td>' + d.nextStep.html + '</td>'
         + '<td class="des-act"><button type="button" class="des-drawer-btn" title="填寫規格詳情" onclick="event.stopPropagation();openEditDesign(\'' + d.id + '\')">☰</button></td>'
@@ -14038,7 +14045,7 @@ function applyDesignFormPermissions(rootSel) {
   var saveBtn = null;
   if (rootSel === '#pp-edit-des') saveBtn = document.querySelector('#des-drawer .des-drawer-foot .bpri');
   if (!saveBtn) saveBtn = root.querySelector('.ppf .bpri');
-  if (saveBtn) saveBtn.style.display = (isPMRole() || currentUserRole === '設計師') ? '' : 'none';
+  if (saveBtn) saveBtn.style.display = (isAdminRole() || (isPMRole() && currentUserRole !== '設計師')) ? '' : 'none';
   var delBtn = document.getElementById('ed-del-btn');
   if (delBtn) delBtn.style.display = isAdminRole() ? '' : 'none';
 }
@@ -14049,6 +14056,12 @@ function openEditDesignBasic(desId, ev) {
     ev.stopPropagation();
   }
   if (!desId) return;
+  // 設計師不可開「編輯設計任務」；改開側欄填寫自己的區塊
+  if (currentUserRole === '設計師' && !isAdminRole()) {
+    openEditDesign(desId);
+    return;
+  }
+  if (!(isPMRole() || isAdminRole())) return;
   var rec = designsData.find(function(r) { return r.record_id === desId; });
   if (!rec) return;
   editingDesignId = desId;
@@ -14081,7 +14094,8 @@ function openEditDesignBasic(desId, ev) {
 }
 
 function saveEditDesignBasic() {
-  if (!(isPMRole() || currentUserRole === '設計師')) return;
+  if (currentUserRole === '設計師' && !isAdminRole()) return;
+  if (!(isPMRole() || isAdminRole())) return;
   if (!editingDesignId) return;
   var packed = collectDesignBasicFields('eb');
   if (!packed.name) { alert('請填寫主類別'); return; }
