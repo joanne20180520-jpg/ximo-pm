@@ -3924,7 +3924,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260803v9';
+var APP_BUILD = '20260803v10';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -4124,11 +4124,13 @@ var undoStack = [];
 var undoToastTimer = null;
 var pendingHardDeletes = {};
 
-function showUndoToast(msg) {
+function showUndoToast(msg, canUndo) {
   var toast = document.getElementById('undo-toast');
   var msgEl = document.getElementById('undo-toast-msg');
   if (!toast || !msgEl) return;
   msgEl.textContent = msg;
+  var btn = toast.querySelector('.undo-btn');
+  if (btn) btn.hidden = !canUndo;
   toast.classList.add('show');
   if (undoToastTimer) clearTimeout(undoToastTimer);
   undoToastTimer = setTimeout(function() {
@@ -4187,7 +4189,7 @@ function softDeleteForUndo(table, recordId, opts) {
       finalizeHardDelete(recordId);
     }, 5000)
   };
-  showUndoToast(opts.toastMsg || '已刪除');
+  showUndoToast(opts.toastMsg || '已刪除', true);
   return Promise.resolve();
 }
 
@@ -8667,7 +8669,7 @@ function doDeleteMilestoneFromEditor(list, idx, removed) {
     }).then(function() {
       renderMilestonesPage();
       renderProjects();
-      showUndoToast('已刪除里程碑「' + (snapshot.name || '未命名') + '」');
+      showUndoToast('已刪除里程碑「' + (snapshot.name || '未命名') + '」', true);
     }).catch(function() {
       undoStack.pop();
     });
@@ -8680,7 +8682,7 @@ function doDeleteMilestoneFromEditor(list, idx, removed) {
   editingMilestoneId = null;
   renderMilestonesPage();
   renderProjects();
-  showUndoToast('已刪除里程碑「' + (snapshot.name || '未命名') + '」');
+  showUndoToast('已刪除里程碑「' + (snapshot.name || '未命名') + '」', true);
 }
 
 function getProjectPmPerson(proj) {
