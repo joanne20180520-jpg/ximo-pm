@@ -1354,6 +1354,10 @@ function normalizeArchiveUrlValue(val) {
   if (!val) return null;
   if (typeof val === 'string' && val.trim()) {
     let url = val.trim();
+    // NAS／本機路徑不要硬加 https://
+    if (/^(\\\\|\/|[A-Za-z]:[\\/])/.test(url) || url.indexOf('\\\\') === 0) {
+      return { link: url, text: url.length > 48 ? url.slice(0, 48) + '…' : url };
+    }
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
     const text = url.replace(/^https?:\/\//, '');
     return { link: url, text: text.length > 48 ? text.slice(0, 48) + '…' : text };
@@ -1362,6 +1366,42 @@ function normalizeArchiveUrlValue(val) {
     return { link: String(val.link), text: String(val.text || val.link).slice(0, 48) };
   }
   return null;
+}
+
+/** NAS 路徑欄：文字欄直接存；超連結欄用可還原的 https 包裝（Lark URL 欄不接受純路徑） */
+var NAS_PATH_FIELD_NAMES = {
+  'NAS路徑位置': 1,
+  '路徑位置': 1
+};
+var NAS_PATH_URL_PREFIX = 'https://ximo-nas.local/?p=';
+
+function isNasPathFieldName(name) {
+  return !!(name && NAS_PATH_FIELD_NAMES[name]);
+}
+
+function encodeNasPathForUrlField(path) {
+  const s = String(path || '').trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s) && s.indexOf('ximo-nas.local') < 0) {
+    return { link: s, text: s.length > 80 ? s.slice(0, 80) + '…' : s };
+  }
+  return {
+    link: NAS_PATH_URL_PREFIX + encodeURIComponent(s),
+    text: s.length > 80 ? s.slice(0, 80) + '…' : s
+  };
+}
+
+function normalizeNasPathWriteValue(meta, val) {
+  const raw = val == null ? '' : String(val).trim();
+  const t = meta && meta.type;
+  if (t === 15) {
+    if (!raw) return null;
+    return encodeNasPathForUrlField(raw);
+  }
+  // 文字／條碼等
+  if (t === 1 || t === 13 || !t) return raw;
+  if (typeof val === 'string') return val;
+  return raw;
 }
 
 function normalizeArchiveDateValue(val) {
@@ -1498,7 +1538,17 @@ function normalizeArchiveFieldValue(meta, val) {
   if (t === 1) {
     if (typeof val === 'string') return val;
     if (typeof val === 'number' || typeof val === 'boolean') return String(val);
-    if (val && typeof val === 'object' && val.text) return String(val.text);
+    if (val && typeof val === 'object') {
+      if (val.text != null && String(val.text).trim()) return String(val.text);
+      if (val.link != null && String(val.link).trim()) {
+        let link = String(val.link).trim();
+        if (/^https?:\/\/(\\\\|\/|[A-Za-z]:[\\/])/i.test(link)) {
+          link = link.replace(/^https?:\/\//i, '');
+        }
+        return link;
+      }
+      if (val.url != null && String(val.url).trim()) return String(val.url);
+    }
     return null;
   }
 
@@ -1724,6 +1774,8 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
     '設計主管圖面審核': ['設計主管圖面檢核'],
     'NAS路徑位置': ['路徑位置'],
     '路徑位置': ['NAS路徑位置'],
+    '價格(含稅)': ['含稅價格', '價格含稅'],
+    '含稅價格': ['價格(含稅)', '價格含稅'],
     '備註': ['備註（工作細項說明）'],
     '備註（工作細項說明）': ['備註'],
     '設計師備註時間': ['設計師備註更新時間'],
@@ -1749,6 +1801,15 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
     }
     if (m.type === 5 && val === null) {
       out[name] = null;
+      return;
+    }
+    if (isNasPathFieldName(name)) {
+      const nasVal = normalizeNasPathWriteValue(m, val);
+      if (nasVal !== undefined && nasVal !== null) out[name] = nasVal;
+      else if (val === '' || val === null) {
+        // 文字欄可清空；超連結清空略過（Lark 對 URL null 支援不一）
+        if (m.type === 1 || m.type === 13) out[name] = '';
+      }
       return;
     }
     if (BITABLE_LINK_FIELD_TYPES[m.type]) {

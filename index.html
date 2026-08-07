@@ -597,6 +597,16 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .des-remark-composer textarea{width:100%;min-height:88px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;line-height:1.5;font-family:inherit;background:#fff;resize:vertical;box-sizing:border-box}
 .des-remark-composer textarea:focus{border-color:var(--accent);outline:none}
 .des-remark-composer .bsm{align-self:flex-end;padding:7px 16px;font-size:12px}
+.des-remark-item{position:relative}
+.des-remark-item-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:6px}
+.des-remark-item-actions button{font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--t2);cursor:pointer}
+.des-remark-item-actions button:hover{border-color:var(--accent);color:var(--accent)}
+.des-remark-edit-btn{border:none !important;background:transparent !important;color:var(--c2) !important;font-weight:600;text-decoration:underline;padding:0 2px !important}
+.des-remark-edit-area{width:100%;min-height:72px;padding:8px 10px;border:1px solid var(--accent);border-radius:7px;font-size:12px;line-height:1.5;font-family:inherit;resize:vertical;box-sizing:border-box}
+.des-drawer-save-status{font-size:11px;color:var(--t3);margin-top:4px;min-height:16px}
+.des-drawer-save-status.is-saving{color:#b06000}
+.des-drawer-save-status.is-saved{color:#1a7a45}
+.des-drawer-save-status.is-error{color:#c0392b}
 .des-ver-chip.editable{cursor:pointer;transition:background .12s,color .12s}
 .des-ver-chip.editable:hover{background:var(--c2);color:#fff}
 .pp-note{width:420px}
@@ -611,6 +621,7 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .des-drawer-btn:hover{background:var(--c2);color:#fff;border-color:var(--c2)}
 .des-drawer-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:320;opacity:0;pointer-events:none;transition:opacity .2s}
 .des-drawer-backdrop.open{opacity:1;pointer-events:auto}
+.des-drawer-backdrop.open.ignore-click{pointer-events:none !important}
 .des-drawer{position:fixed;top:0;right:0;width:min(480px,100vw);height:100vh;background:#fff;z-index:330;box-shadow:-8px 0 28px rgba(0,0,0,.12);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .22s ease;border-left:1px solid var(--border)}
 .des-drawer.open{transform:translateX(0)}
 .des-drawer-head{padding:16px 18px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
@@ -1449,20 +1460,21 @@ button.btn-loading::after{content:'…';margin-left:2px}
 
 <!-- 修改設計任務單 -->
 <!-- 設計資料填寫側欄 -->
-<div class="des-drawer-backdrop" id="des-drawer-backdrop" onclick="closeDesignDrawer()"></div>
+<div class="des-drawer-backdrop" id="des-drawer-backdrop" onclick="onDesignDrawerBackdropClick(event)"></div>
 <aside class="des-drawer" id="des-drawer" aria-hidden="true">
   <div class="des-drawer-head">
     <div class="des-drawer-title-row">
       <div style="flex:1;min-width:0">
         <div class="des-drawer-title" id="ddw-title">設計項目</div>
         <div class="des-drawer-meta" id="ddw-meta"></div>
+        <div class="des-drawer-save-status" id="ddw-save-status" aria-live="polite"></div>
       </div>
       <button type="button" class="des-drawer-close" onclick="closeDesignDrawer()" aria-label="關閉">✕</button>
     </div>
   </div>
   <div class="des-drawer-body" id="pp-edit-des">
     <div class="des-acc" data-acc="basic" data-owner="pm">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">指派與進度</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">指派與進度</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
         <div class="fg"><label>主類別</label><input type="text" id="ed-name" data-des-role="pm"></div>
         <div class="fg"><label>所屬工作項目</label><select id="ed-wi" data-des-role="pm"></select></div>
@@ -1472,7 +1484,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
       </div>
     </div>
     <div class="des-acc" data-acc="req" data-owner="pm">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">需求規格</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">需求規格</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
         <div class="fg"><label>項目</label><input type="text" id="ed-item" data-des-role="pm"></div>
         <div class="fg"><label>尺寸</label><input type="text" id="ed-size" data-des-role="pm"></div>
@@ -1484,14 +1496,14 @@ button.btn-loading::after{content:'…';margin-left:2px}
       </div>
     </div>
     <div class="des-acc" data-acc="make" data-owner="designer">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">製作規格</span><span class="des-acc-owner">設計師填</span><span class="des-acc-lock" hidden>唯讀</span></button>
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">製作規格</span><span class="des-acc-owner">設計師填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
         <div class="fg"><label>材質</label><input type="text" id="ed-material" data-des-role="designer"></div>
         <div class="fg"><label>加工項目</label><input type="text" id="ed-process" data-des-role="designer"></div>
       </div>
     </div>
     <div class="des-acc" data-acc="signoff" data-owner="signoff">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">設計＆PM 主管審核</span><span class="des-acc-owner">主管填</span><span class="des-acc-lock" hidden>唯讀</span></button>
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">設計＆PM 主管審核</span><span class="des-acc-owner">主管填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
         <div class="fg"><label>設計主管圖面檢核</label>
           <div class="des-sign-wrap">
@@ -1510,24 +1522,25 @@ button.btn-loading::after{content:'…';margin-left:2px}
       </div>
     </div>
     <div class="des-acc" data-acc="pm" data-owner="pm">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">定稿資訊</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">定稿資訊</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
         <div class="fg"><label>定稿時間</label><input type="date" id="ed-final" onchange="onOptionalDateClear(this)" data-des-role="pm"></div>
         <div class="fg"><label>定稿狀態</label><input type="text" id="ed-final-status" readonly style="background:#f0eeea" title="請展開版本，在最新版旁勾選定稿"></div>
       </div>
     </div>
     <div class="des-acc" data-acc="money" data-owner="designer">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">發包資訊</span><span class="des-acc-owner">設計師填</span><span class="des-acc-lock" hidden>唯讀</span></button>
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">發包資訊</span><span class="des-acc-owner">設計師填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
         <div class="fg"><label>發包廠商</label><input type="text" id="ed-vendor" data-des-role="designer"></div>
-        <div class="fg"><label>價格</label><input type="text" class="money-input" id="ed-price" placeholder="NT$0" data-des-role="designer"></div>
+        <div class="fg"><label>價格</label><input type="text" class="money-input" id="ed-price" placeholder="NT$0" data-des-role="designer" oninput="calcDesignPriceTaxed()"></div>
+        <div class="fg"><label>價格(含稅)</label><input type="text" id="ed-price-taxed" readonly style="background:#f0f0f0;color:var(--t3)" placeholder="輸入價格後自動計算" title="價格 × 1.05"></div>
         <div class="fg"><label>稅收</label><input type="text" id="ed-tax" data-des-role="designer"></div>
         <div class="fg"><label>發票抬頭</label><textarea id="ed-invoice" rows="2" data-des-role="designer"></textarea></div>
         <div class="fg"><label>已完成</label><select id="ed-done" data-des-role="designer"><option value="false">否</option><option value="true">是</option></select></div>
       </div>
     </div>
     <div class="des-acc" data-acc="deliver" data-owner="designer">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">到貨與交付</span><span class="des-acc-owner">設計師填</span><span class="des-acc-lock" hidden>唯讀</span></button>
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">到貨與交付</span><span class="des-acc-owner">設計師填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
         <div class="fg"><label>發包時間</label><input type="date" id="ed-outsource-date" onchange="onOptionalDateClear(this)" data-des-role="designer"></div>
         <div class="fg"><label>到貨時間</label><input type="date" id="ed-arrive" onchange="onOptionalDateClear(this)" data-des-role="designer"></div>
@@ -1536,7 +1549,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
       </div>
     </div>
     <div class="des-acc" data-acc="note" data-owner="both">
-      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this)"><span class="des-acc-chev">▶</span><span class="des-acc-title">備註（工作細項說明）</span><span class="des-acc-owner">共同</span></button>
+      <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">備註（工作細項說明）</span><span class="des-acc-owner">共同</span></button>
       <div class="des-acc-body">
         <div class="fg des-remark-fg" style="margin:0">
           <label>備註</label>
@@ -1554,8 +1567,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
   </div>
   <div class="des-drawer-foot">
     <button class="bcan bdel-action" id="ed-del-btn" onclick="deleteDesignFromEdit()">刪除此任務</button>
-    <button class="bcan" onclick="closeDesignDrawer()">取消</button>
-    <button class="bpri" onclick="saveEditDesign()">儲存</button>
+    <button class="bcan" onclick="closeDesignDrawer()">關閉</button>
+    <button class="bpri" onclick="saveEditDesign()">儲存並關閉</button>
   </div>
 </aside>
 
@@ -2233,6 +2246,7 @@ document.addEventListener('blur', function(e) {
   else if (t.id === 'aa') calcE();
   else if (t.id === 'ee-actual') calcEditExpense();
   else if (t.id === 'ca') calcP();
+  else if (t.id === 'ed-price') calcDesignPriceTaxed();
 }, true);
 function calcP(){
   var v=parseMoney(document.getElementById('ca').value);
@@ -4642,7 +4656,14 @@ var ROLE_PAGES = {
 };
 
 function isAdminRole() {
-  return currentUserRole === '管理員';
+  if (currentUserRole === '管理員' || currentUserRole === '管理员') return true;
+  try {
+    var auth = JSON.parse(sessionStorage.getItem(AUTH_CACHE_KEY) || 'null');
+    if (auth && (auth.role === '管理員' || auth.role === '管理员' || (typeof isAdminRoleToken === 'function' && isAdminRoleToken(auth.role)))) {
+      return true;
+    }
+  } catch (e) {}
+  return false;
 }
 function isDesignLeadRole() {
   return currentUserRole === '設計主管';
@@ -12606,7 +12627,7 @@ function getDesignRemarkAuthorRole() {
 function getDesignRemarkAuthorName() {
   var n = '';
   try {
-    var auth = JSON.parse(localStorage.getItem(AUTH_CACHE_KEY) || 'null');
+    var auth = JSON.parse(sessionStorage.getItem(AUTH_CACHE_KEY) || 'null');
     if (auth && auth.memberName) n = String(auth.memberName).trim();
   } catch (e) {}
   if (!n) n = getLoginDisplayName();
@@ -12622,6 +12643,66 @@ function getDesignRemarkAuthorName() {
   return shortPersonLabel(n) || '未名';
 }
 
+function getDesignRemarkAuthorCandidates() {
+  var out = [];
+  var seen = {};
+  function add(n) {
+    n = String(n || '').trim();
+    if (!n) return;
+    var variants = [n, shortPersonLabel(n)];
+    var base = n.split(/[_\s　]+/)[0];
+    if (base) variants.push(base, shortPersonLabel(base));
+    variants.forEach(function(v) {
+      v = String(v || '').trim();
+      if (!v || seen[v]) return;
+      seen[v] = 1;
+      out.push(v);
+    });
+  }
+  try {
+    var auth = JSON.parse(sessionStorage.getItem(AUTH_CACHE_KEY) || 'null');
+    if (auth) add(auth.memberName);
+  } catch (e) {}
+  add(getLoginDisplayName());
+  try {
+    var u = getCurrentLoginUser();
+    if (u) {
+      add(u.name);
+      add(u.enName);
+    }
+  } catch (e2) {}
+  add(getDesignRemarkAuthorName());
+  return out;
+}
+
+function sameDesignRemarkAuthor(who) {
+  who = shortPersonLabel(who || '');
+  if (!who) return false;
+  var list = getDesignRemarkAuthorCandidates();
+  for (var i = 0; i < list.length; i++) {
+    var me = shortPersonLabel(list[i]);
+    if (!me) continue;
+    if (me === who) return true;
+    if (me.indexOf(who) === 0 || who.indexOf(me) === 0) return true;
+  }
+  return false;
+}
+
+function canEditDesignRemarkItem(it) {
+  if (!it) return false;
+  // 管理員、PM 可改共同備註全部（含代改同事留言）
+  if (isAdminRole()) return true;
+  if (isPMRole() && !isDesignerLikeRole()) return true;
+  if (!isDesignerLikeRole()) return false;
+  if (sameDesignRemarkAuthor(it.who)) return true;
+  // 舊留言沒有作者名：同角色可改
+  if (!it.who) {
+    if (it.role === 'designer') return true;
+    if (it.role === 'pm' && isPMRole()) return true;
+  }
+  return false;
+}
+
 function resolveDesignStickyAuthor(parsed, kind, designId) {
   if (parsed && parsed.who) return shortPersonLabel(parsed.who);
   var des = designId ? designsData.find(function(r) { return r.record_id === designId; }) : null;
@@ -12631,6 +12712,7 @@ function resolveDesignStickyAuthor(parsed, kind, designId) {
 }
 
 function parseDesignRemarkThread(raw) {
+  raw = fieldPlainText(raw);
   raw = raw == null ? '' : String(raw).trim();
   if (!raw) return [];
   if (raw.indexOf(DESIGN_REMARK_HEADER) === 0) {
@@ -12670,6 +12752,19 @@ function packDesignRemarkThread(items) {
   return DESIGN_REMARK_HEADER + '\n' + lines.join('\n');
 }
 
+function persistDesignRemarkThread(toastMsg) {
+  if (!editingDesignId) return Promise.resolve();
+  var packed = packDesignRemarkThread(editingDesignRemarkItems);
+  var hidden = document.getElementById('ed-remark');
+  if (hidden) hidden.value = packed;
+  return optimisticUpdate('designs', editingDesignId, { '備註': packed }, { failMsg: '備註儲存失敗', skipSync: true })
+    .then(function() {
+      if (toastMsg) showUndoToast(toastMsg);
+      syncTables(['designs']).catch(function() {});
+    })
+    .catch(function() {});
+}
+
 function renderDesignRemarkThread() {
   var box = document.getElementById('ed-remark-thread');
   var hidden = document.getElementById('ed-remark');
@@ -12679,17 +12774,59 @@ function renderDesignRemarkThread() {
     box.innerHTML = '<div class="des-remark-empty">尚無備註。</div>';
     return;
   }
-  box.innerHTML = editingDesignRemarkItems.map(function(it) {
+  box.innerHTML = editingDesignRemarkItems.map(function(it, idx) {
     var role = it.role === 'designer' ? 'designer' : (it.role === 'pm' ? 'pm' : 'unknown');
     var metaParts = [];
     if (it.who) metaParts.push(escHtml(shortPersonLabel(it.who)));
     if (it.ts) metaParts.push(escHtml(fmtNoteTime(it.ts)));
     var meta = metaParts.length ? '<span class="des-remark-meta">' + metaParts.join(' · ') + '</span>' : '';
-    return '<div class="des-remark-item des-remark-item--' + role + '">'
+    var canEdit = canEditDesignRemarkItem(it);
+    if (it._editing && canEdit) {
+      return '<div class="des-remark-item des-remark-item--' + role + '" data-remark-idx="' + idx + '">'
+        + '<textarea class="des-remark-edit-area" id="ed-remark-edit-' + idx + '">' + escHtml(it.text) + '</textarea>'
+        + '<div class="des-remark-item-actions">'
+        + '<button type="button" onclick="cancelEditDesignRemarkNote(' + idx + ')">取消</button>'
+        + '<button type="button" onclick="saveEditDesignRemarkNote(' + idx + ')">儲存修改</button>'
+        + '</div></div>';
+    }
+    var actions = canEdit
+      ? '<div class="des-remark-item-actions"><button type="button" class="des-remark-edit-btn" onclick="event.stopPropagation();startEditDesignRemarkNote(' + idx + ')">編輯</button></div>'
+      : '';
+    return '<div class="des-remark-item des-remark-item--' + role + '" data-remark-idx="' + idx + '">'
       + '<span class="des-remark-text">' + escHtml(it.text) + '</span>'
       + meta
+      + actions
       + '</div>';
   }).join('');
+}
+
+function startEditDesignRemarkNote(idx) {
+  var it = editingDesignRemarkItems[idx];
+  if (!canEditDesignRemarkItem(it)) return;
+  editingDesignRemarkItems.forEach(function(x) { if (x) x._editing = false; });
+  it._editing = true;
+  renderDesignRemarkThread();
+  var ta = document.getElementById('ed-remark-edit-' + idx);
+  if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+
+function cancelEditDesignRemarkNote(idx) {
+  var it = editingDesignRemarkItems[idx];
+  if (it) it._editing = false;
+  renderDesignRemarkThread();
+}
+
+function saveEditDesignRemarkNote(idx) {
+  var it = editingDesignRemarkItems[idx];
+  if (!canEditDesignRemarkItem(it)) return;
+  var ta = document.getElementById('ed-remark-edit-' + idx);
+  var text = ta ? String(ta.value || '').trim() : '';
+  if (!text) { alert('備註內容不可空白'); return; }
+  it.text = text;
+  it.ts = Date.now();
+  it._editing = false;
+  renderDesignRemarkThread();
+  persistDesignRemarkThread('備註已更新');
 }
 
 function addDesignRemarkNote() {
@@ -12706,10 +12843,7 @@ function addDesignRemarkNote() {
   });
   if (input) input.value = '';
   renderDesignRemarkThread();
-  var packed = packDesignRemarkThread(editingDesignRemarkItems);
-  optimisticUpdate('designs', editingDesignId, { '備註': packed }, { failMsg: '備註儲存失敗' })
-    .then(function() { showUndoToast('備註已送出'); })
-    .catch(function() {});
+  persistDesignRemarkThread('備註已送出');
 }
 
 
@@ -13929,7 +14063,11 @@ function optimisticUpdate(table, recordId, fields, opts) {
     return res;
   }).catch(function(err) {
     restoreTableSnapshot(table, prev);
-    alert((opts.failMsg || '修改失敗') + '：' + (err.message || '請稍後再試'));
+    if (!opts.quiet) {
+      alert((opts.failMsg || '修改失敗') + '：' + (err.message || '請稍後再試'));
+    } else {
+      showUndoToast((opts.failMsg || '修改失敗') + '：' + (err.message || '請稍後再試'));
+    }
     throw err;
   });
 }
@@ -13972,11 +14110,49 @@ function fieldTextValue(raw) {
   if (typeof raw === 'number') return String(raw);
   if (Array.isArray(raw) && raw.length) return fieldTextValue(raw[0]);
   if (raw && typeof raw === 'object') {
-    if (raw.text) return String(raw.text).trim();
-    if (raw.name) return String(raw.name).trim();
+    if (raw.text != null && String(raw.text).trim()) return String(raw.text).trim();
+    if (raw.name != null && String(raw.name).trim()) return String(raw.name).trim();
+    if (raw.link != null && String(raw.link).trim()) return String(raw.link).trim();
+    if (raw.url != null && String(raw.url).trim()) return String(raw.url).trim();
     if (raw.text_arr && raw.text_arr[0]) return String(raw.text_arr[0]).trim();
   }
-  return String(raw).trim();
+  return '';
+}
+
+/** NAS／路徑欄：避免 Lark URL 物件變成 [object Object] */
+function nasPathFromField(raw) {
+  if (raw === undefined || raw === null || raw === '') return '';
+  if (typeof raw === 'string' || typeof raw === 'number') {
+    var s0 = String(raw).trim();
+    if (s0.indexOf('https://ximo-nas.local/?p=') === 0) {
+      try { return decodeURIComponent(s0.slice('https://ximo-nas.local/?p='.length)); } catch (e0) { return s0; }
+    }
+    return s0;
+  }
+  var plain = fieldPlainText(raw);
+  if (plain && plain !== '[object Object]' && plain.indexOf('https://ximo-nas.local/?p=') !== 0) {
+    // text 可能是截斷顯示，優先還原 link 裡的完整路徑
+  }
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    var link = String(raw.link || raw.url || '').trim();
+    if (link.indexOf('https://ximo-nas.local/?p=') === 0) {
+      try { return decodeURIComponent(link.slice('https://ximo-nas.local/?p='.length)); } catch (e1) {}
+    }
+    if (plain && plain !== '[object Object]' && plain.indexOf('ximo-nas.local') < 0) return plain;
+    if (link) {
+      if (/^https?:\/\/(\\\\|\/|[A-Za-z]:[\\/])/i.test(link)) {
+        link = link.replace(/^https?:\/\//i, '');
+      }
+      if (/^file:\/\//i.test(link)) {
+        try { link = decodeURIComponent(link.replace(/^file:\/\//i, '')); } catch (e2) {
+          link = link.replace(/^file:\/\//i, '');
+        }
+      }
+      return link;
+    }
+  }
+  if (plain && plain !== '[object Object]') return plain;
+  return '';
 }
 
 /** 較完整的純文字擷取（Lark 文字／富文本陣列） */
@@ -13990,6 +14166,8 @@ function fieldPlainText(raw) {
       if (typeof x === 'object') {
         if (x.text != null) return String(x.text);
         if (x.name != null) return String(x.name);
+        if (x.link != null) return String(x.link);
+        if (x.url != null) return String(x.url);
         if (x.content != null) return fieldPlainText(x.content);
         if (Array.isArray(x.text_arr)) return x.text_arr.join('');
       }
@@ -13997,8 +14175,10 @@ function fieldPlainText(raw) {
     }).join('').trim();
   }
   if (typeof raw === 'object') {
-    if (raw.text != null) return String(raw.text).trim();
-    if (raw.name != null) return String(raw.name).trim();
+    if (raw.text != null && String(raw.text).trim()) return String(raw.text).trim();
+    if (raw.name != null && String(raw.name).trim()) return String(raw.name).trim();
+    if (raw.link != null && String(raw.link).trim()) return String(raw.link).trim();
+    if (raw.url != null && String(raw.url).trim()) return String(raw.url).trim();
     if (raw.content != null) return fieldPlainText(raw.content);
     if (Array.isArray(raw.text_arr)) return raw.text_arr.join('').trim();
   }
@@ -14289,7 +14469,8 @@ function refreshOpenDesignDrawerFromServer() {
     refreshDesignSignChecksFromRecord(rec);
     var finalEl = document.getElementById('ed-final-status');
     if (finalEl) finalEl.value = (rec.fields && rec.fields['定稿狀態']) || '未定稿';
-    applyEditDesignPermissions();
+    // 不要 resetOpen：避免使用者剛展開的區塊被同步後又關掉
+    applyEditDesignPermissions({ resetOpen: false });
   }).catch(function() {});
 }
 
@@ -14372,9 +14553,10 @@ function canEditDesignRole(role) {
   if (role === 'design_lead') return isDesignLeadRole();
   if (role === 'admin_sign') return isAdminRole();
   if (isAdminRole()) return true;
+  // PM 也可改設計師欄（含 NAS 路徑），避免管理員／PM 改了卻存不進去
   if (role === 'both') return isPMRole() || isDesignerLikeRole();
   if (role === 'pm') return isPMRole();
-  if (role === 'designer') return isDesignerLikeRole();
+  if (role === 'designer') return isDesignerLikeRole() || isPMRole();
   return false;
 }
 
@@ -14497,12 +14679,13 @@ function openEditDesign(desId) {
   document.getElementById('ed-outsource-date').value = f['發包時間'] ? tsToDateInput(f['發包時間']) : '';
   document.getElementById('ed-arrive').value = f['到貨時間'] ? tsToDateInput(f['到貨時間']) : (f['成品交付日'] ? tsToDateInput(f['成品交付日']) : '');
   document.getElementById('ed-qty').value = f['數量'] != null ? String(f['數量']) : '';
-  document.getElementById('ed-path').value = f['NAS路徑位置'] || f['路徑位置'] || '';
+  document.getElementById('ed-path').value = nasPathFromField(f['NAS路徑位置'] != null ? f['NAS路徑位置'] : f['路徑位置']);
   setDesignSelectBool('ed-pm-check', getDesignSignCheckValue(f, DESIGN_PM_CHECK_KEYS));
   document.getElementById('ed-final').value = f['定稿時間'] ? tsToDateInput(f['定稿時間']) : (f['完稿交付日'] ? tsToDateInput(f['完稿交付日']) : '');
   document.getElementById('ed-vendor').value = f['發包廠商'] || '';
   var price = parseFloat(f['價格']) || 0;
   document.getElementById('ed-price').value = price ? 'NT$' + Math.round(price).toLocaleString() : '';
+  calcDesignPriceTaxed();
   document.getElementById('ed-tax').value = f['稅收'] != null ? String(f['稅收']) : '';
   document.getElementById('ed-invoice').value = f['發票抬頭'] || '';
   setDesignSelectBool('ed-done', f['已完成']);
@@ -14528,34 +14711,315 @@ function openEditDesign(desId) {
     if (desName) chips += '<span class="des-drawer-chip"><span class="av ' + avatarClass(desName) + '">' + personInitial(desName) + '</span>' + escHtml(desName) + '</span>';
     metaEl.innerHTML = badge + chips;
   }
-  applyEditDesignPermissions();
+  applyEditDesignPermissions({ resetOpen: true });
+  designDrawerHydrating = true;
+  designDrawerDirty = false;
+  designDrawerAccReady = true;
+  setDesignDrawerSaveStatus('');
+  // 延後掛上 backdrop，避免開側欄的同一次點擊打到遮罩又關掉
   openDesignDrawer();
-  // 後台若取消簽核／定稿，開側欄時強制跟 Base 對齊
   refreshOpenDesignDrawerFromServer();
+  setTimeout(function() { designDrawerHydrating = false; }, 50);
 }
 
 function openDesignDrawer() {
   var backdrop = document.getElementById('des-drawer-backdrop');
   var drawer = document.getElementById('des-drawer');
-  if (backdrop) backdrop.classList.add('open');
+  designDrawerOpenedAt = Date.now();
   if (drawer) {
     drawer.classList.add('open');
     drawer.setAttribute('aria-hidden', 'false');
   }
+  if (backdrop) {
+    backdrop.classList.add('open');
+    backdrop.classList.add('ignore-click');
+    // 開啟動畫期間完全不收點擊，避免第一次展開立刻被關掉
+    clearTimeout(openDesignDrawer._bgTimer);
+    openDesignDrawer._bgTimer = setTimeout(function() {
+      backdrop.classList.remove('ignore-click');
+    }, 700);
+  }
+  ensureDesignDrawerAutoSaveBound();
+}
+
+function onDesignDrawerBackdropClick(e) {
+  var backdrop = document.getElementById('des-drawer-backdrop');
+  if (backdrop && backdrop.classList.contains('ignore-click')) return;
+  if (Date.now() - designDrawerOpenedAt < 700) return;
+  if (e && e.target && e.target.id !== 'des-drawer-backdrop') return;
+  closeDesignDrawer();
 }
 
 function closeDesignDrawer() {
-  var backdrop = document.getElementById('des-drawer-backdrop');
-  var drawer = document.getElementById('des-drawer');
-  if (backdrop) backdrop.classList.remove('open');
-  if (drawer) {
-    drawer.classList.remove('open');
-    drawer.setAttribute('aria-hidden', 'true');
+  var finish = function() {
+    var backdrop = document.getElementById('des-drawer-backdrop');
+    var drawer = document.getElementById('des-drawer');
+    if (backdrop) backdrop.classList.remove('open');
+    if (drawer) {
+      drawer.classList.remove('open');
+      drawer.setAttribute('aria-hidden', 'true');
+    }
+    editingDesignId = null;
+    designDrawerDirty = false;
+    designDrawerAccReady = false;
+    setDesignDrawerSaveStatus('');
+  };
+  clearTimeout(designAutoSaveTimer);
+  designAutoSaveTimer = null;
+  // 關閉前一律嘗試存一次（含 NAS 路徑）
+  if (editingDesignId && (isPMRole() || isDesignerLikeRole() || isAdminRole())) {
+    designDrawerDirty = true;
+    var pathEl = document.getElementById('ed-path');
+    var pathPromise = (pathEl && !pathEl.disabled)
+      ? saveDesignNasPathNow()
+      : Promise.resolve(true);
+    pathPromise
+      .then(function() { return flushDesignDrawerAutoSave({ silent: true, force: true }); })
+      .finally(finish);
+    return;
   }
-  editingDesignId = null;
+  finish();
 }
 
-function toggleDesignAcc(btn) {
+function calcDesignPriceTaxed() {
+  var priceEl = document.getElementById('ed-price');
+  var taxedEl = document.getElementById('ed-price-taxed');
+  if (!taxedEl) return 0;
+  var price = parseMoney(priceEl && priceEl.value);
+  if (!price) {
+    taxedEl.value = '';
+    return 0;
+  }
+  var taxed = Math.round(price * 1.05);
+  taxedEl.value = ntf(taxed);
+  return taxed;
+}
+
+var designDrawerHydrating = false;
+var designDrawerDirty = false;
+var designDrawerSaving = false;
+var designAutoSaveTimer = null;
+var designDrawerAutoSaveBound = false;
+var designDrawerOpenedAt = 0;
+var designDrawerAccReady = false;
+var designAccToggleAt = 0;
+
+function setDesignDrawerSaveStatus(state) {
+  var el = document.getElementById('ddw-save-status');
+  if (!el) return;
+  el.classList.remove('is-saving', 'is-saved', 'is-error');
+  if (state === 'pending') {
+    el.textContent = '有未儲存變更…';
+  } else if (state === 'saving') {
+    el.classList.add('is-saving');
+    el.textContent = '自動儲存中…';
+  } else if (state === 'saved') {
+    el.classList.add('is-saved');
+    el.textContent = '已自動儲存';
+  } else if (state === 'error') {
+    el.classList.add('is-error');
+    el.textContent = '自動儲存失敗，請再試一次';
+  } else {
+    el.textContent = '';
+  }
+}
+
+function scheduleDesignDrawerAutoSave() {
+  if (designDrawerHydrating || !editingDesignId) return;
+  if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return;
+  designDrawerDirty = true;
+  setDesignDrawerSaveStatus('pending');
+  clearTimeout(designAutoSaveTimer);
+  designAutoSaveTimer = setTimeout(function() {
+    flushDesignDrawerAutoSave();
+  }, 800);
+}
+
+function flushDesignDrawerAutoSave(opts) {
+  opts = opts || {};
+  clearTimeout(designAutoSaveTimer);
+  designAutoSaveTimer = null;
+  if (!editingDesignId) return Promise.resolve(true);
+  if (!designDrawerDirty && !opts.force) return Promise.resolve(true);
+  if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return Promise.resolve(false);
+  commitInProgressRemarkEdits();
+  var id = editingDesignId;
+  var fields = collectDesignDrawerFieldsForSave();
+  designDrawerDirty = false;
+  designDrawerSaving = true;
+  if (!opts.silent) setDesignDrawerSaveStatus('saving');
+  else setDesignDrawerSaveStatus('saving');
+  return optimisticUpdate('designs', id, fields, {
+    failMsg: '自動儲存失敗',
+    skipSync: true,
+    quiet: !!opts.silent
+  })
+    .then(function() {
+      // 確保本機 designsData 的路徑與剛寫入一致（避免 sync 前被舊值蓋掉）
+      var rec = designsData.find(function(r) { return r.record_id === id; });
+      if (rec && fields['NAS路徑位置'] != null) {
+        rec.fields = rec.fields || {};
+        rec.fields['NAS路徑位置'] = fields['NAS路徑位置'];
+        if (fields['路徑位置'] != null) rec.fields['路徑位置'] = fields['路徑位置'];
+      }
+      if (editingDesignId === id) setDesignDrawerSaveStatus('saved');
+      syncTables(['designs']).catch(function() {});
+      return true;
+    })
+    .catch(function() {
+      designDrawerDirty = true;
+      if (editingDesignId === id) setDesignDrawerSaveStatus('error');
+      return false;
+    })
+    .finally(function() {
+      designDrawerSaving = false;
+    });
+}
+
+function designFieldWriteRole(fieldName) {
+  var designerFields = {
+    '材質': 1, '加工項目': 1, '發包廠商': 1, '價格': 1, '稅收': 1, '發票抬頭': 1, '已完成': 1,
+    '發包時間': 1, '到貨時間': 1, '數量': 1, 'NAS路徑位置': 1, '路徑位置': 1
+  };
+  var pmFields = {
+    '主類別': 1, '所屬工作項目': 1, '負責PM': 1, '設計師': 1,
+    '項目': 1, '尺寸': 1, '單雙面': 1, '文案': 1, '設計需求參考資料': 1,
+    '需求交付': 1, '初稿時間': 1, '定稿時間': 1
+  };
+  var bothFields = { '備註': 1, '進度狀態': 1, '進度數值': 1 };
+  if (designerFields[fieldName]) return 'designer';
+  if (pmFields[fieldName]) return 'pm';
+  if (bothFields[fieldName]) return 'both';
+  return 'skip';
+}
+
+/** 依角色只送可寫欄位；簽核欄不走自動存 */
+function collectDesignDrawerFieldsForSave() {
+  var all = collectDesignDrawerFields();
+  delete all['設計主管圖面檢核'];
+  delete all['PM主管內容審核'];
+  delete all['設計主管圖面審核'];
+  delete all['PM主管內容檢核'];
+  if (isAdminRole() || (isPMRole() && !isDesignerLikeRole())) return all;
+  var out = {};
+  Object.keys(all).forEach(function(k) {
+    var role = designFieldWriteRole(k);
+    if (role === 'skip') return;
+    if (role === 'both') {
+      out[k] = all[k];
+      return;
+    }
+    if (role === 'designer' && (isDesignerLikeRole() || isPMRole())) out[k] = all[k];
+    if (role === 'pm' && isPMRole() && !isDesignLeadRole()) out[k] = all[k];
+  });
+  // NAS 路徑：只要輸入框可編輯就一定帶上
+  var pathEl = document.getElementById('ed-path');
+  if (pathEl && !pathEl.disabled) {
+    var pathVal = String(pathEl.value || '').trim();
+    out['NAS路徑位置'] = pathVal;
+    out['路徑位置'] = pathVal;
+  }
+  return out;
+}
+
+function saveDesignNasPathNow() {
+  if (!editingDesignId || designDrawerHydrating) return Promise.resolve(false);
+  var pathEl = document.getElementById('ed-path');
+  if (!pathEl || pathEl.disabled) return Promise.resolve(false);
+  if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return Promise.resolve(false);
+  var pathVal = String(pathEl.value || '').trim();
+  setDesignDrawerSaveStatus('saving');
+  return optimisticUpdate('designs', editingDesignId, {
+    'NAS路徑位置': pathVal,
+    '路徑位置': pathVal
+  }, { failMsg: 'NAS路徑儲存失敗', skipSync: true, quiet: true })
+    .then(function() {
+      var rec = designsData.find(function(r) { return r.record_id === editingDesignId; });
+      if (rec) {
+        rec.fields = rec.fields || {};
+        rec.fields['NAS路徑位置'] = pathVal;
+        rec.fields['路徑位置'] = pathVal;
+      }
+      setDesignDrawerSaveStatus('saved');
+      showUndoToast('NAS路徑已儲存');
+      return true;
+    })
+    .catch(function(err) {
+      setDesignDrawerSaveStatus('error');
+      showUndoToast('NAS路徑儲存失敗：' + ((err && err.message) || '請稍後再試'));
+      return false;
+    });
+}
+
+function commitInProgressRemarkEdits() {
+  editingDesignRemarkItems.forEach(function(it, idx) {
+    if (!it || !it._editing) return;
+    var ta = document.getElementById('ed-remark-edit-' + idx);
+    if (ta) {
+      var text = String(ta.value || '').trim();
+      if (text) {
+        it.text = text;
+        it.ts = Date.now();
+      }
+    }
+    it._editing = false;
+  });
+}
+
+function ensureDesignDrawerAutoSaveBound() {
+  if (designDrawerAutoSaveBound) return;
+  var root = document.getElementById('pp-edit-des');
+  if (!root) return;
+  designDrawerAutoSaveBound = true;
+  root.addEventListener('input', function(e) {
+    var t = e.target;
+    if (!t || !t.id) return;
+    if (t.id === 'ed-remark-input' || (t.id && t.id.indexOf('ed-remark-edit-') === 0)) return;
+    if (t.id === 'ed-price') calcDesignPriceTaxed();
+    if (t.id === 'ed-path') {
+      designDrawerDirty = true;
+      setDesignDrawerSaveStatus('pending');
+      clearTimeout(saveDesignNasPathNow._timer);
+      saveDesignNasPathNow._timer = setTimeout(function() { saveDesignNasPathNow(); }, 600);
+      return;
+    }
+    scheduleDesignDrawerAutoSave();
+  });
+  root.addEventListener('change', function(e) {
+    var t = e.target;
+    if (!t || !t.id) return;
+    if (t.id === 'ed-remark-input' || (t.id && t.id.indexOf('ed-remark-edit-') === 0)) return;
+    if (t.id === 'ed-price') calcDesignPriceTaxed();
+    if (t.id === 'ed-path') {
+      saveDesignNasPathNow();
+      return;
+    }
+    scheduleDesignDrawerAutoSave();
+  });
+  root.addEventListener('blur', function(e) {
+    var t = e.target;
+    if (!t || !t.id) return;
+    if (t.id === 'ed-remark-input' || (t.id && t.id.indexOf('ed-remark-edit-') === 0)) return;
+    if (t.classList && t.classList.contains('money-input')) formatMoneyField(t);
+    if (t.id === 'ed-price') calcDesignPriceTaxed();
+    if (t.id === 'ed-path') {
+      clearTimeout(saveDesignNasPathNow._timer);
+      saveDesignNasPathNow();
+      return;
+    }
+    if (designDrawerDirty) flushDesignDrawerAutoSave();
+  }, true);
+}
+
+function toggleDesignAcc(btn, ev) {
+  if (ev) {
+    try { ev.preventDefault(); } catch (e0) {}
+    try { ev.stopPropagation(); } catch (e1) {}
+  }
+  var now = Date.now();
+  // 避免同一點擊被觸發兩次（展開立刻又收合）
+  if (now - designAccToggleAt < 320) return;
+  designAccToggleAt = now;
   var acc = btn && btn.closest ? btn.closest('.des-acc') : null;
   if (!acc) return;
   var open = !acc.classList.contains('open');
@@ -14573,44 +15037,46 @@ function designDrawerOwnerMatches(owner) {
   return false;
 }
 
-function applyEditDesignPermissions() {
+function applyEditDesignPermissions(opts) {
+  opts = opts || {};
+  // 只有明確 resetOpen:true 才重設展開（開側欄時）；同步／重套權限絕不再收合
+  var resetOpen = opts.resetOpen === true;
   applyDesignFormPermissions('#pp-edit-des');
   var roleKey = isAdminRole() ? 'admin' : (isDesignerLikeRole() ? 'designer' : 'pm');
   document.querySelectorAll('#pp-edit-des .des-acc').forEach(function(acc, idx) {
     var owner = acc.getAttribute('data-owner') || 'pm';
     var mine = false;
-    if (isAdminRole()) {
-      // 管理員可看全部；簽核區可操作 PM 主管審核
+    if (isAdminRole() || (isPMRole() && !isDesignerLikeRole())) {
+      // 管理員／PM：全部可編輯
       mine = true;
     } else if (isDesignLeadRole()) {
-      // 設計主管＝設計師權限＋主管簽核
       mine = owner === 'signoff' || owner === 'designer' || owner === 'both';
     } else if (isDesignerRole()) {
       mine = owner === 'designer' || owner === 'both';
     } else {
       mine = owner === 'pm' || owner === 'both';
     }
-    var open = false;
-    if (roleKey === 'admin') {
-      open = idx === 0 || owner === 'signoff';
-    } else if (isDesignLeadRole()) {
-      open = owner === 'signoff' || owner === 'designer' || owner === 'both';
-    } else {
-      open = owner === roleKey || owner === 'both';
+    if (resetOpen) {
+      // 預設全部展開，避免還要點第一次才打開
+      acc.classList.add('open');
+      var chev = acc.querySelector('.des-acc-chev');
+      if (chev) chev.textContent = '▼';
     }
-    acc.classList.toggle('open', open);
     acc.classList.toggle('locked', !mine);
-    var chev = acc.querySelector('.des-acc-chev');
-    if (chev) chev.textContent = open ? '▼' : '▶';
     var lock = acc.querySelector('.des-acc-lock');
     if (lock) lock.hidden = mine;
     acc.style.display = '';
-    if (!mine) {
-      acc.querySelectorAll('input, select, textarea, button.des-sign-check').forEach(function(el) {
+    acc.querySelectorAll('input, select, textarea, button.des-sign-check').forEach(function(el) {
+      if (!mine) {
         el.disabled = true;
-      });
-    }
+        return;
+      }
+      var role = el.getAttribute('data-des-role');
+      if (role) el.disabled = !canEditDesignRole(role);
+      else el.disabled = false;
+    });
   });
+  if (resetOpen) designDrawerAccReady = true;
   syncDesignSignCheckUi('ed-design-check');
   syncDesignSignCheckUi('ed-pm-check');
 }
@@ -14647,6 +15113,7 @@ function collectDesignDrawerFields() {
     '設計主管圖面檢核': readDesignSelectBool('ed-design-check'),
     '數量': document.getElementById('ed-qty').value.trim(),
     'NAS路徑位置': document.getElementById('ed-path').value.trim(),
+    '路徑位置': document.getElementById('ed-path').value.trim(),
     'PM主管內容審核': readDesignSelectBool('ed-pm-check'),
     '發包廠商': document.getElementById('ed-vendor').value.trim(),
     '稅收': document.getElementById('ed-tax').value.trim(),
@@ -14665,6 +15132,8 @@ function collectDesignDrawerFields() {
   var price = parseMoney(document.getElementById('ed-price').value);
   if (price) fields['價格'] = price;
   else fields['價格'] = 0;
+  // 價格(含稅) 由 Lark 公式欄計算（價格×1.05），前端不寫入
+  calcDesignPriceTaxed();
   applyOptionalDateField(fields, '需求交付', document.getElementById('ed-need').value);
   applyOptionalDateField(fields, '初稿時間', document.getElementById('ed-draft').value);
   applyOptionalDateField(fields, '定稿時間', document.getElementById('ed-final').value);
@@ -14684,21 +15153,14 @@ function collectDesignFormFields(prefix) {
 function saveEditDesign() {
   if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return;
   if (!editingDesignId) return;
-  var fields = collectDesignDrawerFields();
-  var rec = designsData.find(function(r) { return r.record_id === editingDesignId; });
-  var oldFields = rec ? JSON.parse(JSON.stringify(rec.fields || {})) : null;
-  var name = getDesignDisplayName(rec && rec.fields) || '設計任務';
-
-  showConfirm({
-    type: 'edit',
-    title: '確認儲存資料填寫',
-    body: '確定要儲存這筆規格／製作／財務資料嗎？<br><span class="confirm-name">「' + escHtml(name) + '」</span>',
-    okText: '儲存',
-    onOk: function() {
-      if (oldFields) undoStack.push({ type: 'update', table: 'designs', recordId: editingDesignId, data: oldFields });
-      var id = editingDesignId;
+  designDrawerDirty = true;
+  var id = editingDesignId;
+  flushDesignDrawerAutoSave({ silent: true }).then(function(ok) {
+    if (!ok) return;
+    showUndoToast('已儲存');
+    if (editingDesignId === id) {
+      designDrawerDirty = false;
       closeDesignDrawer();
-      optimisticUpdate('designs', id, fields, { failMsg: '修改失敗' }).catch(function() {});
     }
   });
 }
