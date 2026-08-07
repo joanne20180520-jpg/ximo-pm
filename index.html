@@ -567,13 +567,14 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .des-ver-table th{text-align:left;color:var(--t3);font-size:10px;font-weight:600;padding:4px 6px;border-bottom:1px solid var(--border)}
 .des-ver-table td{padding:6px;vertical-align:top;border-bottom:1px solid var(--border)}
 .des-ver-table tr:last-child td{border-bottom:none}
-.des-ver-table th:nth-child(1),.des-ver-table td:nth-child(1){width:48px}
-.des-ver-table th:nth-child(2),.des-ver-table td:nth-child(2){width:168px}
-.des-ver-table th:nth-child(3),.des-ver-table td:nth-child(3),.des-ver-table th:nth-child(4),.des-ver-table td:nth-child(4){width:auto}
-.des-ver-table th:nth-child(5),.des-ver-table td:nth-child(5){width:84px;white-space:nowrap}
-.des-ver-table th:nth-child(6),.des-ver-table td:nth-child(6){width:48px}
-.des-ver-table td:nth-child(2){padding-right:4px}
-.des-ver-table td:nth-child(3){padding-left:4px}
+.des-ver-table th:nth-child(1),.des-ver-table td:nth-child(1){width:44px}
+.des-ver-table th:nth-child(2),.des-ver-table td:nth-child(2),
+.des-ver-table th:nth-child(3),.des-ver-table td:nth-child(3),
+.des-ver-table th:nth-child(4),.des-ver-table td:nth-child(4){width:30%}
+.des-ver-table th:nth-child(5),.des-ver-table td:nth-child(5){width:78px;white-space:nowrap}
+.des-ver-table th:nth-child(6),.des-ver-table td:nth-child(6){width:44px}
+.des-ver-table td:nth-child(2) .des-ver-file,
+.des-ver-table td:nth-child(2) .des-file-link{width:100%;max-width:100%;justify-content:flex-start}
 .des-ver-chip{display:inline-block;padding:1px 7px;border-radius:4px;background:#eeebe6;color:var(--text);font-weight:700;font-size:10px}
 .des-note-d{background:#e6f4ee;border-radius:6px;padding:6px 8px;color:#1a7a45;line-height:1.4;white-space:pre-wrap}
 .des-note-p{background:#fff3e0;border-radius:6px;padding:6px 8px;color:#b06000;line-height:1.4;white-space:pre-wrap}
@@ -691,7 +692,7 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .des-progress-track{flex:1;height:6px;border-radius:99px;background:var(--border);overflow:hidden;min-width:48px}
 .des-progress-fill{height:100%;border-radius:99px;background:var(--accent)}
 .des-progress-label{font-size:11px;color:var(--t2);font-variant-numeric:tabular-nums;flex-shrink:0}
-.des-ver-file{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--c2);background:#e4ecf3;padding:3px 8px;border-radius:6px;text-decoration:none;max-width:100%}
+.des-ver-file{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--c2);background:#e4ecf3;padding:3px 8px;border-radius:6px;text-decoration:none;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-sizing:border-box}
 .des-ver-file:hover{text-decoration:underline}
 .des-ver-file.is-downloading,.attach-item-link.is-downloading{opacity:.65;pointer-events:none;cursor:wait;text-decoration:none}
 .des-confirm-cell{display:flex;flex-direction:column;align-items:center;gap:2px}
@@ -13008,8 +13009,10 @@ function renderDesignStickyNote(text, kind, versionId, designId, finalized, vers
   var timeHtml = metaParts.length ? '<span class="des-sticky-time">' + metaParts.join(' · ') + '</span>' : '';
   if (!raw) {
     if (!can) {
-      if (kind === 'p') return '<span class="des-note-wait">等待PM回饋...</span>';
-      return '<span class="des-note-wait">—</span>';
+      if (kind === 'p') {
+        return '<div class="' + cls + ' empty" style="cursor:default"><span class="des-sticky-hint">等待PM回饋…</span></div>';
+      }
+      return '<div class="' + cls + ' empty" style="cursor:default"><span class="des-sticky-hint">—</span></div>';
     }
     return '<button type="button" class="' + cls + ' empty" title="點擊寫備註" onclick="event.stopPropagation();openDesignVersionNote(\'' + versionId + '\',\'' + designId + '\',\'' + field + '\')"><span class="des-sticky-hint">＋ 寫備註</span></button>';
   }
