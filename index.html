@@ -599,14 +599,11 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .des-remark-composer .bsm{align-self:flex-end;padding:7px 16px;font-size:12px}
 .des-remark-item{position:relative}
 .des-remark-item-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:6px}
-.des-remark-item-actions button{font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:#fff;color:var(--t2);cursor:pointer}
-.des-remark-item-actions button:hover{border-color:var(--accent);color:var(--accent)}
-.des-remark-edit-btn{border:none !important;background:transparent !important;color:var(--c2) !important;font-weight:600;text-decoration:underline;padding:0 2px !important}
-.des-remark-edit-area{width:100%;min-height:72px;padding:8px 10px;border:1px solid var(--accent);border-radius:7px;font-size:12px;line-height:1.5;font-family:inherit;resize:vertical;box-sizing:border-box}
-.des-drawer-save-status{font-size:11px;color:var(--t3);margin-top:4px;min-height:16px}
-.des-drawer-save-status.is-saving{color:#b06000}
-.des-drawer-save-status.is-saved{color:#1a7a45}
-.des-drawer-save-status.is-error{color:#c0392b}
+.des-remark-edit-btn{border:none !important;background:transparent !important;color:var(--c2) !important;font-weight:600;text-decoration:underline;padding:0 2px !important;cursor:pointer;font-size:11px}
+.des-remark-edit-area{width:100%;min-height:56px;padding:6px 8px;border:1.5px solid #2f9e5b;border-radius:6px;font-size:12px;line-height:1.5;font-family:inherit;resize:vertical;box-sizing:border-box;background:rgba(255,255,255,.55);color:inherit}
+.des-remark-item--pm .des-remark-edit-area{border-color:#d08920}
+.des-remark-item--editing{padding:8px 10px}
+.des-remark-item--editing .des-remark-meta{margin-top:8px}
 .des-ver-chip.editable{cursor:pointer;transition:background .12s,color .12s}
 .des-ver-chip.editable:hover{background:var(--c2);color:#fff}
 .pp-note{width:420px}
@@ -1467,9 +1464,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
       <div style="flex:1;min-width:0">
         <div class="des-drawer-title" id="ddw-title">設計項目</div>
         <div class="des-drawer-meta" id="ddw-meta"></div>
-        <div class="des-drawer-save-status" id="ddw-save-status" aria-live="polite"></div>
       </div>
-      <button type="button" class="des-drawer-close" onclick="closeDesignDrawer()" aria-label="關閉">✕</button>
+      <button type="button" class="des-drawer-close" onclick="event.stopPropagation();closeDesignDrawer()" aria-label="關閉">✕</button>
     </div>
   </div>
   <div class="des-drawer-body" id="pp-edit-des">
@@ -1567,8 +1563,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
   </div>
   <div class="des-drawer-foot">
     <button class="bcan bdel-action" id="ed-del-btn" onclick="deleteDesignFromEdit()">刪除此任務</button>
-    <button class="bcan" onclick="closeDesignDrawer()">關閉</button>
-    <button class="bpri" onclick="saveEditDesign()">儲存並關閉</button>
+    <button class="bcan" onclick="event.stopPropagation();closeDesignDrawer()">關閉</button>
+    <button class="bpri" onclick="event.stopPropagation();saveEditDesign()">儲存並關閉</button>
   </div>
 </aside>
 
@@ -12782,12 +12778,13 @@ function renderDesignRemarkThread() {
     var meta = metaParts.length ? '<span class="des-remark-meta">' + metaParts.join(' · ') + '</span>' : '';
     var canEdit = canEditDesignRemarkItem(it);
     if (it._editing && canEdit) {
-      return '<div class="des-remark-item des-remark-item--' + role + '" data-remark-idx="' + idx + '">'
-        + '<textarea class="des-remark-edit-area" id="ed-remark-edit-' + idx + '">' + escHtml(it.text) + '</textarea>'
-        + '<div class="des-remark-item-actions">'
-        + '<button type="button" onclick="cancelEditDesignRemarkNote(' + idx + ')">取消</button>'
-        + '<button type="button" onclick="saveEditDesignRemarkNote(' + idx + ')">儲存修改</button>'
-        + '</div></div>';
+      return '<div class="des-remark-item des-remark-item--' + role + ' des-remark-item--editing" data-remark-idx="' + idx + '">'
+        + '<textarea class="des-remark-edit-area" id="ed-remark-edit-' + idx + '"'
+        + ' onblur="saveEditDesignRemarkNote(' + idx + ')"'
+        + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();cancelEditDesignRemarkNote(' + idx + ');}">'
+        + escHtml(it.text) + '</textarea>'
+        + meta
+        + '</div>';
     }
     var actions = canEdit
       ? '<div class="des-remark-item-actions"><button type="button" class="des-remark-edit-btn" onclick="event.stopPropagation();startEditDesignRemarkNote(' + idx + ')">編輯</button></div>'
@@ -12807,7 +12804,10 @@ function startEditDesignRemarkNote(idx) {
   it._editing = true;
   renderDesignRemarkThread();
   var ta = document.getElementById('ed-remark-edit-' + idx);
-  if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  if (ta) {
+    ta.focus();
+    try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {}
+  }
 }
 
 function cancelEditDesignRemarkNote(idx) {
@@ -12818,15 +12818,26 @@ function cancelEditDesignRemarkNote(idx) {
 
 function saveEditDesignRemarkNote(idx) {
   var it = editingDesignRemarkItems[idx];
+  if (!it || !it._editing) return;
   if (!canEditDesignRemarkItem(it)) return;
   var ta = document.getElementById('ed-remark-edit-' + idx);
   var text = ta ? String(ta.value || '').trim() : '';
-  if (!text) { alert('備註內容不可空白'); return; }
+  if (!text) {
+    // 空白則取消編輯、保留原文
+    it._editing = false;
+    renderDesignRemarkThread();
+    return;
+  }
+  if (text === String(it.text || '').trim()) {
+    it._editing = false;
+    renderDesignRemarkThread();
+    return;
+  }
   it.text = text;
   it.ts = Date.now();
   it._editing = false;
   renderDesignRemarkThread();
-  persistDesignRemarkThread('備註已更新');
+  persistDesignRemarkThread();
 }
 
 function addDesignRemarkNote() {
@@ -14715,8 +14726,6 @@ function openEditDesign(desId) {
   designDrawerHydrating = true;
   designDrawerDirty = false;
   designDrawerAccReady = true;
-  setDesignDrawerSaveStatus('');
-  // 延後掛上 backdrop，避免開側欄的同一次點擊打到遮罩又關掉
   openDesignDrawer();
   refreshOpenDesignDrawerFromServer();
   setTimeout(function() { designDrawerHydrating = false; }, 50);
@@ -14751,34 +14760,52 @@ function onDesignDrawerBackdropClick(e) {
 }
 
 function closeDesignDrawer() {
-  var finish = function() {
-    var backdrop = document.getElementById('des-drawer-backdrop');
-    var drawer = document.getElementById('des-drawer');
-    if (backdrop) backdrop.classList.remove('open');
-    if (drawer) {
-      drawer.classList.remove('open');
-      drawer.setAttribute('aria-hidden', 'true');
-    }
-    editingDesignId = null;
-    designDrawerDirty = false;
-    designDrawerAccReady = false;
-    setDesignDrawerSaveStatus('');
-  };
   clearTimeout(designAutoSaveTimer);
   designAutoSaveTimer = null;
-  // 關閉前一律嘗試存一次（含 NAS 路徑）
-  if (editingDesignId && (isPMRole() || isDesignerLikeRole() || isAdminRole())) {
-    designDrawerDirty = true;
-    var pathEl = document.getElementById('ed-path');
-    var pathPromise = (pathEl && !pathEl.disabled)
-      ? saveDesignNasPathNow()
-      : Promise.resolve(true);
-    pathPromise
-      .then(function() { return flushDesignDrawerAutoSave({ silent: true, force: true }); })
-      .finally(finish);
-    return;
+  clearTimeout(saveDesignNasPathNow._timer);
+
+  var id = editingDesignId;
+  var canSave = !!(id && (isPMRole() || isDesignerLikeRole() || isAdminRole()));
+  var fields = null;
+  if (canSave) {
+    try {
+      commitInProgressRemarkEdits();
+      designDrawerDirty = true;
+      fields = collectDesignDrawerFieldsForSave();
+    } catch (e) {
+      fields = null;
+    }
   }
-  finish();
+
+  // UI 立刻關閉，存檔在背景跑
+  var backdrop = document.getElementById('des-drawer-backdrop');
+  var drawer = document.getElementById('des-drawer');
+  if (backdrop) {
+    backdrop.classList.remove('open');
+    backdrop.classList.remove('ignore-click');
+  }
+  if (drawer) {
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+  }
+  editingDesignId = null;
+  designDrawerDirty = false;
+  designDrawerAccReady = false;
+  designDrawerSaving = false;
+
+  if (canSave && fields && id) {
+    optimisticUpdate('designs', id, fields, {
+      failMsg: '儲存失敗',
+      skipSync: true,
+      quiet: true
+    }).then(function() {
+      var rec = designsData.find(function(r) { return r.record_id === id; });
+      if (rec) {
+        rec.fields = Object.assign({}, rec.fields || {}, normalizeOptimisticFields(fields));
+      }
+      syncTables(['designs']).catch(function() {});
+    }).catch(function() {});
+  }
 }
 
 function calcDesignPriceTaxed() {
@@ -14804,34 +14831,17 @@ var designDrawerOpenedAt = 0;
 var designDrawerAccReady = false;
 var designAccToggleAt = 0;
 
-function setDesignDrawerSaveStatus(state) {
-  var el = document.getElementById('ddw-save-status');
-  if (!el) return;
-  el.classList.remove('is-saving', 'is-saved', 'is-error');
-  if (state === 'pending') {
-    el.textContent = '有未儲存變更…';
-  } else if (state === 'saving') {
-    el.classList.add('is-saving');
-    el.textContent = '自動儲存中…';
-  } else if (state === 'saved') {
-    el.classList.add('is-saved');
-    el.textContent = '已自動儲存';
-  } else if (state === 'error') {
-    el.classList.add('is-error');
-    el.textContent = '自動儲存失敗，請再試一次';
-  } else {
-    el.textContent = '';
-  }
+function setDesignDrawerSaveStatus() {
+  // 不在畫面上顯示自動儲存狀態（改背景存）
 }
 
 function scheduleDesignDrawerAutoSave() {
   if (designDrawerHydrating || !editingDesignId) return;
   if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return;
   designDrawerDirty = true;
-  setDesignDrawerSaveStatus('pending');
   clearTimeout(designAutoSaveTimer);
   designAutoSaveTimer = setTimeout(function() {
-    flushDesignDrawerAutoSave();
+    flushDesignDrawerAutoSave({ silent: true });
   }, 800);
 }
 
@@ -14847,28 +14857,23 @@ function flushDesignDrawerAutoSave(opts) {
   var fields = collectDesignDrawerFieldsForSave();
   designDrawerDirty = false;
   designDrawerSaving = true;
-  if (!opts.silent) setDesignDrawerSaveStatus('saving');
-  else setDesignDrawerSaveStatus('saving');
   return optimisticUpdate('designs', id, fields, {
     failMsg: '自動儲存失敗',
     skipSync: true,
-    quiet: !!opts.silent
+    quiet: true
   })
     .then(function() {
-      // 確保本機 designsData 的路徑與剛寫入一致（避免 sync 前被舊值蓋掉）
       var rec = designsData.find(function(r) { return r.record_id === id; });
       if (rec && fields['NAS路徑位置'] != null) {
         rec.fields = rec.fields || {};
         rec.fields['NAS路徑位置'] = fields['NAS路徑位置'];
         if (fields['路徑位置'] != null) rec.fields['路徑位置'] = fields['路徑位置'];
       }
-      if (editingDesignId === id) setDesignDrawerSaveStatus('saved');
       syncTables(['designs']).catch(function() {});
       return true;
     })
     .catch(function() {
       designDrawerDirty = true;
-      if (editingDesignId === id) setDesignDrawerSaveStatus('error');
       return false;
     })
     .finally(function() {
@@ -14927,26 +14932,23 @@ function saveDesignNasPathNow() {
   var pathEl = document.getElementById('ed-path');
   if (!pathEl || pathEl.disabled) return Promise.resolve(false);
   if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return Promise.resolve(false);
+  var id = editingDesignId;
   var pathVal = String(pathEl.value || '').trim();
-  setDesignDrawerSaveStatus('saving');
-  return optimisticUpdate('designs', editingDesignId, {
+  return optimisticUpdate('designs', id, {
     'NAS路徑位置': pathVal,
     '路徑位置': pathVal
   }, { failMsg: 'NAS路徑儲存失敗', skipSync: true, quiet: true })
     .then(function() {
-      var rec = designsData.find(function(r) { return r.record_id === editingDesignId; });
+      var rec = designsData.find(function(r) { return r.record_id === id; });
       if (rec) {
         rec.fields = rec.fields || {};
         rec.fields['NAS路徑位置'] = pathVal;
         rec.fields['路徑位置'] = pathVal;
       }
-      setDesignDrawerSaveStatus('saved');
-      showUndoToast('NAS路徑已儲存');
+      syncTables(['designs']).catch(function() {});
       return true;
     })
-    .catch(function(err) {
-      setDesignDrawerSaveStatus('error');
-      showUndoToast('NAS路徑儲存失敗：' + ((err && err.message) || '請稍後再試'));
+    .catch(function() {
       return false;
     });
 }
@@ -14978,7 +14980,6 @@ function ensureDesignDrawerAutoSaveBound() {
     if (t.id === 'ed-price') calcDesignPriceTaxed();
     if (t.id === 'ed-path') {
       designDrawerDirty = true;
-      setDesignDrawerSaveStatus('pending');
       clearTimeout(saveDesignNasPathNow._timer);
       saveDesignNasPathNow._timer = setTimeout(function() { saveDesignNasPathNow(); }, 600);
       return;
@@ -15154,15 +15155,7 @@ function saveEditDesign() {
   if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return;
   if (!editingDesignId) return;
   designDrawerDirty = true;
-  var id = editingDesignId;
-  flushDesignDrawerAutoSave({ silent: true }).then(function(ok) {
-    if (!ok) return;
-    showUndoToast('已儲存');
-    if (editingDesignId === id) {
-      designDrawerDirty = false;
-      closeDesignDrawer();
-    }
-  });
+  closeDesignDrawer();
 }
 
 function openEditExpense(expId) {
