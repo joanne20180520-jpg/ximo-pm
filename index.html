@@ -12623,6 +12623,51 @@ function getDesignRemarkAuthorRole() {
   return 'pm';
 }
 
+function isDesignRemarkWhoPlaceholder(who) {
+  var s = String(who || '').trim();
+  return !s || s === '未名' || s === '設計師' || s === '設計主管' || s === '設計' || s === 'PM' || s === 'pm' || s === 'designer';
+}
+
+function getOpenDesignRemarkPersonFallback(role) {
+  var name = '';
+  try {
+    if (role === 'designer') {
+      var desEl = document.getElementById('ed-designer');
+      if (desEl) {
+        if (desEl.selectedOptions && desEl.selectedOptions[0]) name = String(desEl.selectedOptions[0].textContent || '').trim();
+        if (!name) name = String(desEl.value || '').trim();
+      }
+      if (!name && editingDesignId) {
+        var des = designsData.find(function(r) { return r.record_id === editingDesignId; });
+        if (des) name = personName((des.fields || {})['設計師']);
+      }
+    } else {
+      var pmEl = document.getElementById('ed-pm');
+      if (pmEl) {
+        if (pmEl.selectedOptions && pmEl.selectedOptions[0]) name = String(pmEl.selectedOptions[0].textContent || '').trim();
+        if (!name) name = String(pmEl.value || '').trim();
+      }
+      if (!name && editingDesignId) {
+        var des2 = designsData.find(function(r) { return r.record_id === editingDesignId; });
+        if (des2) name = personName((des2.fields || {})['負責PM']);
+      }
+    }
+  } catch (e) {}
+  return String(name || '').trim();
+}
+
+function formatDesignRemarkWho(it) {
+  var who = shortPersonLabel((it && it.who) || '');
+  if (!isDesignRemarkWhoPlaceholder(who)) return who;
+  var role = (it && it.role) || '';
+  var fallback = '';
+  if (role === 'designer') fallback = getOpenDesignRemarkPersonFallback('designer');
+  else if (role === 'pm') fallback = getOpenDesignRemarkPersonFallback('pm');
+  fallback = shortPersonLabel(fallback);
+  if (!isDesignRemarkWhoPlaceholder(fallback)) return fallback;
+  return '';
+}
+
 function getDesignRemarkAuthorName() {
   var n = '';
   try {
@@ -12633,13 +12678,17 @@ function getDesignRemarkAuthorName() {
   if (!n) {
     try {
       var u = getCurrentLoginUser();
-      if (u) n = String(u.name || u.enName || '').trim();
+      if (u) {
+        enrichLoginUserFromMembers(u);
+        n = String(u.name || u.enName || '').trim();
+      }
     } catch (e2) {}
   }
-  if (!n && isDesignerRole()) n = '設計師';
-  if (!n && isDesignLeadRole()) n = '設計主管';
-  if (!n) n = 'PM';
-  return shortPersonLabel(n) || '未名';
+  if (isDesignRemarkWhoPlaceholder(n)) {
+    var role = getDesignRemarkAuthorRole();
+    n = getOpenDesignRemarkPersonFallback(role);
+  }
+  return shortPersonLabel(n) || '';
 }
 
 function getDesignRemarkAuthorCandidates() {
@@ -12694,8 +12743,8 @@ function canEditDesignRemarkItem(it) {
   if (isPMRole() && !isDesignerLikeRole()) return true;
   if (!isDesignerLikeRole()) return false;
   if (sameDesignRemarkAuthor(it.who)) return true;
-  // 舊留言沒有作者名：同角色可改
-  if (!it.who) {
+  // 舊留言沒有作者名／只存了角色：同角色可改
+  if (!it.who || isDesignRemarkWhoPlaceholder(it.who)) {
     if (it.role === 'designer') return true;
     if (it.role === 'pm' && isPMRole()) return true;
   }
@@ -12776,7 +12825,8 @@ function renderDesignRemarkThread() {
   box.innerHTML = editingDesignRemarkItems.map(function(it, idx) {
     var role = it.role === 'designer' ? 'designer' : (it.role === 'pm' ? 'pm' : 'unknown');
     var metaParts = [];
-    if (it.who) metaParts.push(escHtml(shortPersonLabel(it.who)));
+    var whoLabel = formatDesignRemarkWho(it);
+    if (whoLabel) metaParts.push(escHtml(whoLabel));
     if (it.ts) metaParts.push(escHtml(fmtNoteTime(it.ts)));
     var meta = metaParts.length ? '<span class="des-remark-meta">' + metaParts.join(' · ') + '</span>' : '';
     var canEdit = canEditDesignRemarkItem(it);
@@ -12853,6 +12903,10 @@ function saveEditDesignRemarkNote(idx) {
   }
   it.text = text;
   it.ts = Date.now();
+  var authorName = getDesignRemarkAuthorName();
+  if (authorName && (!it.who || isDesignRemarkWhoPlaceholder(it.who) || sameDesignRemarkAuthor(it.who))) {
+    it.who = authorName;
+  }
   it._editing = false;
   renderDesignRemarkThread();
   persistDesignRemarkThread();
