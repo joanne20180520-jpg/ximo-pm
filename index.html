@@ -15152,10 +15152,10 @@ function applyEditDesignPermissions(opts) {
       mine = owner === 'pm' || owner === 'both';
     }
     if (resetOpen) {
-      // 預設全部展開，避免還要點第一次才打開
-      acc.classList.add('open');
+      // 只展開自己要填的區塊；別人的區塊收合（仍可手動點開看）
+      acc.classList.toggle('open', mine);
       var chev = acc.querySelector('.des-acc-chev');
-      if (chev) chev.textContent = '▼';
+      if (chev) chev.textContent = mine ? '▼' : '▶';
     }
     acc.classList.toggle('locked', !mine);
     var lock = acc.querySelector('.des-acc-lock');
