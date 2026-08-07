@@ -14691,6 +14691,7 @@ function openEditDesign(desId) {
   document.getElementById('ed-arrive').value = f['到貨時間'] ? tsToDateInput(f['到貨時間']) : (f['成品交付日'] ? tsToDateInput(f['成品交付日']) : '');
   document.getElementById('ed-qty').value = f['數量'] != null ? String(f['數量']) : '';
   document.getElementById('ed-path').value = nasPathFromField(f['NAS路徑位置'] != null ? f['NAS路徑位置'] : f['路徑位置']);
+  designNasPathBaseline = getDesignNasPathInputValue();
   setDesignSelectBool('ed-pm-check', getDesignSignCheckValue(f, DESIGN_PM_CHECK_KEYS));
   document.getElementById('ed-final').value = f['定稿時間'] ? tsToDateInput(f['定稿時間']) : (f['完稿交付日'] ? tsToDateInput(f['完稿交付日']) : '');
   document.getElementById('ed-vendor').value = f['發包廠商'] || '';
@@ -14766,12 +14767,17 @@ function closeDesignDrawer() {
 
   var id = editingDesignId;
   var canSave = !!(id && (isPMRole() || isDesignerLikeRole() || isAdminRole()));
+  var shouldSave = canSave && (designDrawerDirty || isDesignNasPathChanged());
   var fields = null;
-  if (canSave) {
+  if (shouldSave) {
     try {
       commitInProgressRemarkEdits();
-      designDrawerDirty = true;
       fields = collectDesignDrawerFieldsForSave();
+      // 沒改過 NAS 就不要塞進 payload
+      if (!isDesignNasPathChanged()) {
+        delete fields['NAS路徑位置'];
+        delete fields['路徑位置'];
+      }
     } catch (e) {
       fields = null;
     }
@@ -14792,8 +14798,9 @@ function closeDesignDrawer() {
   designDrawerDirty = false;
   designDrawerAccReady = false;
   designDrawerSaving = false;
+  designNasPathBaseline = '';
 
-  if (canSave && fields && id) {
+  if (shouldSave && fields && id && Object.keys(fields).length) {
     optimisticUpdate('designs', id, fields, {
       failMsg: '儲存失敗',
       skipSync: true,
@@ -14830,6 +14837,16 @@ var designDrawerAutoSaveBound = false;
 var designDrawerOpenedAt = 0;
 var designDrawerAccReady = false;
 var designAccToggleAt = 0;
+var designNasPathBaseline = '';
+
+function getDesignNasPathInputValue() {
+  var pathEl = document.getElementById('ed-path');
+  return pathEl ? String(pathEl.value || '').trim() : '';
+}
+
+function isDesignNasPathChanged() {
+  return getDesignNasPathInputValue() !== String(designNasPathBaseline || '').trim();
+}
 
 function setDesignDrawerSaveStatus() {
   // 不在畫面上顯示自動儲存狀態（改背景存）
@@ -14932,13 +14949,15 @@ function saveDesignNasPathNow() {
   var pathEl = document.getElementById('ed-path');
   if (!pathEl || pathEl.disabled) return Promise.resolve(false);
   if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return Promise.resolve(false);
+  if (!isDesignNasPathChanged()) return Promise.resolve(true);
   var id = editingDesignId;
-  var pathVal = String(pathEl.value || '').trim();
+  var pathVal = getDesignNasPathInputValue();
   return optimisticUpdate('designs', id, {
     'NAS路徑位置': pathVal,
     '路徑位置': pathVal
   }, { failMsg: 'NAS路徑儲存失敗', skipSync: true, quiet: true })
     .then(function() {
+      designNasPathBaseline = pathVal;
       var rec = designsData.find(function(r) { return r.record_id === id; });
       if (rec) {
         rec.fields = rec.fields || {};
@@ -14979,6 +14998,7 @@ function ensureDesignDrawerAutoSaveBound() {
     if (t.id === 'ed-remark-input' || (t.id && t.id.indexOf('ed-remark-edit-') === 0)) return;
     if (t.id === 'ed-price') calcDesignPriceTaxed();
     if (t.id === 'ed-path') {
+      if (!isDesignNasPathChanged()) return;
       designDrawerDirty = true;
       clearTimeout(saveDesignNasPathNow._timer);
       saveDesignNasPathNow._timer = setTimeout(function() { saveDesignNasPathNow(); }, 600);
@@ -14992,6 +15012,7 @@ function ensureDesignDrawerAutoSaveBound() {
     if (t.id === 'ed-remark-input' || (t.id && t.id.indexOf('ed-remark-edit-') === 0)) return;
     if (t.id === 'ed-price') calcDesignPriceTaxed();
     if (t.id === 'ed-path') {
+      if (!isDesignNasPathChanged()) return;
       saveDesignNasPathNow();
       return;
     }
@@ -15005,10 +15026,11 @@ function ensureDesignDrawerAutoSaveBound() {
     if (t.id === 'ed-price') calcDesignPriceTaxed();
     if (t.id === 'ed-path') {
       clearTimeout(saveDesignNasPathNow._timer);
+      if (!isDesignNasPathChanged()) return;
       saveDesignNasPathNow();
       return;
     }
-    if (designDrawerDirty) flushDesignDrawerAutoSave();
+    if (designDrawerDirty) flushDesignDrawerAutoSave({ silent: true });
   }, true);
 }
 
