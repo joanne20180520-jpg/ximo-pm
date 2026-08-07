@@ -600,13 +600,13 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .des-remark-item{position:relative}
 .des-remark-item-actions{display:flex;gap:6px;justify-content:flex-end;margin-top:6px}
 .des-remark-edit-btn{border:none !important;background:transparent !important;color:var(--c2) !important;font-weight:600;text-decoration:underline;padding:0 2px !important;cursor:pointer;font-size:11px}
-.des-remark-item--editing{border-width:2px !important;padding:10px 12px}
-.des-remark-item--designer.des-remark-item--editing{border-color:#2f9e5b !important;background:#e8f6ee;box-shadow:inset 0 0 0 1px rgba(47,158,91,.25)}
-.des-remark-item--pm.des-remark-item--editing{border-color:#d08920 !important;background:#fff6e8;box-shadow:inset 0 0 0 1px rgba(208,137,32,.25)}
+.des-remark-item--editing{border-width:2px !important;padding:10px 12px;cursor:text}
+.des-remark-item--designer.des-remark-item--editing{border-color:#2f9e5b !important;background:#e8f6ee !important;box-shadow:inset 0 0 0 1px rgba(47,158,91,.28)}
+.des-remark-item--pm.des-remark-item--editing{border-color:#d08920 !important;background:#fff6e8 !important;box-shadow:inset 0 0 0 1px rgba(208,137,32,.28)}
 .des-remark-item--unknown.des-remark-item--editing{border-color:var(--accent) !important}
-.des-remark-edit-area{display:block;width:100%;min-height:56px;padding:0;margin:0;border:none !important;outline:none !important;box-shadow:none !important;border-radius:0;font-size:12px;line-height:1.5;font-family:inherit;resize:vertical;box-sizing:border-box;background:transparent !important;color:inherit;-webkit-appearance:none;appearance:none}
-.des-remark-edit-area:focus{outline:none !important;border:none !important;box-shadow:none !important}
-.des-remark-item--editing .des-remark-meta{margin-top:8px}
+.des-remark-edit-area,.des-drawer .fg .des-remark-edit-area,.des-drawer .fg div.des-remark-edit-area{display:block;width:100%;min-height:1.5em;padding:0 !important;margin:0 !important;border:none !important;outline:none !important;box-shadow:none !important;border-radius:0 !important;font-size:12px;line-height:1.5;font-family:inherit;box-sizing:border-box;background:transparent !important;color:inherit !important;white-space:pre-wrap;word-break:break-word;caret-color:currentColor;-webkit-user-modify:read-write-plaintext-only}
+.des-remark-edit-area:focus,.des-drawer .fg .des-remark-edit-area:focus{outline:none !important;border:none !important;box-shadow:none !important;background:transparent !important}
+.des-remark-item--editing .des-remark-meta{margin-top:8px;pointer-events:none}
 .des-ver-chip.editable{cursor:pointer;transition:background .12s,color .12s}
 .des-ver-chip.editable:hover{background:var(--c2);color:#fff}
 .pp-note{width:420px}
@@ -12782,10 +12782,10 @@ function renderDesignRemarkThread() {
     var canEdit = canEditDesignRemarkItem(it);
     if (it._editing && canEdit) {
       return '<div class="des-remark-item des-remark-item--' + role + ' des-remark-item--editing" data-remark-idx="' + idx + '">'
-        + '<textarea class="des-remark-edit-area" id="ed-remark-edit-' + idx + '"'
+        + '<div class="des-remark-edit-area" id="ed-remark-edit-' + idx + '" contenteditable="true" role="textbox" aria-multiline="true"'
         + ' onblur="saveEditDesignRemarkNote(' + idx + ')"'
         + ' onkeydown="if(event.key===\'Escape\'){event.preventDefault();cancelEditDesignRemarkNote(' + idx + ');}">'
-        + escHtml(it.text) + '</textarea>'
+        + escHtml(it.text) + '</div>'
         + meta
         + '</div>';
     }
@@ -12800,17 +12800,32 @@ function renderDesignRemarkThread() {
   }).join('');
 }
 
+function designRemarkEditText(el) {
+  if (!el) return '';
+  if (typeof el.innerText === 'string') return String(el.innerText || '');
+  return String(el.textContent || '');
+}
+
+function focusDesignRemarkEditEnd(el) {
+  if (!el) return;
+  el.focus();
+  try {
+    var range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    var sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } catch (e) {}
+}
+
 function startEditDesignRemarkNote(idx) {
   var it = editingDesignRemarkItems[idx];
   if (!canEditDesignRemarkItem(it)) return;
   editingDesignRemarkItems.forEach(function(x) { if (x) x._editing = false; });
   it._editing = true;
   renderDesignRemarkThread();
-  var ta = document.getElementById('ed-remark-edit-' + idx);
-  if (ta) {
-    ta.focus();
-    try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) {}
-  }
+  focusDesignRemarkEditEnd(document.getElementById('ed-remark-edit-' + idx));
 }
 
 function cancelEditDesignRemarkNote(idx) {
@@ -12824,7 +12839,7 @@ function saveEditDesignRemarkNote(idx) {
   if (!it || !it._editing) return;
   if (!canEditDesignRemarkItem(it)) return;
   var ta = document.getElementById('ed-remark-edit-' + idx);
-  var text = ta ? String(ta.value || '').trim() : '';
+  var text = designRemarkEditText(ta).trim();
   if (!text) {
     // 空白則取消編輯、保留原文
     it._editing = false;
@@ -14980,7 +14995,7 @@ function commitInProgressRemarkEdits() {
     if (!it || !it._editing) return;
     var ta = document.getElementById('ed-remark-edit-' + idx);
     if (ta) {
-      var text = String(ta.value || '').trim();
+      var text = designRemarkEditText(ta).trim();
       if (text) {
         it.text = text;
         it.ts = Date.now();
