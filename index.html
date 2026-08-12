@@ -1448,7 +1448,9 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>主類別</label><input type="text" id="ds-name" placeholder="手拿牌" data-des-role="pm"></div>
   <div class="fg"><label>所屬工作項目</label><select id="ds-wi" data-des-role="pm"></select></div>
   <div class="fg"><label>負責PM</label><select id="ds-pm" data-members data-des-role="pm"></select></div>
-  <div class="fg"><label>設計師</label><select id="ds-designer" data-members="designer" data-des-role="assign_designer"></select></div>
+  <div class="fg"><label>設計師</label><select id="ds-designer" data-members="designer" data-des-role="assign_designer"></select>
+  <div style="font-size:10px;color:var(--t3);margin-top:4px">新增時自動帶入設計主管；後續由設計主管改派設計師。</div>
+  </div>
   <div class="fg"><label>進度狀態</label><select id="ds-status" data-des-role="both"></select></div>
   <p style="font-size:11px;color:var(--t3);margin:4px 0 0;line-height:1.5">建立後請點列右側 ☰ 側欄填寫規格、製作與財務資料。</p>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-des')">取消</button><button class="bpri" onclick="saveDesign()">新增</button></div></div></div>
@@ -14654,7 +14656,8 @@ function canEditDesignRole(role) {
   if (isAdminRole()) return true;
   // PM 也可改設計師欄（含 NAS 路徑），避免管理員／PM 改了卻存不進去
   if (role === 'both') return isPMRole() || isDesignerLikeRole();
-  if (role === 'assign_designer') return (isPMRole() && !isDesignerLikeRole()) || isDesignLeadRole();
+  // 設計師指派：僅設計主管（PM 新增時預設寫入設計主管，之後不可改）
+  if (role === 'assign_designer') return isDesignLeadRole();
   if (role === 'pm') return isPMRole() && !isDesignLeadRole();
   if (role === 'designer') return isDesignerLikeRole() || isPMRole();
   return false;
@@ -14735,6 +14738,8 @@ function saveEditDesignBasic() {
   } else {
     if (!packed.name) { alert('請填寫主類別'); return; }
     if (!packed.wiId) { alert('請選擇工作項目'); return; }
+    // PM 不可改設計師；僅管理員可在此覆寫
+    if (!isAdminRole()) delete fieldsToSave['設計師'];
   }
   var rec = designsData.find(function(r) { return r.record_id === editingDesignId; });
   var oldFields = rec ? JSON.parse(JSON.stringify(rec.fields || {})) : null;
@@ -15022,7 +15027,12 @@ function collectDesignDrawerFieldsForSave() {
   delete all['PM主管內容審核'];
   delete all['設計主管圖面審核'];
   delete all['PM主管內容檢核'];
-  if (isAdminRole() || (isPMRole() && !isDesignerLikeRole())) return all;
+  if (isAdminRole()) return all;
+  // PM：可寫大部分欄位，但不可改設計師（僅設計主管可指派）
+  if (isPMRole() && !isDesignerLikeRole()) {
+    delete all['設計師'];
+    return all;
+  }
   var out = {};
   Object.keys(all).forEach(function(k) {
     var role = designFieldWriteRole(k);
@@ -15031,7 +15041,7 @@ function collectDesignDrawerFieldsForSave() {
       out[k] = all[k];
       return;
     }
-    if (role === 'assign_designer' && ((isPMRole() && !isDesignerLikeRole()) || isDesignLeadRole())) out[k] = all[k];
+    if (role === 'assign_designer' && isDesignLeadRole()) out[k] = all[k];
     if (role === 'designer' && (isDesignerLikeRole() || isPMRole())) out[k] = all[k];
     if (role === 'pm' && isPMRole() && !isDesignLeadRole()) out[k] = all[k];
   });
@@ -15629,6 +15639,60 @@ function deleteDesignFromEdit() {
   deleteDesign(editingDesignId, name);
 }
 
+function getDesignLeadMemberEntries() {
+  var byId = {};
+  var nameOnly = [];
+  Object.keys(membersMap).forEach(function(name) {
+    var m = membersMap[name];
+    if (!m || m.hideFromSelects || m.role === '管理員') return;
+    if (!(isDesignLeadRoleToken(m.role) || m.role === '設計主管')) return;
+    var id = String(m.id || '').trim();
+    if (id && /^ou_|^on_/i.test(id)) {
+      if (!byId[id] || name.length > byId[id].length) byId[id] = name;
+    } else if (name && name !== '—') {
+      if (nameOnly.indexOf(name) < 0) nameOnly.push(name);
+    }
+  });
+  var entries = [];
+  Object.keys(byId).sort(function(a, b) {
+    return byId[a].localeCompare(byId[b], 'zh-Hant');
+  }).forEach(function(id) {
+    entries.push({ name: byId[id], id: id, value: id });
+  });
+  nameOnly.sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); }).forEach(function(name) {
+    entries.push({ name: name, id: '', value: name });
+  });
+  return entries;
+}
+
+/** 新增設計任務時預設的設計主管（open_id 或顯示名）；找不到則回空字串 */
+function getDefaultDesignLeadSelectValue() {
+  var leads = getDesignLeadMemberEntries();
+  return leads.length ? leads[0].value : '';
+}
+
+function selectDefaultDesignLead(sel) {
+  if (!sel) return false;
+  var val = getDefaultDesignLeadSelectValue();
+  if (!val) return false;
+  for (var i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].value === val) {
+      sel.selectedIndex = i;
+      return true;
+    }
+  }
+  // 若選單尚未含設計主管（異常），補上再選
+  var leads = getDesignLeadMemberEntries();
+  if (!leads.length) return false;
+  var lead = leads[0];
+  var opt = document.createElement('option');
+  opt.value = lead.value;
+  opt.textContent = lead.name;
+  sel.appendChild(opt);
+  sel.value = lead.value;
+  return true;
+}
+
 function preparePopup(id) {
   refreshFormSelects();
   if (id === 'pp-proj') {
@@ -15664,6 +15728,7 @@ function preparePopup(id) {
     }
   }
   if (id === 'pp-des') {
+    selectDefaultDesignLead(document.getElementById('ds-designer'));
     applyDesignFormPermissions('#pp-des');
   }
   if (id === 'pp-des-basic') {
@@ -15888,6 +15953,14 @@ function saveDesign() {
   if (!packed.name) { alert('請填寫主類別'); return; }
   if (!packed.wiId) { alert('請選擇工作項目'); return; }
   var fields = packed.fields;
+  // PM 新增：設計師一律先寫入設計主管，之後由設計主管改派
+  var leadVal = getDefaultDesignLeadSelectValue();
+  var leadPerson = leadVal ? larkPerson(leadVal) : null;
+  if (!leadPerson) {
+    alert('找不到設計主管，請先在人員資料為設計主管加上「設計主管」標籤');
+    return;
+  }
+  fields['設計師'] = leadPerson;
   fields['定稿狀態'] = '未定稿';
 
   cl('pp-des');
