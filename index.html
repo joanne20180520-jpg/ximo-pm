@@ -14654,12 +14654,12 @@ function canEditDesignRole(role) {
   if (role === 'design_lead') return isDesignLeadRole();
   if (role === 'admin_sign') return isAdminRole();
   if (isAdminRole()) return true;
-  // PM 也可改設計師欄（含 NAS 路徑），避免管理員／PM 改了卻存不進去
   if (role === 'both') return isPMRole() || isDesignerLikeRole();
   // 設計師指派：僅設計主管（PM 新增時預設寫入設計主管，之後不可改）
   if (role === 'assign_designer') return isDesignLeadRole();
   if (role === 'pm') return isPMRole() && !isDesignLeadRole();
-  if (role === 'designer') return isDesignerLikeRole() || isPMRole();
+  // 設計師填寫欄：僅設計師／設計主管可改；PM 唯讀
+  if (role === 'designer') return isDesignerLikeRole();
   return false;
 }
 
@@ -15028,10 +15028,14 @@ function collectDesignDrawerFieldsForSave() {
   delete all['設計主管圖面審核'];
   delete all['PM主管內容檢核'];
   if (isAdminRole()) return all;
-  // PM：可寫大部分欄位，但不可改設計師（僅設計主管可指派）
+  // PM：只寫 PM／共用欄；設計師填寫欄與指派不可覆寫
   if (isPMRole() && !isDesignerLikeRole()) {
-    delete all['設計師'];
-    return all;
+    var pmOut = {};
+    Object.keys(all).forEach(function(k) {
+      var role = designFieldWriteRole(k);
+      if (role === 'pm' || role === 'both') pmOut[k] = all[k];
+    });
+    return pmOut;
   }
   var out = {};
   Object.keys(all).forEach(function(k) {
@@ -15042,7 +15046,7 @@ function collectDesignDrawerFieldsForSave() {
       return;
     }
     if (role === 'assign_designer' && isDesignLeadRole()) out[k] = all[k];
-    if (role === 'designer' && (isDesignerLikeRole() || isPMRole())) out[k] = all[k];
+    if (role === 'designer' && isDesignerLikeRole()) out[k] = all[k];
     if (role === 'pm' && isPMRole() && !isDesignLeadRole()) out[k] = all[k];
   });
   // NAS 路徑：只要輸入框可編輯就一定帶上
@@ -15180,8 +15184,7 @@ function applyEditDesignPermissions(opts) {
   document.querySelectorAll('#pp-edit-des .des-acc').forEach(function(acc, idx) {
     var owner = acc.getAttribute('data-owner') || 'pm';
     var mine = false;
-    if (isAdminRole() || (isPMRole() && !isDesignerLikeRole())) {
-      // 管理員／PM：全部可編輯
+    if (isAdminRole()) {
       mine = true;
     } else if (isDesignLeadRole()) {
       // 指派與進度（basic）可開：僅設計師欄可編；其餘 PM 欄仍由 canEditDesignRole 鎖住
@@ -15190,6 +15193,7 @@ function applyEditDesignPermissions(opts) {
     } else if (isDesignerRole()) {
       mine = owner === 'designer' || owner === 'both';
     } else {
+      // PM：只展開／可編自己的區塊；設計師填區塊收合且唯讀（仍可手動點開看）
       mine = owner === 'pm' || owner === 'both';
     }
     if (resetOpen) {
