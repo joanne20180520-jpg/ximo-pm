@@ -734,6 +734,10 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .bss{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
 .bss .bsub,.bss .bsub2{margin-top:0}
 .p-upper{font-size:11px;color:var(--t2);margin-top:4px;min-height:16px}
+.pay-list-wrap{padding:0 16px 16px;border-top:1px solid var(--border)}
+.pay-list-head{font-size:12px;font-weight:700;color:var(--text);padding:12px 0 8px}
+.pay-list-wrap .dt{width:100%}
+.pay-list-wrap .dt td,.pay-list-wrap .dt th{font-size:11px}
 
 /* avatar */
 .av{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0}
@@ -1196,12 +1200,14 @@ button.btn-loading::after{content:'…';margin-left:2px}
 
     <!-- 付款金費單 -->
     <div id="pg-p" class="page">
-      <div class="dc"><div class="dch"><h3>付款申請單</h3><span style="font-size:11px;color:var(--t3);margin-left:8px">填寫後確認資料列印</span><span id="pay-user-label" style="font-size:11px;margin-left:auto;color:var(--t2)"></span></div>
+      <div class="dc"><div class="dch"><h3>付款申請單</h3><span style="font-size:11px;color:var(--t3);margin-left:8px">填寫後預覽確認，送出狀態為未審核</span><span id="pay-user-label" style="font-size:11px;margin-left:auto;color:var(--t2)"></span></div>
         <div class="pfw">
           <div>
             <div class="fg"><label>申請人</label><input type="text" id="p-applicant" placeholder="Lark 登入自動帶入，或手動填寫"></div>
             <div class="fg"><label>申請部門</label><input type="text" id="p-dept" value="璽墨"></div>
             <div class="fg"><label>申請日期</label><input type="date" id="p-date"></div>
+            <div class="fg"><label>所屬標案</label><select id="p-proj" onchange="onPaymentProjChange()"></select></div>
+            <div class="fg"><label>所屬工作項目</label><select id="p-wi"></select></div>
             <div class="fg"><label>支付對象</label><input type="text" id="p-payee" placeholder="OOO"></div>
             <div class="fg"><label>廠商名稱</label><input type="text" id="p-vendor" placeholder="OOOO"></div>
             <div class="fg"><label>支付性質</label><div class="ntags" id="p-nature">
@@ -1222,10 +1228,22 @@ button.btn-loading::after{content:'…';margin-left:2px}
             <div class="fg"><label>事由</label><input type="text" id="p-reason" placeholder="填寫付款事由"></div>
             <div class="fg"><label>備註</label><input type="text" id="p-remark" placeholder="備註說明"></div>
             <div class="fg"><label>付款總金額</label><input type="text" class="money-input" id="p-total" placeholder="NT$0" oninput="updatePayUpper()"><div class="p-upper" id="p-upper"></div></div>
+            <div class="fg">
+              <label>附件</label>
+              <div class="attach-dropzone" id="p-attach-zone" onclick="if(event.target.id!=='p-attach-file')document.getElementById('p-attach-file').click()" ondragover="onPayAttachDragOver(event)" ondragleave="onPayAttachDragLeave(event)" ondrop="onPayAttachDrop(event)">
+                <input type="file" id="p-attach-file" multiple style="display:none" onchange="onPayAttachSelect(this.files)">
+                <span>點此上傳，或拖曳檔案到這裡</span>
+              </div>
+              <div id="p-attach-list"></div>
+            </div>
             <div class="bss">
               <button class="bsub" onclick="prevPay()">確認資料預覽</button>
             </div>
           </div>
+        </div>
+        <div class="pay-list-wrap">
+          <div class="pay-list-head">已送出的付款申請</div>
+          <div id="pay-list-area"><div style="padding:8px 0;color:var(--t3);font-size:12px">載入中...</div></div>
         </div>
       </div>
     </div>
@@ -1927,7 +1945,11 @@ function sw(btn,id){
     if (!deferredDataReady && currentUserRole !== '設計師') loadDeferredTables({ silent: true });
     renderDesigns();
   }
-  if(id==='pg-p') applyLoginUserToForms();
+  if(id==='pg-p') {
+    applyLoginUserToForms();
+    fillPaymentProjectSelects();
+    ensurePaymentsLoaded().then(function() { renderPaymentsList(); });
+  }
   if(id==='pg-ai') { renderAiPage(); syncAiComposerBounds(); }
 }
 
@@ -3749,7 +3771,7 @@ function showPaymentSaveNotice(printed, res) {
   if (!el || !msgEl) return;
   if (card) card.classList.remove('is-error');
   if (icon) icon.textContent = '✓';
-  msgEl.textContent = '付款申請單資料已填入表格。';
+  msgEl.textContent = '付款申請單已送出，狀態為未審核。';
   var subParts = [];
   if (printed) subParts.push('已列印');
   else subParts.push('未列印');
@@ -3781,6 +3803,8 @@ function hidePaymentSaveNotice() {
 
 function validatePaymentForm() {
   var data = collectPaymentFields();
+  if (!data.projId) { alert('請選擇所屬標案'); return null; }
+  if (!data.wiId) { alert('請選擇所屬工作項目'); return null; }
   if (!data.total) { alert('請填寫付款總金額'); return null; }
   if (!data.payee) { alert('請填寫支付對象'); return null; }
   if (!data.applicant) data.applicant = '未指定';
@@ -4158,15 +4182,15 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260803v19';
+var APP_BUILD = '20260817v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
 var AUTH_CACHE_MAX_AGE = 10 * 60 * 1000;
-var BOOTSTRAP_TABLE_KEYS = ['projects', 'workitems', 'tasks', 'expenses', 'designs', 'design_versions', 'journal', 'members', 'milestones'];
+var BOOTSTRAP_TABLE_KEYS = ['projects', 'workitems', 'tasks', 'expenses', 'designs', 'design_versions', 'journal', 'members', 'milestones', 'payments'];
 var CORE_TABLE_KEYS_PM = ['projects', 'workitems', 'tasks', 'members'];
 var CORE_TABLE_KEYS_DESIGNER = ['projects', 'workitems', 'designs', 'design_versions', 'members'];
-var DEFERRED_TABLE_KEYS_PM = ['expenses', 'designs', 'design_versions', 'journal', 'milestones'];
+var DEFERRED_TABLE_KEYS_PM = ['expenses', 'designs', 'design_versions', 'journal', 'milestones', 'payments'];
 var DEFERRED_TABLE_KEYS_DESIGNER = ['tasks', 'expenses', 'journal'];
 var SYNC_EXPAND = {
   projects: ['projects'],
@@ -4178,6 +4202,7 @@ var SYNC_EXPAND = {
   journal: ['journal'],
   members: ['members'],
   milestones: ['milestones'],
+  payments: ['payments'],
   all: BOOTSTRAP_TABLE_KEYS
 };
 var syncInflight = null;
@@ -4248,6 +4273,7 @@ function applyPartialTable(key, part) {
     case 'journal': journalData = records; break;
     case 'members': membersData = records; break;
     case 'milestones': milestonesData = records; break;
+    case 'payments': paymentsData = records; break;
   }
 }
 
@@ -4263,7 +4289,8 @@ function buildBootstrapPayloadFromState() {
     design_versions: { records: designVersionsData },
     journal: { records: journalData },
     members: { records: membersData },
-    milestones: { records: milestonesData }
+    milestones: { records: milestonesData },
+    payments: { records: paymentsData }
   };
 }
 
@@ -4290,6 +4317,7 @@ function refreshViewsForTables(keys) {
   if ((s.tasks || s.workitems || s.projects || s.milestones) && document.getElementById('pg-ms') && document.getElementById('pg-ms').classList.contains('active')) {
     renderMilestonesPage();
   }
+  if (s.payments || s.projects || s.workitems) renderPaymentsList();
 }
 
 function fetchSyncPayloadRemote(tableKeys) {
@@ -4637,6 +4665,8 @@ var designVersionsData = [];
 var journalData = [];
 var membersData = [];
 var milestonesData = [];
+var paymentsData = [];
+var payPendingAttachments = [];
 var membersMap = {};
 var currentLoginUser = null;
 var loginUserReady = false;
@@ -6373,6 +6403,7 @@ function renderDeferredViews(keys) {
       // designs / journal also need their dedicated renders when keys arrive
       if (!keys || keys.indexOf('designs') >= 0 || keys.indexOf('design_versions') >= 0) renderDesigns();
       if (!keys || keys.indexOf('journal') >= 0) renderJournalPage();
+      if (!keys || keys.indexOf('payments') >= 0) renderPaymentsList();
     }
   } catch (renderErr) {
     console.error('延伸資料渲染失敗', renderErr);
@@ -6400,6 +6431,7 @@ function applyBootstrapPayload(payload) {
   take('journal', function(r) { journalData = r; });
   take('members', function(r) { membersData = r; });
   take('milestones', function(r) { milestonesData = r; });
+  take('payments', function(r) { paymentsData = r; });
   pruneSelectedProjects();
   hydrateMilestonesFromProjects();
 }
@@ -12379,8 +12411,20 @@ function savePaymentRecord(data) {
     '事由': data.reason,
     '備註': data.remark,
     '付款總金額': parseFloat(data.total),
-    '狀態': '待處理'
+    '狀態': '未審核',
+    '標案名稱': data.projName || '',
+    '工作項目名稱': data.wiName || ''
   };
+  if (data.projId) {
+    fields['所屬標案'] = [data.projId];
+    fields['所數標案'] = [data.projId];
+  }
+  if (data.wiId) fields['所屬工作項目'] = [data.wiId];
+  if (payPendingAttachments.length) {
+    fields['附件'] = payPendingAttachments.map(function(a) {
+      return { file_token: a.file_token, name: a.name };
+    });
+  }
   var applicantName = (data.applicant || '').trim();
   var loginUser = getCurrentLoginUser();
   var loginName = getLoginDisplayName();
@@ -12409,8 +12453,215 @@ function savePaymentRecord(data) {
     if (res.applicantDebug && !res.applicantDebug.inBody) {
       console.warn('申請人未寫入 Lark', res.applicantDebug);
     }
+    payPendingAttachments = [];
+    renderPayAttachList();
+    var rec = (res.data && res.data.record) || (res.main && res.main.data && res.main.data.record) || null;
+    if (rec && rec.record_id) {
+      paymentsData = [rec].concat(paymentsData.filter(function(r) { return r.record_id !== rec.record_id; }));
+    }
+    renderPaymentsList();
+    syncTables(['payments']).catch(function() {});
     return res;
   });
+}
+
+function getVisiblePaymentProjects() {
+  return projectsData.filter(function(p) { return isProjectVisible(p); });
+}
+
+function fillPaymentProjectSelects() {
+  var projSel = document.getElementById('p-proj');
+  if (!projSel) return;
+  var prevProj = projSel.value;
+  var projects = getVisiblePaymentProjects();
+  var labels = ['請選擇標案'].concat(projects.map(function(p) { return p.fields['標案名稱'] || '未命名'; }));
+  var values = [''].concat(projects.map(function(p) { return p.record_id; }));
+  fillSelectOptions(projSel, labels, values);
+  if (prevProj) projSel.value = prevProj;
+  fillPaymentWorkitems(projSel.value || '');
+}
+
+function fillPaymentWorkitems(projId) {
+  var sel = document.getElementById('p-wi');
+  if (!sel) return;
+  var prev = sel.value;
+  var items = [];
+  if (projId) {
+    var rec = projectsData.find(function(p) { return p.record_id === projId; });
+    items = rec ? getWorkitemsForProject(rec) : [];
+  }
+  var labels = ['請選擇工作項目'].concat(items.map(function(w) { return w.fields['工作項目名稱'] || ''; }));
+  var values = [''].concat(items.map(function(w) { return w.record_id; }));
+  fillSelectOptions(sel, labels, values);
+  if (prev) sel.value = prev;
+}
+
+function onPaymentProjChange() {
+  var projSel = document.getElementById('p-proj');
+  fillPaymentWorkitems(projSel ? projSel.value : '');
+}
+
+function renderPayAttachList() {
+  var listEl = document.getElementById('p-attach-list');
+  if (!listEl) return;
+  if (!payPendingAttachments.length) {
+    listEl.innerHTML = '';
+    return;
+  }
+  var html = '';
+  payPendingAttachments.forEach(function(item, idx) {
+    var name = escHtml(item.name || '附件');
+    var dlBtn = item.file_token
+      ? '<button type="button" class="attach-item-link" onclick="event.stopPropagation();downloadPayAttachment(\'' + escAttr(item.file_token) + '\')">下載</button>'
+      : '';
+    html += '<div class="attach-item"><span class="attach-item-name">' + name + '</span>' + dlBtn
+      + '<button type="button" class="attach-item-remove" title="移除" onclick="event.stopPropagation();removePayAttachment(' + idx + ')">×</button></div>';
+  });
+  listEl.innerHTML = html;
+}
+
+function onPayAttachSelect(fileList) {
+  if (!fileList || !fileList.length) return;
+  for (var i = 0; i < fileList.length; i++) uploadPayAttachment(fileList[i]);
+  var input = document.getElementById('p-attach-file');
+  if (input) input.value = '';
+}
+
+function onPayAttachDragOver(ev) {
+  ev.preventDefault();
+  var zone = document.getElementById('p-attach-zone');
+  if (zone) zone.classList.add('dragover');
+}
+
+function onPayAttachDragLeave(ev) {
+  ev.preventDefault();
+  var zone = document.getElementById('p-attach-zone');
+  if (zone) zone.classList.remove('dragover');
+}
+
+function onPayAttachDrop(ev) {
+  ev.preventDefault();
+  onPayAttachDragLeave(ev);
+  if (ev.dataTransfer && ev.dataTransfer.files) onPayAttachSelect(ev.dataTransfer.files);
+}
+
+function uploadPayAttachment(file) {
+  if (!file) return;
+  if (file.size > 20 * 1024 * 1024) {
+    alert('檔案過大（上限 20MB）：' + file.name);
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function() {
+    var result = String(reader.result || '');
+    var base64 = result.indexOf(',') >= 0 ? result.split(',')[1] : result;
+    var headers = { 'Content-Type': 'application/json' };
+    var tok = getUserAccessToken();
+    if (tok) headers['X-User-Access-Token'] = tok;
+    fetch(apiUrl('action=upload-attachment'), {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(withUserToken({
+        fileName: file.name,
+        contentBase64: base64,
+        table: 'payments'
+      }))
+    }).then(function(r) { return r.json(); }).then(function(res) {
+      if (res.error) throw new Error(res.error);
+      if (!res.file_token) throw new Error('未取得 file_token');
+      payPendingAttachments.push({
+        file_token: res.file_token,
+        name: file.name,
+        size: file.size
+      });
+      renderPayAttachList();
+    }).catch(function(err) {
+      alert('附件上傳失敗：' + (err.message || '請稍後再試'));
+    });
+  };
+  reader.onerror = function() { alert('讀取檔案失敗'); };
+  reader.readAsDataURL(file);
+}
+
+function removePayAttachment(index) {
+  payPendingAttachments.splice(index, 1);
+  renderPayAttachList();
+}
+
+function downloadPayAttachment(fileToken) {
+  if (!fileToken) return;
+  var q = 'action=download-attachment&fileToken=' + encodeURIComponent(fileToken) + '&table=payments';
+  fetch(apiUrl(q)).then(function(r) { return r.json(); }).then(function(res) {
+    if (res.error) throw new Error(res.error);
+    if (res.url) window.open(res.url, '_blank');
+    else throw new Error('無法取得下載連結');
+  }).catch(function(err) {
+    alert('下載失敗：' + (err.message || '請稍後再試'));
+  });
+}
+
+function getPaymentStatusLabel(f) {
+  var s = String((f && (f['狀態'] || f['審核狀態'])) || '').trim();
+  if (s === '已審核' || s === '已核銷' || s === '已合銷') return '已審核';
+  return '未審核';
+}
+
+function getPaymentProjectName(f) {
+  f = f || {};
+  return resolveProjectName(f['所屬標案'] || f['所數標案'])
+    || getLinkText(f['所屬標案'] || f['所數標案'])
+    || String(f['標案名稱'] || '').trim()
+    || '—';
+}
+
+function getPaymentAttachCount(f) {
+  var att = (f && (f['附件'] || f['檔案'])) || [];
+  return Array.isArray(att) ? att.length : 0;
+}
+
+function ensurePaymentsLoaded() {
+  if (paymentsData && paymentsData.length) return Promise.resolve();
+  if (!deferredDataReady) {
+    return loadDeferredTables({ silent: true }).then(function() {
+      if (paymentsData && paymentsData.length) return;
+      return syncTables(['payments']);
+    });
+  }
+  return syncTables(['payments']);
+}
+
+function renderPaymentsList() {
+  var area = document.getElementById('pay-list-area');
+  if (!area) return;
+  if (!paymentsData.length) {
+    area.innerHTML = '<div style="padding:8px 0;color:var(--t3);font-size:12px">尚無已送出的付款申請</div>';
+    return;
+  }
+  var rows = paymentsData.slice().sort(function(a, b) {
+    var da = Number((a.fields && a.fields['申請日期']) || 0);
+    var db = Number((b.fields && b.fields['申請日期']) || 0);
+    return db - da;
+  });
+  var html = '<div style="overflow-x:auto"><table class="dt"><thead><tr>'
+    + '<th>日期</th><th>標案</th><th>申請人</th><th>支付對象</th><th>事由</th><th>金額</th><th>附件</th><th>狀態</th>'
+    + '</tr></thead><tbody>';
+  rows.forEach(function(rec) {
+    var f = rec.fields || {};
+    var status = getPaymentStatusLabel(f);
+    var stClass = status === '已審核' ? 'std' : 'stp';
+    var amount = parseFloat(f['付款總金額']) || 0;
+    var attachN = getPaymentAttachCount(f);
+    html += '<tr><td>' + escHtml(fmtDate(f['申請日期']) || '—') + '</td>'
+      + '<td>' + escHtml(getPaymentProjectName(f)) + '</td>'
+      + '<td>' + escHtml(personName(f['申請人']) || fieldPlainText(f['申請人']) || '—') + '</td>'
+      + '<td>' + escHtml(f['支付對象'] || '—') + '</td>'
+      + '<td>' + escHtml(f['事由'] || '—') + '</td>'
+      + '<td style="font-weight:600">' + ntf(amount) + '</td>'
+      + '<td>' + (attachN ? attachN + ' 件' : '—') + '</td>'
+      + '<td><span class="st ' + stClass + '">' + escHtml(status) + '</span></td></tr>';
+  });
+  html += '</tbody></table></div>';
+  area.innerHTML = html;
 }
 
 // ── 設計任務單 ──
@@ -15823,6 +16074,7 @@ function refreshFormSelects() {
   if (exProj) fillExpenseWorkitems(exProj.value || (projectsData[0] && projectsData[0].record_id) || '', 'ex-wi');
   var eeProj = document.getElementById('ee-proj');
   if (eeProj && eeProj.options.length) fillEditExpenseWorkitems(eeProj.value || eeProj.options[0].value);
+  fillPaymentProjectSelects();
   var statusSel = document.getElementById('nt-status');
   if (statusSel) {
     fillSelectOptions(statusSel, PROGRESS_OPTIONS);
@@ -16020,7 +16272,21 @@ function collectPaymentFields() {
     nature: nats.join('、'),
     natureList: nats,
     applicant: applicant,
-    amountDisplay: totalNum ? 'NT$' + parseInt(totalNum,10).toLocaleString() : ''
+    amountDisplay: totalNum ? 'NT$' + parseInt(totalNum,10).toLocaleString() : '',
+    projId: document.getElementById('p-proj') ? document.getElementById('p-proj').value : '',
+    wiId: document.getElementById('p-wi') ? document.getElementById('p-wi').value : '',
+    projName: (function() {
+      var sel = document.getElementById('p-proj');
+      if (!sel || !sel.value) return '';
+      var opt = sel.options[sel.selectedIndex];
+      return opt ? String(opt.textContent || '').trim() : '';
+    })(),
+    wiName: (function() {
+      var sel = document.getElementById('p-wi');
+      if (!sel || !sel.value) return '';
+      var opt = sel.options[sel.selectedIndex];
+      return opt ? String(opt.textContent || '').trim() : '';
+    })()
   };
 }
 

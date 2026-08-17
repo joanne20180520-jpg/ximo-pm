@@ -1761,7 +1761,12 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
   const allowed = schemas.allowedSet;
   const out = {};
   const paymentAliases = {
-    '申請人': ['申請人員', 'Applicant', '申请人']
+    '申請人': ['申請人員', 'Applicant', '申请人'],
+    '所屬標案': ['所數標案', '標案', '所屬專案'],
+    '所數標案': ['所屬標案', '標案'],
+    '所屬工作項目': ['工作項目'],
+    '附件': ['檔案', '上傳附件'],
+    '狀態': ['審核狀態']
   };
   // yd 工作項目表欄位為「可用成本未稅」；前端仍寫「可用成本」
   // 設計需求：審核／檢核、路徑欄位名稱在不同 Base 可能不一致
@@ -1894,7 +1899,7 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
   const results = { main: null, accounting: null };
   const errors = [];
   const fields = Object.assign({}, rawFields || {});
-  if (fields['狀態'] === undefined) fields['狀態'] = '待處理';
+  if (fields['狀態'] === undefined) fields['狀態'] = '未審核';
   await enrichPaymentApplicant(tenantToken, userToken, fields, applicantOpenIdHint);
 
   const frontCfg = paymentsFrontConfig();
@@ -4156,9 +4161,22 @@ async function checkMemberAuthorization(userAccessToken) {
   };
 }
 
-const BOOTSTRAP_TABLE_KEYS = ['projects', 'workitems', 'tasks', 'expenses', 'designs', 'design_versions', 'journal', 'members', 'milestones'];
+const BOOTSTRAP_TABLE_KEYS = ['projects', 'workitems', 'tasks', 'expenses', 'designs', 'design_versions', 'journal', 'members', 'milestones', 'payments'];
 
 async function fetchTableRecordsSafe(token, tableKey) {
+  if (tableKey === 'payments') {
+    const cfg = paymentsFrontConfig();
+    if (!cfg.appToken) return { records: [], error: 'payments app token missing' };
+    try {
+      const tableId = await resolvePaymentsTableId(token, cfg.appToken, cfg.tableId);
+      if (!tableId) return { records: [], error: 'Invalid table: payments' };
+      const records = await getRecords(token, tableId, cfg.appToken);
+      return { records: records };
+    } catch (err) {
+      console.error('bootstrap payments', err);
+      return { records: [], error: err.message || String(err) };
+    }
+  }
   const tableId = tableIdFor(tableKey);
   if (!tableId) return { records: [], error: 'Invalid table: ' + tableKey };
   try {
@@ -4304,7 +4322,10 @@ export default async function handler(req, res) {
       if (!buffer.length) return res.status(400).json({ error: 'empty file' });
       if (buffer.length > 20 * 1024 * 1024) return res.status(400).json({ error: 'file too large (max 20MB)' });
       const token = await getToken();
-      const appToken = appTokenForTable(tableKey);
+      let appToken = appTokenForTable(tableKey);
+      if (tableKey === 'payments') {
+        appToken = paymentsFrontConfig().appToken || appToken;
+      }
       if (!appToken) return res.status(400).json({ error: 'missing app token for table' });
       const uploaded = await uploadBitableMedia(token, appToken, fileName, buffer);
       return res.status(200).json(uploaded);
@@ -4579,6 +4600,19 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'GET') {
+      if (table === 'payments') {
+        try {
+          const token = await getToken();
+          const cfg = paymentsFrontConfig();
+          const tableId = await resolvePaymentsTableId(token, cfg.appToken, cfg.tableId);
+          if (!tableId) return res.status(400).json({ error: 'Invalid table: payments' });
+          const records = await getRecords(token, tableId, cfg.appToken);
+          return res.status(200).json({ records: records });
+        } catch (err) {
+          console.error('GET payments', err);
+          return res.status(200).json({ records: [], error: err.message });
+        }
+      }
       if (!tableIdFor(table)) return res.status(400).json({ error: 'Invalid table: ' + table });
       try {
         const token = await getToken();
