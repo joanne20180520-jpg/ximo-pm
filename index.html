@@ -1200,7 +1200,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
 
     <!-- 付款金費單 -->
     <div id="pg-p" class="page">
-      <div class="dc"><div class="dch"><h3>付款申請單</h3><span style="font-size:11px;color:var(--t3);margin-left:8px">填寫後預覽確認，送出狀態為未審核</span><span id="pay-user-label" style="font-size:11px;margin-left:auto;color:var(--t2)"></span></div>
+      <div class="dc"><div class="dch"><h3>付款申請單</h3><span style="font-size:11px;color:var(--t3);margin-left:8px">填寫後預覽確認，送出狀態為審批中</span><span id="pay-user-label" style="font-size:11px;margin-left:auto;color:var(--t2)"></span></div>
         <div class="pfw">
           <div>
             <div class="fg"><label>申請人</label><input type="text" id="p-applicant" placeholder="Lark 登入自動帶入，或手動填寫"></div>
@@ -3771,7 +3771,7 @@ function showPaymentSaveNotice(printed, res) {
   if (!el || !msgEl) return;
   if (card) card.classList.remove('is-error');
   if (icon) icon.textContent = '✓';
-  msgEl.textContent = '付款申請單已送出，狀態為未審核。';
+  msgEl.textContent = '付款申請單已送出，狀態為審批中。';
   var subParts = [];
   if (printed) subParts.push('已列印');
   else subParts.push('未列印');
@@ -12411,7 +12411,7 @@ function savePaymentRecord(data) {
     '事由': data.reason,
     '備註': data.remark,
     '付款總金額': parseFloat(data.total),
-    '狀態': '未審核',
+    '狀態': '審批中',
     '標案名稱': data.projName || '',
     '工作項目名稱': data.wiName || ''
   };
@@ -12602,8 +12602,9 @@ function downloadPayAttachment(fileToken) {
 
 function getPaymentStatusLabel(f) {
   var s = String((f && (f['狀態'] || f['審核狀態'])) || '').trim();
-  if (s === '已審核' || s === '已核銷' || s === '已合銷') return '已審核';
-  return '未審核';
+  if (s === '封存') return '封存';
+  if (s === '已核銷' || s === '已審核' || s === '已合銷') return '已核銷';
+  return '審批中';
 }
 
 function getPaymentProjectName(f) {
@@ -12648,7 +12649,7 @@ function renderPaymentsList() {
   rows.forEach(function(rec) {
     var f = rec.fields || {};
     var status = getPaymentStatusLabel(f);
-    var stClass = status === '已審核' ? 'std' : 'stp';
+    var stClass = status === '已核銷' ? 'std' : (status === '封存' ? 'st' : 'stp');
     var amount = parseFloat(f['付款總金額']) || 0;
     var attachN = getPaymentAttachCount(f);
     html += '<tr><td>' + escHtml(fmtDate(f['申請日期']) || '—') + '</td>'

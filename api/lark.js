@@ -1899,7 +1899,7 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
   const results = { main: null, accounting: null };
   const errors = [];
   const fields = Object.assign({}, rawFields || {});
-  if (fields['狀態'] === undefined) fields['狀態'] = '未審核';
+  if (fields['狀態'] === undefined) fields['狀態'] = '審批中';
   await enrichPaymentApplicant(tenantToken, userToken, fields, applicantOpenIdHint);
 
   const frontCfg = paymentsFrontConfig();
