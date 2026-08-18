@@ -1768,6 +1768,7 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
     '附件': ['檔案', '上傳附件'],
     '狀態': ['審核狀態'],
     '審批編號': ['審批實例', '審批單號', 'instance_code'],
+    '待簽核人': ['待签核人', 'Pending Approver'],
     '支出明細': ['關聯支出', '支出紀錄']
   };
   // yd 工作項目表欄位為「可用成本未稅」；前端仍寫「可用成本」
@@ -2145,6 +2146,18 @@ async function writePaymentApprovalCode(tenantToken, userToken, recordId, instan
   }
 }
 
+async function writePaymentPendingApprover(tenantToken, recordId, approverName) {
+  if (!recordId) return false;
+  const frontCfg = paymentsFrontConfig();
+  const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
+  if (!tableId) return false;
+  const fields = { '待簽核人': approverName || '' };
+  const body = await normalizeWriteFields(tenantToken, tableId, fields, frontCfg.appToken);
+  if (!body || !Object.keys(body).length) return false;
+  await updateRecord(tenantToken, tableId, recordId, body, frontCfg.appToken, false);
+  return true;
+}
+
 function paymentRecordStatus(fields) {
   return String((fields && (fields['狀態'] || fields['審核狀態'])) || '').trim();
 }
@@ -2182,6 +2195,44 @@ async function getApprovalInstanceDetail(token, instanceCode) {
   const data = await res.json();
   if (data.code !== 0) throw new Error(data.msg || ('讀取審批失敗 code:' + data.code));
   return data.data || {};
+}
+
+function cleanApproverDisplayName(raw) {
+  if (!raw) return '';
+  return String(raw).split('_')[0].trim();
+}
+
+async function buildMembersOpenIdLookup(tenantToken) {
+  const lookup = {};
+  try {
+    const members = await getRecords(
+      tenantToken,
+      tableIdFor('members'),
+      appTokenForTable('members'),
+      { userIdType: 'open_id' }
+    );
+    for (let i = 0; i < members.length; i++) {
+      const mf = members[i].fields || {};
+      const openId = getMemberPersonOpenId(mf);
+      if (!openId) continue;
+      const name = cleanApproverDisplayName(getMemberName(mf) || personDisplayName(mf['姓名'] || mf['帳號']));
+      if (name) lookup[openId] = name;
+    }
+  } catch (e) {}
+  return lookup;
+}
+
+function pendingApproverFromApprovalDetail(detail, peopleLookup) {
+  const tasks = (detail && detail.task_list) || [];
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i];
+    if (String(task.status || '').toUpperCase() !== 'PENDING') continue;
+    if (task.user_name) return cleanApproverDisplayName(String(task.user_name));
+    const uid = String(task.user_id || task.open_id || '').trim();
+    if (uid && peopleLookup[uid]) return peopleLookup[uid];
+    return cleanApproverDisplayName(uid) || '';
+  }
+  return '';
 }
 
 async function listApprovalInstanceCodes(token, approvalCode, startMs, endMs) {
@@ -2385,7 +2436,7 @@ async function finalizeApprovedPaymentRecord(tenantToken, paymentRec, expenseCac
     expenseId = await createExpenseFromPayment(tenantToken, recordId, fields, expenseCache);
   }
 
-  const updateFields = { '狀態': '已核銷' };
+  const updateFields = { '狀態': '已核銷', '待簽核人': '' };
   if (expenseId) {
     updateFields['支出明細'] = [expenseId];
     updateFields['關聯支出'] = [expenseId];
@@ -2455,7 +2506,7 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
     try { expenseCache = await loadExpenseRecords(tenantToken); } catch (e) {}
   }
 
-  const results = { checked: pending.length, updated: 0, removedDupes: removedDupes, errors: [], details: [] };
+  const results = { checked: pending.length, updated: 0, approverSynced: 0, removedDupes: removedDupes, errors: [], details: [] };
   if (!pending.length) return results;
 
   let widgets = [];
@@ -2463,6 +2514,9 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
     const def = await getPaymentApprovalDefinition(tenantToken);
     widgets = parseApprovalFormWidgets(def.form);
   } catch (e) {}
+
+  let peopleLookup = {};
+  try { peopleLookup = await buildMembersOpenIdLookup(tenantToken); } catch (e) {}
 
   const detailCache = {};
   const missingCode = pending.filter(function(rec) { return !paymentApprovalInstanceCode(rec.fields || {}); });
@@ -2496,14 +2550,31 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
       const detail = detailCache[instanceCode] || await getApprovalInstanceDetail(tenantToken, instanceCode);
       detailCache[instanceCode] = detail;
       const st = String(detail.status || '').trim().toUpperCase();
-      if (st !== 'APPROVED') continue;
-      const out = await finalizeApprovedPaymentRecord(tenantToken, rec, expenseCache);
-      results.updated++;
-      results.details.push({
-        recordId: rec.record_id,
-        instanceCode: instanceCode,
-        expenseId: out.expenseId
-      });
+      if (st === 'APPROVED') {
+        const out = await finalizeApprovedPaymentRecord(tenantToken, rec, expenseCache);
+        results.updated++;
+        results.details.push({
+          recordId: rec.record_id,
+          instanceCode: instanceCode,
+          expenseId: out.expenseId
+        });
+        continue;
+      }
+      if (st === 'PENDING') {
+        const approver = pendingApproverFromApprovalDetail(detail, peopleLookup);
+        const current = String((rec.fields || {})['待簽核人'] || '').trim();
+        if (approver !== current) {
+          const wrote = await writePaymentPendingApprover(tenantToken, rec.record_id, approver);
+          if (wrote) {
+            rec.fields = rec.fields || {};
+            rec.fields['待簽核人'] = approver;
+            results.approverSynced++;
+          } else {
+            rec.fields = rec.fields || {};
+            rec.fields['待簽核人'] = approver;
+          }
+        }
+      }
     } catch (err) {
       results.errors.push({
         recordId: rec.record_id,

@@ -12846,7 +12846,7 @@ function renderPaymentsList() {
     return;
   }
   var html = '<div style="overflow-x:auto"><table class="dt"><thead><tr>'
-    + '<th>日期</th><th>標案</th><th>申請人</th><th>支付對象</th><th>事由</th><th>金額</th><th>附件</th><th>狀態</th><th>審批</th>'
+    + '<th>日期</th><th>標案</th><th>申請人</th><th>支付對象</th><th>事由</th><th>金額</th><th>附件</th><th>狀態</th><th>待簽核人</th><th>審批</th>'
     + '</tr></thead><tbody>';
   rows.forEach(function(rec) {
     var f = rec.fields || {};
@@ -12855,6 +12855,7 @@ function renderPaymentsList() {
     var amount = parseFloat(f['付款總金額']) || 0;
     var attachN = getPaymentAttachCount(f);
     var instanceCode = String(f['審批編號'] || f['審批實例'] || f['審批單號'] || '').trim();
+    var pendingApprover = String(f['待簽核人'] || '').trim();
     var approvalCell = instanceCode
       ? '<a href="https://www.larksuite.com/approval/detail/' + encodeURIComponent(instanceCode) + '" target="_blank" rel="noopener">開啟</a>'
       : '—';
@@ -12866,6 +12867,7 @@ function renderPaymentsList() {
       + '<td style="font-weight:600">' + ntf(amount) + '</td>'
       + '<td>' + (attachN ? attachN + ' 件' : '—') + '</td>'
       + '<td><span class="st ' + stClass + '">' + escHtml(status) + '</span></td>'
+      + '<td>' + escHtml((status === '審批中' && pendingApprover) ? pendingApprover : '—') + '</td>'
       + '<td>' + approvalCell + '</td></tr>';
   });
   html += '</tbody></table></div>';
