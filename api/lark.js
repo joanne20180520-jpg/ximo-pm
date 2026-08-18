@@ -3778,7 +3778,7 @@ async function sendPaymentNotify(fields) {
     '事由：' + (fields['事由'] || ''),
     '金額：' + amountStr,
     printUrl,
-    '已列印存檔，請會計審核處理 👇'
+    '已送出審批，請依流程線上簽核 👇'
   ].join('\n');
   const result = await sendWebhook(text);
   return Object.assign({ notifyTo: notifyTo, printUrl: printUrl }, result);

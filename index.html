@@ -1633,14 +1633,13 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="pp pp-pay">
     <div class="pph">
       <h3>付款申請單預覽</h3>
-      <span style="font-size:11px;color:var(--t3);margin-left:8px">確認無誤後列印</span>
+      <span style="font-size:11px;color:var(--t3);margin-left:8px">確認無誤後送出審批；列印改為簽核完成後</span>
       <button class="ppc" onclick="cl('pp-prev')" style="margin-left:auto">✕</button>
     </div>
     <div class="ppb"><iframe id="prev-iframe" title="付款申請單預覽"></iframe></div>
     <div class="ppf">
       <button class="bcan" onclick="cl('pp-prev')">返回修改</button>
-      <button class="bsm" onclick="openPayPrintTab()">新分頁列印</button>
-      <button class="bpri" onclick="doPrint()">🖨 確認列印並存檔</button>
+      <button class="bpri" onclick="submitPaymentFromPreview()">確認送出審批</button>
     </div>
   </div>
 </div>
@@ -3712,7 +3711,7 @@ function openPayPrintTab() {
 
 function prevPay() {
   if (!getLoginDisplayName()) {
-    alert('請先 Lark 登入，列印與存檔才會記錄申請人');
+    alert('請先 Lark 登入，送出才會記錄申請人');
   }
   if (!document.getElementById('p-total').value.replace(/[^0-9]/g, '')) {
     alert('請填寫付款總金額');
@@ -3762,7 +3761,7 @@ function triggerPaymentPrint() {
   iframe.src = buildPayPrintUrl({ embed: true });
 }
 
-function showPaymentSaveNotice(printed, res) {
+function showPaymentSaveNotice(_printed, res) {
   var el = document.getElementById('pay-save-notice');
   var card = document.getElementById('pay-save-notice-card');
   var icon = document.getElementById('pay-save-notice-icon');
@@ -3775,8 +3774,6 @@ function showPaymentSaveNotice(printed, res) {
     ? '付款申請單已送出審批。'
     : '付款申請單已送出，狀態為審批中。';
   var subParts = [];
-  if (printed) subParts.push('已列印');
-  else subParts.push('未列印');
   if (res && res.approval && res.approval.ok) {
     subParts.push('已建立 Lark 審批');
     if (res.approval.url) {
@@ -3825,32 +3822,21 @@ function validatePaymentForm() {
 
 function savePaymentOnly(closePreview) {
   if (!getLoginDisplayName()) {
-    alert('請先 Lark 登入，存檔才會記錄申請人');
+    alert('請先 Lark 登入，送出才會記錄申請人');
   }
   var data = validatePaymentForm();
   if (!data) return;
   savePaymentRecord(data).then(function(res) {
     if (closePreview) cl('pp-prev');
-    showPaymentSaveNotice(false, res);
+    showPaymentSaveNotice(null, res);
   }).catch(function(err) {
     console.error(err);
-    showPaymentSaveError('存檔失敗：' + (err.message || '請稍後再試'));
+    showPaymentSaveError('送出失敗：' + (err.message || '請稍後再試'));
   });
 }
 
-function doPrint() {
-  var data = validatePaymentForm();
-  if (!data) return;
-
-  triggerPaymentPrint();
-
-  savePaymentRecord(data).then(function(res) {
-    cl('pp-prev');
-    showPaymentSaveNotice(true, res);
-  }).catch(function(err) {
-    console.error(err);
-    showPaymentSaveError('已開啟列印，但存檔失敗：' + (err.message || '請稍後再試'));
-  });
+function submitPaymentFromPreview() {
+  savePaymentOnly(true);
 }
 
 // ── 甘特圖 ──

@@ -53,7 +53,7 @@ textarea.filled { background:#f0fff4; }
   <button class="btn btn-clear" onclick="clearForm()">清除重填</button>
   <button class="btn btn-print" onclick="window.print()">列印 / 存PDF</button>
 </div>
-<div class="autofill-banner" id="autofillBanner">✅ 已從 Lark 自動帶入資料，確認後直接列印即可</div>
+<div class="autofill-banner" id="autofillBanner">已帶入資料，請確認內容無誤後送出審批</div>
  
 <div class="page">
   <div class="company-name">元頂集團</div>
@@ -305,6 +305,8 @@ function applyEmbedMode() {
     document.body.style.background = 'white';
     document.querySelector('.page').style.margin = '0';
     document.querySelector('.page').style.boxShadow = 'none';
+    var banner = document.getElementById('autofillBanner');
+    if (banner) banner.textContent = '已帶入資料，請確認內容無誤後送出審批';
   }
 }
 
