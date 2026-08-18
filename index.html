@@ -4726,6 +4726,7 @@ var journalData = [];
 var membersData = [];
 var milestonesData = [];
 var paymentsData = [];
+var paymentApprovalMeta = {};
 var payPendingAttachments = [];
 var payAttachmentUploading = 0;
 var paySubmitting = false;
@@ -12723,9 +12724,44 @@ function getPaymentAttachCount(f) {
   return Array.isArray(att) ? att.length : 0;
 }
 
+function applyPaymentRecords(records) {
+  paymentsData = records || [];
+  paymentApprovalMeta = {};
+  paymentsData.forEach(function(rec) {
+    if (rec && rec.approvalMeta) paymentApprovalMeta[rec.record_id] = rec.approvalMeta;
+  });
+}
+
+function getPaymentApprovalMeta(rec) {
+  if (!rec) return {};
+  return rec.approvalMeta || paymentApprovalMeta[rec.record_id] || {};
+}
+
+function getPaymentInstanceCode(f, rec) {
+  var meta = getPaymentApprovalMeta(rec);
+  return String(f['審批編號'] || f['審批實例'] || f['審批單號'] || meta.instanceCode || '').trim();
+}
+
+function getPaymentPendingApproverLabel(f, status, rec) {
+  var meta = getPaymentApprovalMeta(rec);
+  var name = String(f['待簽核人'] || meta.pendingApprover || '').trim();
+  if (status === '審批中' && name) return name;
+  return '—';
+}
+
+function renderPaymentApprovalCell(f, status, rec) {
+  var meta = getPaymentApprovalMeta(rec);
+  var instanceCode = getPaymentInstanceCode(f, rec);
+  if (instanceCode) {
+    return '<a href="https://www.larksuite.com/approval/detail/' + encodeURIComponent(instanceCode) + '" target="_blank" rel="noopener">開啟</a>';
+  }
+  if (status === '已核銷' || meta.approvalStatus === 'APPROVED') return '審批完成';
+  return '—';
+}
+
 function syncPaymentApprovals() {
   return fetch(apiUrl('action=sync-payment-approvals')).then(function(r) { return r.json(); }).then(function(res) {
-    if (res && res.payments && res.payments.records) paymentsData = res.payments.records;
+    if (res && res.payments && res.payments.records) applyPaymentRecords(res.payments.records);
     renderPaymentsList();
     if (res && res.sync && (res.sync.updated > 0 || res.sync.removedDupes > 0)) {
       return syncTables(['expenses']).then(function() { return res; });
@@ -12854,11 +12890,8 @@ function renderPaymentsList() {
     var stClass = status === '已核銷' ? 'std' : (status === '封存' ? 'st' : 'stp');
     var amount = parseFloat(f['付款總金額']) || 0;
     var attachN = getPaymentAttachCount(f);
-    var instanceCode = String(f['審批編號'] || f['審批實例'] || f['審批單號'] || '').trim();
-    var pendingApprover = String(f['待簽核人'] || '').trim();
-    var approvalCell = instanceCode
-      ? '<a href="https://www.larksuite.com/approval/detail/' + encodeURIComponent(instanceCode) + '" target="_blank" rel="noopener">開啟</a>'
-      : '—';
+    var instanceCode = getPaymentInstanceCode(f, rec);
+    var approvalCell = renderPaymentApprovalCell(f, status, rec);
     html += '<tr><td>' + escHtml(fmtDate(f['申請日期']) || '—') + '</td>'
       + '<td>' + escHtml(getPaymentProjectName(f)) + '</td>'
       + '<td>' + escHtml(personName(f['申請人']) || fieldPlainText(f['申請人']) || '—') + '</td>'
@@ -12867,7 +12900,7 @@ function renderPaymentsList() {
       + '<td style="font-weight:600">' + ntf(amount) + '</td>'
       + '<td>' + (attachN ? attachN + ' 件' : '—') + '</td>'
       + '<td><span class="st ' + stClass + '">' + escHtml(status) + '</span></td>'
-      + '<td>' + escHtml((status === '審批中' && pendingApprover) ? pendingApprover : '—') + '</td>'
+      + '<td>' + escHtml(getPaymentPendingApproverLabel(f, status, rec)) + '</td>'
       + '<td>' + approvalCell + '</td></tr>';
   });
   html += '</tbody></table></div>';

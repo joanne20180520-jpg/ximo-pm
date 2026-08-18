@@ -2217,12 +2217,44 @@ async function buildMembersOpenIdLookup(tenantToken) {
       if (!openId) continue;
       const name = cleanApproverDisplayName(getMemberName(mf) || personDisplayName(mf['姓名'] || mf['帳號']));
       if (name) lookup[openId] = name;
+      const altIds = [
+        mf['Lark User ID'], mf['User ID'], mf['user_id'], mf['Open ID'], mf['open_id']
+      ];
+      altIds.forEach(function(raw) {
+        const id = fieldTextValue(raw);
+        if (id) lookup[id] = name || lookup[id] || '';
+      });
     }
   } catch (e) {}
   return lookup;
 }
 
-function pendingApproverFromApprovalDetail(detail, peopleLookup) {
+const larkUserNameCache = {};
+
+async function fetchLarkUserDisplayName(token, userId) {
+  const uid = String(userId || '').trim();
+  if (!uid) return '';
+  if (larkUserNameCache[uid]) return larkUserNameCache[uid];
+  const idTypes = /^ou_/i.test(uid) ? ['open_id'] : ['user_id', 'open_id'];
+  for (let i = 0; i < idTypes.length; i++) {
+    try {
+      const url = BASE_URL + '/contact/v3/users/' + encodeURIComponent(uid) + '?user_id_type=' + idTypes[i];
+      const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+      const data = await res.json();
+      if (data.code === 0 && data.data && data.data.user) {
+        const u = data.data.user;
+        const name = cleanApproverDisplayName(String(u.name || u.en_name || u.nickname || '').trim());
+        if (name) {
+          larkUserNameCache[uid] = name;
+          return name;
+        }
+      }
+    } catch (e) {}
+  }
+  return '';
+}
+
+async function pendingApproverFromApprovalDetail(token, detail, peopleLookup) {
   const tasks = (detail && detail.task_list) || [];
   for (let i = 0; i < tasks.length; i++) {
     const task = tasks[i];
@@ -2230,7 +2262,9 @@ function pendingApproverFromApprovalDetail(detail, peopleLookup) {
     if (task.user_name) return cleanApproverDisplayName(String(task.user_name));
     const uid = String(task.user_id || task.open_id || '').trim();
     if (uid && peopleLookup[uid]) return peopleLookup[uid];
-    return cleanApproverDisplayName(uid) || '';
+    const fromApi = await fetchLarkUserDisplayName(token, uid);
+    if (fromApi) return fromApi;
+    return '';
   }
   return '';
 }
@@ -2295,40 +2329,99 @@ function paymentMatchesApprovalForm(fields, formValues) {
   return true;
 }
 
+function extractApprovalFormAmount(formValues, detail) {
+  const fromMap = parseFloat(String(
+    formValues['付款總金額'] || formValues['金額'] || formValues['總金額'] || 0
+  ).replace(/[^0-9.]/g, '')) || 0;
+  if (fromMap) return fromMap;
+  let items = [];
+  try {
+    items = typeof detail.form === 'string' ? JSON.parse(detail.form) : (detail.form || []);
+  } catch (e) { items = []; }
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i] || {};
+    if (item.type !== 'amount' && item.type !== 'number') continue;
+    const n = parseFloat(String(item.value != null ? item.value : '').replace(/[^0-9.]/g, '')) || 0;
+    if (n) return n;
+  }
+  return 0;
+}
+
+function paymentDetailStartMs(detail) {
+  const t = Number((detail && detail.start_time) || 0);
+  if (!t) return 0;
+  return t < 1e12 ? t * 1000 : t;
+}
+
+function paymentMatchesApprovalDetail(fields, detail, widgets) {
+  const formValues = parseApprovalInstanceForm(detail, widgets);
+  if (paymentMatchesApprovalForm(fields, formValues)) return true;
+  const amount = paymentAmountNumber(fields);
+  const formAmount = extractApprovalFormAmount(formValues, detail);
+  if (!amount || !formAmount || Math.abs(formAmount - amount) > 0.009) return false;
+  const payee = String(fields['支付對象'] || '').trim();
+  const reason = String(fields['事由'] || '').trim();
+  const formPayee = String(formValues['支付對象'] || formValues['收款人'] || '').trim();
+  const formReason = String(formValues['事由'] || formValues['付款事由'] || '').trim();
+  if (payee && formPayee && (payee === formPayee || formPayee.indexOf(payee) >= 0 || payee.indexOf(formPayee) >= 0)) return true;
+  if (reason && formReason && (reason === formReason || formReason.indexOf(reason) >= 0 || reason.indexOf(formReason) >= 0)) return true;
+  const appDate = parsePaymentTs(fields['申請日期']);
+  const startMs = paymentDetailStartMs(detail);
+  if (appDate && startMs && Math.abs(appDate.getTime() - startMs) < 3 * 86400000) return true;
+  return false;
+}
+
 async function resolvePaymentInstanceCode(token, paymentRec, widgets, detailCache) {
   const fields = paymentRec.fields || {};
   let code = paymentApprovalInstanceCode(fields);
   if (code) return code;
+
+  function tryMatch(ic, detail) {
+    return detail && paymentMatchesApprovalDetail(fields, detail, widgets);
+  }
+
   const cachedCodes = Object.keys(detailCache || {});
   for (let i = 0; i < cachedCodes.length; i++) {
     const ic = cachedCodes[i];
-    const formValues = parseApprovalInstanceForm(detailCache[ic], widgets);
-    if (paymentMatchesApprovalForm(fields, formValues)) {
+    if (tryMatch(ic, detailCache[ic])) {
       try { await writePaymentApprovalCode(token, null, paymentRec.record_id, ic); } catch (e) {}
       return ic;
     }
   }
-  const appDate = parsePaymentTs(fields['申請日期']);
-  if (!appDate || cachedCodes.length) return '';
+
   const approvalCode = paymentApprovalCode();
   if (!approvalCode) return '';
-  const startMs = appDate.getTime() - 86400000;
-  const endMs = appDate.getTime() + 14 * 86400000;
+  const appDate = parsePaymentTs(fields['申請日期']);
+  const startMs = appDate ? (appDate.getTime() - 86400000) : (Date.now() - 90 * 86400000);
+  const endMs = appDate ? (appDate.getTime() + 14 * 86400000) : Date.now();
   const codes = await listApprovalInstanceCodes(token, approvalCode, startMs, endMs);
   for (let j = 0; j < codes.length; j++) {
     const ic = codes[j];
     let detail = detailCache[ic];
     if (!detail) {
-      detail = await getApprovalInstanceDetail(token, ic);
-      detailCache[ic] = detail;
+      try {
+        detail = await getApprovalInstanceDetail(token, ic);
+        detailCache[ic] = detail;
+      } catch (e) { continue; }
     }
-    const formValues = parseApprovalInstanceForm(detail, widgets);
-    if (paymentMatchesApprovalForm(fields, formValues)) {
+    if (tryMatch(ic, detail)) {
       try { await writePaymentApprovalCode(token, null, paymentRec.record_id, ic); } catch (e) {}
       return ic;
     }
   }
   return '';
+}
+
+function mergePaymentApprovalMeta(records, approvalMeta) {
+  if (!approvalMeta || !Object.keys(approvalMeta).length) return records;
+  return records.map(function(rec) {
+    const meta = approvalMeta[rec.record_id];
+    if (!meta) return rec;
+    const fields = Object.assign({}, rec.fields || {});
+    if (meta.instanceCode && !paymentApprovalInstanceCode(fields)) fields['審批編號'] = meta.instanceCode;
+    if (meta.pendingApprover && !String(fields['待簽核人'] || '').trim()) fields['待簽核人'] = meta.pendingApprover;
+    return Object.assign({}, rec, { fields: fields, approvalMeta: meta });
+  });
 }
 
 function buildExpenseFieldsFromPayment(fields, paymentRecordId) {
@@ -2491,12 +2584,15 @@ async function syncPendingPaymentApprovals(tenantToken) {
 async function syncPendingPaymentApprovalsInner(tenantToken) {
   const frontCfg = paymentsFrontConfig();
   const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
-  if (!tableId) return { checked: 0, updated: 0, removedDupes: 0, errors: [] };
+  if (!tableId) return { checked: 0, updated: 0, approverSynced: 0, removedDupes: 0, errors: [], approvalMeta: {} };
 
   const records = await getRecords(tenantToken, tableId, frontCfg.appToken);
-  const pending = records.filter(function(rec) {
-    const status = paymentRecordStatus(rec.fields || {});
-    return isPaymentPendingStatus(status);
+  const targets = records.filter(function(rec) {
+    const fields = rec.fields || {};
+    const status = paymentRecordStatus(fields);
+    if (isPaymentPendingStatus(status)) return true;
+    if (!paymentApprovalInstanceCode(fields) && isPaymentApprovedStatus(status)) return true;
+    return false;
   });
 
   let expenseCache = [];
@@ -2506,8 +2602,17 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
     try { expenseCache = await loadExpenseRecords(tenantToken); } catch (e) {}
   }
 
-  const results = { checked: pending.length, updated: 0, approverSynced: 0, removedDupes: removedDupes, errors: [], details: [] };
-  if (!pending.length) return results;
+  const results = {
+    checked: targets.length,
+    updated: 0,
+    approverSynced: 0,
+    linked: 0,
+    removedDupes: removedDupes,
+    errors: [],
+    details: [],
+    approvalMeta: {}
+  };
+  if (!targets.length) return results;
 
   let widgets = [];
   try {
@@ -2519,38 +2624,60 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
   try { peopleLookup = await buildMembersOpenIdLookup(tenantToken); } catch (e) {}
 
   const detailCache = {};
-  const missingCode = pending.filter(function(rec) { return !paymentApprovalInstanceCode(rec.fields || {}); });
+  const missingCode = targets.filter(function(rec) { return !paymentApprovalInstanceCode(rec.fields || {}); });
   if (missingCode.length) {
     let minTs = Date.now();
     let maxTs = 0;
     missingCode.forEach(function(rec) {
       const d = parsePaymentTs((rec.fields || {})['申請日期']);
-      if (!d) return;
-      const t = d.getTime();
+      const t = d ? d.getTime() : Date.now();
       if (t < minTs) minTs = t;
       if (t > maxTs) maxTs = t;
     });
-    if (maxTs >= minTs) {
-      try {
-        const codes = await listApprovalInstanceCodes(tenantToken, paymentApprovalCode(), minTs - 86400000, maxTs + 14 * 86400000);
-        for (let ci = 0; ci < codes.length; ci++) {
-          try {
-            detailCache[codes[ci]] = await getApprovalInstanceDetail(tenantToken, codes[ci]);
-          } catch (e) {}
-        }
-      } catch (e) {}
+    try {
+      const codes = await listApprovalInstanceCodes(
+        tenantToken,
+        paymentApprovalCode(),
+        minTs - 90 * 86400000,
+        maxTs + 14 * 86400000
+      );
+      results.instanceCandidates = codes.length;
+      for (let ci = 0; ci < codes.length; ci++) {
+        try {
+          detailCache[codes[ci]] = await getApprovalInstanceDetail(tenantToken, codes[ci]);
+        } catch (e) {}
+      }
+    } catch (e) {
+      results.errors.push({ error: 'list instances: ' + (e.message || String(e)) });
     }
   }
 
-  for (let i = 0; i < pending.length; i++) {
-    const rec = pending[i];
+  for (let i = 0; i < targets.length; i++) {
+    const rec = targets[i];
+    const status = paymentRecordStatus(rec.fields || {});
+    const pending = isPaymentPendingStatus(status);
     try {
       const instanceCode = await resolvePaymentInstanceCode(tenantToken, rec, widgets, detailCache);
       if (!instanceCode) continue;
       const detail = detailCache[instanceCode] || await getApprovalInstanceDetail(tenantToken, instanceCode);
       detailCache[instanceCode] = detail;
       const st = String(detail.status || '').trim().toUpperCase();
-      if (st === 'APPROVED') {
+      const approver = st === 'PENDING'
+        ? await pendingApproverFromApprovalDetail(tenantToken, detail, peopleLookup)
+        : '';
+      results.approvalMeta[rec.record_id] = {
+        instanceCode: instanceCode,
+        approvalStatus: st,
+        pendingApprover: approver,
+        url: 'https://www.larksuite.com/approval/detail/' + instanceCode
+      };
+      results.linked++;
+      if (!paymentApprovalInstanceCode(rec.fields || {})) {
+        rec.fields = rec.fields || {};
+        rec.fields['審批編號'] = instanceCode;
+      }
+
+      if (pending && st === 'APPROVED') {
         const out = await finalizeApprovedPaymentRecord(tenantToken, rec, expenseCache);
         results.updated++;
         results.details.push({
@@ -2560,19 +2687,13 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
         });
         continue;
       }
-      if (st === 'PENDING') {
-        const approver = pendingApproverFromApprovalDetail(detail, peopleLookup);
+      if (pending && st === 'PENDING' && approver) {
         const current = String((rec.fields || {})['待簽核人'] || '').trim();
         if (approver !== current) {
           const wrote = await writePaymentPendingApprover(tenantToken, rec.record_id, approver);
-          if (wrote) {
-            rec.fields = rec.fields || {};
-            rec.fields['待簽核人'] = approver;
-            results.approverSynced++;
-          } else {
-            rec.fields = rec.fields || {};
-            rec.fields['待簽核人'] = approver;
-          }
+          rec.fields = rec.fields || {};
+          rec.fields['待簽核人'] = approver;
+          if (wrote) results.approverSynced++;
         }
       }
     } catch (err) {
@@ -5055,7 +5176,8 @@ export default async function handler(req, res) {
       const cfg = paymentsFrontConfig();
       const tableId = await resolvePaymentsTableId(token, cfg.appToken, cfg.tableId);
       const records = tableId ? await getRecords(token, tableId, cfg.appToken) : [];
-      return res.status(200).json({ ok: true, sync: sync, payments: { records: records } });
+      const merged = mergePaymentApprovalMeta(records, sync.approvalMeta || {});
+      return res.status(200).json({ ok: true, sync: sync, payments: { records: merged } });
     }
 
     if (action === 'ping' && req.method === 'GET') {
