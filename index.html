@@ -3817,11 +3817,6 @@ function showPaymentSaveNotice(_printed, res) {
   var subParts = [];
   if (res && res.approval && res.approval.ok) {
     subParts.push('已建立 Lark 審批');
-    if (res.approval.url) {
-      subEl.innerHTML = subParts.join(' · ') + ' · <a href="' + escAttr(res.approval.url) + '" target="_blank" rel="noopener">開啟審批</a>';
-      el.classList.remove('hidden');
-      return;
-    }
   } else if (res && res.approval && res.approval.error) {
     subParts.push('審批未送出：' + res.approval.error);
   }
@@ -12751,10 +12746,6 @@ function getPaymentPendingApproverLabel(f, status, rec) {
 
 function renderPaymentApprovalCell(f, status, rec) {
   var meta = getPaymentApprovalMeta(rec);
-  var instanceCode = getPaymentInstanceCode(f, rec);
-  if (instanceCode) {
-    return '<a href="https://www.larksuite.com/approval/detail/' + encodeURIComponent(instanceCode) + '" target="_blank" rel="noopener">開啟</a>';
-  }
   if (status === '已核銷' || meta.approvalStatus === 'APPROVED') return '審批完成';
   return '—';
 }
