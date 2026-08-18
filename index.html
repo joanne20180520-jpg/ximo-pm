@@ -99,6 +99,7 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .pl-cards{flex:1;min-height:0;overflow-y:auto}
 .attach-dropzone{border:2px dashed var(--border);border-radius:var(--rs);padding:14px 10px;text-align:center;font-size:11px;color:var(--t3);cursor:pointer;transition:border-color .15s,background .15s}
 .attach-dropzone:hover,.attach-dropzone.dragover{border-color:#0891b2;background:#f0fdfa;color:var(--t2)}
+.attach-dropzone.is-uploading{opacity:.7;pointer-events:none;cursor:wait}
 .attach-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 8px;margin-top:4px;background:var(--sf2);border-radius:var(--rs);font-size:11px}
 .attach-item-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
 .attach-item-link{border:none;background:none;color:var(--c2);cursor:pointer;font-size:10px;padding:0;text-decoration:underline;flex-shrink:0}
@@ -1235,6 +1236,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
                 <span>點此上傳，或拖曳檔案到這裡</span>
               </div>
               <div id="p-attach-list"></div>
+              <div id="p-attach-status" style="font-size:11px;color:var(--t3);margin-top:4px"></div>
             </div>
             <div class="bss">
               <button class="bsub" onclick="prevPay()">確認資料預覽</button>
@@ -1633,7 +1635,6 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="pp pp-pay">
     <div class="pph">
       <h3>付款申請單預覽</h3>
-      <span style="font-size:11px;color:var(--t3);margin-left:8px">確認無誤後送出審批；列印改為簽核完成後</span>
       <button class="ppc" onclick="cl('pp-prev')" style="margin-left:auto">✕</button>
     </div>
     <div class="ppb"><iframe id="prev-iframe" title="付款申請單預覽"></iframe></div>
@@ -3713,6 +3714,10 @@ function prevPay() {
   if (!getLoginDisplayName()) {
     alert('請先 Lark 登入，送出才會記錄申請人');
   }
+  if (payAttachmentUploading > 0) {
+    alert('附件還在上傳中，請稍候再預覽');
+    return;
+  }
   if (!document.getElementById('p-total').value.replace(/[^0-9]/g, '')) {
     alert('請填寫付款總金額');
     return;
@@ -3823,6 +3828,10 @@ function validatePaymentForm() {
 function savePaymentOnly(closePreview) {
   if (!getLoginDisplayName()) {
     alert('請先 Lark 登入，送出才會記錄申請人');
+  }
+  if (payAttachmentUploading > 0) {
+    alert('附件還在上傳中，請稍候再送出');
+    return;
   }
   var data = validatePaymentForm();
   if (!data) return;
@@ -4665,6 +4674,7 @@ var membersData = [];
 var milestonesData = [];
 var paymentsData = [];
 var payPendingAttachments = [];
+var payAttachmentUploading = 0;
 var membersMap = {};
 var currentLoginUser = null;
 var loginUserReady = false;
@@ -12452,6 +12462,9 @@ function savePaymentRecord(data) {
       console.warn('申請人未寫入 Lark', res.applicantDebug);
     }
     payPendingAttachments = [];
+    payAttachmentUploading = 0;
+    setPayAttachStatus('');
+    updatePayAttachZoneState();
     renderPayAttachList();
     var rec = (res.data && res.data.record) || (res.main && res.main.data && res.main.data.record) || null;
     if (rec && rec.record_id) {
@@ -12509,6 +12522,10 @@ function renderPayAttachList() {
   var html = '';
   payPendingAttachments.forEach(function(item, idx) {
     var name = escHtml(item.name || '附件');
+    if (item.uploading) {
+      html += '<div class="attach-item"><span class="attach-item-name">' + name + '</span><span style="color:var(--t3);flex-shrink:0">上傳中…</span></div>';
+      return;
+    }
     var dlBtn = item.file_token
       ? '<button type="button" class="attach-item-link" onclick="event.stopPropagation();downloadPayAttachment(\'' + escAttr(item.file_token) + '\')">下載</button>'
       : '';
@@ -12516,6 +12533,17 @@ function renderPayAttachList() {
       + '<button type="button" class="attach-item-remove" title="移除" onclick="event.stopPropagation();removePayAttachment(' + idx + ')">×</button></div>';
   });
   listEl.innerHTML = html;
+}
+
+function setPayAttachStatus(msg) {
+  var el = document.getElementById('p-attach-status');
+  if (el) el.textContent = msg || '';
+}
+
+function updatePayAttachZoneState() {
+  var zone = document.getElementById('p-attach-zone');
+  if (!zone) return;
+  zone.classList.toggle('is-uploading', payAttachmentUploading > 0);
 }
 
 function onPayAttachSelect(fileList) {
@@ -12549,6 +12577,12 @@ function uploadPayAttachment(file) {
     alert('檔案過大（上限 20MB）：' + file.name);
     return;
   }
+  var pendingIdx = payPendingAttachments.length;
+  payPendingAttachments.push({ name: file.name, size: file.size, uploading: true });
+  payAttachmentUploading++;
+  renderPayAttachList();
+  setPayAttachStatus('上傳中…（' + payAttachmentUploading + '）');
+  updatePayAttachZoneState();
   var reader = new FileReader();
   reader.onload = function() {
     var result = String(reader.result || '');
@@ -12567,21 +12601,35 @@ function uploadPayAttachment(file) {
     }).then(function(r) { return r.json(); }).then(function(res) {
       if (res.error) throw new Error(res.error);
       if (!res.file_token) throw new Error('未取得 file_token');
-      payPendingAttachments.push({
+      payPendingAttachments[pendingIdx] = {
         file_token: res.file_token,
         name: file.name,
         size: file.size
-      });
+      };
       renderPayAttachList();
     }).catch(function(err) {
+      payPendingAttachments.splice(pendingIdx, 1);
+      renderPayAttachList();
       alert('附件上傳失敗：' + (err.message || '請稍後再試'));
+    }).finally(function() {
+      payAttachmentUploading = Math.max(0, payAttachmentUploading - 1);
+      setPayAttachStatus(payAttachmentUploading ? ('上傳中…（' + payAttachmentUploading + '）') : '');
+      updatePayAttachZoneState();
     });
   };
-  reader.onerror = function() { alert('讀取檔案失敗'); };
+  reader.onerror = function() {
+    payPendingAttachments.splice(pendingIdx, 1);
+    renderPayAttachList();
+    payAttachmentUploading = Math.max(0, payAttachmentUploading - 1);
+    setPayAttachStatus(payAttachmentUploading ? ('上傳中…（' + payAttachmentUploading + '）') : '');
+    updatePayAttachZoneState();
+    alert('讀取檔案失敗');
+  };
   reader.readAsDataURL(file);
 }
 
 function removePayAttachment(index) {
+  if (payPendingAttachments[index] && payPendingAttachments[index].uploading) return;
   payPendingAttachments.splice(index, 1);
   renderPayAttachList();
 }
