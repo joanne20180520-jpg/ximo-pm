@@ -12732,21 +12732,10 @@ function getPaymentApprovalMeta(rec) {
   return rec.approvalMeta || paymentApprovalMeta[rec.record_id] || {};
 }
 
-function getPaymentInstanceCode(f, rec) {
-  var meta = getPaymentApprovalMeta(rec);
-  return String(f['審批編號'] || f['審批實例'] || f['審批單號'] || meta.instanceCode || '').trim();
-}
-
 function getPaymentPendingApproverLabel(f, status, rec) {
   var meta = getPaymentApprovalMeta(rec);
   var name = String(f['待簽核人'] || meta.pendingApprover || '').trim();
   if (status === '審批中' && name) return name;
-  return '—';
-}
-
-function renderPaymentApprovalCell(f, status, rec) {
-  var meta = getPaymentApprovalMeta(rec);
-  if (status === '已核銷' || meta.approvalStatus === 'APPROVED') return '審批完成';
   return '—';
 }
 
@@ -12873,7 +12862,7 @@ function renderPaymentsList() {
     return;
   }
   var html = '<div style="overflow-x:auto"><table class="dt"><thead><tr>'
-    + '<th>日期</th><th>標案</th><th>申請人</th><th>支付對象</th><th>事由</th><th>金額</th><th>附件</th><th>狀態</th><th>待簽核人</th><th>審批</th>'
+    + '<th>日期</th><th>標案</th><th>申請人</th><th>支付對象</th><th>事由</th><th>金額</th><th>附件</th><th>狀態</th><th>待簽核人</th>'
     + '</tr></thead><tbody>';
   rows.forEach(function(rec) {
     var f = rec.fields || {};
@@ -12881,8 +12870,6 @@ function renderPaymentsList() {
     var stClass = status === '已核銷' ? 'std' : (status === '封存' ? 'st' : 'stp');
     var amount = parseFloat(f['付款總金額']) || 0;
     var attachN = getPaymentAttachCount(f);
-    var instanceCode = getPaymentInstanceCode(f, rec);
-    var approvalCell = renderPaymentApprovalCell(f, status, rec);
     html += '<tr><td>' + escHtml(fmtDate(f['申請日期']) || '—') + '</td>'
       + '<td>' + escHtml(getPaymentProjectName(f)) + '</td>'
       + '<td>' + escHtml(personName(f['申請人']) || fieldPlainText(f['申請人']) || '—') + '</td>'
@@ -12891,8 +12878,7 @@ function renderPaymentsList() {
       + '<td style="font-weight:600">' + ntf(amount) + '</td>'
       + '<td>' + (attachN ? attachN + ' 件' : '—') + '</td>'
       + '<td><span class="st ' + stClass + '">' + escHtml(status) + '</span></td>'
-      + '<td>' + escHtml(getPaymentPendingApproverLabel(f, status, rec)) + '</td>'
-      + '<td>' + approvalCell + '</td></tr>';
+      + '<td>' + escHtml(getPaymentPendingApproverLabel(f, status, rec)) + '</td></tr>';
   });
   html += '</tbody></table></div>';
   area.innerHTML = html;
