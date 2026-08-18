@@ -746,8 +746,8 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .pay-query-range-label{font-size:12px;color:var(--t3);flex-shrink:0}
 .pay-query-range input[type=date]{width:148px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;font-size:12px;font-family:inherit;color:var(--text)}
 .pay-query-range-sep{color:var(--t3);font-size:13px}
-.pay-list-wrap .dt{width:100%}
-.pay-list-wrap .dt td,.pay-list-wrap .dt th{font-size:11px}
+.pay-list-wrap .dt{width:100%;table-layout:auto}
+.pay-list-wrap .dt td,.pay-list-wrap .dt th{font-size:11px;white-space:nowrap}
 .pay-list-empty{padding:8px 0;color:var(--t3);font-size:12px}
 @media (max-width:720px){
   .pay-query-bar{align-items:flex-start}
@@ -4328,7 +4328,7 @@ function applyPartialTable(key, part) {
     case 'journal': journalData = records; break;
     case 'members': membersData = records; break;
     case 'milestones': milestonesData = records; break;
-    case 'payments': paymentsData = records; break;
+    case 'payments': paymentsData = mergePaymentApprovalIntoRecords(records); break;
   }
 }
 
@@ -6490,7 +6490,7 @@ function applyBootstrapPayload(payload) {
   take('journal', function(r) { journalData = r; });
   take('members', function(r) { membersData = r; });
   take('milestones', function(r) { milestonesData = r; });
-  take('payments', function(r) { paymentsData = r; });
+  take('payments', function(r) { paymentsData = mergePaymentApprovalIntoRecords(r); });
   pruneSelectedProjects();
   hydrateMilestonesFromProjects();
 }
@@ -12521,7 +12521,7 @@ function savePaymentRecord(data) {
     renderPayAttachList();
     var rec = (res.data && res.data.record) || (res.main && res.main.data && res.main.data.record) || null;
     if (rec && rec.record_id) {
-      paymentsData = [rec].concat(paymentsData.filter(function(r) { return r.record_id !== rec.record_id; }));
+      paymentsData = mergePaymentApprovalIntoRecords([rec].concat(paymentsData.filter(function(r) { return r.record_id !== rec.record_id; })));
     }
     renderPaymentsList();
     syncTables(['payments']).catch(function() {});
@@ -12720,10 +12720,21 @@ function getPaymentAttachCount(f) {
 }
 
 function applyPaymentRecords(records) {
-  paymentsData = records || [];
-  paymentApprovalMeta = {};
-  paymentsData.forEach(function(rec) {
-    if (rec && rec.approvalMeta) paymentApprovalMeta[rec.record_id] = rec.approvalMeta;
+  paymentsData = mergePaymentApprovalIntoRecords(records || []);
+}
+
+function mergePaymentApprovalIntoRecords(records) {
+  return (records || []).map(function(rec) {
+    if (!rec) return rec;
+    var meta = rec.approvalMeta || paymentApprovalMeta[rec.record_id] || {};
+    if (meta.instanceCode || meta.pendingApprover || meta.approvalStatus) {
+      paymentApprovalMeta[rec.record_id] = meta;
+    }
+    var fields = Object.assign({}, rec.fields || {});
+    if (meta.pendingApprover && !String(fields['待簽核人'] || '').trim()) {
+      fields['待簽核人'] = meta.pendingApprover;
+    }
+    return Object.assign({}, rec, { fields: fields, approvalMeta: meta });
   });
 }
 
@@ -12734,6 +12745,7 @@ function getPaymentApprovalMeta(rec) {
 
 function getPaymentPendingApproverLabel(f, status, rec) {
   var meta = getPaymentApprovalMeta(rec);
+  if (status === '已核銷' || meta.approvalStatus === 'APPROVED') return '審批完成';
   var name = String(f['待簽核人'] || meta.pendingApprover || '').trim();
   if (status === '審批中' && name) return name;
   return '—';
