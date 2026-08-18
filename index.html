@@ -1639,8 +1639,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
     </div>
     <div class="ppb"><iframe id="prev-iframe" title="付款申請單預覽"></iframe></div>
     <div class="ppf">
-      <button class="bcan" onclick="cl('pp-prev')">返回修改</button>
-      <button class="bpri" onclick="submitPaymentFromPreview()">確認送出審批</button>
+      <button class="bcan" id="pay-prev-cancel-btn" onclick="cl('pp-prev')">返回修改</button>
+      <button class="bpri" id="pay-submit-btn" data-skip-btn-lock onclick="submitPaymentFromPreview()">確認送出審批</button>
     </div>
   </div>
 </div>
@@ -1709,7 +1709,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
 <script>
   // ── 全域防連點 + 點擊顏色回饋 ──
 (function() {
-  var LOCK_SELECTOR = '.bpri, .bsub, .bsub2, .bsm, .bdel, .confirm-ok, .bads, .badd';
+  var LOCK_SELECTOR = '.bpri:not([data-skip-btn-lock]), .bsub, .bsub2, .bsm, .bdel, .confirm-ok, .bads, .badd';
   function flashClassFor(btn) {
     var cls = btn.className || '';
     if (cls.indexOf('bdel') >= 0 || cls.indexOf('ppc') >= 0) return 'flash-red';
@@ -3825,22 +3825,39 @@ function validatePaymentForm() {
   return data;
 }
 
+function setPaySubmitLoading(on) {
+  var btn = document.getElementById('pay-submit-btn');
+  var cancel = document.getElementById('pay-prev-cancel-btn');
+  if (btn) {
+    btn.disabled = !!on;
+    btn.classList.toggle('btn-loading', !!on);
+    btn.textContent = on ? '送出中，請稍候…' : '確認送出審批';
+  }
+  if (cancel) cancel.disabled = !!on;
+}
+
 function savePaymentOnly(closePreview) {
   if (!getLoginDisplayName()) {
     alert('請先 Lark 登入，送出才會記錄申請人');
   }
+  if (paySubmitting) return;
   if (payAttachmentUploading > 0) {
     alert('附件還在上傳中，請稍候再送出');
     return;
   }
   var data = validatePaymentForm();
   if (!data) return;
+  paySubmitting = true;
+  setPaySubmitLoading(true);
   savePaymentRecord(data).then(function(res) {
     if (closePreview) cl('pp-prev');
     showPaymentSaveNotice(null, res);
   }).catch(function(err) {
     console.error(err);
     showPaymentSaveError('送出失敗：' + (err.message || '請稍後再試'));
+  }).finally(function() {
+    paySubmitting = false;
+    setPaySubmitLoading(false);
   });
 }
 
@@ -4675,6 +4692,7 @@ var milestonesData = [];
 var paymentsData = [];
 var payPendingAttachments = [];
 var payAttachmentUploading = 0;
+var paySubmitting = false;
 var membersMap = {};
 var currentLoginUser = null;
 var loginUserReady = false;
@@ -12429,7 +12447,9 @@ function savePaymentRecord(data) {
   }
   if (data.wiId) fields['所屬工作項目'] = [data.wiId];
   if (payPendingAttachments.length) {
-    fields['附件'] = payPendingAttachments.map(function(a) {
+    fields['附件'] = payPendingAttachments.filter(function(a) {
+      return a.file_token && !a.uploading;
+    }).map(function(a) {
       return { file_token: a.file_token, name: a.name };
     });
   }
