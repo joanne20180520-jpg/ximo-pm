@@ -1124,7 +1124,6 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <button class="tbar-tab" onclick="sw(this,'pg-b')">費用管理</button>
     <button class="tbar-tab" onclick="sw(this,'pg-e')">支出明細</button>
     <button class="tbar-tab" onclick="sw(this,'pg-p')">付款申請</button>
-    <button class="tbar-tab" onclick="sw(this,'pg-acct')">會計</button>
     <button class="tbar-tab" onclick="sw(this,'pg-d')">設計任務單</button>
     <button class="tbar-tab" onclick="sw(this,'pg-journal')">日誌</button>
     <button class="tbar-tab" onclick="sw(this,'pg-ai')">AI分析</button>
@@ -1291,21 +1290,6 @@ button.btn-loading::after{content:'…';margin-left:2px}
           </div>
           <div id="pay-list-area"><div class="pay-list-empty">載入中...</div></div>
         </div>
-      </div>
-    </div>
-
-    <!-- 會計前台 -->
-    <div id="pg-acct" class="page">
-      <div class="acct-page">
-        <div class="dch" style="padding:0 0 12px;border:none">
-          <h3>會計前台</h3>
-          <span style="font-size:11px;color:var(--t3);margin-left:8px">璽墨已核銷的付款會出現在這裡</span>
-        </div>
-        <div class="acct-tabs">
-          <button type="button" class="pay-query-btn active" data-acct-view="project" onclick="setAcctView('project')">各標案總支出</button>
-          <button type="button" class="pay-query-btn" data-acct-view="all" onclick="setAcctView('all')">全部標案總支出</button>
-        </div>
-        <div id="acct-area"><div class="pay-list-empty">載入中...</div></div>
       </div>
     </div>
 
@@ -2013,11 +1997,6 @@ function sw(btn,id){
       if (res && res.sync && (res.sync.updated > 0 || res.sync.removedDupes > 0)) renderExpenses();
     });
   }
-  if(id==='pg-acct') {
-    if (!deferredDataReady) loadDeferredTables({ silent: true });
-    ensurePaymentsLoaded().then(function() { renderAccountingPage(); });
-    renderAccountingPage();
-  }
   if(id==='pg-ai') { renderAiPage(); syncAiComposerBounds(); }
 }
 
@@ -2053,11 +2032,6 @@ var DEEP_LINK_PAGES = {
   payment: 'pg-p',
   '付款申請': 'pg-p',
   '付款': 'pg-p',
-  // 會計前台
-  accounting: 'pg-acct',
-  acct: 'pg-acct',
-  '會計': 'pg-acct',
-  '會計前台': 'pg-acct',
   // 設計任務單
   design: 'pg-d',
   designs: 'pg-d',
@@ -4788,8 +4762,7 @@ var loginRefreshPromise = null;
 var currentUserRole = 'PM';
 var ROLE_PAGES = {
   PM: ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
-  '管理員': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-acct', 'pg-d', 'pg-journal', 'pg-ai'],
-  '會計': ['pg-acct'],
+  '管理員': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
   '設計師': ['pg-d'],
   '設計主管': ['pg-d']
 };
@@ -5110,11 +5083,6 @@ function applyRolePermissions() {
     document.body.classList.remove('role-accountant');
     var designTab = document.querySelector('.tbar-tab[onclick*="pg-d"]');
     if (designTab) sw(designTab, 'pg-d');
-  } else if (role === '會計' || role === '会计') {
-    document.body.classList.remove('role-designer');
-    document.body.classList.add('role-accountant');
-    var acctTab = document.querySelector('.tbar-tab[onclick*="pg-acct"]');
-    if (acctTab) sw(acctTab, 'pg-acct');
   } else {
     document.body.classList.remove('role-designer');
     document.body.classList.remove('role-accountant');
@@ -6446,15 +6414,11 @@ function fetchJsonWithTimeout(url, ms) {
 }
 
 function getCoreTableKeys() {
-  if (isDesignerLikeRole()) return CORE_TABLE_KEYS_DESIGNER.slice();
-  if (isAccountantRole()) return CORE_TABLE_KEYS_ACCT.slice();
-  return CORE_TABLE_KEYS_PM.slice();
+  return isDesignerLikeRole() ? CORE_TABLE_KEYS_DESIGNER.slice() : CORE_TABLE_KEYS_PM.slice();
 }
 
 function getDeferredTableKeys() {
-  if (isDesignerLikeRole()) return DEFERRED_TABLE_KEYS_DESIGNER.slice();
-  if (isAccountantRole()) return DEFERRED_TABLE_KEYS_ACCT.slice();
-  return DEFERRED_TABLE_KEYS_PM.slice();
+  return isDesignerLikeRole() ? DEFERRED_TABLE_KEYS_DESIGNER.slice() : DEFERRED_TABLE_KEYS_PM.slice();
 }
 
 function applyPartialTables(payload, keys) {
