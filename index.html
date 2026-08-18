@@ -736,9 +736,40 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .bss .bsub,.bss .bsub2{margin-top:0}
 .p-upper{font-size:11px;color:var(--t2);margin-top:4px;min-height:16px}
 .pay-list-wrap{padding:0 16px 16px;border-top:1px solid var(--border)}
-.pay-list-head{font-size:12px;font-weight:700;color:var(--text);padding:12px 0 8px}
-.pay-list-wrap .dt{width:100%}
-.pay-list-wrap .dt td,.pay-list-wrap .dt th{font-size:11px}
+.pay-list-head{font-size:12px;font-weight:700;color:var(--text);padding:12px 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pay-list-head-count{font-size:11px;font-weight:500;color:var(--t3)}
+.pay-query-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:var(--sf2);border:1px solid var(--border);border-radius:10px;margin-bottom:14px;flex-wrap:wrap}
+.pay-query-presets{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pay-query-btn{padding:6px 16px;border-radius:20px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;line-height:1.2}
+.pay-query-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pay-query-range{display:flex;align-items:center;gap:8px;margin-left:auto}
+.pay-query-range-label{font-size:12px;color:var(--t3);flex-shrink:0}
+.pay-query-range input[type=date]{width:148px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;font-size:12px;font-family:inherit;color:var(--text)}
+.pay-query-range-sep{color:var(--t3);font-size:13px}
+.pay-sheet{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px 12px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.pay-sheet-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.pay-sheet-co{font-size:12px;font-weight:700}
+.pay-sheet-title{text-align:center;font-size:16px;font-weight:700;letter-spacing:4px;margin:2px 0 10px}
+.pay-sheet-date{font-size:12px;margin-bottom:8px;color:var(--text)}
+.pay-sheet table{width:100%;border-collapse:collapse;table-layout:fixed}
+.pay-sheet td{border:1px solid #333;padding:5px 6px;vertical-align:middle;font-size:12px}
+.pay-sheet .lc{background:#f8f8f8;text-align:center;font-size:11px;white-space:nowrap;width:42px;color:#333}
+.pay-sheet-cbs{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+.pay-sheet-cb{display:inline-flex;align-items:center;gap:3px;font-size:11.5px;white-space:nowrap}
+.pay-sheet-box{width:12px;height:12px;border:1px solid #333;display:inline-flex;align-items:center;justify-content:center;font-size:9px;line-height:1;flex-shrink:0}
+.pay-sheet-cb.on .pay-sheet-box{background:#1a1916;color:#fff;border-color:#1a1916}
+.pay-sheet-jiazi{display:flex;align-items:center;gap:3px;justify-content:center;flex-wrap:wrap}
+.pay-sheet-digit{display:inline-block;min-width:16px;text-align:center;border-bottom:1px solid #333;font-size:12px;padding:0 2px}
+.pay-sheet-unit{font-size:11px}
+.pay-sheet-sign{display:flex;width:100%;min-height:52px;padding-top:2px}
+.pay-sheet-sign>div{flex:1;font-size:12px}
+.pay-sheet-foot{display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#444;gap:12px;flex-wrap:wrap}
+.pay-sheet-empty{padding:16px 0;color:var(--t3);font-size:12px;text-align:center}
+@media (max-width:720px){
+  .pay-query-bar{align-items:flex-start}
+  .pay-query-range{margin-left:0;width:100%}
+  .pay-query-range input[type=date]{flex:1;width:auto;min-width:0}
+}
 
 /* avatar */
 .av{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;flex-shrink:0}
@@ -1244,8 +1275,25 @@ button.btn-loading::after{content:'…';margin-left:2px}
           </div>
         </div>
         <div class="pay-list-wrap">
-          <div class="pay-list-head">已送出的付款申請</div>
-          <div id="pay-list-area"><div style="padding:8px 0;color:var(--t3);font-size:12px">載入中...</div></div>
+          <div class="pay-list-head">
+            <span>已送出的付款申請</span>
+            <span class="pay-list-head-count" id="pay-list-count"></span>
+          </div>
+          <div class="pay-query-bar">
+            <div class="pay-query-presets">
+              <button type="button" class="pay-query-btn active" data-pay-preset="week" onclick="setPayListPreset('week')">本週</button>
+              <button type="button" class="pay-query-btn" data-pay-preset="last" onclick="setPayListPreset('last')">上週</button>
+              <button type="button" class="pay-query-btn" data-pay-preset="month" onclick="setPayListPreset('month')">本月</button>
+              <button type="button" class="pay-query-btn" data-pay-preset="all" onclick="setPayListPreset('all')">全部</button>
+            </div>
+            <div class="pay-query-range">
+              <span class="pay-query-range-label">區間</span>
+              <input type="date" id="pay-range-from" onchange="onPayListRangeChange()">
+              <span class="pay-query-range-sep">~</span>
+              <input type="date" id="pay-range-to" onchange="onPayListRangeChange()">
+            </div>
+          </div>
+          <div id="pay-list-area"><div class="pay-sheet-empty">載入中...</div></div>
         </div>
       </div>
     </div>
@@ -4693,6 +4741,7 @@ var paymentsData = [];
 var payPendingAttachments = [];
 var payAttachmentUploading = 0;
 var paySubmitting = false;
+var payListPreset = 'week';
 var membersMap = {};
 var currentLoginUser = null;
 var loginUserReady = false;
@@ -12697,43 +12746,199 @@ function ensurePaymentsLoaded() {
   return syncTables(['payments']);
 }
 
+function payMondayOf(d) {
+  var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  var day = x.getDay();
+  x.setDate(x.getDate() + (day === 0 ? -6 : 1 - day));
+  return x;
+}
+
+function payListRangeForPreset(preset) {
+  var now = new Date();
+  now.setHours(0, 0, 0, 0);
+  if (preset === 'all') return { from: '', to: '' };
+  if (preset === 'month') {
+    return {
+      from: tsToDateInput(new Date(now.getFullYear(), now.getMonth(), 1)),
+      to: tsToDateInput(new Date(now.getFullYear(), now.getMonth() + 1, 0))
+    };
+  }
+  var mon = payMondayOf(now);
+  if (preset === 'last') {
+    var lastMon = new Date(mon);
+    lastMon.setDate(lastMon.getDate() - 7);
+    var lastSun = new Date(mon);
+    lastSun.setDate(lastSun.getDate() - 1);
+    return { from: tsToDateInput(lastMon), to: tsToDateInput(lastSun) };
+  }
+  var sun = new Date(mon);
+  sun.setDate(sun.getDate() + 6);
+  return { from: tsToDateInput(mon), to: tsToDateInput(sun) };
+}
+
+function syncPayListRangeInputs(from, to) {
+  var fromEl = document.getElementById('pay-range-from');
+  var toEl = document.getElementById('pay-range-to');
+  if (fromEl) fromEl.value = from || '';
+  if (toEl) toEl.value = to || '';
+}
+
+function syncPayListPresetButtons() {
+  document.querySelectorAll('[data-pay-preset]').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-pay-preset') === payListPreset);
+  });
+}
+
+function setPayListPreset(preset) {
+  payListPreset = preset || 'week';
+  var range = payListRangeForPreset(payListPreset);
+  syncPayListRangeInputs(range.from, range.to);
+  syncPayListPresetButtons();
+  renderPaymentsList();
+}
+
+function onPayListRangeChange() {
+  payListPreset = 'custom';
+  syncPayListPresetButtons();
+  renderPaymentsList();
+}
+
+function paymentDateInQuery(f) {
+  var fromEl = document.getElementById('pay-range-from');
+  var toEl = document.getElementById('pay-range-to');
+  var fromStr = fromEl ? fromEl.value : '';
+  var toStr = toEl ? toEl.value : '';
+  if (!fromStr && !toStr) return true;
+  var recDay = tsToDateInput(f && f['申請日期']);
+  if (!recDay) return false;
+  if (fromStr && recDay < fromStr) return false;
+  if (toStr && recDay > toStr) return false;
+  return true;
+}
+
+function paymentNatureList(f) {
+  var raw = f && f['支付性質'];
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.map(function(item) {
+      if (item == null) return '';
+      if (typeof item === 'string') return item;
+      return String(item.text || item.name || item.value || '').trim();
+    }).filter(Boolean);
+  }
+  return String(raw).split(/[,，、]/).map(function(s) { return s.trim(); }).filter(Boolean);
+}
+
+function paySheetHasNature(list, key) {
+  return (list || []).some(function(n) {
+    return n === key || String(n).indexOf(key) >= 0 || key.indexOf(n) >= 0;
+  });
+}
+
+function paySheetCb(on, label) {
+  return '<label class="pay-sheet-cb' + (on ? ' on' : '') + '"><span class="pay-sheet-box">' + (on ? '✓' : '') + '</span>' + escHtml(label) + '</label>';
+}
+
+function payJiaziHtml(num) {
+  var n = Math.round(Number(num) || 0);
+  var digits = [
+    Math.floor(n / 10000000) % 10, Math.floor(n / 1000000) % 10,
+    Math.floor(n / 100000) % 10, Math.floor(n / 10000) % 10,
+    Math.floor(n / 1000) % 10, Math.floor(n / 100) % 10,
+    Math.floor(n / 10) % 10
+  ];
+  var first = -1;
+  for (var i = 0; i < digits.length; i++) {
+    if (digits[i] !== 0) { first = i; break; }
+  }
+  if (first < 0) first = 6;
+  var units = ['仟', '佰', '拾', '萬', '仟', '佰', '拾'];
+  var html = '';
+  for (var j = 0; j < 7; j++) {
+    html += '<span class="pay-sheet-digit">' + (j < first ? '' : String(digits[j])) + '</span>'
+      + '<span class="pay-sheet-unit">' + units[j] + '</span>';
+  }
+  return html + '<span class="pay-sheet-unit">元整</span>';
+}
+
+function paySheetHtml(rec) {
+  var f = rec.fields || {};
+  var status = getPaymentStatusLabel(f);
+  var stClass = status === '已核銷' ? 'std' : (status === '封存' ? 'st' : 'stp');
+  var instanceCode = String(f['審批編號'] || f['審批實例'] || f['審批單號'] || '').trim();
+  var approvalLink = instanceCode
+    ? '<a href="https://www.larksuite.com/approval/detail/' + encodeURIComponent(instanceCode) + '" target="_blank" rel="noopener">開啟審批</a>'
+    : '';
+  var natures = paymentNatureList(f);
+  var method = String(f['支付方式'] || '').trim();
+  var amount = parseFloat(f['付款總金額']) || 0;
+  var applicant = personName(f['申請人']) || fieldPlainText(f['申請人']) || '—';
+  var dateStr = fmtDate(f['申請日期']);
+  var dateBits = dateStr && dateStr !== '—' ? dateStr.split('/') : [];
+  var dateLine = dateBits.length === 3
+    ? ('申請日期：' + dateBits[0] + ' 年 ' + parseInt(dateBits[1], 10) + ' 月 ' + parseInt(dateBits[2], 10) + ' 日')
+    : ('申請日期：' + (dateStr || '—'));
+  var attachN = getPaymentAttachCount(f);
+  var natureKeys = ['貨款', '工程款', '薪工資', '公用事業費用', '交際', '稅捐', '勞健退', '租金', '差旅', '其他'];
+  var natureHtml = natureKeys.map(function(key) {
+    return paySheetCb(paySheetHasNature(natures, key), key);
+  }).join('');
+  return '<article class="pay-sheet">'
+    + '<div class="pay-sheet-top"><span class="pay-sheet-co">元頂集團</span><span><span class="st ' + stClass + '">' + escHtml(status) + '</span>'
+    + (attachN ? ' · 附件 ' + attachN + ' 件' : '')
+    + (approvalLink ? ' · ' + approvalLink : '')
+    + '</span></div>'
+    + '<div class="pay-sheet-title">付款申請單</div>'
+    + '<div class="pay-sheet-date">' + escHtml(dateLine) + '</div>'
+    + '<table><tr>'
+    + '<td class="lc">申請<br>部門</td><td>' + escHtml(f['申請部門'] || '—') + '</td>'
+    + '<td class="lc">支付<br>對象</td><td>' + escHtml(f['支付對象'] || '—') + '</td>'
+    + '<td class="lc">廠商<br>名稱</td><td>' + escHtml(f['廠商名稱'] || '—') + '</td>'
+    + '</tr><tr>'
+    + '<td class="lc">支付<br>性質</td><td colspan="3"><div class="pay-sheet-cbs">' + natureHtml + '</div></td>'
+    + '<td class="lc">支付<br>方式</td><td>'
+    + paySheetCb(method === '匯款', '匯款') + paySheetCb(method === '支票', '支票') + paySheetCb(method === '現金', '現金')
+    + '</td></tr><tr>'
+    + '<td class="lc">事由</td><td colspan="3">' + escHtml(f['事由'] || '') + '</td>'
+    + '<td class="lc">備<br>註</td><td>' + escHtml(f['備註'] || '') + '</td>'
+    + '</tr><tr>'
+    + '<td class="lc" colspan="2">付款總金額：</td>'
+    + '<td colspan="3"><div class="pay-sheet-jiazi">' + payJiaziHtml(amount) + '</div></td>'
+    + '<td style="font-weight:700">' + ntf(amount) + '</td>'
+    + '</tr><tr><td colspan="6"><div class="pay-sheet-sign">'
+    + '<div>董事長室：</div><div>主管：</div><div>申請人：' + escHtml(applicant) + '</div>'
+    + '</div></td></tr></table>'
+    + '<div class="pay-sheet-foot"><span>版本：01-2020-12</span><span>財務部/主管：＿＿＿＿　出納：＿＿＿＿　會計：＿＿＿＿</span></div>'
+    + '</article>';
+}
+
 function renderPaymentsList() {
   var area = document.getElementById('pay-list-area');
+  var countEl = document.getElementById('pay-list-count');
   if (!area) return;
+  var fromEl = document.getElementById('pay-range-from');
+  if (fromEl && payListPreset !== 'custom' && !fromEl.value && payListPreset !== 'all') {
+    var range = payListRangeForPreset(payListPreset);
+    syncPayListRangeInputs(range.from, range.to);
+  }
   if (!paymentsData.length) {
-    area.innerHTML = '<div style="padding:8px 0;color:var(--t3);font-size:12px">尚無已送出的付款申請</div>';
+    area.innerHTML = '<div class="pay-sheet-empty">尚無已送出的付款申請</div>';
+    if (countEl) countEl.textContent = '';
     return;
   }
-  var rows = paymentsData.slice().sort(function(a, b) {
+  var rows = paymentsData.filter(function(rec) {
+    return paymentDateInQuery(rec.fields || {});
+  }).sort(function(a, b) {
     var da = Number((a.fields && a.fields['申請日期']) || 0);
     var db = Number((b.fields && b.fields['申請日期']) || 0);
     return db - da;
   });
-  var html = '<div style="overflow-x:auto"><table class="dt"><thead><tr>'
-    + '<th>日期</th><th>標案</th><th>申請人</th><th>支付對象</th><th>事由</th><th>金額</th><th>附件</th><th>狀態</th><th>審批</th>'
-    + '</tr></thead><tbody>';
-  rows.forEach(function(rec) {
-    var f = rec.fields || {};
-    var status = getPaymentStatusLabel(f);
-    var stClass = status === '已核銷' ? 'std' : (status === '封存' ? 'st' : 'stp');
-    var amount = parseFloat(f['付款總金額']) || 0;
-    var attachN = getPaymentAttachCount(f);
-    var instanceCode = String(f['審批編號'] || f['審批實例'] || f['審批單號'] || '').trim();
-    var approvalCell = instanceCode
-      ? '<a href="https://www.larksuite.com/approval/detail/' + encodeURIComponent(instanceCode) + '" target="_blank" rel="noopener">開啟</a>'
-      : '—';
-    html += '<tr><td>' + escHtml(fmtDate(f['申請日期']) || '—') + '</td>'
-      + '<td>' + escHtml(getPaymentProjectName(f)) + '</td>'
-      + '<td>' + escHtml(personName(f['申請人']) || fieldPlainText(f['申請人']) || '—') + '</td>'
-      + '<td>' + escHtml(f['支付對象'] || '—') + '</td>'
-      + '<td>' + escHtml(f['事由'] || '—') + '</td>'
-      + '<td style="font-weight:600">' + ntf(amount) + '</td>'
-      + '<td>' + (attachN ? attachN + ' 件' : '—') + '</td>'
-      + '<td><span class="st ' + stClass + '">' + escHtml(status) + '</span></td>'
-      + '<td>' + approvalCell + '</td></tr>';
-  });
-  html += '</tbody></table></div>';
-  area.innerHTML = html;
+  if (countEl) countEl.textContent = rows.length + ' 筆';
+  if (!rows.length) {
+    area.innerHTML = '<div class="pay-sheet-empty">此區間沒有付款申請</div>';
+    return;
+  }
+  area.innerHTML = rows.map(paySheetHtml).join('');
 }
 
 // ── 設計任務單 ──
