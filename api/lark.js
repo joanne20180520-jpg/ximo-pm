@@ -2256,15 +2256,21 @@ async function fetchLarkUserDisplayName(token, userId) {
 
 async function pendingApproverFromApprovalDetail(token, detail, peopleLookup) {
   const tasks = (detail && detail.task_list) || [];
-  for (let i = 0; i < tasks.length; i++) {
-    const task = tasks[i];
-    if (String(task.status || '').toUpperCase() !== 'PENDING') continue;
+  const pendingTasks = tasks.filter(function(task) {
+    const st = String(task.status || '').toUpperCase();
+    return st === 'PENDING' || st === 'IN_PROGRESS' || st === 'PROCESSING';
+  });
+  const ordered = pendingTasks.length ? pendingTasks : tasks.filter(function(task) {
+    const st = String(task.status || '').toUpperCase();
+    return st !== 'APPROVED' && st !== 'REJECTED' && st !== 'DONE' && st !== 'CANCELED';
+  });
+  for (let i = 0; i < ordered.length; i++) {
+    const task = ordered[i];
     if (task.user_name) return cleanApproverDisplayName(String(task.user_name));
-    const uid = String(task.user_id || task.open_id || '').trim();
+    const uid = String(task.open_id || task.user_id || '').trim();
     if (uid && peopleLookup[uid]) return peopleLookup[uid];
     const fromApi = await fetchLarkUserDisplayName(token, uid);
     if (fromApi) return fromApi;
-    return '';
   }
   return '';
 }
