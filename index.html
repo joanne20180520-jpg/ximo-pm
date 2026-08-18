@@ -1980,9 +1980,10 @@ function sw(btn,id){
   if(id==='pg-p') {
     applyLoginUserToForms();
     fillPaymentProjectSelects();
+    renderPaymentsList();
     ensurePaymentsLoaded().then(function(res) {
       renderPaymentsList();
-      if (res && res.sync && res.sync.updated > 0) renderExpenses();
+      if (res && res.sync && (res.sync.updated > 0 || res.sync.removedDupes > 0)) renderExpenses();
     });
   }
   if(id==='pg-ai') { renderAiPage(); syncAiComposerBounds(); }
@@ -12725,7 +12726,8 @@ function getPaymentAttachCount(f) {
 function syncPaymentApprovals() {
   return fetch(apiUrl('action=sync-payment-approvals')).then(function(r) { return r.json(); }).then(function(res) {
     if (res && res.payments && res.payments.records) paymentsData = res.payments.records;
-    if (res && res.sync && res.sync.updated > 0) {
+    renderPaymentsList();
+    if (res && res.sync && (res.sync.updated > 0 || res.sync.removedDupes > 0)) {
       return syncTables(['expenses']).then(function() { return res; });
     }
     return res;
@@ -12733,25 +12735,18 @@ function syncPaymentApprovals() {
 }
 
 function ensurePaymentsLoaded() {
-  function loadAfterSync() {
-    return syncPaymentApprovals().catch(function() {
-      return syncTables(['payments']);
-    }).then(function(res) {
-      if (!paymentsData.length) return syncTables(['payments']);
-      if (res && res.sync && res.sync.updated > 0) renderPaymentsList();
-      return res;
-    });
-  }
-  if (paymentsData && paymentsData.length && deferredDataReady) {
+  var first = (paymentsData && paymentsData.length)
+    ? Promise.resolve()
+    : (!deferredDataReady
+      ? loadDeferredTables({ silent: true }).then(function() {
+          if (paymentsData && paymentsData.length) return;
+          return syncTables(['payments']);
+        })
+      : syncTables(['payments']));
+  return first.then(function() {
+    renderPaymentsList();
     return syncPaymentApprovals().catch(function() { return null; });
-  }
-  if (!deferredDataReady) {
-    return loadDeferredTables({ silent: true }).then(function() {
-      if (paymentsData && paymentsData.length) return syncPaymentApprovals().catch(function() { return null; });
-      return loadAfterSync();
-    });
-  }
-  return loadAfterSync();
+  });
 }
 
 function payMondayOf(d) {

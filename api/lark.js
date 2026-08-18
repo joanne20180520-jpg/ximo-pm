@@ -2248,15 +2248,24 @@ async function resolvePaymentInstanceCode(token, paymentRec, widgets, detailCach
   const fields = paymentRec.fields || {};
   let code = paymentApprovalInstanceCode(fields);
   if (code) return code;
+  const cachedCodes = Object.keys(detailCache || {});
+  for (let i = 0; i < cachedCodes.length; i++) {
+    const ic = cachedCodes[i];
+    const formValues = parseApprovalInstanceForm(detailCache[ic], widgets);
+    if (paymentMatchesApprovalForm(fields, formValues)) {
+      try { await writePaymentApprovalCode(token, null, paymentRec.record_id, ic); } catch (e) {}
+      return ic;
+    }
+  }
   const appDate = parsePaymentTs(fields['申請日期']);
-  if (!appDate) return '';
+  if (!appDate || cachedCodes.length) return '';
   const approvalCode = paymentApprovalCode();
   if (!approvalCode) return '';
   const startMs = appDate.getTime() - 86400000;
   const endMs = appDate.getTime() + 14 * 86400000;
   const codes = await listApprovalInstanceCodes(token, approvalCode, startMs, endMs);
-  for (let i = 0; i < codes.length; i++) {
-    const ic = codes[i];
+  for (let j = 0; j < codes.length; j++) {
+    const ic = codes[j];
     let detail = detailCache[ic];
     if (!detail) {
       detail = await getApprovalInstanceDetail(token, ic);
@@ -2264,9 +2273,7 @@ async function resolvePaymentInstanceCode(token, paymentRec, widgets, detailCach
     }
     const formValues = parseApprovalInstanceForm(detail, widgets);
     if (paymentMatchesApprovalForm(fields, formValues)) {
-      try {
-        await writePaymentApprovalCode(token, null, paymentRec.record_id, ic);
-      } catch (e) {}
+      try { await writePaymentApprovalCode(token, null, paymentRec.record_id, ic); } catch (e) {}
       return ic;
     }
   }
@@ -2301,10 +2308,50 @@ function buildExpenseFieldsFromPayment(fields, paymentRecordId) {
   return expense;
 }
 
-async function createExpenseFromPayment(tenantToken, paymentRecordId, fields) {
+function expenseLinkedPaymentId(fields) {
+  const remark = String((fields && (fields['備註'] || fields['說明'])) || '');
+  const m = remark.match(/payment:([A-Za-z0-9_-]+)/);
+  return m ? m[1] : '';
+}
+
+async function loadExpenseRecords(tenantToken) {
+  const tableId = tableIdFor('expenses');
+  const appToken = appTokenForTable('expenses');
+  if (!tableId || !appToken) return [];
+  return getRecords(tenantToken, tableId, appToken);
+}
+
+async function findExpenseIdsForPayment(tenantToken, paymentRecordId, expenseCache) {
+  const rows = expenseCache || await loadExpenseRecords(tenantToken);
+  return rows.filter(function(rec) {
+    return expenseLinkedPaymentId(rec.fields || {}) === paymentRecordId;
+  }).map(function(rec) { return rec.record_id; });
+}
+
+async function deleteDuplicatePaymentExpenses(tenantToken, keepId, extraIds) {
+  const tableId = tableIdFor('expenses');
+  const appToken = appTokenForTable('expenses');
+  if (!tableId || !appToken || !keepId) return 0;
+  let removed = 0;
+  for (let i = 0; i < extraIds.length; i++) {
+    if (!extraIds[i] || extraIds[i] === keepId) continue;
+    try {
+      await deleteRecord(tenantToken, tableId, extraIds[i], appToken, false);
+      removed++;
+    } catch (e) {}
+  }
+  return removed;
+}
+
+async function createExpenseFromPayment(tenantToken, paymentRecordId, fields, expenseCache) {
   const tableId = tableIdFor('expenses');
   const appToken = appTokenForTable('expenses');
   if (!tableId || !appToken) throw new Error('找不到支出明細資料表');
+  const existing = await findExpenseIdsForPayment(tenantToken, paymentRecordId, expenseCache);
+  if (existing.length) {
+    await deleteDuplicatePaymentExpenses(tenantToken, existing[0], existing.slice(1));
+    return existing[0];
+  }
   const body = await normalizeWriteFields(
     tenantToken,
     tableId,
@@ -2313,10 +2360,14 @@ async function createExpenseFromPayment(tenantToken, paymentRecordId, fields) {
   );
   if (!body || !Object.keys(body).length) throw new Error('支出明細欄位無法寫入');
   const res = await createRecord(tenantToken, tableId, body, appToken, false);
-  return extractRecordId(res);
+  const id = extractRecordId(res);
+  if (id && expenseCache) {
+    expenseCache.push({ record_id: id, fields: body });
+  }
+  return id;
 }
 
-async function finalizeApprovedPaymentRecord(tenantToken, paymentRec) {
+async function finalizeApprovedPaymentRecord(tenantToken, paymentRec, expenseCache) {
   const recordId = paymentRec.record_id;
   const fields = paymentRec.fields || {};
   const frontCfg = paymentsFrontConfig();
@@ -2324,8 +2375,14 @@ async function finalizeApprovedPaymentRecord(tenantToken, paymentRec) {
   if (!tableId) throw new Error('找不到付款資料表');
 
   let expenseId = getLinkIds(fields['支出明細'] || fields['關聯支出'])[0] || '';
+  const existing = await findExpenseIdsForPayment(tenantToken, recordId, expenseCache);
+  if (!expenseId && existing.length) expenseId = existing[0];
+  if (existing.length > 1) {
+    await deleteDuplicatePaymentExpenses(tenantToken, expenseId || existing[0], existing);
+    expenseId = expenseId || existing[0];
+  }
   if (!expenseId) {
-    expenseId = await createExpenseFromPayment(tenantToken, recordId, fields);
+    expenseId = await createExpenseFromPayment(tenantToken, recordId, fields, expenseCache);
   }
 
   const updateFields = { '狀態': '已核銷' };
@@ -2340,17 +2397,66 @@ async function finalizeApprovedPaymentRecord(tenantToken, paymentRec) {
   return { recordId: recordId, expenseId: expenseId, status: '已核銷' };
 }
 
+async function dedupePaymentExpenses(tenantToken, expenseCache) {
+  const rows = expenseCache || await loadExpenseRecords(tenantToken);
+  const grouped = {};
+  rows.forEach(function(rec) {
+    const pid = expenseLinkedPaymentId(rec.fields || {});
+    if (pid) {
+      if (!grouped[pid]) grouped[pid] = [];
+      grouped[pid].push(rec.record_id);
+      return;
+    }
+    const f = rec.fields || {};
+    const name = String(f['支出細項'] || '');
+    if (name.indexOf('｜') < 0 && name.indexOf('|') < 0) return;
+    const amount = paymentAmountNumber({ '付款總金額': f['實際金額'] });
+    const date = String(f['日期'] || '');
+    if (!amount || !name) return;
+    const key = 'same:' + name + '|' + amount + '|' + date;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(rec.record_id);
+  });
+  let removed = 0;
+  const ids = Object.keys(grouped);
+  for (let i = 0; i < ids.length; i++) {
+    const list = grouped[ids[i]];
+    if (list.length < 2) continue;
+    removed += await deleteDuplicatePaymentExpenses(tenantToken, list[0], list.slice(1));
+  }
+  return removed;
+}
+
+let paymentApprovalSyncInflight = null;
+
 async function syncPendingPaymentApprovals(tenantToken) {
+  if (paymentApprovalSyncInflight) return paymentApprovalSyncInflight;
+  paymentApprovalSyncInflight = syncPendingPaymentApprovalsInner(tenantToken).finally(function() {
+    paymentApprovalSyncInflight = null;
+  });
+  return paymentApprovalSyncInflight;
+}
+
+async function syncPendingPaymentApprovalsInner(tenantToken) {
   const frontCfg = paymentsFrontConfig();
   const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
-  if (!tableId) return { checked: 0, updated: 0, errors: [] };
+  if (!tableId) return { checked: 0, updated: 0, removedDupes: 0, errors: [] };
 
   const records = await getRecords(tenantToken, tableId, frontCfg.appToken);
   const pending = records.filter(function(rec) {
     const status = paymentRecordStatus(rec.fields || {});
     return isPaymentPendingStatus(status);
   });
-  if (!pending.length) return { checked: 0, updated: 0, errors: [] };
+
+  let expenseCache = [];
+  try { expenseCache = await loadExpenseRecords(tenantToken); } catch (e) { expenseCache = []; }
+  const removedDupes = await dedupePaymentExpenses(tenantToken, expenseCache);
+  if (removedDupes) {
+    try { expenseCache = await loadExpenseRecords(tenantToken); } catch (e) {}
+  }
+
+  const results = { checked: pending.length, updated: 0, removedDupes: removedDupes, errors: [], details: [] };
+  if (!pending.length) return results;
 
   let widgets = [];
   try {
@@ -2359,7 +2465,28 @@ async function syncPendingPaymentApprovals(tenantToken) {
   } catch (e) {}
 
   const detailCache = {};
-  const results = { checked: pending.length, updated: 0, errors: [], details: [] };
+  const missingCode = pending.filter(function(rec) { return !paymentApprovalInstanceCode(rec.fields || {}); });
+  if (missingCode.length) {
+    let minTs = Date.now();
+    let maxTs = 0;
+    missingCode.forEach(function(rec) {
+      const d = parsePaymentTs((rec.fields || {})['申請日期']);
+      if (!d) return;
+      const t = d.getTime();
+      if (t < minTs) minTs = t;
+      if (t > maxTs) maxTs = t;
+    });
+    if (maxTs >= minTs) {
+      try {
+        const codes = await listApprovalInstanceCodes(tenantToken, paymentApprovalCode(), minTs - 86400000, maxTs + 14 * 86400000);
+        for (let ci = 0; ci < codes.length; ci++) {
+          try {
+            detailCache[codes[ci]] = await getApprovalInstanceDetail(tenantToken, codes[ci]);
+          } catch (e) {}
+        }
+      } catch (e) {}
+    }
+  }
 
   for (let i = 0; i < pending.length; i++) {
     const rec = pending[i];
@@ -2370,7 +2497,7 @@ async function syncPendingPaymentApprovals(tenantToken) {
       detailCache[instanceCode] = detail;
       const st = String(detail.status || '').trim().toUpperCase();
       if (st !== 'APPROVED') continue;
-      const out = await finalizeApprovedPaymentRecord(tenantToken, rec);
+      const out = await finalizeApprovedPaymentRecord(tenantToken, rec, expenseCache);
       results.updated++;
       results.details.push({
         recordId: rec.record_id,
@@ -4679,11 +4806,10 @@ async function fetchTableRecordsSafe(token, tableKey) {
     const cfg = paymentsFrontConfig();
     if (!cfg.appToken) return { records: [], error: 'payments app token missing' };
     try {
-      const sync = await syncPendingPaymentApprovals(token);
       const tableId = await resolvePaymentsTableId(token, cfg.appToken, cfg.tableId);
-      if (!tableId) return { records: [], error: 'Invalid table: payments', approvalSync: sync };
+      if (!tableId) return { records: [], error: 'Invalid table: payments' };
       const records = await getRecords(token, tableId, cfg.appToken);
-      return { records: records, approvalSync: sync };
+      return { records: records };
     } catch (err) {
       console.error('bootstrap payments', err);
       return { records: [], error: err.message || String(err) };
@@ -5125,12 +5251,11 @@ export default async function handler(req, res) {
       if (table === 'payments') {
         try {
           const token = await getToken();
-          const sync = await syncPendingPaymentApprovals(token);
           const cfg = paymentsFrontConfig();
           const tableId = await resolvePaymentsTableId(token, cfg.appToken, cfg.tableId);
           if (!tableId) return res.status(400).json({ error: 'Invalid table: payments' });
           const records = await getRecords(token, tableId, cfg.appToken);
-          return res.status(200).json({ records: records, approvalSync: sync });
+          return res.status(200).json({ records: records });
         } catch (err) {
           console.error('GET payments', err);
           return res.status(200).json({ records: [], error: err.message });
