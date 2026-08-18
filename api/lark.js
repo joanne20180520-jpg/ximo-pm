@@ -1769,6 +1769,9 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
     '狀態': ['審核狀態'],
     '審批編號': ['審批實例', '審批單號', 'instance_code'],
     '待簽核人': ['待签核人', 'Pending Approver'],
+    '會計狀態': ['會計進度', 'Accounting Status'],
+    '會計待簽核人': ['會計簽核人'],
+    '會計審批編號': ['會計審批實例'],
     '支出明細': ['關聯支出', '支出紀錄']
   };
   // yd 工作項目表欄位為「可用成本未稅」；前端仍寫「可用成本」
@@ -1900,6 +1903,10 @@ async function resolvePaymentsTableId(token, appToken, preferredId) {
 
 function paymentApprovalCode() {
   return (process.env.LARK_PAYMENT_APPROVAL_CODE || '6FA791B1-2767-4621-86B4-98E22D2E86E4').trim();
+}
+
+function paymentCashApprovalCode() {
+  return (process.env.LARK_PAYMENT_CASH_APPROVAL_CODE || '').trim();
 }
 
 function paymentFieldText(fields, names) {
@@ -2156,6 +2163,172 @@ async function writePaymentPendingApprover(tenantToken, recordId, approverName) 
   if (!body || !Object.keys(body).length) return false;
   await updateRecord(tenantToken, tableId, recordId, body, frontCfg.appToken, false);
   return true;
+}
+
+const ACCOUNTING_NAME_ALIASES = {
+  irisa: ['詹佳瑜', 'Irisa'],
+  su: ['蘇芳玉', '艾莉'],
+  lu: ['盧存莉', 'NINO', 'Nino']
+};
+
+function paymentMethodKind(fields) {
+  const raw = String((fields && (fields['支付方式'] || fields['付款方式'])) || '').trim();
+  if (raw.indexOf('現金') >= 0) return 'cash';
+  return 'wire';
+}
+
+function paymentAccountingStatus(fields) {
+  return String((fields && (fields['會計狀態'] || fields['會計進度'])) || '').trim();
+}
+
+function isAccountingDelivered(fields) {
+  return paymentAccountingStatus(fields) === '已送達詹佳瑜';
+}
+
+function isXimoSignerName(name) {
+  return /蔡宜君|顏楨祐|蔡清德|謝政易|董事長/.test(String(name || ''));
+}
+
+function matchAccountingAlias(name, aliases) {
+  const n = String(name || '').replace(/\s+/g, '');
+  if (!n) return false;
+  for (let i = 0; i < aliases.length; i++) {
+    const a = String(aliases[i] || '').replace(/\s+/g, '');
+    if (!a) continue;
+    if (n === a || n.indexOf(a) >= 0 || a.indexOf(n) >= 0) return true;
+  }
+  return false;
+}
+
+function accountingPersonKeyFromName(name) {
+  if (matchAccountingAlias(name, ACCOUNTING_NAME_ALIASES.su)) return 'su';
+  if (matchAccountingAlias(name, ACCOUNTING_NAME_ALIASES.lu)) return 'lu';
+  if (matchAccountingAlias(name, ACCOUNTING_NAME_ALIASES.irisa)) return 'irisa';
+  return '';
+}
+
+function isXimoStageCompleteForAccounting(approvalStatus, pendingName) {
+  const st = String(approvalStatus || '').toUpperCase();
+  if (st === 'APPROVED') return true;
+  if (st !== 'PENDING') return false;
+  const key = accountingPersonKeyFromName(pendingName);
+  return key === 'su' || key === 'lu' || key === 'irisa';
+}
+
+async function findAccountingPerson(tenantToken, key) {
+  const aliases = ACCOUNTING_NAME_ALIASES[key] || [];
+  if (!aliases.length) return { name: aliases[0] || '', openId: '' };
+  try {
+    const members = await getRecords(
+      tenantToken,
+      tableIdFor('members'),
+      appTokenForTable('members'),
+      { userIdType: 'open_id' }
+    );
+    for (let i = 0; i < members.length; i++) {
+      const mf = members[i].fields || {};
+      const name = getMemberName(mf) || personDisplayName(mf['姓名'] || mf['帳號']);
+      if (!matchAccountingAlias(name, aliases)) continue;
+      return { name: cleanApproverDisplayName(name) || aliases[0], openId: getMemberPersonOpenId(mf) };
+    }
+  } catch (e) {}
+  return { name: aliases[0] || '', openId: '' };
+}
+
+async function writePaymentAccountingRoute(tenantToken, recordId, patch) {
+  if (!recordId || !patch) return false;
+  const frontCfg = paymentsFrontConfig();
+  const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
+  if (!tableId) return false;
+  const fields = {
+    '會計狀態': patch.status || '',
+    '會計待簽核人': patch.approver || '',
+    '待簽核人': patch.approver || ''
+  };
+  if (patch.acctInstanceCode) fields['會計審批編號'] = patch.acctInstanceCode;
+  const body = await normalizeWriteFields(tenantToken, tableId, fields, frontCfg.appToken);
+  if (!body || !Object.keys(body).length) return false;
+  await updateRecord(tenantToken, tableId, recordId, body, frontCfg.appToken, false);
+  return true;
+}
+
+async function notifyAccountingPerson(tenantToken, person, text) {
+  if (!person || !person.openId) return { ok: false, skipped: true };
+  return sendImTextToOpenId(tenantToken, person.openId, text);
+}
+
+function buildAccountingNotifyText(title, fields, extra) {
+  const amount = paymentAmountNumber(fields);
+  const lines = [
+    title,
+    '申請人：' + paymentApplicantText(fields),
+    '支付對象：' + String((fields && fields['支付對象']) || ''),
+    '支付方式：' + String((fields && (fields['支付方式'] || fields['付款方式'])) || ''),
+    '事由：' + String((fields && fields['事由']) || ''),
+    '金額：NT$' + (amount ? amount.toLocaleString() : '0')
+  ];
+  if (extra) lines.push(extra);
+  return lines.join('\n');
+}
+
+async function routeApprovedPaymentToAccounting(tenantToken, paymentRec, opts) {
+  const rec = paymentRec || {};
+  const fields = rec.fields || {};
+  if (isAccountingDelivered(fields)) return { skipped: true, status: '已送達詹佳瑜' };
+  const kind = paymentMethodKind(fields);
+  const pendingName = String((opts && opts.pendingApprover) || '').trim();
+  const approvalStatus = String((opts && opts.approvalStatus) || '').toUpperCase();
+  const personKey = accountingPersonKeyFromName(pendingName);
+  const current = paymentAccountingStatus(fields);
+
+  let nextStatus = '已送達詹佳瑜';
+  let nextApprover = '詹佳瑜';
+  let notifyKey = 'irisa';
+  if (kind === 'cash') {
+    if (personKey === 'su') {
+      nextStatus = '待蘇芳玉簽核';
+      nextApprover = '蘇芳玉';
+      notifyKey = 'su';
+    } else if (personKey === 'lu') {
+      nextStatus = '待盧存莉簽核';
+      nextApprover = '盧存莉';
+      notifyKey = 'lu';
+    } else if (current === '待盧存莉簽核' || personKey === 'irisa') {
+      nextStatus = '已送達詹佳瑜';
+      nextApprover = '詹佳瑜';
+      notifyKey = 'irisa';
+    } else {
+      nextStatus = current === '待盧存莉簽核' ? '待盧存莉簽核' : '待蘇芳玉簽核';
+      nextApprover = nextStatus === '待盧存莉簽核' ? '盧存莉' : '蘇芳玉';
+      notifyKey = nextStatus === '待盧存莉簽核' ? 'lu' : 'su';
+    }
+  }
+
+  if (current === nextStatus) return { skipped: true, status: nextStatus };
+
+  const person = await findAccountingPerson(tenantToken, notifyKey);
+  const display = person.name || nextApprover;
+  await writePaymentAccountingRoute(tenantToken, rec.record_id, {
+    status: nextStatus,
+    approver: nextStatus === '已送達詹佳瑜' ? '詹佳瑜' : display
+  });
+  rec.fields = rec.fields || {};
+  rec.fields['會計狀態'] = nextStatus;
+  rec.fields['會計待簽核人'] = nextStatus === '已送達詹佳瑜' ? '詹佳瑜' : display;
+  rec.fields['待簽核人'] = rec.fields['會計待簽核人'];
+
+  let extra = '';
+  if (nextStatus === '已送達詹佳瑜') extra = '請自行列印付款申請單與附件給夏桂英。';
+  else extra = '請在 Lark 審批蓋章。蓋完後會送到詹佳瑜。';
+  const title = nextStatus === '已送達詹佳瑜'
+    ? '【付款申請·已送到詹佳瑜】'
+    : ('【付款申請·現金待蓋章】' + nextStatus);
+  const notified = await notifyAccountingPerson(
+    tenantToken,
+    person,
+    buildAccountingNotifyText(title, fields, extra)
+  );
+  return { status: nextStatus, notified: !!(notified && notified.ok), person: display };
 }
 
 function paymentRecordStatus(fields) {
@@ -2517,9 +2690,10 @@ async function createExpenseFromPayment(tenantToken, paymentRecordId, fields, ex
   return id;
 }
 
-async function finalizeApprovedPaymentRecord(tenantToken, paymentRec, expenseCache) {
-  const recordId = paymentRec.record_id;
-  const fields = paymentRec.fields || {};
+async function finalizeApprovedPaymentRecord(tenantToken, paymentRec, expenseCache, opts) {
+  const rec = paymentRec || {};
+  const recordId = rec.record_id;
+  const fields = rec.fields || {};
   const frontCfg = paymentsFrontConfig();
   const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
   if (!tableId) throw new Error('找不到付款資料表');
@@ -2535,7 +2709,7 @@ async function finalizeApprovedPaymentRecord(tenantToken, paymentRec, expenseCac
     expenseId = await createExpenseFromPayment(tenantToken, recordId, fields, expenseCache);
   }
 
-  const updateFields = { '狀態': '已核銷', '待簽核人': '' };
+  const updateFields = { '狀態': '已核銷' };
   if (expenseId) {
     updateFields['支出明細'] = [expenseId];
     updateFields['關聯支出'] = [expenseId];
@@ -2544,7 +2718,14 @@ async function finalizeApprovedPaymentRecord(tenantToken, paymentRec, expenseCac
   if (body && Object.keys(body).length) {
     await updateRecord(tenantToken, tableId, recordId, body, frontCfg.appToken, false);
   }
-  return { recordId: recordId, expenseId: expenseId, status: '已核銷' };
+  rec.fields = Object.assign({}, fields, { '狀態': '已核銷' });
+  let accounting = null;
+  try {
+    accounting = await routeApprovedPaymentToAccounting(tenantToken, rec, opts || {});
+  } catch (e) {
+    accounting = { error: e.message || String(e) };
+  }
+  return { recordId: recordId, expenseId: expenseId, status: '已核銷', accounting: accounting };
 }
 
 async function dedupePaymentExpenses(tenantToken, expenseCache) {
@@ -2597,7 +2778,7 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
     const fields = rec.fields || {};
     const status = paymentRecordStatus(fields);
     if (isPaymentPendingStatus(status)) return true;
-    if (!paymentApprovalInstanceCode(fields) && isPaymentApprovedStatus(status)) return true;
+    if (isPaymentApprovedStatus(status) && !isAccountingDelivered(fields)) return true;
     return false;
   });
 
@@ -2664,7 +2845,13 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
     const pending = isPaymentPendingStatus(status);
     try {
       const instanceCode = await resolvePaymentInstanceCode(tenantToken, rec, widgets, detailCache);
-      if (!instanceCode) continue;
+      if (!instanceCode) {
+        if (!pending && isPaymentApprovedStatus(status)) {
+          const routed = await routeApprovedPaymentToAccounting(tenantToken, rec, { approvalStatus: 'APPROVED' });
+          if (routed && !routed.skipped) results.updated++;
+        }
+        continue;
+      }
       const detail = detailCache[instanceCode] || await getApprovalInstanceDetail(tenantToken, instanceCode);
       detailCache[instanceCode] = detail;
       const st = String(detail.status || '').trim().toUpperCase();
@@ -2683,14 +2870,26 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
         rec.fields['審批編號'] = instanceCode;
       }
 
-      if (pending && st === 'APPROVED') {
-        const out = await finalizeApprovedPaymentRecord(tenantToken, rec, expenseCache);
+      if (pending && (st === 'APPROVED' || isXimoStageCompleteForAccounting(st, approver))) {
+        const out = await finalizeApprovedPaymentRecord(tenantToken, rec, expenseCache, {
+          pendingApprover: approver,
+          approvalStatus: st
+        });
         results.updated++;
         results.details.push({
           recordId: rec.record_id,
           instanceCode: instanceCode,
-          expenseId: out.expenseId
+          expenseId: out.expenseId,
+          accounting: out.accounting || null
         });
+        continue;
+      }
+      if (!pending && isPaymentApprovedStatus(status)) {
+        const routed = await routeApprovedPaymentToAccounting(tenantToken, rec, {
+          pendingApprover: approver,
+          approvalStatus: st
+        });
+        if (routed && !routed.skipped) results.updated++;
         continue;
       }
       if (pending && st === 'PENDING' && approver) {
@@ -4763,11 +4962,27 @@ function isAdminRoleToken(raw) {
   return lower === 'admin' || lower === 'administrator';
 }
 
+function isAccountantRoleToken(raw) {
+  const r = String(raw || '').trim();
+  if (!r) return false;
+  if (r === '會計' || r === '会计') return true;
+  if (r.indexOf('會計') >= 0 || r.indexOf('会计') >= 0) return true;
+  const lower = r.toLowerCase();
+  return lower === 'accounting' || lower === 'accountant' || lower === 'finance';
+}
+
+function isAccountantMemberName(name) {
+  return !!(accountingPersonKeyFromName(name));
+}
+
 function getMemberRole(fields) {
-  // 「免日報」不影響登入權限；管理員全頁；設計主管／設計師限縮設計頁
+  // 「免日報」不影響登入權限；管理員全頁；設計主管／設計師限縮設計頁；會計只看會計前台
   const tokens = collectMemberRoleTokens(fields);
   for (let i = 0; i < tokens.length; i++) {
     if (isAdminRoleToken(tokens[i])) return '管理員';
+  }
+  for (let i = 0; i < tokens.length; i++) {
+    if (isAccountantRoleToken(tokens[i])) return '會計';
   }
   for (let i = 0; i < tokens.length; i++) {
     if (isDesignLeadRoleToken(tokens[i])) return '設計主管';
@@ -4775,6 +4990,8 @@ function getMemberRole(fields) {
   for (let i = 0; i < tokens.length; i++) {
     if (isDesignerRoleToken(tokens[i])) return '設計師';
   }
+  const memberName = getMemberName(fields);
+  if (isAccountantMemberName(memberName)) return '會計';
   return 'PM';
 }
 
@@ -5218,6 +5435,7 @@ export default async function handler(req, res) {
           hasWebhookKeyword: !!process.env.LARK_WEBHOOK_KEYWORD,
           paymentNotifyMode: paymentNotifyMode(),
           paymentApprovalCode: paymentApprovalCode(),
+          paymentCashApprovalCodeSet: !!paymentCashApprovalCode(),
           paymentsTableMain: paymentsFrontConfig().tableId,
           paymentsTableAccounting: paymentsAccountingConfig().tableId,
           paymentsFrontUrlSet: !!(process.env.LARK_PAYMENTS_FRONTEND_URL || '').trim(),

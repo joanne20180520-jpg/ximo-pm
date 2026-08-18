@@ -749,6 +749,16 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .pay-list-wrap .dt{width:100%;table-layout:auto}
 .pay-list-wrap .dt td,.pay-list-wrap .dt th{font-size:11px;white-space:nowrap}
 .pay-list-empty{padding:8px 0;color:var(--t3);font-size:12px}
+.acct-page{padding:16px}
+.acct-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.acct-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.acct-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.acct-card .lb{font-size:11px;color:var(--t3);margin-bottom:4px}
+.acct-card .vl{font-size:20px;font-weight:700;color:var(--text)}
+.acct-proj{margin-bottom:14px}
+@media (max-width:720px){
+  .acct-summary{grid-template-columns:1fr 1fr}
+}
 @media (max-width:720px){
   .pay-query-bar{align-items:flex-start}
   .pay-query-range{margin-left:0;width:100%}
@@ -930,7 +940,8 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .pay-save-notice-btn{padding:8px 22px;border:none;border-radius:8px;background:#dbeafe;color:#1d4ed8;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s,transform .1s}
 .pay-save-notice-btn:hover{background:#bfdbfe}
 .pay-save-notice-btn:active{transform:scale(0.97)}
-body.role-designer #lp,body.role-designer #rp,body.role-designer #tl,body.role-designer #tr{display:none!important}
+body.role-designer #lp,body.role-designer #rp,body.role-designer #tl,body.role-designer #tr,
+body.role-accountant #lp,body.role-accountant #rp,body.role-accountant #tl,body.role-accountant #tr{display:none!important}
 .design-filter-bar{display:none;align-items:center;gap:10px;padding:8px 12px;margin-bottom:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);position:sticky;top:0;z-index:20;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 body.role-designer .design-filter-bar{display:flex}
 .design-filter-label{font-size:12px;font-weight:600;color:var(--t2);flex-shrink:0;white-space:nowrap}
@@ -1113,6 +1124,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <button class="tbar-tab" onclick="sw(this,'pg-b')">費用管理</button>
     <button class="tbar-tab" onclick="sw(this,'pg-e')">支出明細</button>
     <button class="tbar-tab" onclick="sw(this,'pg-p')">付款申請</button>
+    <button class="tbar-tab" onclick="sw(this,'pg-acct')">會計</button>
     <button class="tbar-tab" onclick="sw(this,'pg-d')">設計任務單</button>
     <button class="tbar-tab" onclick="sw(this,'pg-journal')">日誌</button>
     <button class="tbar-tab" onclick="sw(this,'pg-ai')">AI分析</button>
@@ -1279,6 +1291,21 @@ button.btn-loading::after{content:'…';margin-left:2px}
           </div>
           <div id="pay-list-area"><div class="pay-list-empty">載入中...</div></div>
         </div>
+      </div>
+    </div>
+
+    <!-- 會計前台 -->
+    <div id="pg-acct" class="page">
+      <div class="acct-page">
+        <div class="dch" style="padding:0 0 12px;border:none">
+          <h3>會計前台</h3>
+          <span style="font-size:11px;color:var(--t3);margin-left:8px">璽墨已核銷的付款會出現在這裡</span>
+        </div>
+        <div class="acct-tabs">
+          <button type="button" class="pay-query-btn active" data-acct-view="project" onclick="setAcctView('project')">各標案總支出</button>
+          <button type="button" class="pay-query-btn" data-acct-view="all" onclick="setAcctView('all')">全部標案總支出</button>
+        </div>
+        <div id="acct-area"><div class="pay-list-empty">載入中...</div></div>
       </div>
     </div>
 
@@ -1986,6 +2013,11 @@ function sw(btn,id){
       if (res && res.sync && (res.sync.updated > 0 || res.sync.removedDupes > 0)) renderExpenses();
     });
   }
+  if(id==='pg-acct') {
+    if (!deferredDataReady) loadDeferredTables({ silent: true });
+    ensurePaymentsLoaded().then(function() { renderAccountingPage(); });
+    renderAccountingPage();
+  }
   if(id==='pg-ai') { renderAiPage(); syncAiComposerBounds(); }
 }
 
@@ -2021,6 +2053,11 @@ var DEEP_LINK_PAGES = {
   payment: 'pg-p',
   '付款申請': 'pg-p',
   '付款': 'pg-p',
+  // 會計前台
+  accounting: 'pg-acct',
+  acct: 'pg-acct',
+  '會計': 'pg-acct',
+  '會計前台': 'pg-acct',
   // 設計任務單
   design: 'pg-d',
   designs: 'pg-d',
@@ -4237,7 +4274,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260818v1';
+var APP_BUILD = '20260818v2';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -4247,6 +4284,8 @@ var CORE_TABLE_KEYS_PM = ['projects', 'workitems', 'tasks', 'members'];
 var CORE_TABLE_KEYS_DESIGNER = ['projects', 'workitems', 'designs', 'design_versions', 'members'];
 var DEFERRED_TABLE_KEYS_PM = ['expenses', 'designs', 'design_versions', 'journal', 'milestones', 'payments'];
 var DEFERRED_TABLE_KEYS_DESIGNER = ['tasks', 'expenses', 'journal'];
+var CORE_TABLE_KEYS_ACCT = ['projects', 'workitems', 'members'];
+var DEFERRED_TABLE_KEYS_ACCT = ['expenses', 'payments'];
 var SYNC_EXPAND = {
   projects: ['projects'],
   workitems: ['workitems'],
@@ -4373,6 +4412,7 @@ function refreshViewsForTables(keys) {
     renderMilestonesPage();
   }
   if (s.payments || s.projects || s.workitems) renderPaymentsList();
+  if (s.payments || s.expenses || s.projects) renderAccountingPage();
 }
 
 function fetchSyncPayloadRemote(tableKeys) {
@@ -4748,7 +4788,8 @@ var loginRefreshPromise = null;
 var currentUserRole = 'PM';
 var ROLE_PAGES = {
   PM: ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
-  '管理員': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
+  '管理員': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-acct', 'pg-d', 'pg-journal', 'pg-ai'],
+  '會計': ['pg-acct'],
   '設計師': ['pg-d'],
   '設計主管': ['pg-d']
 };
@@ -4771,6 +4812,9 @@ function isDesignerRole() {
 }
 function isDesignerLikeRole() {
   return isDesignerRole() || isDesignLeadRole();
+}
+function isAccountantRole() {
+  return currentUserRole === '會計' || currentUserRole === '会计';
 }
 function isPMRole() {
   // PM、管理員可看全部；設計師／設計主管限縮設計頁
@@ -5002,6 +5046,7 @@ function logoutAndShowGate() {
   authReady = false;
   clearLoginStorage();
   document.body.classList.remove('role-designer');
+  document.body.classList.remove('role-accountant');
   autoLoginAttempted = false;
   attemptAutoLogin(true);
 }
@@ -5062,10 +5107,17 @@ function applyRolePermissions() {
   });
   if (role === '設計師' || role === '設計主管') {
     document.body.classList.add('role-designer');
+    document.body.classList.remove('role-accountant');
     var designTab = document.querySelector('.tbar-tab[onclick*="pg-d"]');
     if (designTab) sw(designTab, 'pg-d');
+  } else if (role === '會計' || role === '会计') {
+    document.body.classList.remove('role-designer');
+    document.body.classList.add('role-accountant');
+    var acctTab = document.querySelector('.tbar-tab[onclick*="pg-acct"]');
+    if (acctTab) sw(acctTab, 'pg-acct');
   } else {
     document.body.classList.remove('role-designer');
+    document.body.classList.remove('role-accountant');
   }
 }
 
@@ -6394,11 +6446,15 @@ function fetchJsonWithTimeout(url, ms) {
 }
 
 function getCoreTableKeys() {
-  return isDesignerLikeRole() ? CORE_TABLE_KEYS_DESIGNER.slice() : CORE_TABLE_KEYS_PM.slice();
+  if (isDesignerLikeRole()) return CORE_TABLE_KEYS_DESIGNER.slice();
+  if (isAccountantRole()) return CORE_TABLE_KEYS_ACCT.slice();
+  return CORE_TABLE_KEYS_PM.slice();
 }
 
 function getDeferredTableKeys() {
-  return isDesignerLikeRole() ? DEFERRED_TABLE_KEYS_DESIGNER.slice() : DEFERRED_TABLE_KEYS_PM.slice();
+  if (isDesignerLikeRole()) return DEFERRED_TABLE_KEYS_DESIGNER.slice();
+  if (isAccountantRole()) return DEFERRED_TABLE_KEYS_ACCT.slice();
+  return DEFERRED_TABLE_KEYS_PM.slice();
 }
 
 function applyPartialTables(payload, keys) {
@@ -6420,6 +6476,7 @@ function safeRenderAfterLoad() {
     renderGanttFromData();
     renderBudget();
     renderExpenses();
+    renderAccountingPage();
     buildMembersMap();
     fillMemberSelects();
   } catch (renderErr) {
@@ -6462,7 +6519,11 @@ function renderDeferredViews(keys) {
       // designs / journal also need their dedicated renders when keys arrive
       if (!keys || keys.indexOf('designs') >= 0 || keys.indexOf('design_versions') >= 0) renderDesigns();
       if (!keys || keys.indexOf('journal') >= 0) renderJournalPage();
-      if (!keys || keys.indexOf('payments') >= 0) renderPaymentsList();
+      if (!keys || keys.indexOf('payments') >= 0) {
+        renderPaymentsList();
+        renderAccountingPage();
+      }
+      if (!keys || keys.indexOf('expenses') >= 0) renderAccountingPage();
     }
   } catch (renderErr) {
     console.error('延伸資料渲染失敗', renderErr);
@@ -12745,7 +12806,13 @@ function getPaymentApprovalMeta(rec) {
 
 function getPaymentPendingApproverLabel(f, status, rec) {
   var meta = getPaymentApprovalMeta(rec);
-  if (status === '已核銷' || meta.approvalStatus === 'APPROVED') return '審批完成';
+  if (status === '已核銷') {
+    var acct = String(f['會計狀態'] || '').trim();
+    if (acct === '已送達詹佳瑜') return '已送達詹佳瑜';
+    var acctName = String(f['會計待簽核人'] || f['待簽核人'] || meta.pendingApprover || '').trim();
+    if (acctName) return acctName;
+    return '審批完成';
+  }
   var name = String(f['待簽核人'] || meta.pendingApprover || '').trim();
   if (status === '審批中' && name) return name;
   return '—';
@@ -12755,6 +12822,7 @@ function syncPaymentApprovals() {
   return fetch(apiUrl('action=sync-payment-approvals')).then(function(r) { return r.json(); }).then(function(res) {
     if (res && res.payments && res.payments.records) applyPaymentRecords(res.payments.records);
     renderPaymentsList();
+    renderAccountingPage();
     if (res && res.sync && (res.sync.updated > 0 || res.sync.removedDupes > 0)) {
       return syncTables(['expenses']).then(function() { return res; });
     }
@@ -12893,6 +12961,151 @@ function renderPaymentsList() {
       + '<td>' + escHtml(getPaymentPendingApproverLabel(f, status, rec)) + '</td></tr>';
   });
   html += '</tbody></table></div>';
+  area.innerHTML = html;
+}
+
+var acctViewMode = 'project';
+
+function setAcctView(mode) {
+  acctViewMode = mode === 'all' ? 'all' : 'project';
+  document.querySelectorAll('[data-acct-view]').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-acct-view') === acctViewMode);
+  });
+  renderAccountingPage();
+}
+
+function getAcctPaymentMethod(f) {
+  return String((f && (f['支付方式'] || f['付款方式'])) || '').trim() || '未填';
+}
+
+function getAcctAccountingLabel(f, rec) {
+  var status = String((f && (f['會計狀態'] || f['會計進度'])) || '').trim();
+  if (status) return status;
+  var pending = getPaymentPendingApproverLabel(f, getPaymentStatusLabel(f), rec);
+  return pending === '—' ? '待處理' : pending;
+}
+
+function listSettledAccountingPayments() {
+  return (paymentsData || []).filter(function(rec) {
+    return getPaymentStatusLabel(rec.fields || {}) === '已核銷';
+  }).sort(function(a, b) {
+    return Number((b.fields && b.fields['申請日期']) || 0) - Number((a.fields && a.fields['申請日期']) || 0);
+  });
+}
+
+function buildAccountingProjectRows() {
+  var byName = {};
+  function ensure(name) {
+    if (!byName[name]) {
+      byName[name] = { name: name, total: 0, cash: 0, wire: 0, check: 0, count: 0, payments: [] };
+    }
+    return byName[name];
+  }
+  listSettledAccountingPayments().forEach(function(rec) {
+    var f = rec.fields || {};
+    var name = getPaymentProjectName(f) || '未分標案';
+    var row = ensure(name);
+    var amount = parseFloat(f['付款總金額']) || 0;
+    var method = getAcctPaymentMethod(f);
+    row.total += amount;
+    row.count += 1;
+    if (method.indexOf('現金') >= 0) row.cash += amount;
+    else if (method.indexOf('支票') >= 0) row.check += amount;
+    else row.wire += amount;
+    row.payments.push({ rec: rec, fields: f, amount: amount, method: method });
+  });
+  (expensesData || []).forEach(function(rec) {
+    var f = rec.fields || {};
+    if (expenseLinkedPaymentId(f)) return;
+    var name = resolveProjectName(f['所數標案'] || f['所屬標案']) || getPaymentProjectName(f) || '未分標案';
+    var row = ensure(name);
+    var amount = parseFloat(f['實際金額']) || 0;
+    row.total += amount;
+    row.count += 1;
+  });
+  return Object.keys(byName).sort(function(a, b) {
+    return byName[b].total - byName[a].total;
+  }).map(function(k) { return byName[k]; });
+}
+
+function expenseLinkedPaymentId(fields) {
+  var remark = String((fields && (fields['備註'] || fields['說明'])) || '');
+  var m = remark.match(/payment:([A-Za-z0-9_-]+)/);
+  return m ? m[1] : '';
+}
+
+function renderAccountingSummaryCards(projects) {
+  var total = 0;
+  var cash = 0;
+  var wire = 0;
+  var count = 0;
+  projects.forEach(function(p) {
+    total += p.total;
+    cash += p.cash;
+    wire += p.wire + p.check;
+    count += p.count;
+  });
+  return '<div class="acct-summary">'
+    + '<div class="acct-card"><div class="lb">總支出</div><div class="vl">' + ntf(total) + '</div></div>'
+    + '<div class="acct-card"><div class="lb">標案數</div><div class="vl">' + projects.length + '</div></div>'
+    + '<div class="acct-card"><div class="lb">現金</div><div class="vl">' + ntf(cash) + '</div></div>'
+    + '<div class="acct-card"><div class="lb">匯款／支票</div><div class="vl">' + ntf(wire) + '</div></div>'
+    + '</div>';
+}
+
+function renderAccountingPaymentTable(items) {
+  if (!items.length) return '<div class="pay-list-empty">尚無已核銷付款</div>';
+  var html = '<div style="overflow-x:auto"><table class="dt"><thead><tr>'
+    + '<th>日期</th><th>支付對象</th><th>支付方式</th><th>事由</th><th>金額</th><th>會計狀態</th>'
+    + '</tr></thead><tbody>';
+  items.forEach(function(item) {
+    var f = item.fields;
+    html += '<tr><td>' + escHtml(fmtDate(f['申請日期']) || '—') + '</td>'
+      + '<td>' + escHtml(f['支付對象'] || '—') + '</td>'
+      + '<td>' + escHtml(item.method || '—') + '</td>'
+      + '<td>' + escHtml(f['事由'] || '—') + '</td>'
+      + '<td style="font-weight:600">' + ntf(item.amount) + '</td>'
+      + '<td>' + escHtml(getAcctAccountingLabel(f, item.rec)) + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function renderAccountingPage() {
+  var area = document.getElementById('acct-area');
+  if (!area) return;
+  var projects = buildAccountingProjectRows();
+  if (!projects.length) {
+    area.innerHTML = '<div class="pay-list-empty">尚無已核銷的付款或支出</div>';
+    return;
+  }
+  var html = renderAccountingSummaryCards(projects);
+  if (acctViewMode === 'all') {
+    html += '<div class="dc acct-proj"><div class="dch"><h3>全部標案</h3></div>'
+      + '<div style="overflow-x:auto"><table class="dt"><thead><tr>'
+      + '<th>標案</th><th>筆數</th><th>現金</th><th>匯款／支票</th><th>總支出</th>'
+      + '</tr></thead><tbody>';
+    projects.forEach(function(p) {
+      html += '<tr><td>' + escHtml(p.name) + '</td><td>' + p.count + '</td>'
+        + '<td>' + ntf(p.cash) + '</td><td>' + ntf(p.wire + p.check) + '</td>'
+        + '<td style="font-weight:600">' + ntf(p.total) + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+  } else {
+    projects.forEach(function(p, i) {
+      var color = PROJECT_COLORS[i % PROJECT_COLORS.length];
+      html += '<div class="dc acct-proj"><div class="dch"><div class="pdot" style="background:' + color + '"></div><h3>' + escHtml(p.name) + '</h3>'
+        + '<span style="margin-left:auto;font-size:12px;font-weight:700">' + ntf(p.total) + '</span></div>'
+        + '<div class="bo" style="grid-template-columns:repeat(4,1fr)">'
+        + '<div class="bi"><div class="lb">筆數</div><div class="vl">' + p.count + '</div></div>'
+        + '<div class="bi"><div class="lb">現金</div><div class="vl">' + ntf(p.cash) + '</div></div>'
+        + '<div class="bi"><div class="lb">匯款／支票</div><div class="vl">' + ntf(p.wire + p.check) + '</div></div>'
+        + '<div class="bi"><div class="lb">總支出</div><div class="vl">' + ntf(p.total) + '</div></div>'
+        + '</div>'
+        + renderAccountingPaymentTable(p.payments)
+        + '</div>';
+    });
+  }
   area.innerHTML = html;
 }
 
