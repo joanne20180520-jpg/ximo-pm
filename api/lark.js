@@ -1962,12 +1962,13 @@ function parseApprovalFormWidgets(formRaw) {
   }
   if (!Array.isArray(parsed)) return [];
   return parsed.map(function(w) {
+    const option = w.option || w.options || null;
     return {
       id: w.id || w.custom_id || '',
       type: w.type || 'input',
       name: String(w.name || w.custom_id || '').trim(),
-      option: w.option || w.options || [],
-      currency: w.currency || (w.value && w.value.currency) || 'TWD'
+      option: option,
+      currency: (option && option.currencyRange && option.currencyRange[0]) || w.currency || w.value || 'TWD'
     };
   }).filter(function(w) { return w.id; });
 }
@@ -1984,6 +1985,40 @@ function matchApprovalWidgetOption(widget, label) {
     }
   }
   return String(opts[0].value != null ? opts[0].value : '');
+}
+
+function approvalWidgetShouldSkip(name) {
+  const n = String(name || '').replace(/\s+/g, '');
+  const skip = {
+    '所屬標案': 1,
+    '所屬專案': 1,
+    '所屬個案': 1,
+    '所數標案': 1,
+    '所屬工作項目': 1,
+    '工作項目': 1,
+    '工作項目名稱': 1,
+    '標案名稱': 1
+  };
+  return !!skip[n];
+}
+
+function paymentFieldsForApproval(fields) {
+  const f = Object.assign({}, fields || {});
+  delete f['所屬標案'];
+  delete f['所數標案'];
+  delete f['所屬工作項目'];
+  return f;
+}
+
+function pickAmountCurrency(widget) {
+  const range = widget && widget.option && widget.option.currencyRange;
+  if (Array.isArray(range) && range.length) {
+    if (range.indexOf('TWD') >= 0) return 'TWD';
+    return range[0];
+  }
+  const def = widget && widget.currency;
+  if (def && def !== 'USD') return def;
+  return 'TWD';
 }
 
 function approvalWidgetAliases(name) {
@@ -2022,29 +2057,31 @@ async function getPaymentApprovalDefinition(token) {
 
 function buildPaymentApprovalForm(widgets, fields, openId) {
   const form = [];
+  const approvalFields = paymentFieldsForApproval(fields);
   (widgets || []).forEach(function(w) {
+    if (approvalWidgetShouldSkip(w.name)) return;
     const names = approvalWidgetAliases(w.name);
     const type = String(w.type || 'input');
     let item = null;
     if (type === 'amount') {
-      item = { id: w.id, type: 'amount', value: paymentAmountNumber(fields), currency: 'TWD' };
+      item = { id: w.id, type: 'amount', value: paymentAmountNumber(approvalFields), currency: pickAmountCurrency(w) };
     } else if (type === 'number') {
-      item = { id: w.id, type: 'number', value: paymentAmountNumber(fields) };
+      item = { id: w.id, type: 'number', value: paymentAmountNumber(approvalFields) };
     } else if (type === 'radio' || type === 'radioV2') {
-      const label = paymentFieldText(fields, names);
+      const label = paymentFieldText(approvalFields, names);
       const opt = matchApprovalWidgetOption(w, label);
       if (opt) item = { id: w.id, type: 'radioV2', value: opt };
     } else if (type === 'date') {
-      item = { id: w.id, type: 'date', value: paymentDateRfc3339(fields) };
+      item = { id: w.id, type: 'date', value: paymentDateRfc3339(approvalFields) };
     } else if (type === 'contact') {
       if (openId) item = { id: w.id, type: 'contact', value: [], open_ids: [openId] };
     } else if (type === 'textarea') {
-      const text = paymentFieldText(fields, names);
+      const text = paymentFieldText(approvalFields, names);
       if (text) item = { id: w.id, type: 'textarea', value: text };
     } else if (type === 'attachment' || type === 'attachmentV2') {
       return;
     } else {
-      const text = paymentFieldText(fields, names);
+      const text = paymentFieldText(approvalFields, names);
       if (text) item = { id: w.id, type: type.indexOf('input') >= 0 ? 'input' : type, value: text };
     }
     if (item) form.push(item);
