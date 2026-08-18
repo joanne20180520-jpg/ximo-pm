@@ -1766,7 +1766,8 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
     '所數標案': ['所屬標案', '標案'],
     '所屬工作項目': ['工作項目'],
     '附件': ['檔案', '上傳附件'],
-    '狀態': ['審核狀態']
+    '狀態': ['審核狀態'],
+    '審批編號': ['審批實例', '審批單號', 'instance_code']
   };
   // yd 工作項目表欄位為「可用成本未稅」；前端仍寫「可用成本」
   // 設計需求：審核／檢核、路徑欄位名稱在不同 Base 可能不一致
@@ -1895,6 +1896,209 @@ async function resolvePaymentsTableId(token, appToken, preferredId) {
   return preferred;
 }
 
+function paymentApprovalCode() {
+  return (process.env.LARK_PAYMENT_APPROVAL_CODE || '6FA791B1-2767-4621-86B4-98E22D2E86E4').trim();
+}
+
+function paymentFieldText(fields, names) {
+  const f = fields || {};
+  for (let i = 0; i < names.length; i++) {
+    const raw = f[names[i]];
+    if (raw == null || raw === '') continue;
+    if (Array.isArray(raw)) {
+      const parts = raw.map(function(item) {
+        if (item == null) return '';
+        if (typeof item === 'string') return item;
+        if (item.text) return String(item.text);
+        if (item.name) return String(item.name);
+        return '';
+      }).filter(Boolean);
+      if (parts.length) return parts.join('、');
+      continue;
+    }
+    if (typeof raw === 'object') {
+      if (raw.text) return String(raw.text);
+      if (raw.name) return String(raw.name);
+    }
+    return String(raw);
+  }
+  return '';
+}
+
+function paymentAmountNumber(fields) {
+  const n = parseFloat(String((fields && fields['付款總金額']) || '').replace(/[^0-9.]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+
+function paymentDateRfc3339(fields) {
+  const raw = fields && fields['申請日期'];
+  let d = null;
+  if (typeof raw === 'number') d = new Date(raw);
+  else if (typeof raw === 'string' && raw.trim()) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) d = new Date(raw.trim() + 'T00:00:00+08:00');
+    else d = new Date(raw);
+  }
+  if (!d || isNaN(d.getTime())) d = new Date();
+  const pad = function(n) { return String(n).padStart(2, '0'); };
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T00:00:00+08:00';
+}
+
+function paymentApplicantOpenId(fields, hint) {
+  if (isValidPersonOpenId(hint)) return String(hint).trim();
+  const raw = fields && fields['申請人'];
+  if (!raw) return '';
+  if (Array.isArray(raw) && raw[0]) {
+    const id = raw[0].id || raw[0].open_id || '';
+    if (isValidPersonOpenId(id)) return String(id);
+  }
+  if (raw.id && isValidPersonOpenId(raw.id)) return String(raw.id);
+  return '';
+}
+
+function parseApprovalFormWidgets(formRaw) {
+  let parsed = formRaw;
+  if (typeof formRaw === 'string') {
+    try { parsed = JSON.parse(formRaw); } catch (e) { return []; }
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.map(function(w) {
+    return {
+      id: w.id || w.custom_id || '',
+      type: w.type || 'input',
+      name: String(w.name || w.custom_id || '').trim(),
+      option: w.option || w.options || [],
+      currency: w.currency || (w.value && w.value.currency) || 'TWD'
+    };
+  }).filter(function(w) { return w.id; });
+}
+
+function matchApprovalWidgetOption(widget, label) {
+  const want = String(label || '').trim();
+  const opts = widget && widget.option;
+  if (!want || !Array.isArray(opts) || !opts.length) return '';
+  for (let i = 0; i < opts.length; i++) {
+    const opt = opts[i] || {};
+    const text = String(opt.text || opt.name || opt.value || '').trim();
+    if (text === want || text.indexOf(want) >= 0 || want.indexOf(text) >= 0) {
+      return String(opt.value != null ? opt.value : opt.text || '');
+    }
+  }
+  return String(opts[0].value != null ? opts[0].value : '');
+}
+
+function approvalWidgetAliases(name) {
+  const n = String(name || '').replace(/\s+/g, '');
+  const map = {
+    '所屬專案': ['所屬標案', '標案名稱', '所屬個案'],
+    '所屬標案': ['所屬專案', '標案名稱', '所屬個案'],
+    '所屬個案': ['所屬專案', '所屬標案', '標案名稱'],
+    '所屬工作項目': ['工作項目', '工作項目名稱'],
+    '支付對象': ['收款人'],
+    '廠商名稱': ['廠商'],
+    '支付性質': ['付款性質'],
+    '支付方式': ['付款方式'],
+    '事由': ['付款事由'],
+    '備註': ['說明'],
+    '付款總金額': ['金額', '總金額'],
+    '附件': ['檔案'],
+    '申請部門': ['部門'],
+    '申請人': ['發起人'],
+    '申請日期': ['日期']
+  };
+  return [n].concat(map[n] || []);
+}
+
+async function getPaymentApprovalDefinition(token) {
+  const code = paymentApprovalCode();
+  if (!code) throw new Error('缺少 LARK_PAYMENT_APPROVAL_CODE');
+  const url = BASE_URL + '/approval/v4/approvals/' + encodeURIComponent(code) + '?locale=zh-TW';
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+  const data = await res.json();
+  if (data.code !== 0 || !data.data) {
+    throw new Error(data.msg || '無法讀取付款審批定義（請確認應用已開審批權限）');
+  }
+  return data.data;
+}
+
+function buildPaymentApprovalForm(widgets, fields, openId) {
+  const form = [];
+  (widgets || []).forEach(function(w) {
+    const names = approvalWidgetAliases(w.name);
+    const type = String(w.type || 'input');
+    let item = null;
+    if (type === 'amount') {
+      item = { id: w.id, type: 'amount', value: paymentAmountNumber(fields), currency: 'TWD' };
+    } else if (type === 'number') {
+      item = { id: w.id, type: 'number', value: paymentAmountNumber(fields) };
+    } else if (type === 'radio' || type === 'radioV2') {
+      const label = paymentFieldText(fields, names);
+      const opt = matchApprovalWidgetOption(w, label);
+      if (opt) item = { id: w.id, type: 'radioV2', value: opt };
+    } else if (type === 'date') {
+      item = { id: w.id, type: 'date', value: paymentDateRfc3339(fields) };
+    } else if (type === 'contact') {
+      if (openId) item = { id: w.id, type: 'contact', value: [], open_ids: [openId] };
+    } else if (type === 'textarea') {
+      const text = paymentFieldText(fields, names);
+      if (text) item = { id: w.id, type: 'textarea', value: text };
+    } else if (type === 'attachment' || type === 'attachmentV2') {
+      return;
+    } else {
+      const text = paymentFieldText(fields, names);
+      if (text) item = { id: w.id, type: type.indexOf('input') >= 0 ? 'input' : type, value: text };
+    }
+    if (item) form.push(item);
+  });
+  return form;
+}
+
+async function createPaymentApprovalInstance(token, fields, openIdHint) {
+  const approvalCode = paymentApprovalCode();
+  if (!approvalCode) return { ok: false, skipped: true, error: '未設定審批代碼' };
+  const openId = paymentApplicantOpenId(fields, openIdHint);
+  if (!openId) return { ok: false, error: '找不到申請人 open_id，無法送審（請用 Lark 登入）' };
+  const def = await getPaymentApprovalDefinition(token);
+  const widgets = parseApprovalFormWidgets(def.form);
+  const form = buildPaymentApprovalForm(widgets, fields, openId);
+  const body = {
+    approval_code: approvalCode,
+    open_id: openId,
+    form: JSON.stringify(form)
+  };
+  const res = await fetch(BASE_URL + '/approval/v4/instances', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (data.code !== 0) {
+    throw new Error(data.msg || ('建立審批失敗 code:' + data.code));
+  }
+  const instanceCode = (data.data && data.data.instance_code) || '';
+  return {
+    ok: true,
+    approvalCode: approvalCode,
+    instanceCode: instanceCode,
+    url: instanceCode ? ('https://www.larksuite.com/approval/detail/' + instanceCode) : ''
+  };
+}
+
+async function writePaymentApprovalCode(tenantToken, userToken, recordId, instanceCode) {
+  if (!recordId || !instanceCode) return;
+  const frontCfg = paymentsFrontConfig();
+  const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
+  if (!tableId) return;
+  const fields = { '審批編號': instanceCode };
+  const body = await normalizeWriteFields(tenantToken, tableId, fields, frontCfg.appToken);
+  if (!body || !Object.keys(body).length) return;
+  await writeWithUserFallback(tenantToken, userToken, function(tok, asUser) {
+    return updateRecord(tok, tableId, recordId, body, frontCfg.appToken, asUser);
+  });
+}
+
 async function createPaymentInBothBases(tenantToken, userToken, rawFields, applicantOpenIdHint) {
   const results = { main: null, accounting: null };
   const errors = [];
@@ -1960,6 +2164,24 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
   if (!results.main && !results.accounting) {
     throw new Error(errors.join('；') || '付款資料寫入失敗');
   }
+
+  try {
+    results.approval = await createPaymentApprovalInstance(tenantToken, fields, applicantOpenIdHint);
+    const recId = extractRecordId(results.main) || extractRecordId(results.accounting);
+    if (results.approval && results.approval.ok && results.approval.instanceCode && recId) {
+      try {
+        await writePaymentApprovalCode(tenantToken, userToken, recId, results.approval.instanceCode);
+      } catch (writeErr) {
+        errors.push('審批編號未寫回表格：' + (writeErr.message || String(writeErr)));
+      }
+    } else if (results.approval && !results.approval.ok && results.approval.error) {
+      errors.push('Lark 審批：' + results.approval.error);
+    }
+  } catch (apprErr) {
+    results.approval = { ok: false, error: apprErr.message || String(apprErr) };
+    errors.push('Lark 審批：' + results.approval.error);
+  }
+
   if (errors.length) results.partialErrors = errors;
 
   const primary = results.main || results.accounting;
@@ -1970,7 +2192,8 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
     accounting: results.accounting,
     partialErrors: results.partialErrors || [],
     enrichedFields: fields,
-    applicantDebug: results.applicantDebug || null
+    applicantDebug: results.applicantDebug || null,
+    approval: results.approval || null
   };
 }
 
@@ -4371,6 +4594,7 @@ export default async function handler(req, res) {
           webhookCount: getWebhookUrls().length,
           hasWebhookKeyword: !!process.env.LARK_WEBHOOK_KEYWORD,
           paymentNotifyMode: paymentNotifyMode(),
+          paymentApprovalCode: paymentApprovalCode(),
           paymentsTableMain: paymentsFrontConfig().tableId,
           paymentsTableAccounting: paymentsAccountingConfig().tableId,
           paymentsFrontUrlSet: !!(process.env.LARK_PAYMENTS_FRONTEND_URL || '').trim(),

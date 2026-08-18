@@ -3771,10 +3771,22 @@ function showPaymentSaveNotice(printed, res) {
   if (!el || !msgEl) return;
   if (card) card.classList.remove('is-error');
   if (icon) icon.textContent = '✓';
-  msgEl.textContent = '付款申請單已送出，狀態為審批中。';
+  msgEl.textContent = (res && res.approval && res.approval.ok)
+    ? '付款申請單已送出審批。'
+    : '付款申請單已送出，狀態為審批中。';
   var subParts = [];
   if (printed) subParts.push('已列印');
   else subParts.push('未列印');
+  if (res && res.approval && res.approval.ok) {
+    subParts.push('已建立 Lark 審批');
+    if (res.approval.url) {
+      subEl.innerHTML = subParts.join(' · ') + ' · <a href="' + escAttr(res.approval.url) + '" target="_blank" rel="noopener">開啟審批</a>';
+      el.classList.remove('hidden');
+      return;
+    }
+  } else if (res && res.approval && res.approval.error) {
+    subParts.push('審批未送出：' + res.approval.error);
+  }
   if (res && res.notify && res.notify.mode === 'automation') subParts.push('由 Lark 自動化發送');
   if (res && res.partialErrors && res.partialErrors.length) subParts.push(res.partialErrors.join(' '));
   if (res && res.applicantDebug && !res.applicantDebug.inBody) subParts.push('申請人未寫入表格');
@@ -4182,7 +4194,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260817v1';
+var APP_BUILD = '20260818v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12644,7 +12656,7 @@ function renderPaymentsList() {
     return db - da;
   });
   var html = '<div style="overflow-x:auto"><table class="dt"><thead><tr>'
-    + '<th>日期</th><th>標案</th><th>申請人</th><th>支付對象</th><th>事由</th><th>金額</th><th>附件</th><th>狀態</th>'
+    + '<th>日期</th><th>標案</th><th>申請人</th><th>支付對象</th><th>事由</th><th>金額</th><th>附件</th><th>狀態</th><th>審批</th>'
     + '</tr></thead><tbody>';
   rows.forEach(function(rec) {
     var f = rec.fields || {};
@@ -12652,6 +12664,10 @@ function renderPaymentsList() {
     var stClass = status === '已核銷' ? 'std' : (status === '封存' ? 'st' : 'stp');
     var amount = parseFloat(f['付款總金額']) || 0;
     var attachN = getPaymentAttachCount(f);
+    var instanceCode = String(f['審批編號'] || f['審批實例'] || f['審批單號'] || '').trim();
+    var approvalCell = instanceCode
+      ? '<a href="https://www.larksuite.com/approval/detail/' + encodeURIComponent(instanceCode) + '" target="_blank" rel="noopener">開啟</a>'
+      : '—';
     html += '<tr><td>' + escHtml(fmtDate(f['申請日期']) || '—') + '</td>'
       + '<td>' + escHtml(getPaymentProjectName(f)) + '</td>'
       + '<td>' + escHtml(personName(f['申請人']) || fieldPlainText(f['申請人']) || '—') + '</td>'
@@ -12659,7 +12675,8 @@ function renderPaymentsList() {
       + '<td>' + escHtml(f['事由'] || '—') + '</td>'
       + '<td style="font-weight:600">' + ntf(amount) + '</td>'
       + '<td>' + (attachN ? attachN + ' 件' : '—') + '</td>'
-      + '<td><span class="st ' + stClass + '">' + escHtml(status) + '</span></td></tr>';
+      + '<td><span class="st ' + stClass + '">' + escHtml(status) + '</span></td>'
+      + '<td>' + approvalCell + '</td></tr>';
   });
   html += '</tbody></table></div>';
   area.innerHTML = html;
