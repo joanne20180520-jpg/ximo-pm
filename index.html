@@ -3959,6 +3959,19 @@ function setPaySubmitLoading(on) {
   if (cancel) cancel.disabled = !!on;
 }
 
+function isPaymentSaveNoticeOpen() {
+  var el = document.getElementById('pay-save-notice');
+  return !!(el && !el.classList.contains('hidden'));
+}
+
+function showPaymentOptimisticSent() {
+  showPaymentSaveNotice(null, { optimistic: true, approval: { ok: true } });
+  var msgEl = document.getElementById('pay-save-notice-msg');
+  var subEl = document.getElementById('pay-save-notice-sub');
+  if (msgEl) msgEl.textContent = '付款申請單已送出。';
+  if (subEl) subEl.textContent = '';
+}
+
 function savePaymentOnly(closePreview) {
   if (!getLoginDisplayName()) {
     alert('請先 Lark 登入，送出才會記錄申請人');
@@ -3976,10 +3989,24 @@ function savePaymentOnly(closePreview) {
   if (!data) return;
   paySubmitting = true;
   setPaySubmitLoading(true);
-  savePaymentRecord(data).then(function(res) {
+  var optimisticShown = false;
+  var optimisticTimer = setTimeout(function() {
+    optimisticShown = true;
     if (closePreview) cl('pp-prev');
-    showPaymentSaveNotice(null, res);
+    setPaySubmitLoading(false);
+    showPaymentOptimisticSent();
+  }, 3000);
+  savePaymentRecord(data).then(function(res) {
+    clearTimeout(optimisticTimer);
+    if (closePreview) cl('pp-prev');
+    setPaySubmitLoading(false);
+    if (!optimisticShown || isPaymentSaveNoticeOpen()) {
+      showPaymentSaveNotice(null, res);
+    }
   }).catch(function(err) {
+    clearTimeout(optimisticTimer);
+    if (closePreview) cl('pp-prev');
+    setPaySubmitLoading(false);
     console.error(err);
     showPaymentSaveError('送出失敗：' + (err.message || '請稍後再試'));
   }).finally(function() {
@@ -4333,7 +4360,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260819v9';
+var APP_BUILD = '20260819v10';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
