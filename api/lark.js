@@ -6118,13 +6118,29 @@ export default async function handler(req, res) {
       const raw = def.form || def.approval_form || '';
       const widgets = parseApprovalFormWidgets(raw);
       const attach = findApprovalAttachmentWidget(widgets);
+      const nodes = (def.node_list || []).map(function(n, i) {
+        return {
+          i: i,
+          name: n.name || '',
+          node_type: n.node_type || '',
+          need_approver: !!n.need_approver,
+          require_signature: !!n.require_signature,
+          range_count: (n.approver_chosen_range || []).reduce(function(s, r) {
+            return s + ((r.approver_range_ids || []).length);
+          }, 0)
+        };
+      });
       return res.status(200).json({
         ok: true,
+        approval_name: def.approval_name || '',
+        status: def.status || '',
         widgetCount: widgets.length,
         widgets: widgets.map(function(w) {
           return { id: w.id, custom_id: w.custom_id || '', type: w.type, name: w.name };
         }),
         attachWidget: attach,
+        nodeCount: nodes.length,
+        nodes: nodes,
         formPreview: (typeof raw === 'string' ? raw : JSON.stringify(raw || '')).slice(0, 2500)
       });
     }
