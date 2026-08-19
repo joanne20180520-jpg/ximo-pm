@@ -963,7 +963,9 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .pay-save-notice-btn:hover{background:#bfdbfe}
 .pay-save-notice-btn:active{transform:scale(0.97)}
 body.role-designer #lp,body.role-designer #rp,body.role-designer #tl,body.role-designer #tr,
-body.role-accountant #lp,body.role-accountant #rp,body.role-accountant #tl,body.role-accountant #tr{display:none!important}
+body.role-accountant .lp-task-card,
+body.role-accountant #rp,
+body.role-accountant #tr{display:none!important}
 .design-filter-bar{display:none;align-items:center;gap:10px;padding:8px 12px;margin-bottom:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);position:sticky;top:0;z-index:20;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 body.role-designer .design-filter-bar{display:flex}
 .design-filter-label{font-size:12px;font-weight:600;color:var(--t2);flex-shrink:0;white-space:nowrap}
@@ -4331,7 +4333,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260819v7';
+var APP_BUILD = '20260819v8';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -4341,8 +4343,8 @@ var CORE_TABLE_KEYS_PM = ['projects', 'workitems', 'tasks', 'members'];
 var CORE_TABLE_KEYS_DESIGNER = ['projects', 'workitems', 'designs', 'design_versions', 'members'];
 var DEFERRED_TABLE_KEYS_PM = ['expenses', 'designs', 'design_versions', 'journal', 'milestones', 'payments'];
 var DEFERRED_TABLE_KEYS_DESIGNER = ['tasks', 'expenses', 'journal'];
-var CORE_TABLE_KEYS_ACCT = ['projects', 'workitems', 'members'];
-var DEFERRED_TABLE_KEYS_ACCT = ['expenses', 'payments'];
+var CORE_TABLE_KEYS_ACCT = ['projects', 'workitems', 'expenses', 'members'];
+var DEFERRED_TABLE_KEYS_ACCT = ['payments'];
 var SYNC_EXPAND = {
   projects: ['projects'],
   workitems: ['workitems'],
@@ -4848,7 +4850,9 @@ var ROLE_PAGES = {
   '管理員': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
   '管理员': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
   '設計師': ['pg-d'],
-  '設計主管': ['pg-d']
+  '設計主管': ['pg-d'],
+  '會計': ['pg-b', 'pg-e'],
+  '会计': ['pg-b', 'pg-e']
 };
 
 function isAdminRole() {
@@ -4874,8 +4878,8 @@ function isAccountantRole() {
   return currentUserRole === '會計' || currentUserRole === '会计';
 }
 function isPMRole() {
-  // PM、管理員可看全部；設計師／設計主管限縮設計頁
-  return !isDesignerLikeRole();
+  // PM、管理員可看全部；設計師／設計主管限縮設計頁；會計只看費用與支出
+  return !isDesignerLikeRole() && !isAccountantRole();
 }
 
 function applyDetailPopupPermissions(popupId) {
@@ -5172,6 +5176,9 @@ function applyRolePermissions() {
     document.body.classList.remove('role-accountant');
     var designTab = document.querySelector('.tbar-tab[onclick*="pg-d"]');
     if (designTab) sw(designTab, 'pg-d');
+  } else if (role === '會計' || role === '会计') {
+    document.body.classList.add('role-accountant');
+    document.body.classList.remove('role-designer');
   } else {
     document.body.classList.remove('role-designer');
     document.body.classList.remove('role-accountant');
@@ -6512,11 +6519,15 @@ function fetchJsonWithTimeout(url, ms) {
 }
 
 function getCoreTableKeys() {
-  return isDesignerLikeRole() ? CORE_TABLE_KEYS_DESIGNER.slice() : CORE_TABLE_KEYS_PM.slice();
+  if (isDesignerLikeRole()) return CORE_TABLE_KEYS_DESIGNER.slice();
+  if (isAccountantRole()) return CORE_TABLE_KEYS_ACCT.slice();
+  return CORE_TABLE_KEYS_PM.slice();
 }
 
 function getDeferredTableKeys() {
-  return isDesignerLikeRole() ? DEFERRED_TABLE_KEYS_DESIGNER.slice() : DEFERRED_TABLE_KEYS_PM.slice();
+  if (isDesignerLikeRole()) return DEFERRED_TABLE_KEYS_DESIGNER.slice();
+  if (isAccountantRole()) return DEFERRED_TABLE_KEYS_ACCT.slice();
+  return DEFERRED_TABLE_KEYS_PM.slice();
 }
 
 function applyPartialTables(payload, keys) {
@@ -6925,9 +6936,9 @@ function renderExpenses() {
   function renderProjectBlock(pname, color) {
     var items = byProject[pname] || [];
     var header = '<div class="dc"><div class="dch"><div class="pdot" style="background:'+color+'"></div><h3>'+escHtml(pname)+'</h3>'
-      +'<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-exp\')">＋ 新增支出明細</button></div>';
+      + (isPMRole() ? '<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-exp\')">＋ 新增支出明細</button>' : '') + '</div>';
     if (!items.length) {
-      return header + '<div style="padding:12px 16px;color:var(--t3);font-size:12px">此標案尚無支出明細，點右上角新增第一筆</div></div>';
+      return header + '<div style="padding:12px 16px;color:var(--t3);font-size:12px">' + (isPMRole() ? '此標案尚無支出明細，點右上角新增第一筆' : '此標案尚無支出明細') + '</div></div>';
     }
     var byAssignee = {};
     items.forEach(function(item) {
@@ -16127,6 +16138,7 @@ function openEditExpense(expId) {
 }
 
 function saveEditExpense() {
+  if (!isPMRole()) { alert('僅 PM／管理員可修改支出明細'); return; }
   if (!editingExpenseId) return;
   var name = document.getElementById('ee-name').value.trim();
   var projId = document.getElementById('ee-proj').value;
