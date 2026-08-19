@@ -1991,6 +1991,7 @@ function tgp(row, e) {
   }
 }
 function sw(btn,id){
+  if (id === 'pg-ai' && !isAdminRole()) return;
   document.querySelectorAll('.tbar-tab').forEach(function(t){t.classList.remove('active');});
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   btn.classList.add('active');
@@ -2301,6 +2302,7 @@ function applyDeepLinkPage() {
       return;
     }
     sessionStorage.removeItem(DEEP_LINK_STORAGE_KEY);
+    if (pageId === 'pg-ai' && !isAdminRole()) return;
     var btn = document.querySelector('.tbar-tab[onclick*="' + pageId + '"]');
     if (!btn) return;
     sw(btn, pageId);
@@ -4300,7 +4302,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260819v5';
+var APP_BUILD = '20260819v6';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -4813,8 +4815,9 @@ var TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 var loginRefreshPromise = null;
 var currentUserRole = 'PM';
 var ROLE_PAGES = {
-  PM: ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
+  PM: ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal'],
   '管理員': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
+  '管理员': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
   '設計師': ['pg-d'],
   '設計主管': ['pg-d']
 };
@@ -5130,6 +5133,11 @@ function applyRolePermissions() {
     var pageId = m ? m[1] : '';
     btn.style.display = allowed.indexOf(pageId) >= 0 ? '' : 'none';
   });
+  var activePage = document.querySelector('.page.active');
+  if (activePage && allowed.indexOf(activePage.id) < 0 && allowed[0]) {
+    var fallbackTab = document.querySelector('.tbar-tab[onclick*="' + allowed[0] + '"]');
+    if (fallbackTab) sw(fallbackTab, allowed[0]);
+  }
   if (role === '設計師' || role === '設計主管') {
     document.body.classList.add('role-designer');
     document.body.classList.remove('role-accountant');
@@ -12151,6 +12159,7 @@ function onAiProjectChange() {
 }
 
 function renderAiPage() {
+  if (!isAdminRole()) return;
   fillAiProjectSelect();
   if (!aiSelectedProjectId) {
     showAiIdleState();
@@ -12487,6 +12496,7 @@ function renderAiChatFromRecord(rawText) {
 }
 
 function runAiAnalysis() {
+  if (!isAdminRole()) return;
   if (!aiSelectedProjectId) { alert('請先選擇專案'); return; }
   var body = document.getElementById('ai-body');
   var btn = document.getElementById('ai-run-btn');
@@ -12535,6 +12545,7 @@ function runAiAnalysis() {
 }
 
 function sendAiFollowup() {
+  if (!isAdminRole()) return;
   var input = document.getElementById('ai-followup-input');
   var question = input ? input.value.replace(/\n+$/, '').trim() : '';
   if (!question) return;
