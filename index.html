@@ -27,7 +27,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .tbar-tab{padding:6px 12px;border-radius:var(--rs);border:none;background:none;font-size:12px;cursor:pointer;color:var(--t2);transition:all .15s;white-space:nowrap;flex-shrink:0}
 .tbar-tab:hover{background:var(--sf2);color:var(--text)}
 .tbar-tab.active{background:var(--accent);color:#fff}
-.tbar-help{padding:6px 12px;border-radius:var(--rs);border:1px dashed var(--border);background:none;font-size:12px;cursor:pointer;color:var(--t3);transition:all .15s;white-space:nowrap;flex-shrink:0;text-decoration:none;margin-left:4px;font-family:inherit}
+.tbar-help{padding:6px 12px;border-radius:var(--rs);border:1px dashed var(--border);background:none;font-size:12px;cursor:pointer;color:var(--t3);transition:all .15s;white-space:nowrap;flex-shrink:0;text-decoration:none;font-family:inherit}
 .tbar-help:hover{background:var(--sf2);color:var(--text);border-color:#cfc8bc}
 .tbar-help.active{background:var(--sf2);color:var(--text);border-style:solid;border-color:#cfc8bc}
 
@@ -1151,8 +1151,10 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <button class="tbar-tab" onclick="sw(this,'pg-d')">設計任務單</button>
     <button class="tbar-tab" onclick="sw(this,'pg-journal')">日誌</button>
     <button class="tbar-tab" onclick="sw(this,'pg-ai')">AI分析</button>
-    <button type="button" class="tbar-help" id="btn-manual" onclick="toggleManualDrawer()" title="在右側開啟操作手冊（可邊看邊操作）">操作手冊</button>
   </nav>
+  <div class="topbar-actions">
+    <button type="button" class="tbar-help" id="btn-manual" onclick="toggleManualDrawer()" title="在右側開啟操作手冊（可邊看邊操作）">操作手冊</button>
+  </div>
 </div>
 
 <div id="manual-drawer" aria-hidden="true">
@@ -1176,8 +1178,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="ah">
       <span class="sl">Projects</span>
       <div class="sa">
-        <button class="badd" onclick="openPopup('pp-proj')">＋新增服務建議書</button>
-        <button class="badd" onclick="openPopup('pp-work')">＋工作項目</button>
+        <button class="badd" id="btn-add-proj" onclick="openPopup('pp-proj')">＋新增服務建議書</button>
+        <button class="badd" id="btn-add-wi" onclick="openPopup('pp-work')">＋工作項目</button>
       </div>
       <div id="proj-picker-mount"></div>
     </div>
@@ -1993,7 +1995,7 @@ function tgp(row, e) {
   }
 }
 function sw(btn,id){
-  if (id === 'pg-ai' && !isAdminRole()) return;
+  if (!isPageAllowed(id)) return;
   document.querySelectorAll('.tbar-tab').forEach(function(t){t.classList.remove('active');});
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   btn.classList.add('active');
@@ -2304,7 +2306,7 @@ function applyDeepLinkPage() {
       return;
     }
     sessionStorage.removeItem(DEEP_LINK_STORAGE_KEY);
-    if (pageId === 'pg-ai' && !isAdminRole()) return;
+    if (!isPageAllowed(pageId)) return;
     var btn = document.querySelector('.tbar-tab[onclick*="' + pageId + '"]');
     if (!btn) return;
     sw(btn, pageId);
@@ -2325,7 +2327,14 @@ function sf(el,color){
   el.style.color='#fff';
 }
 function op(id){document.getElementById(id).classList.add('open');}
-function openPopup(id) { preparePopup(id); op(id); }
+function openPopup(id) {
+  if ((id === 'pp-proj' || id === 'pp-work') && !canManageProjects()) {
+    alert('僅管理員可開案或建立工作項目');
+    return;
+  }
+  preparePopup(id);
+  op(id);
+}
 function cl(id){
   var el = document.getElementById(id);
   if (el) el.classList.remove('open');
@@ -3655,6 +3664,7 @@ function setWorkItemsImportSaving(saving) {
 }
 
 function saveProjectImport() {
+  if (!canManageProjects()) { alert('僅管理員可開案'); return; }
   if (projectImportSaving) return;
   var name = document.getElementById('np-name').value.trim();
   if (!name) { alert('請填寫標案名稱（或新增服務建議書自動帶入）'); return; }
@@ -4873,7 +4883,7 @@ var TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 var loginRefreshPromise = null;
 var currentUserRole = 'PM';
 var ROLE_PAGES = {
-  PM: ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal'],
+  PM: ['pg-s', 'pg-e', 'pg-p', 'pg-d', 'pg-journal'],
   '管理員': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
   '管理员': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
   '設計師': ['pg-d'],
@@ -4881,6 +4891,18 @@ var ROLE_PAGES = {
   '會計': ['pg-b', 'pg-e'],
   '会计': ['pg-b', 'pg-e']
 };
+
+function getAllowedPages() {
+  if (isAdminRole()) return ROLE_PAGES['管理員'];
+  var role = currentUserRole || 'PM';
+  return ROLE_PAGES[role] || ROLE_PAGES.PM;
+}
+function isPageAllowed(pageId) {
+  return getAllowedPages().indexOf(pageId) >= 0;
+}
+function canManageProjects() {
+  return isAdminRole();
+}
 
 function isAdminRole() {
   if (currentUserRole === '管理員' || currentUserRole === '管理员') return true;
@@ -4905,7 +4927,7 @@ function isAccountantRole() {
   return currentUserRole === '會計' || currentUserRole === '会计';
 }
 function isPMRole() {
-  // PM、管理員可看全部；設計師／設計主管限縮設計頁；會計只看費用與支出
+  // PM 與管理員可操作任務／支出／設計等日常頁；設計師／設計主管限縮設計頁；會計只看費用與支出
   return !isDesignerLikeRole() && !isAccountantRole();
 }
 
@@ -5186,13 +5208,18 @@ function checkMemberAuthorization() {
 
 function applyRolePermissions() {
   var role = currentUserRole || 'PM';
-  var allowed = ROLE_PAGES[role] || ROLE_PAGES.PM;
+  var allowed = getAllowedPages();
   document.querySelectorAll('.tbar-tab').forEach(function(btn) {
     var onclick = btn.getAttribute('onclick') || '';
     var m = onclick.match(/sw\(this,'([^']+)'\)/);
     var pageId = m ? m[1] : '';
     btn.style.display = allowed.indexOf(pageId) >= 0 ? '' : 'none';
   });
+  var canStruct = canManageProjects();
+  var addProj = document.getElementById('btn-add-proj');
+  var addWi = document.getElementById('btn-add-wi');
+  if (addProj) addProj.style.display = canStruct ? '' : 'none';
+  if (addWi) addWi.style.display = canStruct ? '' : 'none';
   var activePage = document.querySelector('.page.active');
   if (activePage && allowed.indexOf(activePage.id) < 0 && allowed[0]) {
     var fallbackTab = document.querySelector('.tbar-tab[onclick*="' + allowed[0] + '"]');
@@ -7122,8 +7149,11 @@ function buildProjectCardHtml(rec, color) {
     subHTML += '<div class="si">'
       + '<div class="si-row"><span class="si-name">' + escHtml(wName) + '</span>'
       + (weightStr ? '<span class="si-weight" title="進度／權重（—＝尚未分配權重）">' + weightStr + '</span>' : '')
-      + '<button type="button" class="bdel" title="修改工作項目" style="margin-right:2px" onclick="event.stopPropagation();openEditWorkItem(\'' + wi.record_id + '\')">✎</button>'
-      + '<button type="button" class="bdel" title="刪除工作項目" onclick="deleteWorkItem(\'' + wi.record_id + '\',\'' + escAttr(wName).replace(/'/g, "\\'") + '\')">×</button></div>'
+      + (canManageProjects()
+        ? ('<button type="button" class="bdel" title="修改工作項目" style="margin-right:2px" onclick="event.stopPropagation();openEditWorkItem(\'' + wi.record_id + '\')">✎</button>'
+          + '<button type="button" class="bdel" title="刪除工作項目" onclick="deleteWorkItem(\'' + wi.record_id + '\',\'' + escAttr(wName).replace(/'/g, "\\'") + '\')">×</button>')
+        : '')
+      + '</div>'
       + '<div class="si-meta"><span class="si-date">' + dateStr + '</span>'
       + (daysStr ? '<span class="si-remain">' + daysStr + '</span>' : '')
       + '</div></div>';
@@ -7136,13 +7166,16 @@ function buildProjectCardHtml(rec, color) {
     + '<span class="pr-meta">' + escHtml(meta || '—') + '</span>'
     + '<span class="pr-pct">' + progress + '%</span>'
     + (function() {
+      if (!canManageProjects()) return '';
       var msN = getMilestones(rec.record_id).length;
       if (!msN) return '';
       var pending = getMilestones(rec.record_id).filter(function(m) { return !m.taskIds || !m.taskIds.length; }).length;
       return '<button type="button" class="ms-proj-btn" title="履約里程碑" onclick="event.stopPropagation();openMilestonesForProject(\'' + rec.record_id + '\')">履約' + (pending ? (' ' + pending) : '') + '</button>';
     })()
-    + '<button type="button" class="bdel" title="修改標案" onclick="event.stopPropagation();openEditProject(\'' + rec.record_id + '\')">✎</button>'
-    + '<button type="button" class="bdel" title="刪除標案" onclick="event.stopPropagation();deleteProject(\'' + rec.record_id + '\',\'' + escAttr(name).replace(/'/g, "\\'") + '\')">×</button>'
+    + (canManageProjects()
+      ? ('<button type="button" class="bdel" title="修改標案" onclick="event.stopPropagation();openEditProject(\'' + rec.record_id + '\')">✎</button>'
+        + '<button type="button" class="bdel" title="刪除標案" onclick="event.stopPropagation();deleteProject(\'' + rec.record_id + '\',\'' + escAttr(name).replace(/'/g, "\\'") + '\')">×</button>')
+      : '')
     + '<span class="arr" title="展開工作項目">▶</span>'
     + '</div></div></div>'
     + '<div class="sl2' + (isOpen ? ' open' : '') + '">' + subHTML + '</div></div>';
@@ -8480,6 +8513,7 @@ function onMilestoneProjChange() {
 }
 
 function openMilestonesForProject(projId) {
+  if (!isPageAllowed('pg-ms')) return;
   milestonePageProjId = projId || null;
   var tab = document.querySelector('.tbar-tab[onclick*="pg-ms"]');
   if (tab) sw(tab, 'pg-ms');
@@ -16241,6 +16275,7 @@ function onNwProjChange() {
 }
 
 function openEditWorkItem(wiId) {
+  if (!canManageProjects()) { alert('僅管理員可修改工作項目'); return; }
   var rec = workitemsData.find(function(r){ return r.record_id === wiId; });
   if (!rec) return;
   editingWiId = wiId;
@@ -16267,6 +16302,7 @@ function openEditWorkItem(wiId) {
 }
 
 function saveEditWorkItem() {
+  if (!canManageProjects()) { alert('僅管理員可修改工作項目'); return; }
   if (!editingWiId) return;
   var rec = workitemsData.find(function(r){ return r.record_id === editingWiId; });
   var oldFields = rec ? {
@@ -16316,6 +16352,7 @@ function saveEditWorkItem() {
 }
 
 function openEditProject(projId) {
+  if (!canManageProjects()) { alert('僅管理員可修改標案'); return; }
   var rec = projectsData.find(function(r){ return r.record_id === projId; });
   if (!rec) return;
   editingProjId = projId;
@@ -16332,6 +16369,7 @@ function openEditProject(projId) {
 }
 
 function saveEditProject() {
+  if (!canManageProjects()) { alert('僅管理員可修改標案'); return; }
   if (!editingProjId) return;
   var rec = projectsData.find(function(r){ return r.record_id === editingProjId; });
   var oldFields = rec ? {
@@ -16385,6 +16423,7 @@ function refreshEditSelects() {
 }
 
 function deleteProject(id, name) {
+  if (!canManageProjects()) { alert('僅管理員可刪除標案'); return; }
   var rec = projectsData.find(function(r){ return r.record_id === id; });
   showConfirm({
     type: 'del',
@@ -16404,6 +16443,7 @@ function deleteProject(id, name) {
 }
 
 function deleteWorkItem(id, name) {
+  if (!canManageProjects()) { alert('僅管理員可刪除工作項目'); return; }
   var rec = workitemsData.find(function(r){ return r.record_id === id; });
   showConfirm({
     type: 'del',
@@ -16693,6 +16733,7 @@ function refreshFormSelects() {
 }
 
 function saveWorkItems() {
+  if (!canManageProjects()) { alert('僅管理員可建立工作項目'); return; }
   if (workItemsImportSaving) return;
   var projId = document.getElementById('nw-proj').value;
   if (!projId) { alert('請選擇標案'); return; }
