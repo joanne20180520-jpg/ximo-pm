@@ -5743,16 +5743,20 @@ function extractApplicantOpenIdHint(body) {
   return String(b.applicantOpenId || b.applicant_open_id || '').trim();
 }
 
-async function requireAdminUser(req) {
+async function requireAdminUser(req, deniedMessage) {
   const userAccessToken = extractUserAccessToken(req);
   const auth = await checkMemberAuthorization(userAccessToken);
   if (!auth.authorized) {
     return { ok: false, status: auth.needLogin ? 401 : 403, error: auth.needLogin ? '請先登入' : '沒有權限' };
   }
   if (!isAdminRoleToken(auth.role)) {
-    return { ok: false, status: 403, error: '僅管理員可使用 AI 分析' };
+    return { ok: false, status: 403, error: deniedMessage || '僅管理員可使用此功能' };
   }
   return { ok: true, auth: auth };
+}
+
+function isProjectStructureTable(table) {
+  return table === 'projects' || table === 'workitems';
 }
 
 async function getUserInfoFromToken(userAccessToken) {
@@ -6277,6 +6281,8 @@ export default async function handler(req, res) {
     }
 
     if (action === 'project-import' && req.method === 'POST') {
+      const projGate = await requireAdminUser(req, '僅管理員可開案');
+      if (!projGate.ok) return res.status(projGate.status).json({ error: projGate.error });
       const tenantToken = await getToken();
       const userAccessToken = extractUserAccessToken(req);
       const b = stripAuthFromBody(req.body || {});
@@ -6287,6 +6293,8 @@ export default async function handler(req, res) {
     }
 
     if (action === 'workitems-import' && req.method === 'POST') {
+      const wiGate = await requireAdminUser(req, '僅管理員可建立工作項目');
+      if (!wiGate.ok) return res.status(wiGate.status).json({ error: wiGate.error });
       const tenantToken = await getToken();
       const userAccessToken = extractUserAccessToken(req);
       const b = stripAuthFromBody(req.body || {});
@@ -6309,7 +6317,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'ai-analysis' && req.method === 'POST') {
-      const adminGate = await requireAdminUser(req);
+      const adminGate = await requireAdminUser(req, '僅管理員可使用 AI 分析');
       if (!adminGate.ok) return res.status(adminGate.status).json({ ok: false, error: adminGate.error });
       const projectId = req.body && req.body.projectId;
       if (!projectId) return res.status(400).json({ error: 'missing projectId' });
@@ -6367,7 +6375,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'ai-followup' && req.method === 'POST') {
-      const followGate = await requireAdminUser(req);
+      const followGate = await requireAdminUser(req, '僅管理員可使用 AI 分析');
       if (!followGate.ok) return res.status(followGate.status).json({ ok: false, error: followGate.error });
       const b = req.body || {};
       const projectId = b.projectId;
@@ -6455,6 +6463,10 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       if (!tableIdFor(table)) return res.status(400).json({ error: 'Invalid table' });
+      if (isProjectStructureTable(table)) {
+        const structGate = await requireAdminUser(req, table === 'projects' ? '僅管理員可開案' : '僅管理員可建立工作項目');
+        if (!structGate.ok) return res.status(structGate.status).json({ error: structGate.error });
+      }
       const applicantHint = extractApplicantOpenIdHint(req.body);
       const cleanBody = stripAuthFromBody(req.body || {});
       if (table === 'payments') {
@@ -6480,6 +6492,10 @@ export default async function handler(req, res) {
 
     if (req.method === 'PUT') {
       if (!tableIdFor(table) || !recordId) return res.status(400).json({ error: 'Invalid params' });
+      if (isProjectStructureTable(table)) {
+        const structGate = await requireAdminUser(req, table === 'projects' ? '僅管理員可修改標案' : '僅管理員可修改工作項目');
+        if (!structGate.ok) return res.status(structGate.status).json({ error: structGate.error });
+      }
       const tableAppToken = appTokenForTable(table);
       const tid = tableIdFor(table);
       const cleanBody = stripAuthFromBody(req.body || {});
@@ -6492,6 +6508,10 @@ export default async function handler(req, res) {
 
     if (req.method === 'DELETE') {
       if (!tableIdFor(table) || !recordId) return res.status(400).json({ error: 'Invalid params' });
+      if (isProjectStructureTable(table)) {
+        const structGate = await requireAdminUser(req, table === 'projects' ? '僅管理員可刪除標案' : '僅管理員可刪除工作項目');
+        if (!structGate.ok) return res.status(structGate.status).json({ error: structGate.error });
+      }
       const tableAppToken = appTokenForTable(table);
       const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
         return deleteRecord(tok, tableIdFor(table), recordId, tableAppToken, asUser);

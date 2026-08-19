@@ -121,7 +121,7 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .si{padding:6px 9px 6px 12px;font-size:11px;color:var(--t2);font-weight:500;cursor:default;border-radius:var(--rs);display:flex;flex-direction:column;gap:3px}
 .si:hover{background:var(--sf2)}
 .si .bdel{background:transparent;color:var(--t3);opacity:0}
-.si:hover .bdel{opacity:1}
+body.role-pm-limited #pl-projects .bdel{display:none !important}
 .si .bdel:hover{color:#c0392b;background:rgba(192,57,43,.12)}
 .si-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
 .si-name{font-size:11px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -5224,6 +5224,16 @@ function applyRolePermissions() {
   if (activePage && allowed.indexOf(activePage.id) < 0 && allowed[0]) {
     var fallbackTab = document.querySelector('.tbar-tab[onclick*="' + allowed[0] + '"]');
     if (fallbackTab) sw(fallbackTab, allowed[0]);
+  }
+  if (canManageProjects()) {
+    document.body.classList.add('role-admin');
+    document.body.classList.remove('role-pm-limited');
+  } else if (isPMRole()) {
+    document.body.classList.add('role-pm-limited');
+    document.body.classList.remove('role-admin');
+  } else {
+    document.body.classList.remove('role-admin');
+    document.body.classList.remove('role-pm-limited');
   }
   if (role === '設計師' || role === '設計主管') {
     document.body.classList.add('role-designer');
@@ -14905,6 +14915,7 @@ function apiDelete(table, recordId) {
     method: 'DELETE',
     headers: tok ? { 'X-User-Access-Token': tok } : {}
   }).then(function(r) { return r.json(); }).then(function(res) {
+    if (res && res.error) throw new Error(res.error);
     if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '刪除失敗');
     return res;
   });
