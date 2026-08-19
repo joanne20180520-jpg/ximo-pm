@@ -151,19 +151,39 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .tgl>span:not(.tc):not(.tgl-arrow):not(.tgd):not(.av){flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tgd{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .tc{background:var(--sf2);border-radius:8px;padding:1px 5px;font-size:9px;color:var(--t3);font-weight:600;margin-left:auto;flex-shrink:0}
-.ti{padding:8px 10px;border-radius:var(--rs);cursor:pointer;margin-bottom:5px;background:var(--sf2);border:1px solid var(--border);transition:border-color .1s,background .1s;position:relative}
+.ti{padding:8px 10px;border-radius:var(--rs);cursor:pointer;margin-bottom:5px;background:var(--sf2);border:1px solid var(--border);border-left-width:3px;transition:border-color .1s,background .1s;position:relative}
 .ti-compact{padding:7px 10px}
 .ti-compact .tn{font-size:12px}
-.ti:hover{border-color:var(--t3);background:#fff}
+.ti:hover{border-top-color:var(--t3);border-right-color:var(--t3);border-bottom-color:var(--t3);background:#fff}
+.ti.ti-pending{border-left-color:#c5c1ba}
+.ti.ti-doing{border-left-color:var(--report)}
+.ti.ti-overdue{border-left-color:var(--danger);background:#fdf6f4}
+.ti.ti-overdue:hover{background:#fff}
+.ti.ti-done{border-left-color:#8fbc8f;opacity:.78}
+.ti.ti-done .tn{color:var(--t3);text-decoration:line-through;font-weight:600}
+.ti.ti-paused{border-left-color:var(--c2)}
 .ti .bdel{position:absolute;right:6px;top:6px;background:var(--sf2);color:var(--t3);opacity:0}
 .ti:hover .bdel{opacity:1}
 .ti .bdel:hover{color:#c0392b;background:#fff3f3}
 .tn{font-size:13px;font-weight:700;color:var(--text);line-height:1.4;padding-right:14px;word-break:keep-all;overflow-wrap:break-word}
 .tdesc{font-size:11px;font-weight:normal !important;margin-top:3px;line-height:1.4;padding-right:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ti-foot{display:flex;justify-content:flex-end;margin-top:8px}
-.ti-assignee{font-size:11px;color:var(--t3);line-height:1.2}
-.tpb{height:2px;background:var(--border);border-radius:1px;margin-top:5px;overflow:hidden}
-.tpf{height:100%;border-radius:1px}
+.ti-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
+.ti-assignee{font-size:11px;color:var(--t3);line-height:1.2;margin-left:auto;flex-shrink:0}
+.ti-status{font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;flex-shrink:0;white-space:nowrap;line-height:1.4}
+.ti-status.pending{background:#f0f0f0;color:#888}
+.ti-status.doing{background:#e8f5e9;color:#2e7d32}
+.ti-status.overdue{background:#fde8e8;color:#c0392b}
+.ti-status.done{background:#e8f5e9;color:#2e7d32}
+.ti-status.pause{background:#eef4fc;color:#1a4a7a}
+.tpb{height:2px;background:var(--border);border-radius:1px;margin-top:6px;overflow:hidden}
+.tpf{height:100%;border-radius:1px;background:var(--report)}
+.ti-overdue .tpf{background:var(--danger)}
+.task-status-filters{display:flex;gap:3px;overflow-x:auto;padding:0 8px 6px;flex-shrink:0;scrollbar-width:none}
+.task-status-filters::-webkit-scrollbar{display:none}
+.tsf-btn{padding:3px 7px;border:1px solid var(--border);border-radius:12px;background:var(--sf2);font-size:10px;font-weight:600;color:var(--t2);cursor:pointer;line-height:1.2;white-space:nowrap;font-family:inherit}
+.tsf-btn:hover{background:#eeebe6;color:var(--text)}
+.tsf-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.tsf-btn.tsf-overdue.active{background:var(--danger);border-color:var(--danger)}
 .ftag{padding:2px 7px;border-radius:20px;font-size:10px;cursor:pointer;border:1px solid var(--border);white-space:nowrap;color:var(--t2);background:var(--sf2);transition:all .15s;flex-shrink:0}
 .task-group-mode{display:flex;gap:4px;padding:0 8px 6px;flex-shrink:0}
 .tgm-btn{flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:18px;background:var(--sf2);font-size:10px;font-weight:600;color:var(--t2);cursor:pointer;line-height:1.2;transition:background .15s,color .15s,border-color .15s;white-space:nowrap;font-family:inherit}
@@ -558,6 +578,7 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .stp{background:#fff3e0;color:#b06000}
 .ds{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500;background:#fff3e0;color:#b06000}
 .ds-done{background:#e8f5e9;color:#2e7d32}
+.ds-doing{background:#e8f5e9;color:#2e7d32}
 .ds-pending{background:#f0f0f0;color:#888}
 .ds-pause{background:#eef4fc;color:#1a4a7a}
 .ds-final{background:#e8f5e9;color:#2e7d32}
@@ -1167,6 +1188,13 @@ button.btn-loading::after{content:'…';margin-left:2px}
       <div class="task-group-mode" id="task-group-mode">
         <button type="button" class="tgm-btn active" data-mode="due" onclick="setTaskGroupMode('due', this)">依到期日</button>
         <button type="button" class="tgm-btn" data-mode="assignee" onclick="setTaskGroupMode('assignee', this)">依負責人</button>
+      </div>
+      <div class="task-status-filters" id="task-status-filters">
+        <button type="button" class="tsf-btn active" data-status="" onclick="setTaskStatusFilter('', this)">全部</button>
+        <button type="button" class="tsf-btn tsf-overdue" data-status="overdue" onclick="setTaskStatusFilter('overdue', this)">逾期</button>
+        <button type="button" class="tsf-btn" data-status="doing" onclick="setTaskStatusFilter('doing', this)">進行中</button>
+        <button type="button" class="tsf-btn" data-status="pending" onclick="setTaskStatusFilter('pending', this)">未開始</button>
+        <button type="button" class="tsf-btn" data-status="done" onclick="setTaskStatusFilter('done', this)">已完成</button>
       </div>
       <div class="ft" id="task-filters"></div>
       <div class="tl2" id="task-list-body">
@@ -4248,7 +4276,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260819v1';
+var APP_BUILD = '20260819v2';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -5427,6 +5455,26 @@ function taskDueBadgeHtml(dueTs, progress, status) {
 }
 function taskRemainLabel(dueTs, progress, status) {
   return formatTaskDueBadge(dueTs, progress, status).text;
+}
+function getTaskCardKind(t) {
+  var progress = typeof t.progress === 'number' ? t.progress : 0;
+  var status = t.status || '';
+  if (progress >= 100 || status === '已完成') return 'done';
+  var remain = t.remain || taskRemainLabel(t.dueTs, progress, status);
+  if (remain && String(remain).indexOf('逾期') >= 0) return 'overdue';
+  if (status === '暫停') return 'paused';
+  if (progress > 0 || /進行中/.test(status)) return 'doing';
+  return 'pending';
+}
+function taskCardStatusLabel(t, kind) {
+  if (kind === 'done') return '已完成';
+  if (kind === 'overdue') return t.remain || '逾期';
+  if (kind === 'paused') return '暫停';
+  if (kind === 'doing') {
+    var pct = typeof t.progress === 'number' ? t.progress : 0;
+    return pct > 0 ? (pct + '%') : '進行中';
+  }
+  return '未開始';
 }
 function updateTaskDetailDueBadge() {
   if (!currentTaskId) return;
@@ -7064,6 +7112,7 @@ function renderProjects() {
 var TASK_GROUP_STORAGE_KEY = 'ximo-task-group-mode';
 var taskGroupMode = 'due';
 var currentTaskFilterProj = '';
+var currentTaskFilterStatus = '';
 var expandedTaskGroupKeys = {};
 
 function initTaskGroupMode() {
@@ -7203,8 +7252,10 @@ function groupTasksByWorkitem(tasks) {
 function renderTaskRow(t, opts) {
   opts = opts || {};
   var compact = !!opts.hideAssignee;
+  var kind = getTaskCardKind(t);
+  var statusLabel = taskCardStatusLabel(t, kind);
   var html = '';
-  html += '<div class="ti' + (compact ? ' ti-compact' : '') + '" data-proj="' + escAttr(t.projName) + '" onclick="openTaskDetail(\'' + t.id + '\')">';
+  html += '<div class="ti ti-' + kind + (compact ? ' ti-compact' : '') + '" data-proj="' + escAttr(t.projName) + '" data-kind="' + kind + '" onclick="openTaskDetail(\'' + t.id + '\')">';
   if (isAdminRole()) {
     html += '<button type="button" class="bdel" title="刪除任務" onclick="event.stopPropagation();deleteTask(\'' + t.id + '\',\'' + escAttr(t.name).replace(/'/g, "\\'") + '\')">×</button>';
   }
@@ -7213,8 +7264,14 @@ function renderTaskRow(t, opts) {
     var descColor = projDescColorByName(t.projName);
     html += '<div class="tdesc" style="color:' + descColor + '" title="' + escAttr(t.desc) + '">' + escHtml(t.desc) + '</div>';
   }
+  html += '<div class="ti-foot">';
+  html += '<span class="ti-status ' + kind.replace('paused', 'pause') + '">' + escHtml(statusLabel) + '</span>';
   if (!opts.hideAssignee) {
-    html += '<div class="ti-foot"><span class="ti-assignee">' + escHtml(t.assigneeShort || shortPersonLabel(t.assignee)) + '</span></div>';
+    html += '<span class="ti-assignee">' + escHtml(t.assigneeShort || shortPersonLabel(t.assignee)) + '</span>';
+  }
+  html += '</div>';
+  if (kind === 'doing' || (kind === 'overdue' && t.progress > 0 && t.progress < 100)) {
+    html += '<div class="tpb"><div class="tpf" style="width:' + Math.max(4, Math.min(100, t.progress || 0)) + '%"></div></div>';
   }
   html += '</div>';
   return html;
@@ -7282,14 +7339,34 @@ function restoreFilterTagState() {
   });
 }
 
-function applyTaskListFilter(proj) {
-  currentTaskFilterProj = proj || '';
+function applyTaskListFilter(proj, status) {
+  if (proj !== undefined) currentTaskFilterProj = proj || '';
+  if (status !== undefined) currentTaskFilterStatus = status || '';
   document.querySelectorAll('#task-list-body .ti').forEach(function(item) {
-    var match = !proj || item.dataset.proj === proj;
-    item.style.display = match ? '' : 'none';
+    var matchProj = !currentTaskFilterProj || item.dataset.proj === currentTaskFilterProj;
+    var kind = item.dataset.kind || '';
+    var matchStatus = !currentTaskFilterStatus
+      || (currentTaskFilterStatus === 'doing' && (kind === 'doing' || kind === 'paused'))
+      || kind === currentTaskFilterStatus;
+    item.style.display = (matchProj && matchStatus) ? '' : 'none';
   });
   refreshTaskGroupVisibility();
   restoreFilterTagState();
+  restoreStatusFilterState();
+}
+
+function setTaskStatusFilter(status, btn) {
+  applyTaskListFilter(currentTaskFilterProj, status || '');
+  if (btn) {
+    document.querySelectorAll('#task-status-filters .tsf-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+  }
+}
+
+function restoreStatusFilterState() {
+  document.querySelectorAll('#task-status-filters .tsf-btn').forEach(function(btn) {
+    btn.classList.toggle('active', (btn.dataset.status || '') === currentTaskFilterStatus);
+  });
 }
 
 function renderTasks() {
