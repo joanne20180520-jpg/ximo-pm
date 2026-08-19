@@ -1516,6 +1516,49 @@ async function getMediaDownloadUrl(token, fileToken) {
   throw new Error((data && data.msg) || 'download failed');
 }
 
+async function downloadMediaBuffer(token, fileToken) {
+  const res = await fetch(BASE_URL + '/drive/v1/medias/' + encodeURIComponent(fileToken) + '/download', {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  if (res.ok) return Buffer.from(await res.arrayBuffer());
+  const url = await getMediaDownloadUrl(token, fileToken);
+  if (!url) throw new Error('download url not found');
+  const fileRes = await fetch(url);
+  if (!fileRes.ok) throw new Error('download media failed');
+  return Buffer.from(await fileRes.arrayBuffer());
+}
+
+async function uploadApprovalFile(token, fileName, buffer) {
+  const safeName = String(fileName || 'attachment.bin').replace(/[\\/]/g, '_');
+  const urls = [
+    'https://www.larksuite.com/approval/openapi/v2/file/upload',
+    'https://open.larksuite.com/approval/openapi/v2/file/upload'
+  ];
+  let lastErr = 'upload approval file failed';
+  for (let i = 0; i < urls.length; i++) {
+    const form = new FormData();
+    form.append('name', safeName);
+    form.append('type', 'attachment');
+    form.append('content', new Blob([buffer]), safeName);
+    const res = await fetch(urls[i], {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token },
+      body: form
+    });
+    const data = await res.json().catch(function() { return {}; });
+    if (data && data.code === 0 && data.data && data.data.code) {
+      return String(data.data.code);
+    }
+    lastErr = (data && data.msg) || lastErr;
+  }
+  throw new Error(lastErr);
+}
+
+function formatNtAmount(n) {
+  const num = Math.round(Number(n) || 0);
+  return 'NT$' + num.toLocaleString('zh-TW');
+}
+
 function normalizeArchiveFieldValue(meta, val) {
   if (val === undefined || val === null) return null;
   if (val === '' && (!meta || meta.type !== 1)) return null;
@@ -2097,9 +2140,40 @@ function buildPaymentApprovalForm(widgets, fields, openId) {
       return;
     } else {
       const text = paymentFieldText(approvalFields, names);
-      if (text) item = { id: w.id, type: type.indexOf('input') >= 0 ? 'input' : type, value: text };
+      if (/付款總金額|總金額|^金額$/.test(String(w.name || '').replace(/\s+/g, ''))) {
+        const amt = paymentAmountNumber(approvalFields);
+        if (amt) item = { id: w.id, type: type.indexOf('input') >= 0 ? 'input' : type, value: formatNtAmount(amt) };
+      } else if (text) {
+        item = { id: w.id, type: type.indexOf('input') >= 0 ? 'input' : type, value: text };
+      }
     }
     if (item) form.push(item);
+  });
+  return form;
+}
+
+async function appendApprovalAttachments(token, widgets, fields, form) {
+  const widget = (widgets || []).find(function(w) {
+    const t = String(w.type || '');
+    return t === 'attachment' || t === 'attachmentV2';
+  });
+  if (!widget) return form;
+  const files = paymentAttachmentItems(fields);
+  if (!files.length) return form;
+  const codes = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    try {
+      const buf = await downloadMediaBuffer(token, file.file_token);
+      const code = await uploadApprovalFile(token, file.name, buf);
+      if (code) codes.push(code);
+    } catch (err) {}
+  }
+  if (!codes.length) return form;
+  form.push({
+    id: widget.id,
+    type: String(widget.type || 'attachmentV2'),
+    value: codes
   });
   return form;
 }
@@ -2111,7 +2185,8 @@ async function createPaymentApprovalInstance(token, fields, openIdHint) {
   if (!openId) return { ok: false, error: '找不到申請人 open_id，無法送審（請用 Lark 登入）' };
   const def = await getPaymentApprovalDefinition(token);
   const widgets = parseApprovalFormWidgets(def.form);
-  const form = buildPaymentApprovalForm(widgets, fields, openId);
+  let form = buildPaymentApprovalForm(widgets, fields, openId);
+  form = await appendApprovalAttachments(token, widgets, fields, form);
   const body = {
     approval_code: approvalCode,
     open_id: openId,
@@ -2271,7 +2346,7 @@ function buildAccountingNotifyText(title, fields, extra) {
     '支付對象：' + String((fields && fields['支付對象']) || ''),
     '支付方式：' + String((fields && (fields['支付方式'] || fields['付款方式'])) || ''),
     '事由：' + String((fields && fields['事由']) || ''),
-    '金額：NT$' + (amount ? amount.toLocaleString() : '0')
+    '金額：' + formatNtAmount(amount)
   ];
   if (extra) lines.push(extra);
   return lines.join('\n');
@@ -4853,7 +4928,7 @@ async function sendPaymentNotify(fields) {
     '申請部門：' + (fields['申請部門'] || ''),
     '支付對象：' + (fields['支付對象'] || ''),
     '事由：' + (fields['事由'] || ''),
-    '金額：' + amountStr,
+    '金額：' + formatNtAmount(amount),
     printUrl,
     '已送出審批，請依流程線上簽核 👇'
   ].join('\n');
