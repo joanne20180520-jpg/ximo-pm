@@ -948,7 +948,8 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 @keyframes payNoticeFadeIn{from{opacity:0}to{opacity:1}}
 @keyframes payNoticePop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 .pay-save-notice-card{width:100%;max-width:400px;background:#fff;border:1px solid #eceae6;border-radius:14px;padding:20px 20px 16px;box-shadow:0 12px 40px rgba(0,0,0,.12);animation:payNoticePop .28s cubic-bezier(.22,1,.36,1)}
-.pay-save-notice-card.is-error{border-color:#f0d8d8}
+.pay-save-notice-card.is-wait .pay-save-notice-icon{display:none}
+.pay-save-notice-card.is-wait .pay-save-notice-row{align-items:center}
 .pay-save-notice-row{display:flex;align-items:flex-start;gap:14px;margin-bottom:16px}
 .pay-save-notice-icon{width:40px;height:40px;border-radius:10px;background:#e8f5ee;color:#2d6a4f;font-size:20px;line-height:40px;text-align:center;font-weight:700;flex-shrink:0}
 .pay-save-notice-card.is-error .pay-save-notice-icon{background:#fde8e8;color:#b91c1c}
@@ -3790,7 +3791,7 @@ function prevPay() {
     alert('請先 Lark 登入，送出才會記錄申請人');
   }
   if (payAttachmentUploading > 0) {
-    alert('附件還在上傳中，請稍候再預覽');
+    showNotice('附件上傳中，請稍候');
     return;
   }
   if (!document.getElementById('p-total').value.replace(/[^0-9]/g, '')) {
@@ -3848,7 +3849,10 @@ function showPaymentSaveNotice(_printed, res) {
   var msgEl = document.getElementById('pay-save-notice-msg');
   var subEl = document.getElementById('pay-save-notice-sub');
   if (!el || !msgEl) return;
-  if (card) card.classList.remove('is-error');
+  if (card) {
+    card.classList.remove('is-error');
+    card.classList.remove('is-wait');
+  }
   if (icon) icon.textContent = '✓';
   msgEl.textContent = (res && res.approval && res.approval.ok)
     ? '付款申請單已送出審批。'
@@ -3873,7 +3877,10 @@ function showPaymentSaveError(message) {
   var msgEl = document.getElementById('pay-save-notice-msg');
   var subEl = document.getElementById('pay-save-notice-sub');
   if (!el || !msgEl) return;
-  if (card) card.classList.add('is-error');
+  if (card) {
+    card.classList.add('is-error');
+    card.classList.remove('is-wait');
+  }
   if (icon) icon.textContent = '!';
   msgEl.textContent = message || '存檔失敗，請稍後再試。';
   if (subEl) subEl.textContent = '';
@@ -3883,6 +3890,23 @@ function showPaymentSaveError(message) {
 function hidePaymentSaveNotice() {
   var el = document.getElementById('pay-save-notice');
   if (el) el.classList.add('hidden');
+}
+
+function showNotice(msg) {
+  var el = document.getElementById('pay-save-notice');
+  var card = document.getElementById('pay-save-notice-card');
+  var icon = document.getElementById('pay-save-notice-icon');
+  var msgEl = document.getElementById('pay-save-notice-msg');
+  var subEl = document.getElementById('pay-save-notice-sub');
+  if (!el || !msgEl) return;
+  if (card) {
+    card.classList.remove('is-error');
+    card.classList.add('is-wait');
+  }
+  if (icon) icon.textContent = '';
+  msgEl.textContent = msg || '';
+  if (subEl) subEl.textContent = '';
+  el.classList.remove('hidden');
 }
 
 function validatePaymentForm() {
@@ -3912,7 +3936,7 @@ function savePaymentOnly(closePreview) {
   }
   if (paySubmitting) return;
   if (payAttachmentUploading > 0) {
-    alert('附件還在上傳中，請稍候再送出');
+    showNotice('附件上傳中，請稍候');
     return;
   }
   var data = validatePaymentForm();
@@ -4276,7 +4300,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260819v4';
+var APP_BUILD = '20260819v5';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -14166,7 +14190,7 @@ function saveDesignVersion() {
     return;
   }
   if (designVersionUploading > 0) {
-    alert('檔案還在上傳中，請稍候再儲存');
+    showNotice('附件上傳中，請稍候');
     return;
   }
   var label = (document.getElementById('dv-version').value || '').trim() || nextDesignVersionLabel(getVersionsForDesign(addingDesignVersionId));
