@@ -5759,6 +5759,16 @@ function isProjectStructureTable(table) {
   return table === 'projects' || table === 'workitems';
 }
 
+function isTaskFieldsCompleted(fields) {
+  const f = fields || {};
+  const status = String(f['進度狀態'] || '').trim();
+  if (status === '已完成' || status === '完成') return true;
+  const num = f['進度數值'];
+  if (typeof num === 'number' && (num >= 100 || num === 1)) return true;
+  const m = status.match(/(\d+)/);
+  return !!(m && parseInt(m[1], 10) >= 100);
+}
+
 async function getUserInfoFromToken(userAccessToken) {
   const infoRes = await fetch(BASE_URL + '/authen/v1/user_info', {
     headers: { 'Authorization': 'Bearer ' + userAccessToken }
@@ -6513,6 +6523,16 @@ export default async function handler(req, res) {
         if (!structGate.ok) return res.status(structGate.status).json({ error: structGate.error });
       }
       const tableAppToken = appTokenForTable(table);
+      if (table === 'tasks') {
+        try {
+          const existing = await getRecordById(tenantToken, tableIdFor('tasks'), recordId, tableAppToken);
+          if (isTaskFieldsCompleted(existing && existing.fields)) {
+            return res.status(403).json({ error: '已完成的任務不能刪除' });
+          }
+        } catch (readErr) {
+          console.warn('task delete precheck', readErr.message || readErr);
+        }
+      }
       const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
         return deleteRecord(tok, tableIdFor(table), recordId, tableAppToken, asUser);
       });

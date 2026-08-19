@@ -7401,7 +7401,7 @@ function renderTaskRow(t, opts) {
   var statusLabel = taskCardStatusLabel(t, kind);
   var html = '';
   html += '<div class="ti ti-' + kind + (compact ? ' ti-compact' : '') + '" data-proj="' + escAttr(t.projName) + '" data-kind="' + kind + '" onclick="openTaskDetail(\'' + t.id + '\')">';
-  if (isAdminRole()) {
+  if (isAdminRole() && kind !== 'done') {
     html += '<button type="button" class="bdel" title="刪除任務" onclick="event.stopPropagation();deleteTask(\'' + t.id + '\',\'' + escAttr(t.name).replace(/'/g, "\\'") + '\')">×</button>';
   }
   html += '<div class="tn">' + formatTaskNameHtml(t.name) + '</div>';
@@ -9938,7 +9938,20 @@ function onTaskReportStatusChange() {
 }
 
 function isCompletedReportStatus(status) {
-  return status === '已完成' || parseProgressVal(status, null) >= 100;
+  return status === '已完成' || status === '完成' || parseProgressVal(status, null) >= 100;
+}
+
+function isTaskRecordCompleted(rec) {
+  var f = rec && rec.fields ? rec.fields : rec;
+  if (!f) return false;
+  if (isCompletedReportStatus(f['進度狀態'])) return true;
+  return parseProgressVal(f['進度狀態'], f['進度數值']) >= 100;
+}
+
+function syncTaskDetailDeleteButton(rec) {
+  var btn = document.getElementById('td-del-btn');
+  if (!btn) return;
+  btn.style.display = (isPMRole() && !isTaskRecordCompleted(rec)) ? '' : 'none';
 }
 
 function normalizeReportStatusForCategory(status, category, originalStatus) {
@@ -10269,6 +10282,7 @@ function openTaskDetail(taskId) {
   renderTaskAttachList();
   updateTaskDetailDueBadge();
   applyDetailPopupPermissions('pp-td');
+  syncTaskDetailDeleteButton(ctx.rec);
   op('pp-td');
 }
 
@@ -16489,6 +16503,10 @@ function deleteTask(id, name) {
     return;
   }
   var rec = tasksData.find(function(r){ return r.record_id === id; });
+  if (isTaskRecordCompleted(rec)) {
+    showConfirm({ type: 'edit', title: '無法刪除', body: '已完成的任務不能刪除。', okText: '知道了', hideCancel: true, onOk: function() {} });
+    return;
+  }
   showConfirm({
     type: 'del',
     title: '刪除任務',
