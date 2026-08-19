@@ -2324,8 +2324,8 @@ async function routeApprovedPaymentToAccounting(tenantToken, paymentRec, opts) {
   rec.fields['待簽核人'] = rec.fields['會計待簽核人'];
 
   let extra = '';
-  if (nextStatus === '已送達詹佳瑜') extra = '請自行列印付款申請單與附件給夏桂英。';
-  else extra = '請在 Lark 審批蓋章。蓋完後會送到詹佳瑜。';
+  if (nextStatus === '已送達詹佳瑜') extra = buildIrisaPrintNotifyExtra(fields);
+  else extra = '請在 Lark 審批蓋章。蓋完後會送到詹佳瑜列印。';
   const title = nextStatus === '已送達詹佳瑜'
     ? '【付款申請·已送到詹佳瑜】'
     : ('【付款申請·現金待蓋章】' + nextStatus);
@@ -4788,6 +4788,57 @@ function buildPaymentPrintPath(fields) {
   return q ? 'payment-print.html?' + q : 'payment-print.html';
 }
 
+function siteOrigin() {
+  return (process.env.SITE_URL || 'https://ximo-pm.vercel.app').replace(/\/$/, '');
+}
+
+function paymentAttachmentItems(fields) {
+  const raw = (fields && (fields['附件'] || fields['檔案'] || fields['上傳附件'])) || [];
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  raw.forEach(function(item, idx) {
+    if (!item) return;
+    if (typeof item === 'string' && item.trim()) {
+      out.push({ file_token: item.trim(), name: '附件' + (idx + 1) });
+      return;
+    }
+    const token = String(item.file_token || item.token || '').trim();
+    if (!token) return;
+    out.push({
+      file_token: token,
+      name: String(item.name || item.file_name || ('附件' + (idx + 1))).trim()
+    });
+  });
+  return out;
+}
+
+function buildPaymentPrintUrl(fields) {
+  return siteOrigin() + '/' + buildPaymentPrintPath(fields || {});
+}
+
+function buildAttachmentFileUrl(fileToken) {
+  return siteOrigin() + '/api/lark?action=download-attachment-file&fileToken=' + encodeURIComponent(fileToken);
+}
+
+function buildIrisaPrintNotifyExtra(fields) {
+  const lines = [
+    '請列印以下兩項：',
+    '1. 付款申請單：',
+    buildPaymentPrintUrl(fields)
+  ];
+  const files = paymentAttachmentItems(fields);
+  if (!files.length) {
+    lines.push('2. 附件：本筆沒有附件');
+    return lines.join('\n');
+  }
+  lines.push('2. 既有附件：');
+  files.forEach(function(file, idx) {
+    lines.push((idx + 1) + '. ' + file.name);
+    lines.push(buildAttachmentFileUrl(file.file_token));
+  });
+  return lines.join('\n');
+}
+
 async function sendPaymentNotify(fields) {
   const site = (process.env.SITE_URL || 'https://ximo-pm.vercel.app').replace(/\/$/, '');
   const printPath = buildPaymentPrintPath(fields || {});
@@ -5598,12 +5649,16 @@ export default async function handler(req, res) {
       return res.status(200).json(uploaded);
     }
 
-    if (action === 'download-attachment' && req.method === 'GET') {
+    if ((action === 'download-attachment' || action === 'download-attachment-file') && req.method === 'GET') {
       const fileToken = String(req.query.fileToken || '').trim();
       if (!fileToken) return res.status(400).json({ error: 'missing fileToken' });
       const token = await getToken();
       const url = await getMediaDownloadUrl(token, fileToken);
       if (!url) return res.status(404).json({ error: 'download url not found' });
+      if (action === 'download-attachment-file') {
+        res.writeHead(302, { Location: url });
+        return res.end();
+      }
       return res.status(200).json({ ok: true, url: url });
     }
 
