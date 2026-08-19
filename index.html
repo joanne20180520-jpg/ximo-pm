@@ -4063,7 +4063,7 @@ function paintGantt(key,proj,vs,ve,total,cw){
   var fixH='<div class="gfh"><span>工作項目</span></div>';
   proj.rows.forEach(function(row){
     var rowH = Math.max(44, row.bars.length * GANTT_BAR_STEP + 12);
-    fixH+='<div class="grl" style="height:'+rowH+'px"><div class="grn">'+escHtml(row.n)+'</div><div class="grm">'+escHtml(row.m)+'</div></div>';
+    fixH+='<div class="grl" style="height:'+rowH+'px"><div class="grn">'+escHtml(row.n)+'</div><div class="grm" title="日期 · 進度／權重（—＝尚未分配權重）">'+escHtml(row.m)+'</div></div>';
   });
 
   // timeline
@@ -4248,7 +4248,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260818v2';
+var APP_BUILD = '20260819v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -6171,10 +6171,6 @@ function calcWiProgressFromLarkFields(wf) {
   return null;
 }
 
-function getWiWeightedContribPct(wf) {
-  return parseLarkProgressPct(wf && wf['加權進度']);
-}
-
 function calcWiProgressFromLinked(wiId) {
   if (!wiId) return null;
   var taskSum = 0, taskCount = 0;
@@ -6244,18 +6240,12 @@ function parseWeightNum(wf) {
 function calcProjectProgressPct(projRec) {
   var workitems = getWorkitemsForProject(projRec);
   if (!workitems.length) return null;
-  var sumContrib = 0, hasContrib = false;
   var totalW = 0, weightedSum = 0, plainSum = 0, plainCount = 0;
   workitems.forEach(function(wi) {
     var wf = wi.fields;
-    var contrib = getWiWeightedContribPct(wf);
-    if (contrib != null) {
-      sumContrib += contrib;
-      hasContrib = true;
-    }
     var w = parseWeightNum(wf);
     var p = getWiProgressNum(wf, wi.record_id);
-    if (p == null) return;
+    if (p == null) p = 0;
     if (w != null && w > 0) {
       totalW += w;
       weightedSum += w * p;
@@ -6264,10 +6254,11 @@ function calcProjectProgressPct(projRec) {
       plainCount++;
     }
   });
-  if (hasContrib) return Math.min(100, Math.round(sumContrib));
+  // 有分配權重：加權平均（貢獻＝權重×進度，不會把「工作項目進度」加總成 100%）
   if (totalW > 0) return Math.min(100, Math.round(weightedSum / totalW));
+  // 都還沒分配權重：用各工作項目進度的簡單平均
   if (plainCount > 0) return Math.min(100, Math.round(plainSum / plainCount));
-  return null;
+  return 0;
 }
 
 function getProjectProgressPct(projRec) {
@@ -6289,13 +6280,11 @@ function getWiProgressPct(wf, wiId) {
 }
 
 function formatWeightProgress(wf, wiId) {
-  var w = formatPct(wf && wf['權重']);
-  var n = getWiWeightedContribPct(wf);
-  var p = n != null ? (n + '%') : '';
-  if (w && p) return w + '/' + p;
-  if (w) return w + '/—';
-  if (p) return '—/' + p;
-  return '';
+  var wNum = parseWeightNum(wf);
+  var pNum = getWiProgressNum(wf, wiId);
+  var w = (wNum != null && wNum > 0) ? (wNum + '%') : '—';
+  var p = (pNum != null) ? (pNum + '%') : '0%';
+  return p + '/' + w;
 }
 
 function getProjectNameFromWi(wi) {
@@ -6985,7 +6974,7 @@ function buildProjectCardHtml(rec, color) {
     else if (wiStart) dateStr = fmt(wiStart.getTime()) + '–';
     subHTML += '<div class="si">'
       + '<div class="si-row"><span class="si-name">' + escHtml(wName) + '</span>'
-      + (weightStr ? '<span class="si-weight">' + weightStr + '</span>' : '')
+      + (weightStr ? '<span class="si-weight" title="進度／權重（—＝尚未分配權重）">' + weightStr + '</span>' : '')
       + '<button type="button" class="bdel" title="修改工作項目" style="margin-right:2px" onclick="event.stopPropagation();openEditWorkItem(\'' + wi.record_id + '\')">✎</button>'
       + '<button type="button" class="bdel" title="刪除工作項目" onclick="deleteWorkItem(\'' + wi.record_id + '\',\'' + escAttr(wName).replace(/'/g, "\\'") + '\')">×</button></div>'
       + '<div class="si-meta"><span class="si-date">' + dateStr + '</span>'
