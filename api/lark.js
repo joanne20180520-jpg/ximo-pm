@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 
 const APP_ID = (process.env.LARK_APP_ID || '').trim();
 const APP_SECRET = (process.env.LARK_APP_SECRET || '').trim();
@@ -1555,16 +1555,40 @@ function approvalFileName(fileName, asciiOnly) {
   return raw;
 }
 
-function approvalFileFromBuffer(bytes, fileName) {
-  if (typeof File === 'function') {
-    return new File([bytes], fileName, { type: 'application/octet-stream' });
-  }
-  return new Blob([bytes], { type: 'application/octet-stream' });
+function buildApprovalUploadMultipart(name, type, bytes, fileName) {
+  const boundary = '----LarkApproval' + randomBytes(12).toString('hex');
+  const fileBuf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+  const asciiName = approvalFileName(fileName, true);
+  const head = Buffer.from(
+    '--' + boundary + '\r\n' +
+    'Content-Disposition: form-data; name="name"\r\n\r\n' + name + '\r\n' +
+    '--' + boundary + '\r\n' +
+    'Content-Disposition: form-data; name="type"\r\n\r\n' + type + '\r\n' +
+    '--' + boundary + '\r\n' +
+    'Content-Disposition: form-data; name="content"; filename="' + asciiName + '"\r\n' +
+    'Content-Type: application/octet-stream\r\n\r\n',
+    'utf8'
+  );
+  const tail = Buffer.from('\r\n--' + boundary + '--\r\n', 'utf8');
+  return {
+    body: Buffer.concat([head, fileBuf, tail]),
+    contentType: 'multipart/form-data; boundary=' + boundary
+  };
+}
+
+function approvalUploadCodeFromData(data) {
+  if (!data) return '';
+  if (data.code !== 0 && data.code !== '0') return '';
+  const payload = data.data;
+  if (!payload) return '';
+  if (typeof payload === 'string' && payload.trim()) return payload.trim();
+  const code = payload.code || payload.file_code || payload.fileCode || payload.id;
+  return code ? String(code) : '';
 }
 
 async function uploadApprovalFile(token, fileName, buffer, fileType) {
-  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-  const type = /image/i.test(String(fileType || '')) ? 'image' : 'attachment';
+  const bytes = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer));
+  const type = /image/i.test(String(fileType || '')) && !/attach/i.test(String(fileType || '')) ? 'image' : 'attachment';
   const urls = [
     'https://www.larksuite.com/approval/openapi/v2/file/upload',
     'https://open.larksuite.com/approval/openapi/v2/file/upload'
@@ -1576,23 +1600,21 @@ async function uploadApprovalFile(token, fileName, buffer, fileType) {
   for (let u = 0; u < urls.length; u++) {
     for (let n = 0; n < names.length; n++) {
       const safeName = names[n];
-      const form = new FormData();
-      const file = approvalFileFromBuffer(bytes, safeName);
-      form.append('name', safeName);
-      form.append('type', type);
-      form.append('content', file, safeName);
+      const packed = buildApprovalUploadMultipart(safeName, type, bytes, safeName);
       const res = await fetch(urls[u], {
         method: 'POST',
-        headers: { Authorization: 'Bearer ' + token },
-        body: form
+        headers: {
+          Authorization: 'Bearer ' + token,
+          'Content-Type': packed.contentType
+        },
+        body: packed.body
       });
       const rawText = await res.text().catch(function() { return ''; });
       let data = {};
       try { data = rawText ? JSON.parse(rawText) : {}; } catch (e) { data = {}; }
-      if (data && data.code === 0 && data.data && data.data.code) {
-        return String(data.data.code);
-      }
-      lastErr = (data && (data.msg || data.message)) || ('HTTP ' + res.status + (rawText ? (': ' + rawText.slice(0, 120)) : ''));
+      const code = approvalUploadCodeFromData(data);
+      if (code) return code;
+      lastErr = (data && (data.msg || data.message)) || ('HTTP ' + res.status + (rawText ? (': ' + rawText.slice(0, 180)) : ''));
     }
   }
   throw new Error(lastErr);
@@ -2057,6 +2079,15 @@ function paymentApplicantOpenId(fields, hint) {
   return '';
 }
 
+function widgetDisplayName(w) {
+  const n = w && w.name;
+  if (typeof n === 'string') return n.trim();
+  if (n && typeof n === 'object') {
+    return String(n.zh_tw || n['zh-TW'] || n.zh_cn || n['zh-CN'] || n.en_us || Object.values(n)[0] || '').trim();
+  }
+  return String((w && (w.custom_id || w.id)) || '').trim();
+}
+
 function asApprovalWidgetList(raw) {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
@@ -2090,10 +2121,11 @@ function parseApprovalFormWidgets(formRaw) {
         if (Array.isArray(w[key]) && w[key].length) walk(w[key]);
       });
       const id = String(w.id || w.custom_id || w.widget_id || '').trim();
+      const customId = String(w.custom_id || '').trim();
       const type = String(w.type || w.widget_type || '').trim();
-      const name = String(w.name || w.custom_id || '').trim();
+      const name = widgetDisplayName(w);
       const compactName = name.replace(/\s+/g, '');
-      const isAttachName = compactName === '附件' || compactName === '檔案';
+      const isAttachName = compactName === '附件' || compactName === '檔案' || /attach/i.test(type);
       if (!id) return;
       if (layoutTypes[type] && !isAttachName) return;
       if (!type && !isAttachName) return;
@@ -2103,6 +2135,7 @@ function parseApprovalFormWidgets(formRaw) {
       const option = w.option || w.options || null;
       flat.push({
         id: id,
+        custom_id: customId,
         type: type || (isAttachName ? 'attachmentV2' : 'input'),
         name: name,
         option: option,
@@ -2238,19 +2271,36 @@ function findApprovalAttachmentWidget(widgets) {
   return (widgets || []).find(function(w) {
     const t = String(w.type || '').toLowerCase();
     const n = String(w.name || '').replace(/\s+/g, '');
-    return t === 'attachment' || t === 'attachmentv2' || n === '附件' || n === '檔案';
+    return t === 'attachment' || t === 'attachmentv2' || t.indexOf('attach') >= 0 || n === '附件' || n === '檔案' || n.indexOf('附件') >= 0;
   }) || null;
+}
+
+function approvalWidgetFormId(widget) {
+  const id = String((widget && widget.id) || '').trim();
+  const custom = String((widget && widget.custom_id) || '').trim();
+  if (/^widget/i.test(id)) return id;
+  if (custom) return custom;
+  return id || custom;
+}
+
+function approvalAttachmentFormType(widget) {
+  const t = String((widget && widget.type) || '');
+  if (/^attachment$/i.test(t)) return 'attachment';
+  if (/attach/i.test(t)) return t;
+  return 'attachmentV2';
 }
 
 async function appendApprovalAttachments(token, widgets, fields, form) {
   const files = paymentAttachmentItems(fields);
-  if (!files.length) return { form: form, count: 0, error: '' };
+  if (!files.length) return { form: form, count: 0, error: '', files: 0, widget: null };
   const widget = findApprovalAttachmentWidget(widgets);
   if (!widget) {
-    const names = (widgets || []).map(function(w) { return w.name || w.type || w.id; }).filter(Boolean).join('、');
+    const names = (widgets || []).map(function(w) { return (w.name || w.type || w.id); }).filter(Boolean).join('、');
     return {
       form: form,
       count: 0,
+      files: files.length,
+      widget: null,
       error: '審批表單找不到附件欄' + (names ? ('（現有欄位：' + names + '）') : '（請確認已發布含附件欄的表單）')
     };
   }
@@ -2269,16 +2319,20 @@ async function appendApprovalAttachments(token, widgets, fields, form) {
   }
   if (codes.length) {
     form.push({
-      id: widget.id,
-      type: /attachment/i.test(String(widget.type || '')) ? widget.type : 'attachmentV2',
+      id: approvalWidgetFormId(widget),
+      type: approvalAttachmentFormType(widget),
       value: codes
     });
   }
-  return {
+  const result = {
     form: form,
     count: codes.length,
+    files: files.length,
+    widget: { id: widget.id, custom_id: widget.custom_id || '', type: widget.type, name: widget.name },
     error: codes.length === files.length ? '' : (errors.join('；') || '附件未寫入審批附件欄')
   };
+  if (result.error) console.error('[payment-approval-attach]', result.error, result.widget);
+  return result;
 }
 
 async function createPaymentApprovalInstance(token, fields, openIdHint) {
@@ -2291,6 +2345,9 @@ async function createPaymentApprovalInstance(token, fields, openIdHint) {
   let form = buildPaymentApprovalForm(widgets, fields, openId);
   const attached = await appendApprovalAttachments(token, widgets, fields, form);
   form = attached.form;
+  if (attached.files && attached.count === 0) {
+    throw new Error(attached.error || '附件未寫入審批附件欄');
+  }
   const body = {
     approval_code: approvalCode,
     open_id: openId,
@@ -2315,7 +2372,8 @@ async function createPaymentApprovalInstance(token, fields, openIdHint) {
     instanceCode: instanceCode,
     url: instanceCode ? ('https://www.larksuite.com/approval/detail/' + instanceCode) : '',
     attachmentCount: attached.count || 0,
-    attachmentError: attached.error || ''
+    attachmentError: attached.error || '',
+    attachmentDebug: attached.widget || null
   };
 }
 
@@ -3370,6 +3428,14 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
 
   if (!results.main && !results.accounting) {
     throw new Error(errors.join('；') || '付款資料寫入失敗');
+  }
+
+  const createdRec = (results.main && results.main.data && results.main.data.record)
+    || (results.accounting && results.accounting.data && results.accounting.data.record)
+    || null;
+  if (createdRec && createdRec.fields && !paymentAttachmentItems(fields).length) {
+    const fromRec = createdRec.fields['附件'] || createdRec.fields['檔案'] || createdRec.fields['上傳附件'];
+    if (fromRec) fields['附件'] = fromRec;
   }
 
   try {
@@ -5863,6 +5929,23 @@ export default async function handler(req, res) {
       const records = tableId ? await getRecords(token, tableId, cfg.appToken) : [];
       const merged = mergePaymentApprovalMeta(records, sync.approvalMeta || {});
       return res.status(200).json({ ok: true, sync: sync, payments: { records: merged } });
+    }
+
+    if (action === 'approval-form-debug' && req.method === 'GET') {
+      const token = await getToken();
+      const def = await getPaymentApprovalDefinition(token);
+      const raw = def.form || def.approval_form || '';
+      const widgets = parseApprovalFormWidgets(raw);
+      const attach = findApprovalAttachmentWidget(widgets);
+      return res.status(200).json({
+        ok: true,
+        widgetCount: widgets.length,
+        widgets: widgets.map(function(w) {
+          return { id: w.id, custom_id: w.custom_id || '', type: w.type, name: w.name };
+        }),
+        attachWidget: attach,
+        formPreview: (typeof raw === 'string' ? raw : JSON.stringify(raw || '')).slice(0, 2500)
+      });
     }
 
     if (action === 'ping' && req.method === 'GET') {
