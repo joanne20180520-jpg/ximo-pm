@@ -2395,16 +2395,7 @@ async function appendApprovalAttachments(token, widgets, fields, form, mediaCtx)
       continue;
     }
     try {
-      let code = '';
-      try {
-        code = await uploadApprovalFile(token, file.name, buf, widget.type);
-      } catch (upErr) {
-        if (ctx.userToken && ctx.userToken !== token) {
-          code = await uploadApprovalFile(ctx.userToken, file.name, buf, widget.type);
-        } else {
-          throw upErr;
-        }
-      }
+      const code = await uploadApprovalFile(token, file.name, buf, widget.type);
       if (code) codes.push(code);
       else errors.push((file.name || '附件') + '：未取得審批檔案代碼');
     } catch (err) {
