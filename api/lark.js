@@ -5659,7 +5659,7 @@ function isAccountantMemberName(name) {
 }
 
 function getMemberRole(fields) {
-  // 「免日報」不影響登入權限；管理員全頁；PM 限時程／支出／付款／設計／日誌；設計主管／設計師限縮設計頁；會計可看費用管理與支出明細
+  // 「免日報」不影響登入權限；管理員全頁；PM 限時程／費用／支出／付款／設計／日誌；設計主管／設計師限縮設計頁；會計可看費用管理與支出明細
   const tokens = collectMemberRoleTokens(fields);
   for (let i = 0; i < tokens.length; i++) {
     if (isAdminRoleToken(tokens[i])) return '管理員';
