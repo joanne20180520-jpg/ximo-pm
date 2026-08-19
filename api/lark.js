@@ -3494,9 +3494,10 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
   }
 
   const accCfg = paymentsAccountingConfig();
+  let accTableId = '';
   if (accCfg.appToken && (accCfg.appToken !== frontCfg.appToken || accCfg.tableId !== frontCfg.tableId)) {
     try {
-      const accTableId = await resolvePaymentsTableId(
+      accTableId = await resolvePaymentsTableId(
         tenantToken,
         accCfg.appToken,
         accCfg.tableId
@@ -3550,6 +3551,14 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
     errors.push('Lark 審批：' + results.approval.error);
   }
 
+  if (!results.approval || !results.approval.ok) {
+    await rollbackCreatedPaymentRecords(tenantToken, userToken, [
+      { recordId: extractRecordId(results.main), tableId: paymentTableId, appToken: frontCfg.appToken },
+      { recordId: extractRecordId(results.accounting), tableId: accTableId, appToken: accCfg.appToken }
+    ]);
+    throw new Error((results.approval && results.approval.error) || '審批未送出，付款紀錄未列入已送出清單');
+  }
+
   if (errors.length) results.partialErrors = errors;
 
   const primary = results.main || results.accounting;
@@ -3561,8 +3570,29 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
     partialErrors: results.partialErrors || [],
     enrichedFields: fields,
     applicantDebug: results.applicantDebug || null,
-    approval: results.approval || null
+    approval: results.approval || null,
+    rolledBack: !!results.rolledBack
   };
+}
+
+async function rollbackCreatedPaymentRecords(tenantToken, userToken, items) {
+  let any = false;
+  for (let i = 0; i < (items || []).length; i++) {
+    const item = items[i] || {};
+    if (!item.recordId || !item.tableId || !item.appToken) continue;
+    try {
+      await writeWithUserFallback(tenantToken, userToken, function(tok, asUser) {
+        return deleteRecord(tok, item.tableId, item.recordId, item.appToken, asUser);
+      });
+      any = true;
+    } catch (err) {
+      try {
+        await deleteRecord(tenantToken, item.tableId, item.recordId, item.appToken, false);
+        any = true;
+      } catch (err2) {}
+    }
+  }
+  return any;
 }
 
 function hasApplicantTextFallback(body, allowedSet) {
@@ -6370,7 +6400,9 @@ export default async function handler(req, res) {
       if (table === 'payments') {
         const result = await createPaymentInBothBases(tenantToken, userAccessToken, cleanBody, applicantHint);
         try {
-          result.notify = await maybeSendPaymentNotify(result.enrichedFields || cleanBody);
+          if (result.approval && result.approval.ok) {
+            result.notify = await maybeSendPaymentNotify(result.enrichedFields || cleanBody);
+          }
         } catch (notifyErr) {
           result.notify = { ok: false, error: notifyErr.message || String(notifyErr) };
         }

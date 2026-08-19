@@ -4333,7 +4333,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260819v8';
+var APP_BUILD = '20260819v9';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12682,6 +12682,9 @@ function savePaymentRecord(data) {
   }).then(function(r) { return r.json(); }).then(function(res) {
     if (res.error) throw new Error(res.error);
     if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '存檔失敗');
+    if (res.rolledBack || (res.approval && res.approval.ok === false)) {
+      throw new Error((res.approval && res.approval.error) || '審批未送出');
+    }
     if (res.partialErrors && res.partialErrors.length) {
       console.warn('付款部分寫入失敗', res.partialErrors);
     }
@@ -13028,6 +13031,22 @@ function paymentDateInQuery(f) {
   return true;
 }
 
+function paymentHasApprovalInstance(f) {
+  f = f || {};
+  return !!(String(f['審批編號'] || f['審批實例'] || f['審批單號'] || '').trim());
+}
+
+function isListedPaymentRecord(rec) {
+  var f = (rec && rec.fields) || {};
+  var status = getPaymentStatusLabel(f);
+  if (status === '已核銷' || status === '封存') return true;
+  if (paymentHasApprovalInstance(f)) return true;
+  var meta = (rec && rec.approvalMeta) || paymentApprovalMeta[rec && rec.record_id] || {};
+  if (meta.instanceCode) return true;
+  var pending = String(f['待簽核人'] || meta.pendingApprover || '').trim();
+  return !!(pending && pending !== '—');
+}
+
 function renderPaymentsList() {
   var area = document.getElementById('pay-list-area');
   var countEl = document.getElementById('pay-list-count');
@@ -13037,12 +13056,13 @@ function renderPaymentsList() {
     var range = payListRangeForPreset(payListPreset);
     syncPayListRangeInputs(range.from, range.to);
   }
-  if (!paymentsData.length) {
+  var listed = (paymentsData || []).filter(isListedPaymentRecord);
+  if (!listed.length) {
     area.innerHTML = '<div class="pay-list-empty">尚無已送出的付款申請</div>';
     if (countEl) countEl.textContent = '';
     return;
   }
-  var rows = paymentsData.filter(function(rec) {
+  var rows = listed.filter(function(rec) {
     return paymentDateInQuery(rec.fields || {});
   }).sort(function(a, b) {
     var da = Number((a.fields && a.fields['申請日期']) || 0);
@@ -16733,6 +16753,7 @@ function saveTask() {
 }
 
 function saveExpense() {
+  if (!isPMRole()) { alert('僅 PM／管理員可新增支出明細'); return; }
   var name = document.getElementById('ex-name').value.trim();
   var projId = document.getElementById('ex-proj').value;
   var wiId = document.getElementById('ex-wi').value;
