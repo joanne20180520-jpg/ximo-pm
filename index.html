@@ -4276,7 +4276,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260819v3';
+var APP_BUILD = '20260819v4';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -7298,26 +7298,34 @@ function renderWorkitemGroup(group, opts) {
 function refreshTaskGroupVisibility() {
   document.querySelectorAll('#task-list-body .tgl-wi').forEach(function(hdr) {
     var body = hdr.nextElementSibling;
-    var visible = false;
+    var visibleCount = 0;
     if (body) {
       body.querySelectorAll('.ti').forEach(function(ti) {
-        if (ti.style.display !== 'none') visible = true;
+        if (ti.style.display !== 'none') visibleCount++;
       });
     }
-    hdr.style.display = visible ? '' : 'none';
+    var countEl = hdr.querySelector('.tc');
+    if (countEl) countEl.textContent = String(visibleCount);
+    hdr.style.display = visibleCount ? '' : 'none';
     if (body) {
-      if (!visible) body.style.display = 'none';
+      if (!visibleCount) body.style.display = 'none';
       else body.style.removeProperty('display');
     }
   });
   document.querySelectorAll('#task-list-body .tgl-person').forEach(function(hdr) {
     var body = hdr.nextElementSibling;
+    var visibleCount = 0;
     var visible = false;
     if (body) {
+      body.querySelectorAll('.ti').forEach(function(ti) {
+        if (ti.style.display !== 'none') visibleCount++;
+      });
       body.querySelectorAll('.tgl-wi').forEach(function(wi) {
         if (wi.style.display !== 'none') visible = true;
       });
     }
+    var countEl = hdr.querySelector('.tc');
+    if (countEl) countEl.textContent = String(visibleCount);
     hdr.style.display = visible ? '' : 'none';
     if (body) {
       if (!visible) body.style.display = 'none';
