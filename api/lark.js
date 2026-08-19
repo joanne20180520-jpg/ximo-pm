@@ -2019,16 +2019,26 @@ function parseApprovalFormWidgets(formRaw) {
     try { parsed = JSON.parse(formRaw); } catch (e) { return []; }
   }
   if (!Array.isArray(parsed)) return [];
-  return parsed.map(function(w) {
-    const option = w.option || w.options || null;
-    return {
-      id: w.id || w.custom_id || '',
-      type: w.type || 'input',
-      name: String(w.name || w.custom_id || '').trim(),
-      option: option,
-      currency: (option && option.currencyRange && option.currencyRange[0]) || w.currency || w.value || 'TWD'
-    };
-  }).filter(function(w) { return w.id; });
+  const flat = [];
+  (function walk(list) {
+    (list || []).forEach(function(w) {
+      if (!w) return;
+      if (Array.isArray(w.children) && w.children.length) walk(w.children);
+      if (Array.isArray(w.widgets) && w.widgets.length) walk(w.widgets);
+      const option = w.option || w.options || null;
+      const id = w.id || w.custom_id || '';
+      const type = String(w.type || '');
+      if (!id || !type || type === 'fieldList' || type === 'column' || type === 'tab') return;
+      flat.push({
+        id: id,
+        type: type || 'input',
+        name: String(w.name || w.custom_id || '').trim(),
+        option: option,
+        currency: (option && option.option && option.currencyRange && option.currencyRange[0]) || (option && option.currencyRange && option.currencyRange[0]) || w.currency || 'TWD'
+      });
+    });
+  })(parsed);
+  return flat;
 }
 
 function matchApprovalWidgetOption(widget, label) {
@@ -2153,28 +2163,45 @@ function buildPaymentApprovalForm(widgets, fields, openId) {
 }
 
 async function appendApprovalAttachments(token, widgets, fields, form) {
-  const widget = (widgets || []).find(function(w) {
-    const t = String(w.type || '');
-    return t === 'attachment' || t === 'attachmentV2';
-  });
-  if (!widget) return form;
   const files = paymentAttachmentItems(fields);
   if (!files.length) return form;
-  const codes = [];
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    try {
-      const buf = await downloadMediaBuffer(token, file.file_token);
-      const code = await uploadApprovalFile(token, file.name, buf);
-      if (code) codes.push(code);
-    } catch (err) {}
-  }
-  if (!codes.length) return form;
-  form.push({
-    id: widget.id,
-    type: String(widget.type || 'attachmentV2'),
-    value: codes
+  const widget = (widgets || []).find(function(w) {
+    const t = String(w.type || '').toLowerCase();
+    const n = String(w.name || '').replace(/\s+/g, '');
+    return t === 'attachment' || t === 'attachmentv2' || n === '附件' || n === '檔案';
   });
+  const codes = [];
+  if (widget) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const buf = await downloadMediaBuffer(token, file.file_token);
+        const code = await uploadApprovalFile(token, file.name, buf);
+        if (code) codes.push(code);
+      } catch (err) {}
+    }
+    if (codes.length) {
+      form.push({
+        id: widget.id,
+        type: /attachment/i.test(widget.type) ? widget.type : 'attachmentV2',
+        value: codes
+      });
+      return form;
+    }
+  }
+  const linkText = files.map(function(file, idx) {
+    return (idx + 1) + '. ' + file.name + '\n' + buildAttachmentFileUrl(file.file_token);
+  }).join('\n');
+  const noteWidget = (widgets || []).find(function(w) {
+    const n = String(w.name || '').replace(/\s+/g, '');
+    return n === '備註' || n === '說明';
+  });
+  if (!noteWidget) return form;
+  const existing = form.find(function(item) { return item.id === noteWidget.id; });
+  const prefix = existing && existing.value ? String(existing.value) + '\n\n' : '';
+  const value = prefix + '附件下載：\n' + linkText;
+  if (existing) existing.value = value;
+  else form.push({ id: noteWidget.id, type: noteWidget.type || 'textarea', value: value });
   return form;
 }
 
@@ -5400,6 +5427,18 @@ function extractApplicantOpenIdHint(body) {
   return String(b.applicantOpenId || b.applicant_open_id || '').trim();
 }
 
+async function requireAdminUser(req) {
+  const userAccessToken = extractUserAccessToken(req);
+  const auth = await checkMemberAuthorization(userAccessToken);
+  if (!auth.authorized) {
+    return { ok: false, status: auth.needLogin ? 401 : 403, error: auth.needLogin ? '請先登入' : '沒有權限' };
+  }
+  if (!isAdminRoleToken(auth.role)) {
+    return { ok: false, status: 403, error: '僅管理員可使用 AI 分析' };
+  }
+  return { ok: true, auth: auth };
+}
+
 async function getUserInfoFromToken(userAccessToken) {
   const infoRes = await fetch(BASE_URL + '/authen/v1/user_info', {
     headers: { 'Authorization': 'Bearer ' + userAccessToken }
@@ -5911,6 +5950,8 @@ export default async function handler(req, res) {
     }
 
     if (action === 'ai-analysis' && req.method === 'POST') {
+      const adminGate = await requireAdminUser(req);
+      if (!adminGate.ok) return res.status(adminGate.status).json({ ok: false, error: adminGate.error });
       const projectId = req.body && req.body.projectId;
       if (!projectId) return res.status(400).json({ error: 'missing projectId' });
       const larkToken = await getToken();
@@ -5967,6 +6008,8 @@ export default async function handler(req, res) {
     }
 
     if (action === 'ai-followup' && req.method === 'POST') {
+      const followGate = await requireAdminUser(req);
+      if (!followGate.ok) return res.status(followGate.status).json({ ok: false, error: followGate.error });
       const b = req.body || {};
       const projectId = b.projectId;
       const userQuestion = b.question;
