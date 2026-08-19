@@ -1477,7 +1477,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div id="td-attach-list"></div>
   </div>
   <button class="bads" style="margin-top:4px" onclick="openNewTaskFromContext()">＋ 建立新任務</button>
-</div><div class="ppf"><button class="bcan" onclick="cl('pp-td')">取消</button><button class="bpri btn-report" id="td-confirm-btn" onclick="confirmTaskReport()">確認儲存</button></div></div></div>
+</div><div class="ppf"><button class="bcan bdel-action" id="td-del-btn" onclick="deleteTaskFromDetail()">刪除此任務</button><button class="bcan" onclick="cl('pp-td')">取消</button><button class="bpri btn-report" id="td-confirm-btn" onclick="confirmTaskReport()">確認儲存</button></div></div></div>
 
 <div class="po" id="pp-dd"><div class="pp"><div class="pph pph-report" id="dd-header"><h3 id="dd-title">設計回報</h3><div class="td-hdr-actions"><button type="button" class="td-open-report" onclick="openDailyLogFromDesign()">開啟今日回報表</button><button type="button" class="ppc" onclick="cl('pp-dd')">✕</button></div></div><div class="ppb">
   <div id="dd-proj-tag" class="td-proj"></div>
@@ -4942,6 +4942,9 @@ function applyDetailPopupPermissions(popupId) {
     el.style.display = pm ? '' : 'none';
   });
   popup.querySelectorAll('.td-open-report').forEach(function(el) {
+    el.style.display = pm ? '' : 'none';
+  });
+  popup.querySelectorAll('.bdel-action').forEach(function(el) {
     el.style.display = pm ? '' : 'none';
   });
 }
@@ -16473,18 +16476,29 @@ function deleteWorkItem(id, name) {
   });
 }
 
+function deleteTaskFromDetail() {
+  if (!currentTaskId) return;
+  var rec = tasksData.find(function(r) { return r.record_id === currentTaskId; });
+  var name = (rec && rec.fields && rec.fields['任務名稱']) || (document.getElementById('td-name') && document.getElementById('td-name').value) || '未命名';
+  deleteTask(currentTaskId, name);
+}
+
 function deleteTask(id, name) {
-  if (!isAdminRole()) {
-    showConfirm({ type: 'edit', title: '無法刪除', body: '僅管理員可刪除任務。', okText: '知道了', hideCancel: true, onOk: function() {} });
+  if (!isPMRole()) {
+    showConfirm({ type: 'edit', title: '無法刪除', body: '沒有權限刪除任務。', okText: '知道了', hideCancel: true, onOk: function() {} });
     return;
   }
   var rec = tasksData.find(function(r){ return r.record_id === id; });
   showConfirm({
     type: 'del',
     title: '刪除任務',
-    body: '確定要刪除這個任務嗎？<br><span class="confirm-name">「' + name + '」</span>',
+    body: '確定要刪除這個任務嗎？打錯的任務刪掉後可從通知列復原。<br><span class="confirm-name">「' + escHtml(name) + '」</span>',
     okText: '刪除',
     onOk: function() {
+      if (currentTaskId === id) {
+        cl('pp-td');
+        currentTaskId = null;
+      }
       softDeleteForUndo('tasks', id, {
         toastMsg: '已刪除任務「' + (name || '未命名') + '」',
         failMsg: '刪除失敗',
