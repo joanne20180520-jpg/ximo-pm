@@ -1189,6 +1189,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <button type="button" class="tgm-btn active" data-mode="due" onclick="setTaskGroupMode('due', this)">依到期日</button>
         <button type="button" class="tgm-btn" data-mode="assignee" onclick="setTaskGroupMode('assignee', this)">依負責人</button>
       </div>
+      <div class="ft" id="task-filters"></div>
       <div class="task-status-filters" id="task-status-filters">
         <button type="button" class="tsf-btn active" data-status="" onclick="setTaskStatusFilter('', this)">全部</button>
         <button type="button" class="tsf-btn tsf-overdue" data-status="overdue" onclick="setTaskStatusFilter('overdue', this)">逾期</button>
@@ -1196,7 +1197,6 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <button type="button" class="tsf-btn" data-status="pending" onclick="setTaskStatusFilter('pending', this)">未開始</button>
         <button type="button" class="tsf-btn" data-status="done" onclick="setTaskStatusFilter('done', this)">已完成</button>
       </div>
-      <div class="ft" id="task-filters"></div>
       <div class="tl2" id="task-list-body">
         <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
       </div>
@@ -4276,7 +4276,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260819v2';
+var APP_BUILD = '20260819v3';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
