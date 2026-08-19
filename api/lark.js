@@ -1625,25 +1625,67 @@ async function downloadMediaBufferWithFallback(tenantToken, userToken, file, ext
   }
 }
 
+function attachmentDisplayName(item, idx) {
+  if (!item || typeof item === 'string') return '';
+  return String(item.name || item.file_name || item.fileName || '').trim();
+}
+
+function mergePaymentAttachmentMeta(fromRec, original) {
+  const origList = Array.isArray(original) ? original : (original ? [original] : []);
+  const nameByToken = {};
+  origList.forEach(function(item) {
+    if (!item || typeof item === 'string') return;
+    const token = String(item.file_token || item.token || '').trim();
+    const name = attachmentDisplayName(item);
+    if (token && name) nameByToken[token] = name;
+  });
+  const recList = Array.isArray(fromRec) ? fromRec : (fromRec ? [fromRec] : []);
+  if (!recList.length) return origList;
+  return recList.map(function(item, idx) {
+    const origName = attachmentDisplayName(origList[idx]);
+    if (typeof item === 'string') {
+      const token = item.trim();
+      return { file_token: token, name: nameByToken[token] || origName || '' };
+    }
+    const token = String((item && (item.file_token || item.token)) || '').trim();
+    const name = attachmentDisplayName(item) || nameByToken[token] || origName;
+    return Object.assign({}, item || {}, { name: name || '' });
+  });
+}
+
+function encodeRfc5987(str) {
+  return encodeURIComponent(String(str || '')).replace(/['()*]/g, function(ch) {
+    return '%' + ch.charCodeAt(0).toString(16).toUpperCase();
+  });
+}
+
 function approvalFileName(fileName, asciiOnly) {
-  const raw = String(fileName || 'attachment.bin').replace(/[\\/]/g, '_').trim() || 'attachment.bin';
+  const raw = String(fileName || 'file.bin').replace(/[\\/\r\n]/g, '_').trim() || 'file.bin';
   const extMatch = raw.match(/(\.[A-Za-z0-9]{1,8})$/);
   const ext = extMatch ? extMatch[1] : '';
-  if (asciiOnly && /[^\x20-\x7E]/.test(raw)) return 'attachment' + (ext || '.bin');
+  if (asciiOnly && /[^\x20-\x7E]/.test(raw)) return 'file' + (ext || '.bin');
   return raw;
+}
+
+function approvalUploadDisplayName(file, idx) {
+  const raw = String((file && (file.name || file.file_name)) || '').trim();
+  if (raw && !/^附件\d+$/.test(raw)) return raw.replace(/[\r\n]/g, ' ');
+  const extMatch = raw.match(/(\.[A-Za-z0-9]{1,8})$/);
+  return 'file' + (idx + 1) + (extMatch ? extMatch[1] : '.bin');
 }
 
 function buildApprovalUploadMultipart(name, type, bytes, fileName) {
   const boundary = '----LarkApproval' + randomBytes(12).toString('hex');
   const fileBuf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
-  const asciiName = approvalFileName(fileName, true);
+  const displayName = approvalFileName(name || fileName, false);
+  const asciiName = approvalFileName(displayName, true);
   const head = Buffer.from(
     '--' + boundary + '\r\n' +
-    'Content-Disposition: form-data; name="name"\r\n\r\n' + name + '\r\n' +
+    'Content-Disposition: form-data; name="name"\r\n\r\n' + displayName + '\r\n' +
     '--' + boundary + '\r\n' +
     'Content-Disposition: form-data; name="type"\r\n\r\n' + type + '\r\n' +
     '--' + boundary + '\r\n' +
-    'Content-Disposition: form-data; name="content"; filename="' + asciiName + '"\r\n' +
+    'Content-Disposition: form-data; name="content"; filename="' + asciiName.replace(/"/g, '') + '"; filename*=UTF-8\'\'' + encodeRfc5987(displayName) + '\r\n' +
     'Content-Type: application/octet-stream\r\n\r\n',
     'utf8'
   );
@@ -2395,9 +2437,10 @@ async function appendApprovalAttachments(token, widgets, fields, form, mediaCtx)
       continue;
     }
     try {
-      const code = await uploadApprovalFile(token, file.name, buf, widget.type);
+      const uploadName = approvalUploadDisplayName(file, i);
+      const code = await uploadApprovalFile(token, uploadName, buf, widget.type);
       if (code) codes.push(code);
-      else errors.push((file.name || '附件') + '：未取得審批檔案代碼');
+      else errors.push((uploadName || '附件') + '：未取得審批檔案代碼');
     } catch (err) {
       errors.push((file.name || '附件') + '：無法上傳到審批（' + ((err && err.message) || String(err)) + '）');
     }
@@ -3454,6 +3497,7 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
   const errors = [];
   const fields = Object.assign({}, rawFields || {});
   if (fields['狀態'] === undefined) fields['狀態'] = '審批中';
+  const originalAttach = fields['附件'] || fields['檔案'] || fields['上傳附件'];
   await enrichPaymentApplicant(tenantToken, userToken, fields, applicantOpenIdHint);
 
   const frontCfg = paymentsFrontConfig();
@@ -3526,7 +3570,7 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
     || null;
   if (createdRec && createdRec.fields) {
     const fromRec = createdRec.fields['附件'] || createdRec.fields['檔案'] || createdRec.fields['上傳附件'];
-    if (fromRec) fields['附件'] = fromRec;
+    if (fromRec) fields['附件'] = mergePaymentAttachmentMeta(fromRec, originalAttach);
   }
 
   try {
@@ -5171,14 +5215,14 @@ function paymentAttachmentItems(fields) {
   raw.forEach(function(item, idx) {
     if (!item) return;
     if (typeof item === 'string' && item.trim()) {
-      out.push({ file_token: item.trim(), name: '附件' + (idx + 1) });
+      out.push({ file_token: item.trim(), name: '' });
       return;
     }
     const token = String(item.file_token || item.token || '').trim();
     if (!token) return;
     out.push({
       file_token: token,
-      name: String(item.name || item.file_name || ('附件' + (idx + 1))).trim(),
+      name: String(item.name || item.file_name || item.fileName || '').trim(),
       url: item.url || '',
       tmp_url: item.tmp_url || item.tmp_download_url || ''
     });
