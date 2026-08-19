@@ -3788,12 +3788,30 @@ function openPayPrintTab() {
   window.open(buildPayPrintUrl({ print: true }), '_blank');
 }
 
+function whenPayAttachmentsReady(done) {
+  if (typeof done !== 'function') return;
+  if (payAttachmentUploading <= 0) {
+    done();
+    return;
+  }
+  var n = 0;
+  var timer = setInterval(function() {
+    n++;
+    if (payAttachmentUploading <= 0) {
+      clearInterval(timer);
+      done();
+    } else if (n > 600) {
+      clearInterval(timer);
+    }
+  }, 100);
+}
+
 function prevPay() {
   if (!getLoginDisplayName()) {
     alert('請先 Lark 登入，送出才會記錄申請人');
   }
   if (payAttachmentUploading > 0) {
-    showNotice('附件上傳中，請稍候');
+    whenPayAttachmentsReady(function() { prevPay(); });
     return;
   }
   if (!document.getElementById('p-total').value.replace(/[^0-9]/g, '')) {
@@ -3946,6 +3964,10 @@ function savePaymentOnly(closePreview) {
   if (paySubmitting) return;
   if (payAttachmentUploading > 0) {
     showNotice('附件上傳中，請稍候');
+    whenPayAttachmentsReady(function() {
+      hidePaymentSaveNotice();
+      savePaymentOnly(closePreview);
+    });
     return;
   }
   var data = validatePaymentForm();
@@ -4309,7 +4331,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260819v6';
+var APP_BUILD = '20260819v7';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
