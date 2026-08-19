@@ -3862,6 +3862,13 @@ function showPaymentSaveNotice(_printed, res) {
   var subParts = [];
   if (res && res.approval && res.approval.ok) {
     subParts.push('已建立 Lark 審批');
+    if (res.approval.attachmentError) {
+      if (card) card.classList.add('is-error');
+      if (icon) icon.textContent = '!';
+      msgEl.textContent = '付款申請單已送出，但附件未寫入審批附件欄。';
+      subParts.push(res.approval.attachmentError);
+      subParts.push('請再送一筆新的付款申請（舊單無法補附件欄）');
+    }
   } else if (res && res.approval && res.approval.error) {
     subParts.push('審批未送出：' + res.approval.error);
   }

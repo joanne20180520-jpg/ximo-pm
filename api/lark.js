@@ -1516,40 +1516,84 @@ async function getMediaDownloadUrl(token, fileToken) {
   throw new Error((data && data.msg) || 'download failed');
 }
 
+function isJsonContentType(res) {
+  return /application\/json/i.test(String((res && res.headers && res.headers.get('content-type')) || ''));
+}
+
 async function downloadMediaBuffer(token, fileToken) {
+  let lastErr = 'download media failed';
+  try {
+    const url = await getMediaDownloadUrl(token, fileToken);
+    if (url) {
+      const fileRes = await fetch(url);
+      if (fileRes.ok && !isJsonContentType(fileRes)) {
+        return Buffer.from(await fileRes.arrayBuffer());
+      }
+      lastErr = 'tmp download failed';
+    }
+  } catch (err) {
+    lastErr = (err && err.message) || lastErr;
+  }
   const res = await fetch(BASE_URL + '/drive/v1/medias/' + encodeURIComponent(fileToken) + '/download', {
     headers: { Authorization: 'Bearer ' + token }
   });
-  if (res.ok) return Buffer.from(await res.arrayBuffer());
-  const url = await getMediaDownloadUrl(token, fileToken);
-  if (!url) throw new Error('download url not found');
-  const fileRes = await fetch(url);
-  if (!fileRes.ok) throw new Error('download media failed');
-  return Buffer.from(await fileRes.arrayBuffer());
+  if (res.ok && !isJsonContentType(res)) {
+    return Buffer.from(await res.arrayBuffer());
+  }
+  if (isJsonContentType(res)) {
+    const data = await res.json().catch(function() { return {}; });
+    throw new Error((data && data.msg) || lastErr);
+  }
+  throw new Error(lastErr);
 }
 
-async function uploadApprovalFile(token, fileName, buffer) {
-  const safeName = String(fileName || 'attachment.bin').replace(/[\\/]/g, '_');
+function approvalFileName(fileName, asciiOnly) {
+  const raw = String(fileName || 'attachment.bin').replace(/[\\/]/g, '_').trim() || 'attachment.bin';
+  const extMatch = raw.match(/(\.[A-Za-z0-9]{1,8})$/);
+  const ext = extMatch ? extMatch[1] : '';
+  if (asciiOnly && /[^\x20-\x7E]/.test(raw)) return 'attachment' + (ext || '.bin');
+  return raw;
+}
+
+function approvalFileFromBuffer(bytes, fileName) {
+  if (typeof File === 'function') {
+    return new File([bytes], fileName, { type: 'application/octet-stream' });
+  }
+  return new Blob([bytes], { type: 'application/octet-stream' });
+}
+
+async function uploadApprovalFile(token, fileName, buffer, fileType) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  const type = /image/i.test(String(fileType || '')) ? 'image' : 'attachment';
   const urls = [
     'https://www.larksuite.com/approval/openapi/v2/file/upload',
     'https://open.larksuite.com/approval/openapi/v2/file/upload'
   ];
+  const names = [approvalFileName(fileName, false)];
+  const asciiName = approvalFileName(fileName, true);
+  if (asciiName !== names[0]) names.push(asciiName);
   let lastErr = 'upload approval file failed';
-  for (let i = 0; i < urls.length; i++) {
-    const form = new FormData();
-    form.append('name', safeName);
-    form.append('type', 'attachment');
-    form.append('content', new Blob([buffer]), safeName);
-    const res = await fetch(urls[i], {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + token },
-      body: form
-    });
-    const data = await res.json().catch(function() { return {}; });
-    if (data && data.code === 0 && data.data && data.data.code) {
-      return String(data.data.code);
+  for (let u = 0; u < urls.length; u++) {
+    for (let n = 0; n < names.length; n++) {
+      const safeName = names[n];
+      const form = new FormData();
+      const file = approvalFileFromBuffer(bytes, safeName);
+      form.append('name', safeName);
+      form.append('type', type);
+      form.append('content', file, safeName);
+      const res = await fetch(urls[u], {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token },
+        body: form
+      });
+      const rawText = await res.text().catch(function() { return ''; });
+      let data = {};
+      try { data = rawText ? JSON.parse(rawText) : {}; } catch (e) { data = {}; }
+      if (data && data.code === 0 && data.data && data.data.code) {
+        return String(data.data.code);
+      }
+      lastErr = (data && (data.msg || data.message)) || ('HTTP ' + res.status + (rawText ? (': ' + rawText.slice(0, 120)) : ''));
     }
-    lastErr = (data && data.msg) || lastErr;
   }
   throw new Error(lastErr);
 }
@@ -2013,31 +2057,59 @@ function paymentApplicantOpenId(fields, hint) {
   return '';
 }
 
+function asApprovalWidgetList(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try { return asApprovalWidgetList(JSON.parse(raw)); } catch (e) { return []; }
+  }
+  if (typeof raw !== 'object') return [];
+  if (Array.isArray(raw.children)) return raw.children;
+  if (Array.isArray(raw.widgets)) return raw.widgets;
+  if (Array.isArray(raw.form)) return raw.form;
+  if (Array.isArray(raw.list)) return raw.list;
+  return [];
+}
+
 function parseApprovalFormWidgets(formRaw) {
   let parsed = formRaw;
-  if (typeof formRaw === 'string') {
-    try { parsed = JSON.parse(formRaw); } catch (e) { return []; }
+  if (typeof parsed === 'string') {
+    try { parsed = JSON.parse(parsed); } catch (e) { return []; }
+    if (typeof parsed === 'string') {
+      try { parsed = JSON.parse(parsed); } catch (e) { return []; }
+    }
   }
-  if (!Array.isArray(parsed)) return [];
+  const start = asApprovalWidgetList(parsed);
   const flat = [];
+  const seen = {};
+  const layoutTypes = { fieldList: 1, column: 1, columnSet: 1, tab: 1, grid: 1, layout: 1 };
   (function walk(list) {
     (list || []).forEach(function(w) {
-      if (!w) return;
-      if (Array.isArray(w.children) && w.children.length) walk(w.children);
-      if (Array.isArray(w.widgets) && w.widgets.length) walk(w.widgets);
+      if (!w || typeof w !== 'object') return;
+      ['children', 'widgets', 'fields', 'list', 'items', 'elements'].forEach(function(key) {
+        if (Array.isArray(w[key]) && w[key].length) walk(w[key]);
+      });
+      const id = String(w.id || w.custom_id || w.widget_id || '').trim();
+      const type = String(w.type || w.widget_type || '').trim();
+      const name = String(w.name || w.custom_id || '').trim();
+      const compactName = name.replace(/\s+/g, '');
+      const isAttachName = compactName === '附件' || compactName === '檔案';
+      if (!id) return;
+      if (layoutTypes[type] && !isAttachName) return;
+      if (!type && !isAttachName) return;
+      const key = id + '|' + type + '|' + name;
+      if (seen[key]) return;
+      seen[key] = 1;
       const option = w.option || w.options || null;
-      const id = w.id || w.custom_id || '';
-      const type = String(w.type || '');
-      if (!id || !type || type === 'fieldList' || type === 'column' || type === 'tab') return;
       flat.push({
         id: id,
-        type: type || 'input',
-        name: String(w.name || w.custom_id || '').trim(),
+        type: type || (isAttachName ? 'attachmentV2' : 'input'),
+        name: name,
         option: option,
         currency: (option && option.option && option.currencyRange && option.currencyRange[0]) || (option && option.currencyRange && option.currencyRange[0]) || w.currency || 'TWD'
       });
     });
-  })(parsed);
+  })(start);
   return flat;
 }
 
@@ -2146,7 +2218,7 @@ function buildPaymentApprovalForm(widgets, fields, openId) {
     } else if (type === 'textarea') {
       const text = paymentFieldText(approvalFields, names);
       if (text) item = { id: w.id, type: 'textarea', value: text };
-    } else if (type === 'attachment' || type === 'attachmentV2') {
+    } else if (type === 'attachment' || type === 'attachmentV2' || /附件|檔案/.test(String(w.name || '').replace(/\s+/g, ''))) {
       return;
     } else {
       const text = paymentFieldText(approvalFields, names);
@@ -2162,47 +2234,51 @@ function buildPaymentApprovalForm(widgets, fields, openId) {
   return form;
 }
 
-async function appendApprovalAttachments(token, widgets, fields, form) {
-  const files = paymentAttachmentItems(fields);
-  if (!files.length) return form;
-  const widget = (widgets || []).find(function(w) {
+function findApprovalAttachmentWidget(widgets) {
+  return (widgets || []).find(function(w) {
     const t = String(w.type || '').toLowerCase();
     const n = String(w.name || '').replace(/\s+/g, '');
     return t === 'attachment' || t === 'attachmentv2' || n === '附件' || n === '檔案';
-  });
+  }) || null;
+}
+
+async function appendApprovalAttachments(token, widgets, fields, form) {
+  const files = paymentAttachmentItems(fields);
+  if (!files.length) return { form: form, count: 0, error: '' };
+  const widget = findApprovalAttachmentWidget(widgets);
+  if (!widget) {
+    const names = (widgets || []).map(function(w) { return w.name || w.type || w.id; }).filter(Boolean).join('、');
+    return {
+      form: form,
+      count: 0,
+      error: '審批表單找不到附件欄' + (names ? ('（現有欄位：' + names + '）') : '（請確認已發布含附件欄的表單）')
+    };
+  }
   const codes = [];
-  if (widget) {
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      try {
-        const buf = await downloadMediaBuffer(token, file.file_token);
-        const code = await uploadApprovalFile(token, file.name, buf);
-        if (code) codes.push(code);
-      } catch (err) {}
-    }
-    if (codes.length) {
-      form.push({
-        id: widget.id,
-        type: /attachment/i.test(widget.type) ? widget.type : 'attachmentV2',
-        value: codes
-      });
-      return form;
+  const errors = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    try {
+      const buf = await downloadMediaBuffer(token, file.file_token);
+      const code = await uploadApprovalFile(token, file.name, buf, widget.type);
+      if (code) codes.push(code);
+      else errors.push((file.name || '附件') + '：未取得審批檔案代碼');
+    } catch (err) {
+      errors.push((file.name || '附件') + '：' + ((err && err.message) || String(err)));
     }
   }
-  const linkText = files.map(function(file, idx) {
-    return (idx + 1) + '. ' + file.name + '\n' + buildAttachmentFileUrl(file.file_token);
-  }).join('\n');
-  const noteWidget = (widgets || []).find(function(w) {
-    const n = String(w.name || '').replace(/\s+/g, '');
-    return n === '備註' || n === '說明';
-  });
-  if (!noteWidget) return form;
-  const existing = form.find(function(item) { return item.id === noteWidget.id; });
-  const prefix = existing && existing.value ? String(existing.value) + '\n\n' : '';
-  const value = prefix + '附件下載：\n' + linkText;
-  if (existing) existing.value = value;
-  else form.push({ id: noteWidget.id, type: noteWidget.type || 'textarea', value: value });
-  return form;
+  if (codes.length) {
+    form.push({
+      id: widget.id,
+      type: /attachment/i.test(String(widget.type || '')) ? widget.type : 'attachmentV2',
+      value: codes
+    });
+  }
+  return {
+    form: form,
+    count: codes.length,
+    error: codes.length === files.length ? '' : (errors.join('；') || '附件未寫入審批附件欄')
+  };
 }
 
 async function createPaymentApprovalInstance(token, fields, openIdHint) {
@@ -2211,9 +2287,10 @@ async function createPaymentApprovalInstance(token, fields, openIdHint) {
   const openId = paymentApplicantOpenId(fields, openIdHint);
   if (!openId) return { ok: false, error: '找不到申請人 open_id，無法送審（請用 Lark 登入）' };
   const def = await getPaymentApprovalDefinition(token);
-  const widgets = parseApprovalFormWidgets(def.form);
+  const widgets = parseApprovalFormWidgets(def.form || def.approval_form || (def.approval && def.approval.form));
   let form = buildPaymentApprovalForm(widgets, fields, openId);
-  form = await appendApprovalAttachments(token, widgets, fields, form);
+  const attached = await appendApprovalAttachments(token, widgets, fields, form);
+  form = attached.form;
   const body = {
     approval_code: approvalCode,
     open_id: openId,
@@ -2236,7 +2313,9 @@ async function createPaymentApprovalInstance(token, fields, openIdHint) {
     ok: true,
     approvalCode: approvalCode,
     instanceCode: instanceCode,
-    url: instanceCode ? ('https://www.larksuite.com/approval/detail/' + instanceCode) : ''
+    url: instanceCode ? ('https://www.larksuite.com/approval/detail/' + instanceCode) : '',
+    attachmentCount: attached.count || 0,
+    attachmentError: attached.error || ''
   };
 }
 
