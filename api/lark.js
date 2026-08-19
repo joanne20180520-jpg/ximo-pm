@@ -1328,7 +1328,7 @@ async function getTableFieldSchemas(accessToken, appToken, tableId, cache) {
   fields.forEach(function(f) {
     if (f.field_name) {
       set[f.field_name] = 1;
-      meta[f.field_name] = { type: f.type };
+      meta[f.field_name] = { type: f.type, field_id: f.field_id || f.id || '' };
     }
   });
   cache[setKey] = set;
@@ -1491,27 +1491,54 @@ async function uploadBitableMedia(token, appToken, fileName, buffer) {
   };
 }
 
-async function getMediaDownloadUrl(token, fileToken) {
-  const res = await fetch(BASE_URL + '/drive/v1/medias/' + encodeURIComponent(fileToken) + '/download', {
-    method: 'GET',
-    headers: { 'Authorization': 'Bearer ' + token },
-    redirect: 'manual'
-  });
-  if (res.status >= 300 && res.status < 400) {
-    const loc = res.headers.get('location');
-    if (loc) return loc;
+function encodeBitableMediaExtra(opts, fileToken) {
+  if (!opts || !opts.tableId) return '';
+  const perm = { tableId: opts.tableId };
+  if (opts.fieldId && opts.recordId && fileToken) {
+    const recMap = {};
+    recMap[opts.recordId] = [fileToken];
+    const attachments = {};
+    attachments[opts.fieldId] = recMap;
+    perm.attachments = attachments;
   }
+  return encodeURIComponent(JSON.stringify({ bitablePerm: perm }));
+}
+
+async function getMediaDownloadUrl(token, fileToken, extraOpts) {
+  const extra = encodeBitableMediaExtra(extraOpts, fileToken);
+  const paths = [];
+  if (extra) paths.push(BASE_URL + '/drive/v1/medias/' + encodeURIComponent(fileToken) + '/download?extra=' + extra);
+  paths.push(BASE_URL + '/drive/v1/medias/' + encodeURIComponent(fileToken) + '/download');
   let data = null;
-  try { data = await res.json(); } catch (e) {}
-  if (data && data.code === 0 && data.data) {
-    return data.data.download_url || data.data.tmp_download_url || '';
+  for (let i = 0; i < paths.length; i++) {
+    const res = await fetch(paths[i], {
+      method: 'GET',
+      headers: { Authorization: 'Bearer ' + token },
+      redirect: 'manual'
+    });
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get('location');
+      if (loc) return loc;
+    }
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (data && data.code === 0 && data.data) {
+      return data.data.download_url || data.data.tmp_download_url || '';
+    }
   }
-  const tmpRes = await fetch(BASE_URL + '/drive/v1/medias/batch_get_tmp_download_url?file_tokens=' + encodeURIComponent(fileToken), {
-    headers: { 'Authorization': 'Bearer ' + token }
-  });
-  const tmpData = await tmpRes.json();
-  if (tmpData.code === 0 && tmpData.data && tmpData.data.tmp_download_urls && tmpData.data.tmp_download_urls[0]) {
-    return tmpData.data.tmp_download_urls[0].tmp_download_url || '';
+  const tmpUrls = [];
+  if (extra) {
+    tmpUrls.push(BASE_URL + '/drive/v1/medias/batch_get_tmp_download_url?file_tokens=' + encodeURIComponent(fileToken) + '&extra=' + extra);
+  }
+  tmpUrls.push(BASE_URL + '/drive/v1/medias/batch_get_tmp_download_url?file_tokens=' + encodeURIComponent(fileToken));
+  for (let i = 0; i < tmpUrls.length; i++) {
+    const tmpRes = await fetch(tmpUrls[i], {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    const tmpData = await tmpRes.json().catch(function() { return {}; });
+    if (tmpData.code === 0 && tmpData.data && tmpData.data.tmp_download_urls && tmpData.data.tmp_download_urls[0]) {
+      return tmpData.data.tmp_download_urls[0].tmp_download_url || '';
+    }
+    if (!data || data.code) data = tmpData;
   }
   throw new Error((data && data.msg) || 'download failed');
 }
@@ -1520,21 +1547,59 @@ function isJsonContentType(res) {
   return /application\/json/i.test(String((res && res.headers && res.headers.get('content-type')) || ''));
 }
 
-async function downloadMediaBuffer(token, fileToken) {
+async function fetchBinaryFromUrl(url, token) {
+  const headers = {};
+  if (token && /larksuite\.com|feishu\.cn/i.test(String(url || ''))) {
+    headers.Authorization = 'Bearer ' + token;
+  }
+  const res = await fetch(url, {
+    headers: headers,
+    redirect: 'manual'
+  });
+  if (res.status >= 300 && res.status < 400) {
+    const loc = res.headers.get('location');
+    if (!loc) return null;
+    const fileRes = await fetch(loc);
+    if (fileRes.ok && !isJsonContentType(fileRes)) return Buffer.from(await fileRes.arrayBuffer());
+    return null;
+  }
+  if (res.ok && !isJsonContentType(res)) return Buffer.from(await res.arrayBuffer());
+  return null;
+}
+
+async function downloadMediaBuffer(token, file, extraOpts) {
+  const fileToken = typeof file === 'string'
+    ? file
+    : String((file && (file.file_token || file.token)) || '').trim();
+  const directUrls = [];
+  if (file && typeof file === 'object') {
+    if (file.tmp_url) directUrls.push(file.tmp_url);
+    if (file.url) directUrls.push(file.url);
+  }
   let lastErr = 'download media failed';
+  for (let i = 0; i < directUrls.length; i++) {
+    try {
+      const buf = await fetchBinaryFromUrl(directUrls[i], token);
+      if (buf && buf.length) return buf;
+    } catch (err) {
+      lastErr = (err && err.message) || lastErr;
+    }
+  }
+  if (!fileToken) throw new Error(lastErr);
   try {
-    const url = await getMediaDownloadUrl(token, fileToken);
+    const url = await getMediaDownloadUrl(token, fileToken, extraOpts);
     if (url) {
-      const fileRes = await fetch(url);
-      if (fileRes.ok && !isJsonContentType(fileRes)) {
-        return Buffer.from(await fileRes.arrayBuffer());
-      }
+      const buf = await fetchBinaryFromUrl(url, token);
+      if (buf && buf.length) return buf;
       lastErr = 'tmp download failed';
     }
   } catch (err) {
     lastErr = (err && err.message) || lastErr;
   }
-  const res = await fetch(BASE_URL + '/drive/v1/medias/' + encodeURIComponent(fileToken) + '/download', {
+  const extra = encodeBitableMediaExtra(extraOpts, fileToken);
+  const downloadUrl = BASE_URL + '/drive/v1/medias/' + encodeURIComponent(fileToken) + '/download'
+    + (extra ? ('?extra=' + extra) : '');
+  const res = await fetch(downloadUrl, {
     headers: { Authorization: 'Bearer ' + token }
   });
   if (res.ok && !isJsonContentType(res)) {
@@ -1545,6 +1610,19 @@ async function downloadMediaBuffer(token, fileToken) {
     throw new Error((data && data.msg) || lastErr);
   }
   throw new Error(lastErr);
+}
+
+async function downloadMediaBufferWithFallback(tenantToken, userToken, file, extraOpts) {
+  try {
+    return await downloadMediaBuffer(tenantToken, file, extraOpts);
+  } catch (err) {
+    if (userToken && userToken !== tenantToken) {
+      try {
+        return await downloadMediaBuffer(userToken, file, extraOpts);
+      } catch (err2) {}
+    }
+    throw err;
+  }
 }
 
 function approvalFileName(fileName, asciiOnly) {
@@ -2290,7 +2368,7 @@ function approvalAttachmentFormType(widget) {
   return 'attachmentV2';
 }
 
-async function appendApprovalAttachments(token, widgets, fields, form) {
+async function appendApprovalAttachments(token, widgets, fields, form, mediaCtx) {
   const files = paymentAttachmentItems(fields);
   if (!files.length) return { form: form, count: 0, error: '', files: 0, widget: null };
   const widget = findApprovalAttachmentWidget(widgets);
@@ -2304,17 +2382,33 @@ async function appendApprovalAttachments(token, widgets, fields, form) {
       error: '審批表單找不到附件欄' + (names ? ('（現有欄位：' + names + '）') : '（請確認已發布含附件欄的表單）')
     };
   }
+  const ctx = mediaCtx || {};
   const codes = [];
   const errors = [];
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
+    let buf = null;
     try {
-      const buf = await downloadMediaBuffer(token, file.file_token);
-      const code = await uploadApprovalFile(token, file.name, buf, widget.type);
+      buf = await downloadMediaBufferWithFallback(token, ctx.userToken, file, ctx);
+    } catch (err) {
+      errors.push((file.name || '附件') + '：無法讀取付款表附件（' + ((err && err.message) || String(err)) + '）');
+      continue;
+    }
+    try {
+      let code = '';
+      try {
+        code = await uploadApprovalFile(token, file.name, buf, widget.type);
+      } catch (upErr) {
+        if (ctx.userToken && ctx.userToken !== token) {
+          code = await uploadApprovalFile(ctx.userToken, file.name, buf, widget.type);
+        } else {
+          throw upErr;
+        }
+      }
       if (code) codes.push(code);
       else errors.push((file.name || '附件') + '：未取得審批檔案代碼');
     } catch (err) {
-      errors.push((file.name || '附件') + '：' + ((err && err.message) || String(err)));
+      errors.push((file.name || '附件') + '：無法上傳到審批（' + ((err && err.message) || String(err)) + '）');
     }
   }
   if (codes.length) {
@@ -2335,7 +2429,7 @@ async function appendApprovalAttachments(token, widgets, fields, form) {
   return result;
 }
 
-async function createPaymentApprovalInstance(token, fields, openIdHint) {
+async function createPaymentApprovalInstance(token, fields, openIdHint, mediaCtx) {
   const approvalCode = paymentApprovalCode();
   if (!approvalCode) return { ok: false, skipped: true, error: '未設定審批代碼' };
   const openId = paymentApplicantOpenId(fields, openIdHint);
@@ -2343,7 +2437,7 @@ async function createPaymentApprovalInstance(token, fields, openIdHint) {
   const def = await getPaymentApprovalDefinition(token);
   const widgets = parseApprovalFormWidgets(def.form || def.approval_form || (def.approval && def.approval.form));
   let form = buildPaymentApprovalForm(widgets, fields, openId);
-  const attached = await appendApprovalAttachments(token, widgets, fields, form);
+  const attached = await appendApprovalAttachments(token, widgets, fields, form, mediaCtx || {});
   form = attached.form;
   if (attached.files && attached.count === 0) {
     throw new Error(attached.error || '附件未寫入審批附件欄');
@@ -3373,6 +3467,8 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
 
   const frontCfg = paymentsFrontConfig();
   const schemaCache = {};
+  let paymentTableId = '';
+  let attachFieldId = '';
   try {
     const mainTableId = await resolvePaymentsTableId(
       tenantToken,
@@ -3380,7 +3476,10 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
       frontCfg.tableId
     );
     if (!mainTableId) throw new Error('找不到前台付款資料表');
+    paymentTableId = mainTableId;
     const mainSchemas = await getTableFieldSchemas(tenantToken, frontCfg.appToken, mainTableId, schemaCache);
+    const attachMeta = mainSchemas.fieldMeta['附件'] || mainSchemas.fieldMeta['檔案'] || mainSchemas.fieldMeta['上傳附件'];
+    attachFieldId = (attachMeta && attachMeta.field_id) || '';
     if (!fields['申請人'] && fields._applicantDisplayName) {
       applyApplicantTextFallback(fields, mainSchemas.allowedSet);
     }
@@ -3433,13 +3532,18 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
   const createdRec = (results.main && results.main.data && results.main.data.record)
     || (results.accounting && results.accounting.data && results.accounting.data.record)
     || null;
-  if (createdRec && createdRec.fields && !paymentAttachmentItems(fields).length) {
+  if (createdRec && createdRec.fields) {
     const fromRec = createdRec.fields['附件'] || createdRec.fields['檔案'] || createdRec.fields['上傳附件'];
     if (fromRec) fields['附件'] = fromRec;
   }
 
   try {
-    results.approval = await createPaymentApprovalInstance(tenantToken, fields, applicantOpenIdHint);
+    results.approval = await createPaymentApprovalInstance(tenantToken, fields, applicantOpenIdHint, {
+      userToken: userToken,
+      tableId: paymentTableId,
+      recordId: extractRecordId(results.main) || extractRecordId(results.accounting) || '',
+      fieldId: attachFieldId
+    });
     const recId = extractRecordId(results.main) || extractRecordId(results.accounting);
     if (results.approval && results.approval.ok && results.approval.instanceCode && recId) {
       try {
@@ -5053,7 +5157,9 @@ function paymentAttachmentItems(fields) {
     if (!token) return;
     out.push({
       file_token: token,
-      name: String(item.name || item.file_name || ('附件' + (idx + 1))).trim()
+      name: String(item.name || item.file_name || ('附件' + (idx + 1))).trim(),
+      url: item.url || '',
+      tmp_url: item.tmp_url || item.tmp_download_url || ''
     });
   });
   return out;
@@ -5912,7 +6018,17 @@ export default async function handler(req, res) {
       const fileToken = String(req.query.fileToken || '').trim();
       if (!fileToken) return res.status(400).json({ error: 'missing fileToken' });
       const token = await getToken();
-      const url = await getMediaDownloadUrl(token, fileToken);
+      const tableKey = String(req.query.table || '').trim();
+      let extraOpts = null;
+      try {
+        if (tableKey === 'payments') {
+          const cfg = paymentsFrontConfig();
+          extraOpts = { tableId: await resolvePaymentsTableId(token, cfg.appToken, cfg.tableId) };
+        } else if (tableKey) {
+          extraOpts = { tableId: tableIdFor(tableKey) };
+        }
+      } catch (e) {}
+      const url = await getMediaDownloadUrl(token, fileToken, extraOpts);
       if (!url) return res.status(404).json({ error: 'download url not found' });
       if (action === 'download-attachment-file') {
         res.writeHead(302, { Location: url });
