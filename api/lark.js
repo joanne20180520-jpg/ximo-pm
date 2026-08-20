@@ -3292,10 +3292,15 @@ async function findAccWorkitemRecord(accToken, projectRecordId, workitemName, xi
     }
   }
   if (!workitemName) return null;
+  const aliases = accWorkitemAliases(workitemName);
   let fallback = null;
   for (let i = 0; i < rows.length; i++) {
     const f = rows[i].fields || {};
-    const nameHit = accNamesMatch(workitemName, f['工作項目']) || accNamesMatch(workitemName, f['代號']);
+    const wn = accFieldText(f['工作項目']);
+    const code = accFieldText(f['代號']);
+    const nameHit = aliases.some(function(a) {
+      return accNamesMatch(a, wn) || accNamesMatch(a, code) || accNamesMatch(workitemName, wn);
+    });
     if (!nameHit) continue;
     const linked = getLinkIds(f['所屬案件']);
     if (projectRecordId && linked.indexOf(projectRecordId) >= 0) return rows[i];
@@ -3490,7 +3495,133 @@ async function syncXimoCatalogToAcc(ximoToken) {
     result.errors.push({ type: 'prune', error: pruneErr.message || String(pruneErr) });
   }
 
+  try {
+    const rematch = await rematchAccExpensesFromSourceLabels(accToken);
+    result.expensesRematched = rematch.updated || 0;
+    result.expensesStillUnmatched = rematch.stillUnmatched || 0;
+    if (rematch.errors && rematch.errors.length) {
+      result.errors = result.errors.concat(rematch.errors);
+    }
+  } catch (rematchErr) {
+    result.errors.push({ type: 'expense-rematch', error: rematchErr.message || String(rematchErr) });
+  }
+
   return result;
+}
+
+function accWorkitemAliases(name) {
+  const n = String(name || '').replace(/\s+/g, '');
+  const aliases = [n];
+  if (/行政管理費|相關稅捐|相關稅收|行政作業費|稅捐/.test(n)) {
+    aliases.push('配合相關四行政作業費、稅捐');
+    aliases.push('配合相關四行政作業費稅捐');
+  }
+  if (/配合相關.*行政|行政作業費.*稅/.test(n)) {
+    aliases.push('行政管理費');
+    aliases.push('相關稅捐');
+    aliases.push('相關稅收');
+  }
+  if (/雜項/.test(n)) aliases.push('雜項費用');
+  return aliases.filter(Boolean);
+}
+
+async function rematchAccExpensesFromSourceLabels(accToken) {
+  const token = accToken || await getAccTenantToken();
+  await ensureAccExpenseSourceFields(token);
+  const [expenses, projects, workitems] = await Promise.all([
+    getRecords(token, ACC_TABLE_EXPENSES, ACC_APP_TOKEN),
+    getRecords(token, ACC_TABLE_PROJECTS, ACC_APP_TOKEN),
+    getRecords(token, ACC_TABLE_WORKITEMS, ACC_APP_TOKEN)
+  ]);
+  const validProject = {};
+  const validWorkitem = {};
+  projects.forEach(function(p) { validProject[p.record_id] = true; });
+  workitems.forEach(function(w) { validWorkitem[w.record_id] = true; });
+
+  const workitemsByProject = {};
+  workitems.forEach(function(w) {
+    const f = w.fields || {};
+    if (!accFieldText(f['工作項目'])) return;
+    const pid = getLinkIds(f['所屬案件'])[0] || '';
+    if (!pid) return;
+    if (!workitemsByProject[pid]) workitemsByProject[pid] = [];
+    workitemsByProject[pid].push(w);
+  });
+
+  const out = { checked: expenses.length, updated: 0, stillUnmatched: 0, errors: [] };
+
+  for (let i = 0; i < expenses.length; i++) {
+    const rec = expenses[i];
+    const f = rec.fields || {};
+    let projectId = getLinkIds(f['所屬案件'])[0] || '';
+    let workitemId = getLinkIds(f['工項'])[0] || '';
+    if (projectId && !validProject[projectId]) projectId = '';
+    if (workitemId && !validWorkitem[workitemId]) workitemId = '';
+
+    const sourceProject = accFieldText(f['來源標案']);
+    const sourceWorkitem = accFieldText(f['來源工項']);
+    if (projectId && workitemId && validProject[projectId] && validWorkitem[workitemId]) continue;
+
+    let nextProjectId = projectId;
+    let nextWorkitemId = workitemId;
+
+    if (!nextProjectId && sourceProject) {
+      const found = await findAccProjectRecord(token, sourceProject, '', projects);
+      if (found) nextProjectId = found.record_id;
+    }
+
+    if (nextProjectId && !nextWorkitemId && sourceWorkitem) {
+      const candidates = workitemsByProject[nextProjectId] || [];
+      let hit = null;
+      const aliases = accWorkitemAliases(sourceWorkitem);
+      for (let a = 0; a < aliases.length && !hit; a++) {
+        for (let c = 0; c < candidates.length; c++) {
+          const wn = accFieldText((candidates[c].fields || {})['工作項目']);
+          if (accNamesMatch(aliases[a], wn) || accNamesMatch(sourceWorkitem, wn)) {
+            hit = candidates[c];
+            break;
+          }
+        }
+      }
+      if (!hit) {
+        hit = await findAccWorkitemRecord(token, nextProjectId, sourceWorkitem, '', workitems);
+      }
+      if (hit) nextWorkitemId = hit.record_id;
+    }
+
+    if (!nextProjectId && nextWorkitemId) {
+      const wi = workitems.find(function(w) { return w.record_id === nextWorkitemId; });
+      const pid = wi ? (getLinkIds((wi.fields || {})['所屬案件'])[0] || '') : '';
+      if (pid) nextProjectId = pid;
+    }
+
+    if (nextProjectId !== projectId || nextWorkitemId !== workitemId) {
+      try {
+        const body = {};
+        if (nextProjectId) body['所屬案件'] = [nextProjectId];
+        if (nextWorkitemId) body['工項'] = [nextWorkitemId];
+        if (!Object.keys(body).length) {
+          out.stillUnmatched++;
+          continue;
+        }
+        await updateRecord(token, ACC_TABLE_EXPENSES, rec.record_id, body, ACC_APP_TOKEN, false);
+        out.updated++;
+        projectId = nextProjectId;
+        workitemId = nextWorkitemId;
+      } catch (err) {
+        out.errors.push({
+          id: rec.record_id,
+          error: err.message || String(err),
+          sourceProject: sourceProject,
+          sourceWorkitem: sourceWorkitem
+        });
+      }
+    }
+
+    if (!projectId || !workitemId) out.stillUnmatched++;
+  }
+
+  return out;
 }
 
 async function syncSettledPaymentToAccPortal(ximoToken, paymentRec) {
@@ -6478,6 +6609,16 @@ export default async function handler(req, res) {
         const token = await getToken();
         const result = await syncXimoCatalogToAcc(token);
         return res.status(200).json({ ok: true, sync: result });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'rematch-acc-expenses' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const accToken = await getAccTenantToken();
+        const result = await rematchAccExpensesFromSourceLabels(accToken);
+        return res.status(200).json({ ok: true, rematch: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
