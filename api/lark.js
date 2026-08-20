@@ -3377,6 +3377,7 @@ async function syncXimoCatalogToAcc(ximoToken) {
     projectsUpdated: 0,
     workitemsCreated: 0,
     workitemsUpdated: 0,
+    workitemsRemoved: 0,
     progressSynced: 0,
     errors: []
   };
@@ -3437,6 +3438,56 @@ async function syncXimoCatalogToAcc(ximoToken) {
         error: err.message || String(err)
       });
     }
+  }
+
+  // 刪除沒有璽墨來源的 ACC 工項（例如舊的「行政管理費」「相關稅捐」拆項）
+  try {
+    const latestAccWis = await getRecords(accToken, ACC_TABLE_WORKITEMS, ACC_APP_TOKEN);
+    const combinedByProject = {};
+    latestAccWis.forEach(function(rec) {
+      const f = rec.fields || {};
+      if (!accFieldText(f['來源Ximo工項ID'])) return;
+      const compact = accFieldText(f['工作項目']).replace(/\s+/g, '');
+      if (!/配合相關|行政作業費.*稅|稅捐/.test(compact)) return;
+      const pid = getLinkIds(f['所屬案件'])[0];
+      if (pid) combinedByProject[pid] = rec.record_id;
+    });
+    let expenses = [];
+    try { expenses = await getRecords(accToken, ACC_TABLE_EXPENSES, ACC_APP_TOKEN); } catch (e) {}
+    for (let i = 0; i < latestAccWis.length; i++) {
+      const rec = latestAccWis[i];
+      const f = rec.fields || {};
+      if (accFieldText(f['來源Ximo工項ID'])) continue;
+      const pid = getLinkIds(f['所屬案件'])[0] || '';
+      const targetWi = combinedByProject[pid] || '';
+      for (let e = 0; e < expenses.length; e++) {
+        const ef = expenses[e].fields || {};
+        if (getLinkIds(ef['工項']).indexOf(rec.record_id) < 0) continue;
+        try {
+          await updateRecord(
+            accToken,
+            ACC_TABLE_EXPENSES,
+            expenses[e].record_id,
+            targetWi ? { '工項': [targetWi] } : { '工項': [] },
+            ACC_APP_TOKEN,
+            false
+          );
+        } catch (err) {}
+      }
+      try {
+        await deleteRecord(accToken, ACC_TABLE_WORKITEMS, rec.record_id, ACC_APP_TOKEN, false);
+        result.workitemsRemoved++;
+      } catch (err) {
+        result.errors.push({
+          type: 'workitem-delete',
+          id: rec.record_id,
+          name: accFieldText(f['工作項目']),
+          error: err.message || String(err)
+        });
+      }
+    }
+  } catch (pruneErr) {
+    result.errors.push({ type: 'prune', error: pruneErr.message || String(pruneErr) });
   }
 
   return result;
