@@ -121,8 +121,12 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .si{padding:6px 9px 6px 12px;font-size:11px;color:var(--t2);font-weight:500;cursor:default;border-radius:var(--rs);display:flex;flex-direction:column;gap:3px}
 .si:hover{background:var(--sf2)}
 .si .bdel{background:transparent;color:var(--t3);opacity:0}
+.si:hover .bdel{opacity:1}
 body.role-pm-limited #pl-projects .bdel{display:none !important}
+body.role-admin #pl-projects .si .bdel{opacity:1}
 .si .bdel:hover{color:#c0392b;background:rgba(192,57,43,.12)}
+.si .bdel[title="修改工作項目"]:hover{color:var(--c2);background:rgba(26,74,122,.1)}
+body.role-admin #pl-projects .si{cursor:pointer}
 .si-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
 .si-name{font-size:11px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .si-weight{font-size:9px;color:var(--t3);font-weight:700;flex-shrink:0}
@@ -1730,7 +1734,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>截止日</label><input type="date" id="ew-end"></div>
   <div class="fg"><label>可用成本</label><input type="text" class="money-input" id="ew-cost" placeholder="NT$0"></div>
   <div class="fg"><label>權重<span id="ew-weight-remain" class="proc-wi-remain"></span></label><input type="text" id="ew-weight" placeholder="例如 20%" oninput="updateEditWiWeightRemain()" onblur="onEditWiWeightBlur()"></div>
-</div><div class="ppf"><button class="bcan" onclick="cl('pp-edit-wi')">取消</button><button class="bpri" onclick="saveEditWorkItem()">儲存</button></div></div></div>
+</div><div class="ppf"><button class="bcan bdel-action" id="ew-del-btn" onclick="deleteWorkItemFromEdit()">刪除工作項目</button><button class="bcan" onclick="cl('pp-edit-wi')">取消</button><button class="bpri" onclick="saveEditWorkItem()">儲存</button></div></div></div>
 
 <!-- 修改標案 -->
 <div class="po" id="pp-edit-proj"><div class="pp"><div class="pph"><h3>修改標案</h3><button class="ppc" onclick="cl('pp-edit-proj')">✕</button></div><div class="ppb">
@@ -7159,12 +7163,12 @@ function buildProjectCardHtml(rec, color) {
     if (wiStart && wiEnd) dateStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
     else if (wiEnd) dateStr = fmt(wiEnd.getTime());
     else if (wiStart) dateStr = fmt(wiStart.getTime()) + '–';
-    subHTML += '<div class="si">'
+    subHTML += '<div class="si"' + (canManageProjects() ? ' onclick="openEditWorkItem(\'' + wi.record_id + '\')" title="點擊編輯工作項目"' : '') + '>'
       + '<div class="si-row"><span class="si-name">' + escHtml(wName) + '</span>'
       + (weightStr ? '<span class="si-weight" title="進度／權重（—＝尚未分配權重）">' + weightStr + '</span>' : '')
       + (canManageProjects()
         ? ('<button type="button" class="bdel" title="修改工作項目" style="margin-right:2px" onclick="event.stopPropagation();openEditWorkItem(\'' + wi.record_id + '\')">✎</button>'
-          + '<button type="button" class="bdel" title="刪除工作項目" onclick="deleteWorkItem(\'' + wi.record_id + '\',\'' + escAttr(wName).replace(/'/g, "\\'") + '\')">×</button>')
+          + '<button type="button" class="bdel" title="刪除工作項目" onclick="event.stopPropagation();deleteWorkItem(\'' + wi.record_id + '\',\'' + escAttr(wName).replace(/'/g, "\\'") + '\')">×</button>')
         : '')
       + '</div>'
       + '<div class="si-meta"><span class="si-date">' + dateStr + '</span>'
@@ -16326,7 +16330,33 @@ function openEditWorkItem(wiId) {
     var cts = proj ? getProjectContractStart(proj) : null;
     hint.textContent = cts ? ('標案合約開始日：' + fmtDate(cts)) : '標案未設定合約開始日';
   }
+  var delBtn = document.getElementById('ew-del-btn');
+  if (delBtn) delBtn.style.display = canManageProjects() ? '' : 'none';
   op('pp-edit-wi');
+}
+
+function deleteWorkItemFromEdit() {
+  if (!editingWiId) return;
+  var rec = workitemsData.find(function(r){ return r.record_id === editingWiId; });
+  var name = (rec && rec.fields && rec.fields['工作項目名稱']) || (document.getElementById('ew-name') && document.getElementById('ew-name').value) || '未命名';
+  var id = editingWiId;
+  showConfirm({
+    type: 'del',
+    title: '刪除工作項目',
+    body: '確定要刪除這個工作項目嗎？<br><span class="confirm-name">「' + escHtml(name) + '」</span>',
+    okText: '刪除',
+    onOk: function() {
+      cl('pp-edit-wi');
+      editingWiId = null;
+      softDeleteForUndo('workitems', id, {
+        toastMsg: '已刪除工作項目「' + (name || '未命名') + '」',
+        syncKeys: ['workitems', 'tasks'],
+        failMsg: '刪除失敗'
+      }).catch(function(err) {
+        alert('刪除失敗：' + (err.message || '請稍後再試'));
+      });
+    }
+  });
 }
 
 function saveEditWorkItem() {
