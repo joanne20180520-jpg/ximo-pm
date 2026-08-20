@@ -3012,6 +3012,7 @@ function expenseLinkedPaymentId(fields) {
 
 let _accTenantTokenCache = null;
 let _accExpenseFieldsReady = false;
+let _accCatalogFieldsReady = false;
 
 async function getAccTenantToken() {
   if (!ACC_APP_SECRET) return '';
@@ -3132,9 +3133,147 @@ async function resolveXimoPaymentLabels(ximoToken, fields) {
   return { projectName: projectName || '', workitemName: workitemName || '' };
 }
 
-async function findAccProjectRecord(accToken, projectName) {
-  if (!projectName || !ACC_TABLE_PROJECTS) return null;
-  const rows = await getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN);
+async function ensureAccTableFields(accToken, tableId, specs) {
+  if (!tableId || !specs || !specs.length) return;
+  const existing = await listBitableFields(accToken, ACC_APP_TOKEN, tableId);
+  const names = {};
+  (existing || []).forEach(function(f) { names[f.field_name] = true; });
+  for (let i = 0; i < specs.length; i++) {
+    const spec = specs[i];
+    if (!spec || !spec.field_name || names[spec.field_name]) continue;
+    const created = await fetch(
+      BASE_URL + '/bitable/v1/apps/' + encodeURIComponent(ACC_APP_TOKEN)
+        + '/tables/' + encodeURIComponent(tableId) + '/fields',
+      {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + accToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field_name: spec.field_name, type: spec.type })
+      }
+    ).then(function(r) { return r.json(); });
+    if (created.code !== 0) {
+      throw new Error('新增會計欄位失敗: ' + spec.field_name + ' ' + (created.msg || created.code));
+    }
+    names[spec.field_name] = true;
+  }
+}
+
+async function ensureAccCatalogFields(accToken) {
+  if (_accCatalogFieldsReady) return;
+  await ensureAccTableFields(accToken, ACC_TABLE_PROJECTS, [
+    { field_name: '來源Ximo標案ID', type: 1 }
+  ]);
+  await ensureAccTableFields(accToken, ACC_TABLE_WORKITEMS, [
+    { field_name: '來源Ximo工項ID', type: 1 },
+    { field_name: '執行進度', type: 2 }
+  ]);
+  _accCatalogFieldsReady = true;
+}
+
+function parseXimoProjectYear(name, fields) {
+  const text = String(name || '');
+  const m = text.match(/(\d{2,3})\s*年度?/);
+  if (m) return Number(m[1]);
+  const start = fields && (fields['合約開始日'] || fields['開始日']);
+  if (typeof start === 'number' && start > 0) {
+    const ms = start < 1e11 ? start * 1000 : start;
+    const y = new Date(ms).getFullYear();
+    if (y >= 1911) return y - 1911;
+  }
+  return new Date().getFullYear() - 1911;
+}
+
+function accDateMsFromField(raw) {
+  if (raw == null || raw === '') return null;
+  if (typeof raw === 'number' && raw > 0) return raw < 1e11 ? raw * 1000 : raw;
+  if (typeof raw === 'string' && raw.trim()) {
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(raw.trim())
+      ? new Date(raw.trim() + 'T00:00:00+08:00')
+      : new Date(raw);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  return null;
+}
+
+function calcXimoWiProgressPct(wf) {
+  const f = wf || {};
+  function rollup(val) {
+    if (val === '' || val == null) return null;
+    if (typeof val === 'object') {
+      if (val.value != null) return rollup(val.value);
+      if (val.text != null) return rollup(val.text);
+    }
+    const n = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.-]/g, ''));
+    return isNaN(n) ? null : n;
+  }
+  const taskRaw = rollup(f['任務平均進度']);
+  const designRaw = rollup(f['設計平均進度']);
+  if (designRaw != null && designRaw > 0) {
+    const t = taskRaw != null ? taskRaw : 0;
+    return Math.min(100, Math.round((t + designRaw) / 200 * 100));
+  }
+  if (taskRaw != null) {
+    if (taskRaw <= 1) return Math.min(100, Math.round(taskRaw * 100));
+    if (taskRaw <= 100) return Math.min(100, Math.round(taskRaw));
+    return Math.min(100, Math.round(taskRaw / 100));
+  }
+  return null;
+}
+
+function calcXimoWiProgressFromLinked(wiId, tasks, designs) {
+  if (!wiId) return null;
+  let taskSum = 0;
+  let taskCount = 0;
+  let designSum = 0;
+  let designCount = 0;
+  function progressOf(fields) {
+    const f = fields || {};
+    const status = String(f['進度狀態'] || '').trim();
+    const num = f['進度數值'];
+    if (typeof num === 'number' && !isNaN(num)) {
+      if (num > 0 && num <= 1) return num * 100;
+      return Math.min(100, num);
+    }
+    if (/完成|已完成|done/i.test(status)) return 100;
+    if (/進行|處理中/i.test(status)) return 50;
+    if (/未開始|待辦/i.test(status)) return 0;
+    return null;
+  }
+  (tasks || []).forEach(function(t) {
+    const ids = getLinkIds((t.fields || {})['所屬工作項目']);
+    if (ids.indexOf(wiId) < 0) return;
+    const p = progressOf(t.fields);
+    if (p == null) return;
+    taskSum += p;
+    taskCount++;
+  });
+  (designs || []).forEach(function(d) {
+    const ids = getLinkIds((d.fields || {})['所屬工作項目']);
+    if (ids.indexOf(wiId) < 0) return;
+    const p = progressOf(d.fields);
+    if (p == null) return;
+    designSum += p;
+    designCount++;
+  });
+  if (!taskCount && !designCount) return null;
+  const taskAvg = taskCount ? taskSum / taskCount : null;
+  const designAvg = designCount ? designSum / designCount : null;
+  if (designCount > 0) {
+    const t = taskAvg != null ? taskAvg : 0;
+    const d = designAvg != null ? designAvg : 0;
+    return Math.min(100, Math.round((t + d) / 2));
+  }
+  return Math.min(100, Math.round(taskAvg != null ? taskAvg : designAvg));
+}
+
+async function findAccProjectRecord(accToken, projectName, ximoProjectId, cachedRows) {
+  const rows = cachedRows || await getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN);
+  if (ximoProjectId) {
+    for (let i = 0; i < rows.length; i++) {
+      const f = rows[i].fields || {};
+      if (accFieldText(f['來源Ximo標案ID']) === ximoProjectId) return rows[i];
+    }
+  }
+  if (!projectName) return null;
   for (let i = 0; i < rows.length; i++) {
     const f = rows[i].fields || {};
     if (accNamesMatch(projectName, f['案名']) || accNamesMatch(projectName, f['完整名稱'])) {
@@ -3144,9 +3283,15 @@ async function findAccProjectRecord(accToken, projectName) {
   return null;
 }
 
-async function findAccWorkitemRecord(accToken, projectRecordId, workitemName) {
-  if (!workitemName || !ACC_TABLE_WORKITEMS) return null;
-  const rows = await getRecords(accToken, ACC_TABLE_WORKITEMS, ACC_APP_TOKEN);
+async function findAccWorkitemRecord(accToken, projectRecordId, workitemName, ximoWorkitemId, cachedRows) {
+  const rows = cachedRows || await getRecords(accToken, ACC_TABLE_WORKITEMS, ACC_APP_TOKEN);
+  if (ximoWorkitemId) {
+    for (let i = 0; i < rows.length; i++) {
+      const f = rows[i].fields || {};
+      if (accFieldText(f['來源Ximo工項ID']) === ximoWorkitemId) return rows[i];
+    }
+  }
+  if (!workitemName) return null;
   let fallback = null;
   for (let i = 0; i < rows.length; i++) {
     const f = rows[i].fields || {};
@@ -3157,6 +3302,144 @@ async function findAccWorkitemRecord(accToken, projectRecordId, workitemName) {
     if (!fallback) fallback = rows[i];
   }
   return projectRecordId ? null : fallback;
+}
+
+async function upsertAccProjectFromXimo(accToken, ximoProject, cachedAccProjects) {
+  const fields = (ximoProject && ximoProject.fields) || {};
+  const ximoId = ximoProject && ximoProject.record_id;
+  const name = accFieldText(fields['標案名稱']);
+  if (!ximoId || !name) return { skipped: true, reason: 'missing-project' };
+  const existing = await findAccProjectRecord(accToken, name, ximoId, cachedAccProjects);
+  const due = accDateMsFromField(fields['合約結束日'] || fields['截止日']);
+  const body = {
+    '案名': name,
+    '完整名稱': name,
+    '年度': parseXimoProjectYear(name, fields),
+    '來源Ximo標案ID': ximoId
+  };
+  if (due) body['到期日'] = due;
+  if (existing && existing.record_id) {
+    await updateRecord(accToken, ACC_TABLE_PROJECTS, existing.record_id, body, ACC_APP_TOKEN, false);
+    existing.fields = Object.assign({}, existing.fields || {}, body);
+    return { updated: true, recordId: existing.record_id, record: existing };
+  }
+  const created = await createRecord(accToken, ACC_TABLE_PROJECTS, body, ACC_APP_TOKEN, false);
+  const rec = (created.data && created.data.record) || { record_id: extractRecordId(created), fields: body };
+  if (cachedAccProjects) cachedAccProjects.push(rec);
+  return { created: true, recordId: rec.record_id, record: rec };
+}
+
+async function upsertAccWorkitemFromXimo(accToken, ximoWorkitem, accProjectId, progressPct, cachedAccWorkitems) {
+  const fields = (ximoWorkitem && ximoWorkitem.fields) || {};
+  const ximoId = ximoWorkitem && ximoWorkitem.record_id;
+  const name = accFieldText(fields['工作項目名稱'] || fields['名稱'] || fields['工作項目']);
+  if (!ximoId || !name || !accProjectId) return { skipped: true, reason: 'missing-workitem' };
+  const existing = await findAccWorkitemRecord(accToken, accProjectId, name, ximoId, cachedAccWorkitems);
+  const cost = Number(fields['可用成本'] || fields['可用成本未稅'] || 0) || 0;
+  const body = {
+    '工作項目': name,
+    '所屬案件': [accProjectId],
+    '來源Ximo工項ID': ximoId
+  };
+  if (cost > 0) body['可用成本'] = cost;
+  if (progressPct != null && !isNaN(progressPct)) body['執行進度'] = Math.max(0, Math.min(100, Number(progressPct)));
+  if (existing && existing.record_id) {
+    const ef = existing.fields || {};
+    // Keep Acc budget sheet fields (項次/數量/單價…) if already filled.
+    await updateRecord(accToken, ACC_TABLE_WORKITEMS, existing.record_id, body, ACC_APP_TOKEN, false);
+    existing.fields = Object.assign({}, ef, body);
+    return { updated: true, recordId: existing.record_id, record: existing };
+  }
+  const created = await createRecord(accToken, ACC_TABLE_WORKITEMS, body, ACC_APP_TOKEN, false);
+  const rec = (created.data && created.data.record) || { record_id: extractRecordId(created), fields: body };
+  if (cachedAccWorkitems) cachedAccWorkitems.push(rec);
+  return { created: true, recordId: rec.record_id, record: rec };
+}
+
+async function syncXimoCatalogToAcc(ximoToken) {
+  if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_PROJECTS || !ACC_TABLE_WORKITEMS) {
+    return { skipped: true, reason: 'acc-env-missing' };
+  }
+  const accToken = await getAccTenantToken();
+  await ensureAccCatalogFields(accToken);
+
+  const projects = await getRecords(ximoToken, tableIdFor('projects'), appTokenForTable('projects'));
+  const workitems = await getRecords(ximoToken, tableIdFor('workitems'), appTokenForTable('workitems'));
+  let tasks = [];
+  let designs = [];
+  try { tasks = await getRecords(ximoToken, tableIdFor('tasks'), appTokenForTable('tasks')); } catch (e) {}
+  try { designs = await getRecords(ximoToken, tableIdFor('designs'), appTokenForTable('designs')); } catch (e) {}
+
+  const accProjects = await getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN);
+  const accWorkitems = await getRecords(accToken, ACC_TABLE_WORKITEMS, ACC_APP_TOKEN);
+  const result = {
+    projectsCreated: 0,
+    projectsUpdated: 0,
+    workitemsCreated: 0,
+    workitemsUpdated: 0,
+    progressSynced: 0,
+    errors: []
+  };
+  const projectMap = {};
+
+  for (let i = 0; i < projects.length; i++) {
+    try {
+      const up = await upsertAccProjectFromXimo(accToken, projects[i], accProjects);
+      if (up.created) result.projectsCreated++;
+      else if (up.updated) result.projectsUpdated++;
+      if (up.recordId) projectMap[projects[i].record_id] = up.recordId;
+    } catch (err) {
+      result.errors.push({
+        type: 'project',
+        id: projects[i].record_id,
+        error: err.message || String(err)
+      });
+    }
+  }
+
+  for (let i = 0; i < workitems.length; i++) {
+    const wi = workitems[i];
+    const wf = wi.fields || {};
+    try {
+      const projIds = getLinkIds(wf['所屬標案'] || wf['所數標案']);
+      let accProjectId = '';
+      for (let p = 0; p < projIds.length; p++) {
+        if (projectMap[projIds[p]]) {
+          accProjectId = projectMap[projIds[p]];
+          break;
+        }
+      }
+      if (!accProjectId && projIds[0]) {
+        const ximoProj = projects.find(function(r) { return r.record_id === projIds[0]; });
+        const pname = ximoProj
+          ? accFieldText((ximoProj.fields || {})['標案名稱'])
+          : getLinkText(wf['所屬標案'] || wf['所數標案']);
+        const found = await findAccProjectRecord(accToken, pname, projIds[0], accProjects);
+        if (found) {
+          accProjectId = found.record_id;
+          projectMap[projIds[0]] = accProjectId;
+        }
+      }
+      if (!accProjectId) {
+        result.errors.push({ type: 'workitem', id: wi.record_id, error: '找不到對應 ACC 案件' });
+        continue;
+      }
+      let progress = calcXimoWiProgressPct(wf);
+      if (progress == null) progress = calcXimoWiProgressFromLinked(wi.record_id, tasks, designs);
+      const up = await upsertAccWorkitemFromXimo(accToken, wi, accProjectId, progress, accWorkitems);
+      if (up.created) result.workitemsCreated++;
+      else if (up.updated) result.workitemsUpdated++;
+      if (progress != null) result.progressSynced++;
+    } catch (err) {
+      result.errors.push({
+        type: 'workitem',
+        id: wi.record_id,
+        error: err.message || String(err)
+      });
+    }
+  }
+
+  return result;
 }
 
 async function syncSettledPaymentToAccPortal(ximoToken, paymentRec) {
@@ -3180,11 +3463,18 @@ async function syncSettledPaymentToAccPortal(ximoToken, paymentRec) {
   }
 
   const labels = await resolveXimoPaymentLabels(ximoToken, fields);
-  const accProject = await findAccProjectRecord(accToken, labels.projectName);
-  const accWorkitem = await findAccWorkitemRecord(
+  try {
+    await ensureAccCatalogFields(accToken);
+  } catch (e) {}
+  const accProjects = await getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN).catch(function() { return []; });
+  const accWorkitems = await getRecords(accToken, ACC_TABLE_WORKITEMS, ACC_APP_TOKEN).catch(function() { return []; });
+  let accProject = await findAccProjectRecord(accToken, labels.projectName, '', accProjects);
+  let accWorkitem = await findAccWorkitemRecord(
     accToken,
     accProject ? accProject.record_id : '',
-    labels.workitemName
+    labels.workitemName,
+    '',
+    accWorkitems
   );
 
   const payee = accFieldText(fields['支付對象']);
@@ -6119,11 +6409,27 @@ export default async function handler(req, res) {
     if (action === 'sync-payment-approvals' && req.method === 'GET') {
       const token = await getToken();
       const sync = await syncPendingPaymentApprovals(token);
+      let accCatalog = null;
+      try {
+        accCatalog = await syncXimoCatalogToAcc(token);
+      } catch (accErr) {
+        accCatalog = { ok: false, error: accErr.message || String(accErr) };
+      }
       const cfg = paymentsFrontConfig();
       const tableId = await resolvePaymentsTableId(token, cfg.appToken, cfg.tableId);
       const records = tableId ? await getRecords(token, tableId, cfg.appToken) : [];
       const merged = mergePaymentApprovalMeta(records, sync.approvalMeta || {});
-      return res.status(200).json({ ok: true, sync: sync, payments: { records: merged } });
+      return res.status(200).json({ ok: true, sync: sync, accCatalog: accCatalog, payments: { records: merged } });
+    }
+
+    if (action === 'sync-ximo-to-acc' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const token = await getToken();
+        const result = await syncXimoCatalogToAcc(token);
+        return res.status(200).json({ ok: true, sync: result });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
     }
 
     if (action === 'approval-form-debug' && req.method === 'GET') {
@@ -6299,6 +6605,11 @@ export default async function handler(req, res) {
       const projectFields = b.project || {};
       const workitems = Array.isArray(b.workitems) ? b.workitems : [];
       const result = await createProjectImportBundle(tenantToken, userAccessToken, projectFields, workitems);
+      try {
+        result.accSync = await syncXimoCatalogToAcc(tenantToken);
+      } catch (accErr) {
+        result.accSync = { ok: false, error: accErr.message || String(accErr) };
+      }
       return res.status(200).json(result);
     }
 
@@ -6312,6 +6623,11 @@ export default async function handler(req, res) {
       const workitems = Array.isArray(b.workitems) ? b.workitems : [];
       if (!projectId) return res.status(400).json({ error: 'missing projectId' });
       const result = await createWorkItemsBundle(tenantToken, userAccessToken, projectId, workitems);
+      try {
+        result.accSync = await syncXimoCatalogToAcc(tenantToken);
+      } catch (accErr) {
+        result.accSync = { ok: false, error: accErr.message || String(accErr) };
+      }
       return res.status(200).json(result);
     }
 
