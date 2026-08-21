@@ -4126,9 +4126,19 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
   if (errors.length) results.partialErrors = errors;
 
   const primary = results.main || results.accounting;
+  const primaryData = primary && primary.data ? primary.data : {};
+  const outRecord = primaryData.record
+    ? Object.assign({}, primaryData.record, {
+        fields: Object.assign({}, (primaryData.record.fields || {}), {
+          '審批編號': (results.approval && results.approval.instanceCode) || (primaryData.record.fields || {})['審批編號'] || '',
+          '狀態': (primaryData.record.fields || {})['狀態'] || '審批中'
+        })
+      })
+    : null;
+
   return {
     code: 0,
-    data: primary && primary.data ? primary.data : {},
+    data: outRecord ? Object.assign({}, primaryData, { record: outRecord }) : primaryData,
     main: results.main,
     accounting: results.accounting,
     partialErrors: results.partialErrors || [],

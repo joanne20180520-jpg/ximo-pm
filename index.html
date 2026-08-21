@@ -12806,10 +12806,24 @@ function savePaymentRecord(data) {
     renderPayAttachList();
     var rec = (res.data && res.data.record) || (res.main && res.main.data && res.main.data.record) || null;
     if (rec && rec.record_id) {
+      var fields = Object.assign({}, rec.fields || {});
+      if (res.approval && res.approval.instanceCode && !String(fields['審批編號'] || '').trim()) {
+        fields['審批編號'] = res.approval.instanceCode;
+      }
+      rec = Object.assign({}, rec, {
+        fields: fields,
+        approvalMeta: Object.assign({}, rec.approvalMeta || {}, res.approval && res.approval.ok ? {
+          instanceCode: res.approval.instanceCode || '',
+          approvalStatus: 'PENDING'
+        } : {})
+      });
       paymentsData = mergePaymentApprovalIntoRecords([rec].concat(paymentsData.filter(function(r) { return r.record_id !== rec.record_id; })));
     }
+    payListPage = 1;
     renderPaymentsList();
-    syncTables(['payments']).catch(function() {});
+    syncTables(['payments']).then(function() {
+      return syncPaymentApprovals();
+    }).catch(function() {});
     return res;
   });
 }
@@ -13146,7 +13160,10 @@ function paymentDateInQuery(f) {
   var toStr = toEl ? toEl.value : '';
   if (!fromStr && !toStr) return true;
   var recDay = tsToDateInput(f && f['申請日期']);
-  if (!recDay) return false;
+  if (!recDay) {
+    // 沒有申請日期時不要因區間被藏掉（改看全部仍可對）
+    return !fromStr && !toStr;
+  }
   if (fromStr && recDay < fromStr) return false;
   if (toStr && recDay > toStr) return false;
   return true;
@@ -13165,7 +13182,12 @@ function isListedPaymentRecord(rec) {
   var meta = (rec && rec.approvalMeta) || paymentApprovalMeta[rec && rec.record_id] || {};
   if (meta.instanceCode) return true;
   var pending = String(f['待簽核人'] || meta.pendingApprover || '').trim();
-  return !!(pending && pending !== '—');
+  if (pending && pending !== '—') return true;
+  // 審批中且有金額：新單常見「審批編號」尚未寫回，仍要顯示在清單
+  if (status === '審批中' && (parseFloat(f['付款總金額']) || 0) > 0 && (f['申請日期'] != null && f['申請日期'] !== '')) {
+    return true;
+  }
+  return false;
 }
 
 function renderPaymentsList() {
