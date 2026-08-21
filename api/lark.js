@@ -6276,6 +6276,16 @@ function getMemberName(fields) {
 
 function collectMemberRoleTokens(fields) {
   const tokens = [];
+  function pushOne(s) {
+    s = String(s || '').trim();
+    if (!s) return;
+    // 多選偶發以「設計師,免日報」整段字串存在
+    if (/[,，、;/｜|]/.test(s)) {
+      s.split(/[,，、;/｜|]+/).forEach(pushOne);
+      return;
+    }
+    tokens.push(s);
+  }
   function pushRaw(raw) {
     if (raw == null || raw === '') return;
     if (Array.isArray(raw)) {
@@ -6283,14 +6293,16 @@ function collectMemberRoleTokens(fields) {
       return;
     }
     if (typeof raw === 'object') {
-      if (raw.text) tokens.push(String(raw.text).trim());
-      else if (raw.name) tokens.push(String(raw.name).trim());
-      else if (Array.isArray(raw.text_arr)) {
-        raw.text_arr.forEach(function(t) { tokens.push(String(t).trim()); });
+      if (raw.text != null) pushOne(raw.text);
+      if (raw.name != null) pushOne(raw.name);
+      if (raw.value != null && typeof raw.value !== 'object') pushOne(raw.value);
+      if (Array.isArray(raw.text_arr)) {
+        raw.text_arr.forEach(function(t) { pushOne(t); });
       }
+      if (Array.isArray(raw.options)) raw.options.forEach(pushRaw);
       return;
     }
-    tokens.push(String(raw).trim());
+    pushOne(raw);
   }
   const f = fields || {};
   pushRaw(f['角色']);
@@ -6298,6 +6310,9 @@ function collectMemberRoleTokens(fields) {
   pushRaw(f['標籤']);
   pushRaw(f['Tag']);
   pushRaw(f['Tags']);
+  Object.keys(f).forEach(function(k) {
+    if (/角色|標籤|tag|role/i.test(k)) pushRaw(f[k]);
+  });
   return tokens.filter(Boolean);
 }
 
@@ -6314,7 +6329,8 @@ function isDesignerRoleToken(raw) {
   const r = String(raw || '').trim();
   if (!r) return false;
   if (isDesignLeadRoleToken(r)) return false;
-  if (r === '設計師' || r === '设计师') return true;
+  if (r === '設計師' || r === '设计师' || r === '設計' || r === '设计') return true;
+  if (r.indexOf('設計師') >= 0 || r.indexOf('设计师') >= 0) return true;
   return r.toLowerCase() === 'designer';
 }
 
@@ -6594,12 +6610,14 @@ async function checkMemberAuthorization(userAccessToken) {
       };
     }
     if (isLarkQuotaExceededError(err)) {
-      // 無人員表快取時仍允許已 OAuth 的公司帳號暫入，避免整站鎖死
+      // 無人員表快取時仍允許已 OAuth 的公司帳號暫入，但不可硬編碼成 PM
+      // （否則設計師會看到 PM 全頁且設計欄位被鎖）。角色交給前端用快取／人員資料還原。
       return {
         ok: true,
         needLogin: false,
         authorized: true,
-        role: 'PM',
+        role: null,
+        roleUnknown: true,
         memberName: (user && (user.name || user.enName)) || '',
         user,
         quotaExceeded: true,

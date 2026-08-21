@@ -4388,7 +4388,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260819v10';
+var APP_BUILD = '20260821v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -5229,7 +5229,15 @@ function checkMemberAuthorization() {
           hint: res.hint || ''
         };
       }
-      return { authorized: true, role: res.role || 'PM', memberName: res.memberName || '', loginUser: res.user || null, quotaExceeded: !!res.quotaExceeded, warning: res.warning || '' };
+      return {
+        authorized: true,
+        role: res.role || null,
+        roleUnknown: !!res.roleUnknown || (!!res.quotaExceeded && !res.role),
+        memberName: res.memberName || '',
+        loginUser: res.user || null,
+        quotaExceeded: !!res.quotaExceeded,
+        warning: res.warning || ''
+      };
     })
     .catch(function(err) {
       return { authorized: false, needLogin: false, networkError: true, authError: err.message || '連線失敗' };
@@ -5279,12 +5287,14 @@ function applyRolePermissions() {
   }
 }
 
-function readAuthCache() {
+function readAuthCache(opts) {
+  opts = opts || {};
   try {
     var raw = sessionStorage.getItem(AUTH_CACHE_KEY);
     if (!raw) return null;
     var parsed = JSON.parse(raw);
-    if (!parsed || !parsed.ts || Date.now() - parsed.ts > AUTH_CACHE_MAX_AGE) return null;
+    if (!parsed || !parsed.ts) return null;
+    if (!opts.ignoreAge && Date.now() - parsed.ts > AUTH_CACHE_MAX_AGE) return null;
     var u = getCurrentLoginUser();
     if (!u) return null;
     var openId = u.openId || '';
@@ -5295,15 +5305,80 @@ function readAuthCache() {
   }
 }
 
+function resolveRoleFromMembersForLoginUser() {
+  var user = getCurrentLoginUser();
+  if (!user || !membersData.length) return '';
+  var openId = String(user.openId || '').trim();
+  var unionId = String(user.unionId || '').trim();
+  var userId = String(user.userId || '').trim();
+  var userNames = [user.name, user.enName].map(function(s) { return String(s || '').trim(); }).filter(Boolean);
+  for (var i = 0; i < membersData.length; i++) {
+    var f = membersData[i].fields || {};
+    var personIds = memberFieldPersonIds(f);
+    var mNames = memberFieldPersonNames(f);
+    var matched = false;
+    if (openId && personIds.indexOf(openId) >= 0) matched = true;
+    else if (unionId && personIds.indexOf(unionId) >= 0) matched = true;
+    else {
+      var mUserId = fieldTextValue(f['user_id'] || f['User ID'] || f['userid']);
+      if (userId && mUserId && userId === mUserId) matched = true;
+      else {
+        for (var u = 0; u < userNames.length && !matched; u++) {
+          for (var n = 0; n < mNames.length; n++) {
+            if (namesMatch(mNames[n], userNames[u])) matched = true;
+          }
+        }
+      }
+    }
+    if (matched) return resolveMemberRole(f);
+  }
+  return '';
+}
+
+function resolveSessionRole(result) {
+  result = result || {};
+  var roleUnknown = !!result.roleUnknown || (result.quotaExceeded && !result.role);
+  if (!roleUnknown && result.role) return result.role;
+  var cached = readAuthCache({ ignoreAge: true });
+  if (cached && cached.role) return cached.role;
+  var fromMembers = resolveRoleFromMembersForLoginUser();
+  if (fromMembers) return fromMembers;
+  return result.role || currentUserRole || 'PM';
+}
+
+function reconcileCurrentUserRoleFromMembers() {
+  if (!authReady) return false;
+  var derived = resolveRoleFromMembersForLoginUser();
+  if (!derived || derived === currentUserRole) return false;
+  currentUserRole = derived;
+  applyRolePermissions();
+  writeAuthCache({
+    authorized: true,
+    role: derived,
+    memberName: (getCurrentLoginUser() || {}).name || ''
+  });
+  if (isDesignerLikeRole()) {
+    try { renderDesigns(); } catch (e) {}
+  }
+  return true;
+}
+
 function writeAuthCache(result) {
   if (!result || !result.authorized) return;
   var u = getCurrentLoginUser();
   if (!u) return;
+  var role = result.role || '';
+  // 緊急登入／角色未知時，不要用空值或預設 PM 蓋掉先前正確角色
+  if (result.roleUnknown || (!role && result.quotaExceeded)) {
+    var prev = readAuthCache({ ignoreAge: true });
+    if (prev && prev.role) role = prev.role;
+  }
+  if (!role) role = currentUserRole || 'PM';
   try {
     sessionStorage.setItem(AUTH_CACHE_KEY, JSON.stringify({
       ts: Date.now(),
       openId: u.openId || '',
-      role: result.role || 'PM',
+      role: role,
       memberName: result.memberName || ''
     }));
   } catch (e) {}
@@ -5335,7 +5410,7 @@ function takePostLoginRedirect() {
 
 function applyAuthorizedSession(result, opts) {
   opts = opts || {};
-  currentUserRole = result.role || 'PM';
+  currentUserRole = resolveSessionRole(result);
   hideAuthGate();
   if (result.quotaExceeded || result.warning) {
     try { showLoginError(result.warning || '本月 Lark API 額度已用完，部分功能可能無法使用。'); } catch (e) {}
@@ -5361,13 +5436,16 @@ function applyAuthorizedSession(result, opts) {
   if (!authReady) {
     authReady = true;
     Promise.resolve(loadData()).then(function() {
+      reconcileCurrentUserRoleFromMembers();
       applyDeepLinkPage();
     }).catch(function() {
+      reconcileCurrentUserRoleFromMembers();
       applyDeepLinkPage();
     });
   } else if (!opts.silent) {
     updateTodoLoginLabel();
     renderTeamPanel();
+    reconcileCurrentUserRoleFromMembers();
     applyDeepLinkPage();
   }
   initPayFormDefaults();
@@ -5393,8 +5471,9 @@ function completeAuthAfterLogin(opts) {
           return;
         }
         writeAuthCache(result);
-        currentUserRole = result.role || currentUserRole;
+        currentUserRole = resolveSessionRole(result);
         applyRolePermissions();
+        reconcileCurrentUserRoleFromMembers();
       });
       return true;
     }
@@ -14604,6 +14683,15 @@ function renderDesigns() {
 
 function collectMemberRoleTokens(fields) {
   var tokens = [];
+  function pushOne(s) {
+    s = String(s || '').trim();
+    if (!s) return;
+    if (/[,，、;/｜|]/.test(s)) {
+      s.split(/[,，、;/｜|]+/).forEach(pushOne);
+      return;
+    }
+    tokens.push(s);
+  }
   function pushRaw(raw) {
     if (raw == null || raw === '') return;
     if (Array.isArray(raw)) {
@@ -14611,16 +14699,16 @@ function collectMemberRoleTokens(fields) {
       return;
     }
     if (typeof raw === 'object') {
-      if (raw.text != null) tokens.push(String(raw.text).trim());
-      if (raw.name != null) tokens.push(String(raw.name).trim());
-      if (raw.value != null && typeof raw.value !== 'object') tokens.push(String(raw.value).trim());
+      if (raw.text != null) pushOne(raw.text);
+      if (raw.name != null) pushOne(raw.name);
+      if (raw.value != null && typeof raw.value !== 'object') pushOne(raw.value);
       if (Array.isArray(raw.text_arr)) {
-        raw.text_arr.forEach(function(t) { tokens.push(String(t).trim()); });
+        raw.text_arr.forEach(function(t) { pushOne(t); });
       }
       if (Array.isArray(raw.options)) raw.options.forEach(pushRaw);
       return;
     }
-    tokens.push(String(raw).trim());
+    pushOne(raw);
   }
   var f = fields || {};
   pushRaw(f['角色']);
@@ -14628,7 +14716,7 @@ function collectMemberRoleTokens(fields) {
   pushRaw(f['標籤']);
   pushRaw(f['Tag']);
   pushRaw(f['Tags']);
-  // 多選偶發以整段字串存在，補抓「免日報」
+  // 多選偶發以整段字串存在，補抓「免日報」／「設計師」
   Object.keys(f).forEach(function(k) {
     if (/角色|標籤|tag|role/i.test(k)) pushRaw(f[k]);
   });
@@ -14649,6 +14737,7 @@ function isDesignerRoleToken(raw) {
   if (!r) return false;
   if (isDesignLeadRoleToken(r)) return false;
   if (r === '設計師' || r === '设计师' || r === '設計' || r === '设计') return true;
+  if (r.indexOf('設計師') >= 0 || r.indexOf('设计师') >= 0) return true;
   return r.toLowerCase() === 'designer';
 }
 
@@ -14908,6 +14997,8 @@ function buildMembersMap() {
       if (entry.role !== '會計') entry.role = entry.role || '管理員';
     }
   });
+  // 人員資料到位後，修正緊急登入誤設的 PM 角色（設計師／設計主管／會計）
+  try { reconcileCurrentUserRoleFromMembers(); } catch (e) {}
 }
 
 function memberLabel(field) {
