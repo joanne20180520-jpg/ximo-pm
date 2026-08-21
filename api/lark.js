@@ -75,7 +75,22 @@ function getRedirectUriForRequest(req) {
 // 取得 tenant_access_token（模組內快取，避免同次請求重複換 token）
 let _tenantTokenCache = null;
 let _membersRecordsCache = null;
-const MEMBERS_CACHE_TTL_MS = 3 * 60 * 1000;
+const MEMBERS_CACHE_TTL_MS = 60 * 60 * 1000; // 1 小時，降低登入／權限檢查耗額
+let _larkQuotaExceededUntil = 0;
+
+function isLarkQuotaExceededError(err) {
+  const msg = String((err && err.message) || err || '');
+  return msg.indexOf('99991403') >= 0 || /API call quota has been exceeded/i.test(msg);
+}
+
+function markLarkQuotaExceeded() {
+  // 額度用盡後短時間內少打 API，避免雪崩
+  _larkQuotaExceededUntil = Date.now() + 15 * 60 * 1000;
+}
+
+function isLarkQuotaCoolingDown() {
+  return Date.now() < _larkQuotaExceededUntil;
+}
 
 async function getToken() {
   const now = Date.now();
@@ -119,6 +134,9 @@ function appTokenForTable(tableKey) {
  
 // 讀取表格資料（自動翻頁取回全部記錄）
 async function getRecords(token, tableId, appToken, opts) {
+  if (isLarkQuotaCoolingDown()) {
+    throw new Error('Records error: This month\'s API call quota has been exceeded code:99991403');
+  }
   const targetAppToken = appToken || APP_TOKEN;
   var items = [];
   var pageToken = '';
@@ -130,7 +148,10 @@ async function getRecords(token, tableId, appToken, opts) {
       headers: { 'Authorization': 'Bearer ' + token }
     });
     const data = await res.json();
-    if (data.code !== 0) throw new Error('Records error: ' + data.msg + ' code:' + data.code);
+    if (data.code !== 0) {
+      if (data.code === 99991403 || isLarkQuotaExceededError(data.msg)) markLarkQuotaExceeded();
+      throw new Error('Records error: ' + data.msg + ' code:' + data.code);
+    }
     if (data.data && data.data.items) items = items.concat(data.data.items);
     pageToken = data.data && data.data.has_more ? (data.data.page_token || '') : '';
   } while (pageToken);
@@ -3970,6 +3991,9 @@ async function dedupePaymentExpenses(tenantToken, expenseCache) {
 let paymentApprovalSyncInflight = null;
 
 async function syncPendingPaymentApprovals(tenantToken) {
+  if (isLarkQuotaCoolingDown()) {
+    return { checked: 0, updated: 0, approverSynced: 0, removedDupes: 0, errors: ['quota_exceeded'], approvalMeta: {}, skipped: true };
+  }
   if (paymentApprovalSyncInflight) return paymentApprovalSyncInflight;
   paymentApprovalSyncInflight = syncPendingPaymentApprovalsInner(tenantToken).finally(function() {
     paymentApprovalSyncInflight = null;
@@ -3982,7 +4006,16 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
   const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
   if (!tableId) return { checked: 0, updated: 0, approverSynced: 0, removedDupes: 0, errors: [], approvalMeta: {} };
 
-  const records = await getRecords(tenantToken, tableId, frontCfg.appToken);
+  let records;
+  try {
+    records = await getRecords(tenantToken, tableId, frontCfg.appToken);
+  } catch (err) {
+    if (isLarkQuotaExceededError(err)) {
+      markLarkQuotaExceeded();
+      return { checked: 0, updated: 0, approverSynced: 0, removedDupes: 0, errors: [err.message], approvalMeta: {}, skipped: true };
+    }
+    throw err;
+  }
   const targets = records.filter(function(rec) {
     const fields = rec.fields || {};
     const status = paymentRecordStatus(fields);
@@ -3992,10 +4025,14 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
   });
 
   let expenseCache = [];
-  try { expenseCache = await loadExpenseRecords(tenantToken); } catch (e) { expenseCache = []; }
-  const removedDupes = await dedupePaymentExpenses(tenantToken, expenseCache);
-  if (removedDupes) {
-    try { expenseCache = await loadExpenseRecords(tenantToken); } catch (e) {}
+  let removedDupes = 0;
+  // 額度緊張時跳過支出去重（每次多 1～2 次整表讀取）
+  if (!isLarkQuotaCoolingDown()) {
+    try { expenseCache = await loadExpenseRecords(tenantToken); } catch (e) { expenseCache = []; }
+    removedDupes = await dedupePaymentExpenses(tenantToken, expenseCache);
+    if (removedDupes) {
+      try { expenseCache = await loadExpenseRecords(tenantToken); } catch (e) {}
+    }
   }
 
   const results = {
@@ -4010,12 +4047,7 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
   };
   if (!targets.length) return results;
 
-  let widgets = [];
-  try {
-    const def = await getPaymentApprovalDefinition(tenantToken);
-    widgets = parseApprovalFormWidgets(def.form);
-  } catch (e) {}
-
+  // 不再每次拉審批定義（缺編號時已不做模糊匹配）
   let peopleLookup = {};
   try { peopleLookup = await buildMembersOpenIdLookup(tenantToken); } catch (e) {}
 
@@ -4027,33 +4059,14 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
     if (code) usedInstanceCodes[code] = rec.record_id;
   });
 
+  // 缺審批編號時不再整批拉實例清單（極耗 API 額度）
   const missingCode = targets.filter(function(rec) { return !paymentApprovalInstanceCode(rec.fields || {}); });
   if (missingCode.length) {
-    let minTs = Date.now();
-    let maxTs = 0;
-    missingCode.forEach(function(rec) {
-      const d = parsePaymentTs((rec.fields || {})['申請日期']);
-      const t = d ? d.getTime() : Date.now();
-      if (t < minTs) minTs = t;
-      if (t > maxTs) maxTs = t;
-    });
-    try {
-      const codes = await listApprovalInstanceCodes(
-        tenantToken,
-        paymentApprovalCode(),
-        minTs - 90 * 86400000,
-        maxTs + 14 * 86400000
-      );
-      results.instanceCandidates = codes.length;
-      for (let ci = 0; ci < codes.length; ci++) {
-        try {
-          detailCache[codes[ci]] = await getApprovalInstanceDetail(tenantToken, codes[ci]);
-        } catch (e) {}
-      }
-    } catch (e) {
-      results.errors.push({ error: 'list instances: ' + (e.message || String(e)) });
-    }
+    results.skippedMissingCodeMatch = missingCode.length;
   }
+
+  const MAX_APPROVAL_DETAIL_FETCHES = 5;
+  let detailFetches = 0;
 
   for (let i = 0; i < targets.length; i++) {
     const rec = targets[i];
@@ -4061,8 +4074,8 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
     const pending = isPaymentPendingStatus(status);
     try {
       const existingCode = paymentApprovalInstanceCode(rec.fields || {});
-      const instanceCode = existingCode
-        || await resolvePaymentInstanceCode(tenantToken, rec, widgets, detailCache, usedInstanceCodes);
+      // 無編號者不做模糊匹配，避免 list+detail 爆量
+      const instanceCode = existingCode || '';
       if (!instanceCode) {
         if (!pending && isPaymentApprovedStatus(status)) {
           const routed = await routeApprovedPaymentToAccounting(tenantToken, rec, { approvalStatus: 'APPROVED' });
@@ -4071,8 +4084,13 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
         continue;
       }
       usedInstanceCodes[instanceCode] = rec.record_id;
-      const detail = detailCache[instanceCode] || await getApprovalInstanceDetail(tenantToken, instanceCode);
-      detailCache[instanceCode] = detail;
+      let detail = detailCache[instanceCode];
+      if (!detail) {
+        if (detailFetches >= MAX_APPROVAL_DETAIL_FETCHES) continue;
+        detail = await getApprovalInstanceDetail(tenantToken, instanceCode);
+        detailFetches++;
+        detailCache[instanceCode] = detail;
+      }
       const st = normalizeApprovalInstanceStatus(detail);
       const approvedNow = isApprovalDetailEffectivelyApproved(detail)
         || isApprovalInstanceApprovedStatus(st)
@@ -6528,14 +6546,27 @@ async function getMembersRecords(token, opts) {
   if (!opts.bypassCache && _membersRecordsCache && _membersRecordsCache.expiresAt > now) {
     return _membersRecordsCache.records;
   }
+  // 額度冷卻中：有舊快取就先用，確保還能登入
+  if (isLarkQuotaCoolingDown() && _membersRecordsCache && _membersRecordsCache.records) {
+    return _membersRecordsCache.records;
+  }
   const cfg = getOperationalBitableConfig();
-  // 必須用 open_id，才能與 OAuth user_info 的 open_id 對上
-  const members = await getRecords(token, tableIdFor('members'), cfg.appToken, { userIdType: 'open_id' });
-  _membersRecordsCache = {
-    records: members,
-    expiresAt: now + MEMBERS_CACHE_TTL_MS
-  };
-  return members;
+  try {
+    const members = await getRecords(token, tableIdFor('members'), cfg.appToken, { userIdType: 'open_id' });
+    _membersRecordsCache = {
+      records: members,
+      expiresAt: now + MEMBERS_CACHE_TTL_MS
+    };
+    return members;
+  } catch (err) {
+    if (isLarkQuotaExceededError(err)) {
+      markLarkQuotaExceeded();
+      if (_membersRecordsCache && _membersRecordsCache.records) {
+        return _membersRecordsCache.records;
+      }
+    }
+    throw err;
+  }
 }
 
 async function checkMemberAuthorization(userAccessToken) {
@@ -6549,8 +6580,8 @@ async function checkMemberAuthorization(userAccessToken) {
   const tenantToken = await getToken();
   let members;
   try {
-    // 登入權限檢查不走快取，避免剛加入人員表卻仍被擋
-    members = await getMembersRecords(tenantToken, { bypassCache: true });
+    // 優先用快取，避免每次登入都打滿 bitable 額度
+    members = await getMembersRecords(tenantToken, { bypassCache: false });
   } catch (err) {
     if (isTableConfigError(err)) {
       return {
@@ -6560,6 +6591,19 @@ async function checkMemberAuthorization(userAccessToken) {
         user,
         configError: tableConfigErrorMessage(),
         memberCount: 0
+      };
+    }
+    if (isLarkQuotaExceededError(err)) {
+      // 無人員表快取時仍允許已 OAuth 的公司帳號暫入，避免整站鎖死
+      return {
+        ok: true,
+        needLogin: false,
+        authorized: true,
+        role: 'PM',
+        memberName: (user && (user.name || user.enName)) || '',
+        user,
+        quotaExceeded: true,
+        warning: '本月 Lark API 額度已用完（99991403）。已啟用緊急登入；資料讀寫可能失敗。請管理員升級 Lark 方案或等到下月 1 日重置。'
       };
     }
     throw err;

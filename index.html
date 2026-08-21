@@ -5208,6 +5208,13 @@ function checkMemberAuthorization() {
         if (errMsg.indexOf('TableIdNotFound') >= 0 || errMsg.indexOf('1254041') >= 0) {
           return { authorized: false, needLogin: false, configError: errMsg, loginUser: res.user || null };
         }
+        if (errMsg.indexOf('99991403') >= 0 || /API call quota has been exceeded/i.test(errMsg)) {
+          return {
+            authorized: false,
+            needLogin: false,
+            configError: '本月 Lark API 呼叫額度已用完（99991403）。請管理員升級 Lark 方案，或等到下月 1 日額度重置。'
+          };
+        }
         return { authorized: false, needLogin: true, authError: errMsg };
       }
       if (res.needLogin) {
@@ -5222,7 +5229,7 @@ function checkMemberAuthorization() {
           hint: res.hint || ''
         };
       }
-      return { authorized: true, role: res.role || 'PM', memberName: res.memberName || '', loginUser: res.user || null };
+      return { authorized: true, role: res.role || 'PM', memberName: res.memberName || '', loginUser: res.user || null, quotaExceeded: !!res.quotaExceeded, warning: res.warning || '' };
     })
     .catch(function(err) {
       return { authorized: false, needLogin: false, networkError: true, authError: err.message || '連線失敗' };
@@ -5330,6 +5337,9 @@ function applyAuthorizedSession(result, opts) {
   opts = opts || {};
   currentUserRole = result.role || 'PM';
   hideAuthGate();
+  if (result.quotaExceeded || result.warning) {
+    try { showLoginError(result.warning || '本月 Lark API 額度已用完，部分功能可能無法使用。'); } catch (e) {}
+  }
   if (!opts.silent) {
     var postLogin = takePostLoginRedirect();
     if (postLogin) {
@@ -5378,7 +5388,7 @@ function completeAuthAfterLogin(opts) {
         if (!result.authorized) {
           clearAuthCache();
           if (result.needLogin) logoutAndShowGate();
-          else if (result.configError) showAuthGate('login', '後台設定錯誤', result.configError, result.loginUser || null);
+          else if (result.configError) showAuthGate('login', (result.configError && result.configError.indexOf('99991403') >= 0) ? 'API 額度已用完' : '後台設定錯誤', result.configError, result.loginUser || null);
           else showAuthGate('denied', '無法進入系統', '此人員尚未加入授權名單。\n請管理員協助新增。', result.loginUser);
           return;
         }
@@ -5393,7 +5403,7 @@ function completeAuthAfterLogin(opts) {
     if (result === true) return true;
     if (!result.authorized) {
       if (result.configError) {
-        showAuthGate('login', '後台設定錯誤', result.configError, result.loginUser || null);
+        showAuthGate('login', (result.configError && result.configError.indexOf('99991403') >= 0) ? 'API 額度已用完' : '後台設定錯誤', result.configError, result.loginUser || null);
         setAuthLoginButtonLoading(false);
         return false;
       }
@@ -13063,7 +13073,13 @@ function getPaymentPendingApproverLabel(f, status, rec) {
   return '—';
 }
 
-function syncPaymentApprovals() {
+var _lastPaymentApprovalSyncAt = 0;
+function syncPaymentApprovals(force) {
+  var now = Date.now();
+  if (!force && _lastPaymentApprovalSyncAt && (now - _lastPaymentApprovalSyncAt) < 10 * 60 * 1000) {
+    return Promise.resolve({ skipped: true, reason: 'throttled' });
+  }
+  _lastPaymentApprovalSyncAt = now;
   return fetch(apiUrl('action=sync-payment-approvals')).then(function(r) { return r.json(); }).then(function(res) {
     if (res && res.payments && res.payments.records) applyPaymentRecords(res.payments.records);
     renderPaymentsList();
