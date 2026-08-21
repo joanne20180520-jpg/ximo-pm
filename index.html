@@ -13051,10 +13051,11 @@ function getPaymentPendingApproverLabel(f, status, rec) {
     if (acctName) return acctName;
     return '審批完成';
   }
+  var st = String(meta.approvalStatus || '').toUpperCase();
+  if (st === 'APPROVED' || st === 'DONE' || st === 'COMPLETED') return '已通過・同步中';
   var name = String(f['待簽核人'] || meta.pendingApprover || '').trim();
   if (status === '審批中' && name) return name;
   if (status === '審批中') {
-    var st = String(meta.approvalStatus || '').toUpperCase();
     if (st === 'PENDING') return '待簽核';
     if (meta.instanceCode) return '審批中';
     return '待同步';
