@@ -3361,23 +3361,47 @@ async function upsertAccWorkitemFromXimo(accToken, ximoWorkitem, accProjectId, p
   return { created: true, recordId: rec.record_id, record: rec };
 }
 
-async function syncXimoCatalogToAcc(ximoToken) {
+async function syncXimoCatalogToAcc(ximoToken, opts) {
+  opts = opts || {};
+  const onlyProjectIds = Array.isArray(opts.onlyProjectIds)
+    ? opts.onlyProjectIds.map(function(id) { return String(id || '').trim(); }).filter(Boolean)
+    : null;
+  const incremental = !!(onlyProjectIds && onlyProjectIds.length);
+  const skipPrune = opts.skipPrune != null ? !!opts.skipPrune : incremental;
+  const skipExpenseRematch = opts.skipExpenseRematch != null ? !!opts.skipExpenseRematch : incremental;
+
   if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_PROJECTS || !ACC_TABLE_WORKITEMS) {
     return { skipped: true, reason: 'acc-env-missing' };
   }
   const accToken = await getAccTenantToken();
   await ensureAccCatalogFields(accToken);
 
-  const projects = await getRecords(ximoToken, tableIdFor('projects'), appTokenForTable('projects'));
-  const workitems = await getRecords(ximoToken, tableIdFor('workitems'), appTokenForTable('workitems'));
+  let projects = await getRecords(ximoToken, tableIdFor('projects'), appTokenForTable('projects'));
+  let workitems = await getRecords(ximoToken, tableIdFor('workitems'), appTokenForTable('workitems'));
+  if (incremental) {
+    const idSet = {};
+    onlyProjectIds.forEach(function(id) { idSet[id] = 1; });
+    projects = projects.filter(function(p) { return idSet[p.record_id]; });
+    workitems = workitems.filter(function(wi) {
+      const ids = getLinkIds((wi.fields || {})['所屬標案'] || (wi.fields || {})['所數標案']);
+      for (let i = 0; i < ids.length; i++) {
+        if (idSet[ids[i]]) return true;
+      }
+      return false;
+    });
+  }
+
   let tasks = [];
   let designs = [];
-  try { tasks = await getRecords(ximoToken, tableIdFor('tasks'), appTokenForTable('tasks')); } catch (e) {}
-  try { designs = await getRecords(ximoToken, tableIdFor('designs'), appTokenForTable('designs')); } catch (e) {}
+  if (!incremental) {
+    try { tasks = await getRecords(ximoToken, tableIdFor('tasks'), appTokenForTable('tasks')); } catch (e) {}
+    try { designs = await getRecords(ximoToken, tableIdFor('designs'), appTokenForTable('designs')); } catch (e) {}
+  }
 
   const accProjects = await getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN);
   const accWorkitems = await getRecords(accToken, ACC_TABLE_WORKITEMS, ACC_APP_TOKEN);
   const result = {
+    incremental: incremental,
     projectsCreated: 0,
     projectsUpdated: 0,
     workitemsCreated: 0,
@@ -3431,7 +3455,9 @@ async function syncXimoCatalogToAcc(ximoToken) {
         continue;
       }
       let progress = calcXimoWiProgressPct(wf);
-      if (progress == null) progress = calcXimoWiProgressFromLinked(wi.record_id, tasks, designs);
+      if (progress == null && !incremental) {
+        progress = calcXimoWiProgressFromLinked(wi.record_id, tasks, designs);
+      }
       const up = await upsertAccWorkitemFromXimo(accToken, wi, accProjectId, progress, accWorkitems);
       if (up.created) result.workitemsCreated++;
       else if (up.updated) result.workitemsUpdated++;
@@ -3446,6 +3472,7 @@ async function syncXimoCatalogToAcc(ximoToken) {
   }
 
   // 刪除沒有璽墨來源的 ACC 工項（例如舊的「行政管理費」「相關稅捐」拆項）
+  if (!skipPrune) {
   try {
     const latestAccWis = await getRecords(accToken, ACC_TABLE_WORKITEMS, ACC_APP_TOKEN);
     const combinedByProject = {};
@@ -3494,7 +3521,9 @@ async function syncXimoCatalogToAcc(ximoToken) {
   } catch (pruneErr) {
     result.errors.push({ type: 'prune', error: pruneErr.message || String(pruneErr) });
   }
+  }
 
+  if (!skipExpenseRematch) {
   try {
     const rematch = await rematchAccExpensesFromSourceLabels(accToken);
     result.expensesRematched = rematch.updated || 0;
@@ -3504,6 +3533,7 @@ async function syncXimoCatalogToAcc(ximoToken) {
     }
   } catch (rematchErr) {
     result.errors.push({ type: 'expense-rematch', error: rematchErr.message || String(rematchErr) });
+  }
   }
 
   return result;
@@ -6798,7 +6828,12 @@ export default async function handler(req, res) {
       const workitems = Array.isArray(b.workitems) ? b.workitems : [];
       const result = await createProjectImportBundle(tenantToken, userAccessToken, projectFields, workitems);
       try {
-        result.accSync = await syncXimoCatalogToAcc(tenantToken);
+        // 開案只同步本標案到 ACC，避免整庫同步拖到逾時
+        result.accSync = await syncXimoCatalogToAcc(tenantToken, {
+          onlyProjectIds: result.projectId ? [result.projectId] : [],
+          skipPrune: true,
+          skipExpenseRematch: true
+        });
       } catch (accErr) {
         result.accSync = { ok: false, error: accErr.message || String(accErr) };
       }
@@ -6816,7 +6851,11 @@ export default async function handler(req, res) {
       if (!projectId) return res.status(400).json({ error: 'missing projectId' });
       const result = await createWorkItemsBundle(tenantToken, userAccessToken, projectId, workitems);
       try {
-        result.accSync = await syncXimoCatalogToAcc(tenantToken);
+        result.accSync = await syncXimoCatalogToAcc(tenantToken, {
+          onlyProjectIds: [projectId],
+          skipPrune: true,
+          skipExpenseRematch: true
+        });
       } catch (accErr) {
         result.accSync = { ok: false, error: accErr.message || String(accErr) };
       }

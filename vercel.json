@@ -3,6 +3,9 @@
     "api/parse-budget.js": {
       "maxDuration": 60,
       "memory": 1024
+    },
+    "api/lark.js": {
+      "maxDuration": 60
     }
   },
   "headers": [

@@ -3464,10 +3464,13 @@ function apiProjectImport(projectFields, workItemFieldsList) {
   var headers = { 'Content-Type': 'application/json' };
   var tok = getUserAccessToken();
   if (tok) headers['X-User-Access-Token'] = tok;
+  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timer = ctrl ? setTimeout(function() { try { ctrl.abort(); } catch (e) {} }, 55000) : null;
   return fetch(API + '?action=project-import', {
     method: 'POST',
     headers: headers,
-    body: JSON.stringify(withUserToken({ project: projectFields, workitems: workItemFieldsList }))
+    body: JSON.stringify(withUserToken({ project: projectFields, workitems: workItemFieldsList })),
+    signal: ctrl ? ctrl.signal : undefined
   }).then(function(r) {
     return r.json().then(function(res) {
       if (!r.ok && res && res.error) throw new Error(res.error);
@@ -3478,6 +3481,13 @@ function apiProjectImport(projectFields, workItemFieldsList) {
     if (res.error) throw new Error(res.error);
     if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '儲存失敗');
     return res;
+  }).catch(function(err) {
+    if (err && (err.name === 'AbortError' || /aborted/i.test(String(err.message || '')))) {
+      throw new Error('開案逾時。請重新整理後確認標案是否已建立；若未建立請再試一次。');
+    }
+    throw err;
+  }).finally(function() {
+    if (timer) clearTimeout(timer);
   });
 }
 
