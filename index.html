@@ -13048,16 +13048,16 @@ function getPaymentPendingApproverLabel(f, status, rec) {
     var acct = String(f['會計狀態'] || '').trim();
     if (acct === '已送達詹佳瑜') return '已送達詹佳瑜';
     var acctName = String(f['會計待簽核人'] || f['待簽核人'] || meta.pendingApprover || '').trim();
-    if (acctName) return acctName;
+    if (acctName && acctName !== '待簽核' && acctName !== '審批中') return acctName;
     return '審批完成';
   }
   var st = String(meta.approvalStatus || '').toUpperCase();
   if (st === 'APPROVED' || st === 'DONE' || st === 'COMPLETED') return '已通過・同步中';
   var name = String(f['待簽核人'] || meta.pendingApprover || '').trim();
+  if (name === '待簽核' || name === '審批中' || name === '待同步') name = '';
   if (status === '審批中' && name) return name;
   if (status === '審批中') {
-    if (st === 'PENDING') return '待簽核';
-    if (meta.instanceCode) return '審批中';
+    if (meta.instanceCode) return '簽核人同步中';
     return '待同步';
   }
   return '—';

@@ -2833,27 +2833,79 @@ async function pendingApproverFromApprovalDetail(token, detail, peopleLookup) {
   const initiator = String(
     (detail && (detail.open_id || detail.user_id || detail.userId || (detail.user && (detail.user.open_id || detail.user.user_id)))) || ''
   ).trim();
+
+  function collectTaskIds(task) {
+    const ids = [];
+    function push(v) {
+      if (v == null || v === '') return;
+      if (Array.isArray(v)) {
+        v.forEach(push);
+        return;
+      }
+      if (typeof v === 'object') {
+        push(v.open_id || v.user_id || v.id || v.userId);
+        return;
+      }
+      const s = String(v).trim();
+      if (s) ids.push(s);
+    }
+    push(task && task.open_id);
+    push(task && task.user_id);
+    push(task && task.userId);
+    push(task && task.user_id_list);
+    push(task && task.open_id_list);
+    push(task && task.approver_ids);
+    push(task && task.id);
+    return ids;
+  }
+
+  async function resolveUid(uid, userName) {
+    const named = cleanApproverDisplayName(String(userName || '').trim());
+    if (named) return named;
+    const id = String(uid || '').trim();
+    if (!id) return '';
+    if (peopleLookup && peopleLookup[id]) return peopleLookup[id];
+    return await fetchLarkUserDisplayName(token, id);
+  }
+
   const tasks = (detail && (detail.task_list || detail.taskList)) || [];
   const pendingTasks = tasks.filter(function(task) {
-    const st = String(task.status || '').toUpperCase();
+    const st = String((task && task.status) || '').toUpperCase();
     return st === 'PENDING' || st === 'IN_PROGRESS' || st === 'PROCESSING';
   });
   const ordered = pendingTasks.length ? pendingTasks : tasks.filter(function(task) {
-    const st = String(task.status || '').toUpperCase();
-    return st !== 'APPROVED' && st !== 'REJECTED' && st !== 'DONE' && st !== 'CANCELED' && st !== 'CANCELLED';
+    const st = String((task && task.status) || '').toUpperCase();
+    return st !== 'APPROVED' && st !== 'REJECTED' && st !== 'DONE' && st !== 'CANCELED' && st !== 'CANCELLED' && st !== 'PASSED';
   });
-  async function resolveUid(uid, userName) {
-    if (userName) return cleanApproverDisplayName(String(userName));
-    const id = String(uid || '').trim();
-    if (!id) return '';
-    if (peopleLookup[id]) return peopleLookup[id];
-    return await fetchLarkUserDisplayName(token, id);
+
+  // 先找「非申請人」的待簽核；找不到再退回任何人名／節點名
+  const passes = [
+    function(uid) { return !(initiator && uid && uid === initiator); },
+    function() { return true; }
+  ];
+  for (let p = 0; p < passes.length; p++) {
+    const allow = passes[p];
+    for (let i = 0; i < ordered.length; i++) {
+      const task = ordered[i] || {};
+      const ids = collectTaskIds(task);
+      for (let k = 0; k < ids.length; k++) {
+        if (!allow(ids[k])) continue;
+        const name = await resolveUid(ids[k], task.user_name || task.userName || task.name);
+        if (name) return name;
+      }
+      const nodeName = cleanApproverDisplayName(String(task.node_name || task.nodeName || task.name || '').trim());
+      if (nodeName && !/PENDING|APPROVED|REJECTED/i.test(nodeName)) return nodeName;
+    }
   }
-  for (let i = 0; i < ordered.length; i++) {
-    const task = ordered[i];
-    const uid = String(task.open_id || task.user_id || task.userId || '').trim();
-    if (initiator && uid && uid === initiator) continue;
-    const name = await resolveUid(uid, task.user_name || task.userName || task.name);
+
+  const timeline = (detail && detail.timeline) || [];
+  for (let t = timeline.length - 1; t >= 0; t--) {
+    const item = timeline[t] || {};
+    const typ = String(item.type || '').toUpperCase();
+    if (typ === 'START' || typ === 'CANCEL' || typ === 'DELETE' || typ === 'REJECT') continue;
+    const uid = String(item.open_id || item.user_id || item.userId || '').trim();
+    if (initiator && uid && uid === initiator && typ === 'START') continue;
+    const name = await resolveUid(uid, item.user_name || item.userName || item.name);
     if (name) return name;
   }
   return '';
@@ -4025,13 +4077,15 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
       const approvedNow = isApprovalDetailEffectivelyApproved(detail)
         || isApprovalInstanceApprovedStatus(st)
         || isXimoStageCompleteForAccounting(st, '');
-      const approver = (!approvedNow && st === 'PENDING')
-        ? await pendingApproverFromApprovalDetail(tenantToken, detail, peopleLookup)
-        : '';
+      // 只要還在審批中，一律嘗試解析目前待簽核人（含節點名稱備援）
+      let approver = '';
+      if (!approvedNow) {
+        approver = await pendingApproverFromApprovalDetail(tenantToken, detail, peopleLookup);
+      }
       const stageDone = approvedNow || isXimoStageCompleteForAccounting(st, approver);
       results.approvalMeta[rec.record_id] = {
         instanceCode: instanceCode,
-        approvalStatus: approvedNow || stageDone ? 'APPROVED' : st,
+        approvalStatus: approvedNow || stageDone ? 'APPROVED' : (st || 'PENDING'),
         pendingApprover: approver,
         url: 'https://www.larksuite.com/approval/detail/' + instanceCode
       };
@@ -4064,14 +4118,23 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
         if (routed && !routed.skipped) results.updated++;
         continue;
       }
-      if (pending && st === 'PENDING' && approver) {
+      if (pending && !stageDone) {
         const current = String((rec.fields || {})['待簽核人'] || '').trim();
-        if (approver !== current) {
+        const nextLabel = approver || current;
+        if (approver && approver !== current) {
           const wrote = await writePaymentPendingApprover(tenantToken, rec.record_id, approver);
           rec.fields = rec.fields || {};
           rec.fields['待簽核人'] = approver;
           if (wrote) results.approverSynced++;
+        } else if (!approver && !current) {
+          // 寫入節點備援，避免畫面只剩「待簽核」空白語意
+          const fallback = '簽核中';
+          await writePaymentPendingApprover(tenantToken, rec.record_id, fallback);
+          rec.fields = rec.fields || {};
+          rec.fields['待簽核人'] = fallback;
+          results.approvalMeta[rec.record_id].pendingApprover = fallback;
         }
+        if (nextLabel) results.approvalMeta[rec.record_id].pendingApprover = nextLabel;
       }
     } catch (err) {
       results.errors.push({
