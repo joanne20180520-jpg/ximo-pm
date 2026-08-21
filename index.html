@@ -14580,6 +14580,24 @@ function isAdminRoleToken(raw) {
   return lower === 'admin' || lower === 'administrator';
 }
 
+function isAccountantRoleToken(raw) {
+  var r = String(raw || '').trim();
+  if (!r) return false;
+  if (r === '會計' || r === '会计') return true;
+  if (r.indexOf('會計') >= 0 || r.indexOf('会计') >= 0) return true;
+  var lower = r.toLowerCase();
+  return lower === 'accounting' || lower === 'accountant' || lower === 'finance' || lower === 'acc';
+}
+
+/** 帳號顯示名帶 _Acc，或常見會計姓名 → 不當成 PM 選項 */
+function isAccountantMemberName(name) {
+  var n = String(name || '').replace(/\s+/g, '');
+  if (!n) return false;
+  if (/_Acc\b|_acc\b|_ACC\b/i.test(n) || /Acc$/i.test(n)) return true;
+  if (/詹佳瑜|盧存莉|蘇芳玉/.test(n)) return true;
+  return false;
+}
+
 function isJournalExemptToken(raw) {
   var r = String(raw || '').trim();
   if (!r) return false;
@@ -14601,16 +14619,23 @@ function memberSkipsJournal(fields) {
 function memberHidesFromSelects(fields) {
   var tokens = collectMemberRoleTokens(fields);
   for (var i = 0; i < tokens.length; i++) {
-    if (isAdminRoleToken(tokens[i])) return true;
+    if (isAdminRoleToken(tokens[i]) || isAccountantRoleToken(tokens[i])) return true;
   }
-  return false;
+  var hideByName = false;
+  forEachMemberAccountPerson(fields, function(person) {
+    if (isAccountantMemberName(person.name)) hideByName = true;
+  });
+  return hideByName;
 }
 
 function resolveMemberRole(fields) {
-  // 「免日報」只影響日報名單；「管理員」全頁權限但不進一般人員選單（仍要寫日報）；「設計師」限縮頁面
+  // 「免日報」只影響日報名單；管理員／會計不進一般人員選單；設計師限縮頁面
   var tokens = collectMemberRoleTokens(fields);
   for (var i = 0; i < tokens.length; i++) {
     if (isAdminRoleToken(tokens[i])) return '管理員';
+  }
+  for (var a = 0; a < tokens.length; a++) {
+    if (isAccountantRoleToken(tokens[a])) return '會計';
   }
   for (var k = 0; k < tokens.length; k++) {
     if (isDesignLeadRoleToken(tokens[k])) return '設計主管';
@@ -14618,6 +14643,11 @@ function resolveMemberRole(fields) {
   for (var j = 0; j < tokens.length; j++) {
     if (isDesignerRoleToken(tokens[j])) return '設計師';
   }
+  var acctName = false;
+  forEachMemberAccountPerson(fields, function(person) {
+    if (isAccountantMemberName(person.name)) acctName = true;
+  });
+  if (acctName) return '會計';
   return 'PM';
 }
 
@@ -14721,10 +14751,13 @@ function buildMembersMap() {
         }
       }
       if (role === '管理員') membersMap[name].role = '管理員';
-      else if (role === '設計主管' && membersMap[name].role !== '管理員') membersMap[name].role = '設計主管';
-      else if (role === '設計師' && membersMap[name].role !== '管理員' && membersMap[name].role !== '設計主管') membersMap[name].role = '設計師';
+      else if (role === '會計' && membersMap[name].role !== '管理員') membersMap[name].role = '會計';
+      else if (role === '設計主管' && membersMap[name].role !== '管理員' && membersMap[name].role !== '會計') membersMap[name].role = '設計主管';
+      else if (role === '設計師' && membersMap[name].role !== '管理員' && membersMap[name].role !== '會計' && membersMap[name].role !== '設計主管') membersMap[name].role = '設計師';
       if (skipJournal) membersMap[name].skipJournal = true;
-      if (hideFromSelects) membersMap[name].hideFromSelects = true;
+      if (hideFromSelects || role === '會計' || isAccountantMemberName(name)) {
+        membersMap[name].hideFromSelects = true;
+      }
     }
   }
   function addPersonAlias(person, meta) {
@@ -14759,13 +14792,13 @@ function buildMembersMap() {
     if (Array.isArray(pm)) pm.forEach(function(person) { addPersonAlias(person); });
   });
 
-  // 僅依 open_id 擴散免日報／管理員隱藏（避免姓名模糊比對造成錯配）
+  // 僅依 open_id 擴散免日報／選單隱藏（管理員、會計）
   var skipIds = {};
   var hideIds = {};
   membersData.forEach(function(m) {
     var f = m.fields || {};
     var skip = memberSkipsJournal(f);
-    var hide = memberHidesFromSelects(f);
+    var hide = memberHidesFromSelects(f) || resolveMemberRole(f) === '會計';
     if (!skip && !hide) return;
     forEachMemberAccountPerson(f, function(person) {
       if (person.id && /^ou_|^on_/i.test(person.id)) {
@@ -14782,11 +14815,16 @@ function buildMembersMap() {
   });
   Object.keys(membersMap).forEach(function(key) {
     var entry = membersMap[key];
-    if (!entry || !entry.id) return;
+    if (!entry) return;
+    if (isAccountantMemberName(key) || entry.role === '會計') {
+      entry.hideFromSelects = true;
+      entry.role = '會計';
+    }
+    if (!entry.id) return;
     if (skipIds[entry.id]) entry.skipJournal = true;
     if (hideIds[entry.id]) {
       entry.hideFromSelects = true;
-      entry.role = '管理員';
+      if (entry.role !== '會計') entry.role = entry.role || '管理員';
     }
   });
 }
@@ -14803,9 +14841,9 @@ function getMemberNames() {
   return names.sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
 }
 
-/** 下拉選單：value 用 open_id（穩定），label 用顯示名；管理員不列入。
+/** 下拉選單：value 用 open_id（穩定），label 用顯示名；管理員／會計不列入。
  *  opts.designersOnly=true → 設計主管＋設計師（給「設計師」欄位）
- *  預設 → 只列 PM（排除設計團隊與管理員；工作項目／任務／負責PM 等）
+ *  預設 → 只列 PM（排除設計團隊、管理員、會計；工作項目／任務／負責PM 等）
  */
 function isDesignTeamMemberRole(role) {
   return isDesignLeadRoleToken(role) || isDesignerRoleToken(role)
@@ -14820,7 +14858,7 @@ function getMemberSelectOptions(opts) {
   Object.keys(membersMap).forEach(function(name) {
     var m = membersMap[name];
     if (!m) return;
-    if (m.hideFromSelects || m.role === '管理員') return;
+    if (m.hideFromSelects || m.role === '管理員' || m.role === '會計' || isAccountantMemberName(name)) return;
     var onDesignTeam = isDesignTeamMemberRole(m.role);
     if (designersOnly) {
       if (!onDesignTeam) return;
