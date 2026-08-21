@@ -774,6 +774,10 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .pay-list-wrap .dt{width:100%;table-layout:auto}
 .pay-list-wrap .dt td,.pay-list-wrap .dt th{font-size:11px;white-space:nowrap}
 .pay-list-empty{padding:8px 0;color:var(--t3);font-size:12px}
+.pay-list-pager{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:10px 0 0;font-size:12px;color:var(--t2)}
+.pay-list-pager button{padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:12px;font-family:inherit;cursor:pointer;color:var(--text)}
+.pay-list-pager button:disabled{opacity:.4;cursor:default}
+.pay-list-pager .pay-list-page-info{color:var(--t3);min-width:72px;text-align:center}
 .acct-page{padding:16px}
 .acct-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
 .acct-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
@@ -4876,6 +4880,8 @@ var payPendingAttachments = [];
 var payAttachmentUploading = 0;
 var paySubmitting = false;
 var payListPreset = 'week';
+var payListPage = 1;
+var PAY_LIST_PAGE_SIZE = 5;
 var membersMap = {};
 var currentLoginUser = null;
 var loginUserReady = false;
@@ -13033,6 +13039,12 @@ function getPaymentPendingApproverLabel(f, status, rec) {
   }
   var name = String(f['待簽核人'] || meta.pendingApprover || '').trim();
   if (status === '審批中' && name) return name;
+  if (status === '審批中') {
+    var st = String(meta.approvalStatus || '').toUpperCase();
+    if (st === 'PENDING') return '待簽核';
+    if (meta.instanceCode) return '審批中';
+    return '待同步';
+  }
   return '—';
 }
 
@@ -13108,6 +13120,7 @@ function syncPayListPresetButtons() {
 
 function setPayListPreset(preset) {
   payListPreset = preset || 'week';
+  payListPage = 1;
   var range = payListRangeForPreset(payListPreset);
   syncPayListRangeInputs(range.from, range.to);
   syncPayListPresetButtons();
@@ -13116,7 +13129,13 @@ function setPayListPreset(preset) {
 
 function onPayListRangeChange() {
   payListPreset = 'custom';
+  payListPage = 1;
   syncPayListPresetButtons();
+  renderPaymentsList();
+}
+
+function setPayListPage(page) {
+  payListPage = Math.max(1, parseInt(page, 10) || 1);
   renderPaymentsList();
 }
 
@@ -13169,17 +13188,23 @@ function renderPaymentsList() {
   }).sort(function(a, b) {
     var da = Number((a.fields && a.fields['申請日期']) || 0);
     var db = Number((b.fields && b.fields['申請日期']) || 0);
-    return db - da;
+    if (db !== da) return db - da;
+    return String(b.record_id || '').localeCompare(String(a.record_id || ''));
   });
   if (countEl) countEl.textContent = rows.length + ' 筆';
   if (!rows.length) {
     area.innerHTML = '<div class="pay-list-empty">此區間沒有付款申請</div>';
     return;
   }
+  var totalPages = Math.max(1, Math.ceil(rows.length / PAY_LIST_PAGE_SIZE));
+  if (payListPage > totalPages) payListPage = totalPages;
+  if (payListPage < 1) payListPage = 1;
+  var start = (payListPage - 1) * PAY_LIST_PAGE_SIZE;
+  var pageRows = rows.slice(start, start + PAY_LIST_PAGE_SIZE);
   var html = '<div style="overflow-x:auto"><table class="dt"><thead><tr>'
     + '<th>日期</th><th>標案</th><th>申請人</th><th>支付對象</th><th>事由</th><th>金額</th><th>附件</th><th>狀態</th><th>待簽核人</th>'
     + '</tr></thead><tbody>';
-  rows.forEach(function(rec) {
+  pageRows.forEach(function(rec) {
     var f = rec.fields || {};
     var status = getPaymentStatusLabel(f);
     var stClass = status === '已核銷' ? 'std' : (status === '封存' ? 'st' : 'stp');
@@ -13196,6 +13221,13 @@ function renderPaymentsList() {
       + '<td>' + escHtml(getPaymentPendingApproverLabel(f, status, rec)) + '</td></tr>';
   });
   html += '</tbody></table></div>';
+  if (totalPages > 1) {
+    html += '<div class="pay-list-pager">'
+      + '<button type="button" onclick="setPayListPage(' + (payListPage - 1) + ')"' + (payListPage <= 1 ? ' disabled' : '') + '>上一頁</button>'
+      + '<span class="pay-list-page-info">第 ' + payListPage + ' / ' + totalPages + ' 頁</span>'
+      + '<button type="button" onclick="setPayListPage(' + (payListPage + 1) + ')"' + (payListPage >= totalPages ? ' disabled' : '') + '>下一頁</button>'
+      + '</div>';
+  }
   area.innerHTML = html;
 }
 

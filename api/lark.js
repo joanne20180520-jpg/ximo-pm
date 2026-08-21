@@ -2801,22 +2801,40 @@ async function fetchLarkUserDisplayName(token, userId) {
 }
 
 async function pendingApproverFromApprovalDetail(token, detail, peopleLookup) {
-  const tasks = (detail && detail.task_list) || [];
+  const tasks = (detail && (detail.task_list || detail.taskList)) || [];
   const pendingTasks = tasks.filter(function(task) {
     const st = String(task.status || '').toUpperCase();
     return st === 'PENDING' || st === 'IN_PROGRESS' || st === 'PROCESSING';
   });
   const ordered = pendingTasks.length ? pendingTasks : tasks.filter(function(task) {
     const st = String(task.status || '').toUpperCase();
-    return st !== 'APPROVED' && st !== 'REJECTED' && st !== 'DONE' && st !== 'CANCELED';
+    return st !== 'APPROVED' && st !== 'REJECTED' && st !== 'DONE' && st !== 'CANCELED' && st !== 'CANCELLED';
   });
+  async function resolveUid(uid, userName) {
+    if (userName) return cleanApproverDisplayName(String(userName));
+    const id = String(uid || '').trim();
+    if (!id) return '';
+    if (peopleLookup[id]) return peopleLookup[id];
+    return await fetchLarkUserDisplayName(token, id);
+  }
   for (let i = 0; i < ordered.length; i++) {
     const task = ordered[i];
-    if (task.user_name) return cleanApproverDisplayName(String(task.user_name));
-    const uid = String(task.open_id || task.user_id || '').trim();
-    if (uid && peopleLookup[uid]) return peopleLookup[uid];
-    const fromApi = await fetchLarkUserDisplayName(token, uid);
-    if (fromApi) return fromApi;
+    const name = await resolveUid(
+      task.open_id || task.user_id || task.userId,
+      task.user_name || task.userName || task.name
+    );
+    if (name) return name;
+  }
+  const timeline = (detail && detail.timeline) || [];
+  for (let t = timeline.length - 1; t >= 0; t--) {
+    const item = timeline[t] || {};
+    const typ = String(item.type || item.ext || '').toUpperCase();
+    if (typ && typ !== 'START' && typ !== 'PASS' && typ !== 'AUTO_PASS' && typ !== 'TRANSFER') continue;
+    const name = await resolveUid(
+      item.open_id || item.user_id || item.userId,
+      item.user_name || item.userName || item.name
+    );
+    if (name && typ !== 'START') return name;
   }
   return '';
 }
@@ -6621,17 +6639,12 @@ export default async function handler(req, res) {
     if (action === 'sync-payment-approvals' && req.method === 'GET') {
       const token = await getToken();
       const sync = await syncPendingPaymentApprovals(token);
-      let accCatalog = null;
-      try {
-        accCatalog = await syncXimoCatalogToAcc(token);
-      } catch (accErr) {
-        accCatalog = { ok: false, error: accErr.message || String(accErr) };
-      }
+      // 不在此等待整庫 ACC 同步，避免拖垮審批狀態更新
       const cfg = paymentsFrontConfig();
       const tableId = await resolvePaymentsTableId(token, cfg.appToken, cfg.tableId);
       const records = tableId ? await getRecords(token, tableId, cfg.appToken) : [];
       const merged = mergePaymentApprovalMeta(records, sync.approvalMeta || {});
-      return res.status(200).json({ ok: true, sync: sync, accCatalog: accCatalog, payments: { records: merged } });
+      return res.status(200).json({ ok: true, sync: sync, payments: { records: merged } });
     }
 
     if (action === 'sync-ximo-to-acc' && (req.method === 'GET' || req.method === 'POST')) {
