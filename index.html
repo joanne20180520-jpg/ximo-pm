@@ -2027,7 +2027,7 @@ function sw(btn,id){
     renderBudget();
   }
   if(id==='pg-d') {
-    if (!deferredDataReady && currentUserRole !== '設計師') loadDeferredTables({ silent: true });
+    if (!deferredDataReady && !isDesignerLikeRole()) loadDeferredTables({ silent: true });
     renderDesigns();
   }
   if(id==='pg-p') {
@@ -4388,7 +4388,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260821v1';
+var APP_BUILD = '20260824v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -13705,6 +13705,10 @@ function canEditDesignVersionRecord(finalized) {
   return isAdminRole() || isPMRole() || isDesignerLikeRole();
 }
 
+function canDeleteDesignVersion() {
+  return isAdminRole() || isDesignLeadRole();
+}
+
 
 var editingDesignRemarkItems = [];
 var DESIGN_REMARK_HEADER = '‖ximo-notes-v1‖';
@@ -14157,7 +14161,7 @@ function renderDesignVersionPanel(designId, finalized) {
 }
 
 function deleteDesignVersionFromEdit() {
-  if (!isAdminRole() || !editingDesignVersionRecId || !addingDesignVersionId) return;
+  if (!canDeleteDesignVersion() || !editingDesignVersionRecId || !addingDesignVersionId) return;
   var label = (document.getElementById('dv-version') && document.getElementById('dv-version').value) || '版本';
   var versionId = editingDesignVersionRecId;
   var designId = addingDesignVersionId;
@@ -14166,7 +14170,7 @@ function deleteDesignVersionFromEdit() {
 }
 
 function deleteDesignVersion(versionId, designId, label) {
-  if (!isAdminRole() || !versionId) return;
+  if (!canDeleteDesignVersion() || !versionId) return;
   showConfirm({
     type: 'del',
     title: '刪除此版本',
@@ -14405,7 +14409,7 @@ function fillDesignVersionForm(designRec, versionRec, titleText, saveText) {
   if (saveBtn) saveBtn.textContent = saveText;
   var delBtn = document.getElementById('dv-del-btn');
   if (delBtn) {
-    delBtn.style.display = (isAdminRole() && !!editingDesignVersionRecId) ? '' : 'none';
+    delBtn.style.display = (canDeleteDesignVersion() && !!editingDesignVersionRecId) ? '' : 'none';
   }
   applyDesignVersionFormPermissions();
   var zone = document.getElementById('dv-attach-zone');
