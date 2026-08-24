@@ -2052,6 +2052,7 @@ var DEEP_LINK_STORAGE_KEY = 'ximo-deeplink-page';
 var DEEP_LINK_DESIGN_KEY = 'ximo-deeplink-design';
 var DEEP_LINK_TASK_KEY = 'ximo-deeplink-task';
 var DEEP_LINK_VERSION_KEY = 'ximo-deeplink-version';
+var DEEP_LINK_MILESTONE_KEY = 'ximo-deeplink-milestone';
 var DEEP_LINK_PAGES = {
   // 時程管理（任務期限）
   schedule: 'pg-s',
@@ -2118,6 +2119,11 @@ function readDeepLinkVersionId(params) {
   return extractRecId(params.get('versionId') || params.get('ver') || params.get('version') || '');
 }
 
+function readDeepLinkMilestoneId(params) {
+  if (!params) return '';
+  return extractRecId(params.get('milestoneId') || params.get('milestone') || params.get('ms') || '');
+}
+
 function resolveDesignIdFromVersion(versionId) {
   if (!versionId) return '';
   var ver = (designVersionsData || []).find(function(r) { return r.record_id === versionId; });
@@ -2150,15 +2156,18 @@ function captureDeepLinkFromUrl() {
     var designId = readDeepLinkDesignId(params);
     var taskId = readDeepLinkTaskId(params);
     var versionId = readDeepLinkVersionId(params);
+    var milestoneId = readDeepLinkMilestoneId(params);
     if (versionId) {
       sessionStorage.setItem(DEEP_LINK_VERSION_KEY, versionId);
       if (!designId) designId = resolveDesignIdFromVersion(versionId);
     }
     if (designId) sessionStorage.setItem(DEEP_LINK_DESIGN_KEY, designId);
     if (taskId) sessionStorage.setItem(DEEP_LINK_TASK_KEY, taskId);
+    if (milestoneId) sessionStorage.setItem(DEEP_LINK_MILESTONE_KEY, milestoneId);
     var page = (params.get('page') || params.get('tab') || '').trim();
     if (!page && taskId) page = 'schedule';
     if (!page && (designId || versionId)) page = 'design';
+    if (!page && milestoneId) page = 'milestones';
     if (!page) return;
     var key = page.toLowerCase();
     var pageId = DEEP_LINK_PAGES[page] || DEEP_LINK_PAGES[key];
@@ -2197,7 +2206,7 @@ function clearDeepLinkQueryParams(extraKeys) {
   if (!window.history.replaceState) return;
   try {
     var url = new URL(window.location.href);
-    var keys = ['design', 'designId', 'des', 'task', 'taskId', 'version', 'versionId', 'ver', 'page', 'tab', 'note'].concat(extraKeys || []);
+    var keys = ['design', 'designId', 'des', 'task', 'taskId', 'version', 'versionId', 'ver', 'milestone', 'milestoneId', 'ms', 'page', 'tab', 'note'].concat(extraKeys || []);
     keys.forEach(function(k) { url.searchParams.delete(k); });
     var qs = url.searchParams.toString();
     window.history.replaceState({}, '', url.pathname + (qs ? '?' + qs : '') + url.hash);
@@ -2292,6 +2301,46 @@ function applyDeepLinkTask(retries) {
   clearDeepLinkQueryParams();
 }
 
+function applyDeepLinkMilestone(retries) {
+  retries = typeof retries === 'number' ? retries : 40;
+  captureDeepLinkFromUrl();
+  var milestoneId = '';
+  try { milestoneId = sessionStorage.getItem(DEEP_LINK_MILESTONE_KEY) || ''; } catch (e) {}
+  if (!milestoneId) milestoneId = readDeepLinkMilestoneId(collectDeepLinkParams());
+  if (!milestoneId) {
+    if (retries > 0) setTimeout(function() { applyDeepLinkMilestone(retries - 1); }, 300);
+    return;
+  }
+  try { sessionStorage.setItem(DEEP_LINK_MILESTONE_KEY, milestoneId); } catch (e2) {}
+  var rec = (milestonesData || []).find(function(r) { return r.record_id === milestoneId; });
+  if (!rec) {
+    if (retries <= 0) {
+      try { sessionStorage.removeItem(DEEP_LINK_MILESTONE_KEY); } catch (e3) {}
+      showUndoToast('找不到該履約里程碑（ID 可能無效或尚未同步）');
+      return;
+    }
+    if (!deferredDataReady) loadDeferredTables({ silent: true });
+    else if (retries % 8 === 0) syncTables(['milestones', 'workitems', 'projects']);
+    setTimeout(function() { applyDeepLinkMilestone(retries - 1); }, 400);
+    return;
+  }
+  try { sessionStorage.removeItem(DEEP_LINK_MILESTONE_KEY); } catch (e4) {}
+  var projIds = getLinkIds((rec.fields || {})['所屬標案']);
+  var projId = projIds[0] || '';
+  if (projId) {
+    if (!selectedProjectIds.has(projId)) {
+      selectedProjectIds.add(projId);
+      projectSelectNeedsDefault = false;
+      try { saveSelectedProjects(); } catch (e5) {}
+    }
+    openMilestonesForProject(projId);
+  } else {
+    try { renderMilestonesPage(); } catch (e6) {}
+  }
+  setTimeout(function() { openMilestoneEditor(milestoneId); }, 120);
+  clearDeepLinkQueryParams();
+}
+
 function applyDeepLinkPage() {
   try {
     captureDeepLinkFromUrl();
@@ -2299,23 +2348,28 @@ function applyDeepLinkPage() {
     var designId = '';
     var taskId = '';
     var versionId = '';
+    var milestoneId = '';
     try { designId = sessionStorage.getItem(DEEP_LINK_DESIGN_KEY) || ''; } catch (e0) {}
     try { taskId = sessionStorage.getItem(DEEP_LINK_TASK_KEY) || ''; } catch (e1) {}
     try { versionId = sessionStorage.getItem(DEEP_LINK_VERSION_KEY) || ''; } catch (e1b) {}
+    try { milestoneId = sessionStorage.getItem(DEEP_LINK_MILESTONE_KEY) || ''; } catch (e1c) {}
     var params = collectDeepLinkParams();
     if (!designId) designId = readDeepLinkDesignId(params);
     if (!taskId) taskId = readDeepLinkTaskId(params);
     if (!versionId) versionId = readDeepLinkVersionId(params);
+    if (!milestoneId) milestoneId = readDeepLinkMilestoneId(params);
     if (!designId && versionId) designId = resolveDesignIdFromVersion(versionId);
     if (!pageId) {
       var page = (params.get('page') || params.get('tab') || '').trim();
       if (!page && taskId) page = 'schedule';
       if (!page && (designId || versionId)) page = 'design';
+      if (!page && milestoneId) page = 'milestones';
       var key = page.toLowerCase();
       pageId = DEEP_LINK_PAGES[page] || DEEP_LINK_PAGES[key] || '';
     }
     if (!pageId) {
       if (taskId) applyDeepLinkTask();
+      else if (milestoneId) applyDeepLinkMilestone();
       else if (designId) applyDeepLinkDesign();
       return;
     }
@@ -2326,6 +2380,7 @@ function applyDeepLinkPage() {
     sw(btn, pageId);
     if (pageId === 'pg-d') applyDeepLinkDesign();
     if (pageId === 'pg-s') applyDeepLinkTask();
+    if (pageId === 'pg-ms') applyDeepLinkMilestone();
     if (window.history.replaceState) {
       var url = new URL(window.location.href);
       url.searchParams.delete('page');
