@@ -9036,7 +9036,7 @@ function renderMilestonesPage() {
       + '<td>' + (ms.startDate ? escHtml(ms.startDate.replace(/-/g, '/')) : '—') + '</td>'
       + '<td>' + (ms.dueDate ? escHtml(ms.dueDate.replace(/-/g, '/')) : '—') + '</td>'
       + '<td>' + (formatMilestonePctLabel(ms.payPct) ? '<span class="ms-tag pay">' + escHtml(formatMilestonePctLabel(ms.payPct)) + '</span>' : '—') + '</td>'
-      + '<td><div style="font-weight:600">' + snap.progressPct + '% / ' + (snap.thresholdPct || 0) + '%</div>'
+      + '<td><div style="font-weight:600;color:' + (snap.progressPct >= (snap.thresholdPct || 0) ? '#167a3a' : '#b42318') + '">' + snap.progressPct + '% / ' + (snap.thresholdPct || 0) + '%</div>'
       + '<div class="ms-sub">綁定權重 ' + (snap.totalWeight ? (snap.totalWeight + '%') : '未設定') + '</div></td>'
       + '<td><span class="ms-tag' + statusCls + '">' + escHtml(ms.status || '未開始') + '</span>'
       + '</td>'
