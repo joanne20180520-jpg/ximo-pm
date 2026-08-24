@@ -2083,7 +2083,8 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
       const options = ((m.property && m.property.options) || []).map(function(o) {
         return o && o.name;
       }).filter(Boolean);
-      if (options.length && options.indexOf(text) < 0) return;
+      // 狀態可能剛補選項；仍嘗試寫入，避免被靜默略過
+      if (options.length && options.indexOf(text) < 0 && name !== '狀態') return;
       out[name] = text;
       return;
     }
