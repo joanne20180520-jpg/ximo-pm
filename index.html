@@ -4388,7 +4388,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260824v1';
+var APP_BUILD = '20260824v2';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -4914,6 +4914,8 @@ var ROLE_PAGES = {
 
 function getAllowedPages() {
   if (isAdminRole()) return ROLE_PAGES['管理員'];
+  if (isDesignerLikeRole()) return ROLE_PAGES['設計主管'];
+  if (isAccountantRole()) return ROLE_PAGES['會計'];
   var role = currentUserRole || 'PM';
   return ROLE_PAGES[role] || ROLE_PAGES.PM;
 }
@@ -4924,8 +4926,22 @@ function canManageProjects() {
   return isAdminRole();
 }
 
+function authCacheMatchesCurrentUser() {
+  try {
+    var auth = JSON.parse(sessionStorage.getItem(AUTH_CACHE_KEY) || 'null');
+    var u = getCurrentLoginUser();
+    if (!auth || !u) return false;
+    var openId = u.openId || '';
+    if (openId && auth.openId && auth.openId !== openId) return false;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 function isAdminRole() {
   if (currentUserRole === '管理員' || currentUserRole === '管理员') return true;
+  if (!authCacheMatchesCurrentUser()) return false;
   try {
     var auth = JSON.parse(sessionStorage.getItem(AUTH_CACHE_KEY) || 'null');
     if (auth && (auth.role === '管理員' || auth.role === '管理员' || (typeof isAdminRoleToken === 'function' && isAdminRoleToken(auth.role)))) {
@@ -5245,6 +5261,7 @@ function checkMemberAuthorization() {
 }
 
 function applyRolePermissions() {
+  if (membersData.length) reconcileCurrentUserRoleFromMembers();
   var role = currentUserRole || 'PM';
   var allowed = getAllowedPages();
   document.querySelectorAll('.tbar-tab').forEach(function(btn) {
@@ -5273,12 +5290,12 @@ function applyRolePermissions() {
     document.body.classList.remove('role-admin');
     document.body.classList.remove('role-pm-limited');
   }
-  if (role === '設計師' || role === '設計主管') {
+  if (isDesignerLikeRole()) {
     document.body.classList.add('role-designer');
     document.body.classList.remove('role-accountant');
     var designTab = document.querySelector('.tbar-tab[onclick*="pg-d"]');
     if (designTab) sw(designTab, 'pg-d');
-  } else if (role === '會計' || role === '会计') {
+  } else if (isAccountantRole()) {
     document.body.classList.add('role-accountant');
     document.body.classList.remove('role-designer');
   } else {
@@ -5309,6 +5326,19 @@ function resolveRoleFromMembersForLoginUser() {
   var user = getCurrentLoginUser();
   if (!user || !membersData.length) return '';
   var openId = String(user.openId || '').trim();
+  if (openId && membersMap && Object.keys(membersMap).length) {
+    var mappedRole = '';
+    Object.keys(membersMap).forEach(function(name) {
+      var m = membersMap[name];
+      if (!m || m.id !== openId || !m.role) return;
+      if (m.role === '管理員') mappedRole = '管理員';
+      else if (m.role === '會計' && mappedRole !== '管理員') mappedRole = '會計';
+      else if (m.role === '設計主管' && mappedRole !== '管理員' && mappedRole !== '會計') mappedRole = '設計主管';
+      else if (m.role === '設計師' && !mappedRole) mappedRole = '設計師';
+      else if (!mappedRole) mappedRole = m.role;
+    });
+    if (mappedRole) return mappedRole;
+  }
   var unionId = String(user.unionId || '').trim();
   var userId = String(user.userId || '').trim();
   var userNames = [user.name, user.enName].map(function(s) { return String(s || '').trim(); }).filter(Boolean);
@@ -5337,12 +5367,12 @@ function resolveRoleFromMembersForLoginUser() {
 
 function resolveSessionRole(result) {
   result = result || {};
+  var fromMembers = resolveRoleFromMembersForLoginUser();
+  if (fromMembers) return fromMembers;
   var roleUnknown = !!result.roleUnknown || (result.quotaExceeded && !result.role);
   if (!roleUnknown && result.role) return result.role;
   var cached = readAuthCache({ ignoreAge: true });
   if (cached && cached.role) return cached.role;
-  var fromMembers = resolveRoleFromMembersForLoginUser();
-  if (fromMembers) return fromMembers;
   return result.role || currentUserRole || 'PM';
 }
 
@@ -6764,7 +6794,7 @@ function renderCoreShell() {
 function renderDeferredViews(keys) {
   try {
     refreshViewsForTables(keys || getDeferredTableKeys());
-    if (currentUserRole !== '設計師') {
+    if (!isDesignerLikeRole()) {
       // designs / journal also need their dedicated renders when keys arrive
       if (!keys || keys.indexOf('designs') >= 0 || keys.indexOf('design_versions') >= 0) renderDesigns();
       if (!keys || keys.indexOf('journal') >= 0) renderJournalPage();
@@ -6803,6 +6833,10 @@ function applyBootstrapPayload(payload) {
   take('payments', function(r) { paymentsData = mergePaymentApprovalIntoRecords(r); });
   pruneSelectedProjects();
   hydrateMilestonesFromProjects();
+  if (authReady && membersData.length) {
+    buildMembersMap();
+    reconcileCurrentUserRoleFromMembers();
+  }
 }
 
 function renderAllFromBootstrap() {
