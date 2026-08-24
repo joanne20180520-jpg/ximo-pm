@@ -3298,9 +3298,47 @@ async function ensureAccCatalogFields(accToken) {
   ]);
   await ensureAccTableFields(accToken, ACC_TABLE_WORKITEMS, [
     { field_name: '來源Ximo工項ID', type: 1 },
-    { field_name: '執行進度', type: 2 }
+    { field_name: '執行進度', type: 2 },
+    { field_name: '權重', type: 2 }
   ]);
   _accCatalogFieldsReady = true;
+}
+
+let _milestoneFieldsReady = false;
+async function ensureMilestoneTableFields(token) {
+  if (_milestoneFieldsReady) return;
+  const tableId = tableIdFor('milestones');
+  const appToken = appTokenForTable('milestones');
+  if (!tableId || !appToken) return;
+  const existing = await listBitableFields(token, appToken, tableId);
+  const names = {};
+  existing.forEach(function(f) {
+    if (f && f.field_name) names[f.field_name] = true;
+  });
+  const specs = [
+    { field_name: '可請款工項進度％', type: 1 },
+    { field_name: '請款金額', type: 2 },
+    { field_name: '實收金額', type: 2 },
+    { field_name: '可申請通知時間', type: 1 }
+  ];
+  for (let i = 0; i < specs.length; i++) {
+    const spec = specs[i];
+    if (names[spec.field_name]) continue;
+    const created = await fetch(
+      BASE_URL + '/bitable/v1/apps/' + encodeURIComponent(appToken)
+        + '/tables/' + encodeURIComponent(tableId) + '/fields',
+      {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field_name: spec.field_name, type: spec.type })
+      }
+    ).then(function(r) { return r.json(); });
+    if (created.code !== 0) {
+      throw new Error('新增履約欄位失敗: ' + spec.field_name + ' ' + (created.msg || created.code));
+    }
+    names[spec.field_name] = true;
+  }
+  _milestoneFieldsReady = true;
 }
 
 function parseXimoProjectYear(name, fields) {
@@ -3481,6 +3519,8 @@ async function upsertAccWorkitemFromXimo(accToken, ximoWorkitem, accProjectId, p
     '來源Ximo工項ID': ximoId
   };
   if (cost > 0) body['可用成本'] = cost;
+  const weight = Number(fields['權重'] || 0) || 0;
+  if (weight > 0) body['權重'] = weight;
   if (progressPct != null && !isNaN(progressPct)) body['執行進度'] = Math.max(0, Math.min(100, Number(progressPct)));
   if (existing && existing.record_id) {
     const ef = existing.fields || {};
@@ -7292,6 +7332,7 @@ export default async function handler(req, res) {
       }
       const tableAppToken = appTokenForTable(table);
       const tid = tableIdFor(table);
+      if (table === 'milestones') await ensureMilestoneTableFields(tenantToken);
       const body = await normalizeWriteFields(tenantToken, tid, cleanBody, tableAppToken);
       const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
         return createRecord(tok, tid, body, tableAppToken, asUser);
@@ -7308,6 +7349,7 @@ export default async function handler(req, res) {
       const tableAppToken = appTokenForTable(table);
       const tid = tableIdFor(table);
       const cleanBody = stripAuthFromBody(req.body || {});
+      if (table === 'milestones') await ensureMilestoneTableFields(tenantToken);
       const body = await normalizeWriteFields(tenantToken, tid, cleanBody, tableAppToken);
       const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
         return updateRecord(tok, tid, recordId, body, tableAppToken, asUser);
