@@ -1542,7 +1542,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg" style="margin-bottom:6px">
     <div id="ms-plan-groups"></div>
     <div style="display:flex;gap:8px;margin-top:4px">
-      <button type="button" class="bads" onclick="addMilestonePlanGroup()">＋ 新增工作項目</button>
+      <button type="button" class="bads" id="ms-add-wi-btn" onclick="addMilestonePlanGroup()">＋ 新增工作項目</button>
     </div>
   </div>
 </div><div class="ppf"><button class="bcan bdel-action" id="ms-del-btn" onclick="deleteMilestoneFromEditor()" style="display:none">刪除</button><button class="bcan" onclick="cl('pp-milestone')">取消</button><button class="bpri" onclick="saveMilestone()">儲存</button></div></div></div>
@@ -8409,14 +8409,18 @@ function clientMilestoneToFields(ms, projId) {
     '所屬標案': projId ? [projId] : [],
     '類型': ms.type || '其他',
     '狀態': normalizeMilestoneStatus(ms.status),
-    '給付比例': ms.payPct || '',
-    '可請款工項進度％': ms.invoiceProgressPct || '',
-    '請款金額': ms.invoiceAmount || '',
-    '實收金額': ms.actualAmount || '',
     '最終成果': ms.deliverable || '',
-    '規劃任務': JSON.stringify({ version: 2, groups: groups }),
+    '規劃任務': JSON.stringify({ version: 2, groups: uniqueMilestonePlanGroups(groups) }),
     '備註': ms.notes || ''
   };
+  var payN = milestonePercentNumber(ms.payPct);
+  var thresholdN = milestonePercentNumber(ms.invoiceProgressPct);
+  if (payN) fields['給付比例'] = payN;
+  if (thresholdN) fields['可請款工項進度％'] = thresholdN;
+  var invoiceN = milestoneMoneyNumber(ms.invoiceAmount);
+  var actualN = milestoneMoneyNumber(ms.actualAmount);
+  if (invoiceN) fields['請款金額'] = invoiceN;
+  if (actualN) fields['實收金額'] = actualN;
   if (ms.startDate) fields['開始日期'] = dateInputToTs(ms.startDate);
   else fields['開始日期'] = null;
   if (ms.dueDate) fields['截止日'] = dateInputToTs(ms.dueDate);
@@ -8428,7 +8432,7 @@ function clientMilestoneToFields(ms, projId) {
   taskIds.forEach(function(id) { if (uniq.indexOf(id) < 0) uniq.push(id); });
   fields['已產生任務'] = uniq;
   if (ms.clientId) fields['客戶端ID'] = ms.clientId;
-  if (ms.notifiedAt) fields['可申請通知時間'] = ms.notifiedAt;
+  if (ms.notifiedAt) fields['可申請通知時間'] = formatMilestoneNotifyAt(ms.notifiedAt);
   return fields;
 }
 
@@ -8689,6 +8693,10 @@ function setMilestoneStatusSelect(value) {
 
 function milestonePercentNumber(raw) {
   if (raw === '' || raw == null) return 0;
+  if (typeof raw === 'number' && isFinite(raw)) {
+    if (raw > 0 && raw <= 1) return Math.round(raw * 100);
+    return Math.min(100, Math.max(0, Math.round(raw)));
+  }
   return parseWeightPctInput(String(raw));
 }
 
@@ -8696,6 +8704,19 @@ function milestoneMoneyNumber(raw) {
   if (raw === '' || raw == null) return 0;
   var n = parseFloat(String(raw).replace(/[^0-9.-]/g, ''));
   return isNaN(n) ? 0 : n;
+}
+
+function formatMilestoneNotifyAt(raw) {
+  if (raw === '' || raw == null) return '';
+  if (typeof raw === 'string' && /[\/\-]/.test(raw) && !/^\d+$/.test(raw.trim())) return raw;
+  var n = typeof raw === 'number' ? raw : parseInt(String(raw).replace(/[^0-9]/g, ''), 10);
+  if (!n || !isFinite(n)) return String(raw);
+  var ms = n < 1e11 ? n * 1000 : n;
+  var d = new Date(ms);
+  if (isNaN(d.getTime())) return String(raw);
+  function pad(x) { return (x < 10 ? '0' : '') + x; }
+  return d.getFullYear() + '/' + pad(d.getMonth() + 1) + '/' + pad(d.getDate())
+    + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
 }
 
 function getProjectContractAmount(proj) {
@@ -9059,32 +9080,71 @@ function newPlanGroupId() {
   return 'pg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
 }
 
-function fillMilestoneWiSelectEl(sel, projId, selectedName) {
+function fillMilestoneWiSelectEl(sel, projId, selectedName, usedNames) {
   if (!sel) return;
-  var proj = projectsData.find(function(p) { return p.record_id === projId; });
-  var names = [];
-  if (proj) {
-    getWorkitemsForProject(proj).forEach(function(wi) {
-      var n = wi.fields['工作項目名稱'] || '';
-      if (n) names.push(n);
-    });
-  }
-  var html = '';
-  if (!names.length) {
-    html = '<option value="">—</option>';
-  } else {
-    names.forEach(function(n) {
-      html += '<option value="' + escAttr(n) + '">' + escHtml(n) + '</option>';
-    });
+  var names = getMilestoneWorkitemNames(projId);
+  var used = usedNames || {};
+  var html = '<option value="">— 請選擇工作項目 —</option>';
+  names.forEach(function(n) {
+    if (used[n] && n !== selectedName) return;
+    html += '<option value="' + escAttr(n) + '">' + escHtml(n) + '</option>';
+  });
+  if (selectedName && names.indexOf(selectedName) < 0) {
+    html += '<option value="' + escAttr(selectedName) + '">' + escHtml(selectedName) + '</option>';
   }
   sel.innerHTML = html;
-  var pick = selectedName || milestoneDefaultWiName || (names[0] || '');
+  var pick = selectedName || '';
   if (pick) {
     for (var i = 0; i < sel.options.length; i++) {
       if (sel.options[i].value === pick) { sel.selectedIndex = i; return; }
     }
   }
-  if (names.length) sel.selectedIndex = 0;
+  sel.selectedIndex = 0;
+}
+
+function getMilestoneWorkitemNames(projId) {
+  var proj = projectsData.find(function(p) { return p.record_id === projId; });
+  var names = [];
+  if (proj) {
+    getWorkitemsForProject(proj).forEach(function(wi) {
+      var n = String(wi.fields['工作項目名稱'] || '').trim();
+      if (n && names.indexOf(n) < 0) names.push(n);
+    });
+  }
+  return names;
+}
+
+function uniqueMilestonePlanGroups(groups) {
+  var seen = {};
+  var out = [];
+  (groups || []).forEach(function(g) {
+    var name = String((g && g.workItemName) || '').trim();
+    var id = String((g && g.workItemId) || '').trim();
+    var key = id || name;
+    if (key && seen[key]) return;
+    if (key) seen[key] = 1;
+    out.push(g);
+  });
+  return out;
+}
+
+function nextUnusedMilestoneWiName(groups) {
+  var used = {};
+  (groups || []).forEach(function(g) {
+    var n = String((g && g.workItemName) || '').trim();
+    if (n) used[n] = 1;
+  });
+  var names = getMilestoneWorkitemNames(milestonePageProjId);
+  for (var i = 0; i < names.length; i++) {
+    if (!used[names[i]]) return names[i];
+  }
+  return '';
+}
+
+function updateMilestoneAddWiBtn(groups) {
+  var btn = document.getElementById('ms-add-wi-btn');
+  if (!btn) return;
+  btn.disabled = !nextUnusedMilestoneWiName(groups || collectMilestonePlanGroupsFromEditor());
 }
 
 function newPlanTaskId() {
@@ -9106,14 +9166,14 @@ function normalizePlannedTasks(list) {
 }
 
 function normalizePlannedGroups(groups) {
-  return (groups || []).map(function(g) {
+  return uniqueMilestonePlanGroups((groups || []).map(function(g) {
     return {
       id: g.id || newPlanGroupId(),
       workItemName: g.workItemName || '',
       workItemId: g.workItemId || '',
       tasks: normalizePlannedTasks(g.tasks || [])
     };
-  });
+  }));
 }
 
 function emptyMilestonePlanGroup(wiName) {
@@ -9232,23 +9292,30 @@ function renderMilestonePlanTaskRows(tasks) {
 function renderMilestonePlanGroups(groups) {
   var box = document.getElementById('ms-plan-groups');
   if (!box) return;
-  var list = normalizePlannedGroups(groups);
+  var list = uniqueMilestonePlanGroups(normalizePlannedGroups(groups));
   if (!list.length) list = [emptyMilestonePlanGroup()];
   var html = '';
   list.forEach(function(g) {
     html += '<div class="ms-plan-group" data-pgid="' + escAttr(g.id) + '">'
       + '<div class="ms-plan-group-hd">'
-      + '<select class="ms-pg-wi" title="工作項目"></select>'
+      + '<select class="ms-pg-wi" title="工作項目" onchange="onMilestonePlanWiChange(this)"></select>'
       + (list.length > 1 ? '<button type="button" class="ms-plan-del" onclick="removeMilestonePlanGroup(this)">刪除工作項目</button>' : '')
       + '</div>'
-      + '<div class="ms-sub" style="padding:6px 0 0">此工項的權重與執行進度會一起納入可請款計算。</div>'
+      + '<div class="ms-sub" style="padding:6px 0 0">此工項的權重與執行進度會一起納入可請款計算。同一個工作項目只能綁定一次。</div>'
       + '</div>';
   });
   box.innerHTML = html;
   box.querySelectorAll('.ms-plan-group').forEach(function(groupEl, i) {
     var wiSel = groupEl.querySelector('.ms-pg-wi');
-    fillMilestoneWiSelectEl(wiSel, milestonePageProjId, list[i].workItemName || '');
+    var used = {};
+    list.forEach(function(g, gi) {
+      if (gi === i) return;
+      var n = String(g.workItemName || '').trim();
+      if (n) used[n] = 1;
+    });
+    fillMilestoneWiSelectEl(wiSel, milestonePageProjId, list[i].workItemName || '', used);
   });
+  updateMilestoneAddWiBtn(list);
 }
 
 function collectMilestonePlanTasksFromGroupEl(groupEl) {
@@ -9301,7 +9368,37 @@ function collectMilestonePlanGroupsFromEditor() {
 
 function addMilestonePlanGroup() {
   var groups = collectMilestonePlanGroupsFromEditor();
-  groups.push(emptyMilestonePlanGroup(milestoneDefaultWiName || ''));
+  var nextName = nextUnusedMilestoneWiName(groups);
+  if (!nextName) {
+    alert('這個標案可綁定的工作項目都已加入，同一個工作項目不能重複');
+    updateMilestoneAddWiBtn(groups);
+    return;
+  }
+  groups.push(emptyMilestonePlanGroup(nextName));
+  renderMilestonePlanGroups(groups);
+}
+
+function onMilestonePlanWiChange(sel) {
+  var groupEl = sel && sel.closest ? sel.closest('.ms-plan-group') : null;
+  var groups = collectMilestonePlanGroupsFromEditor();
+  if (!groupEl) {
+    renderMilestonePlanGroups(groups);
+    return;
+  }
+  var gid = groupEl.getAttribute('data-pgid');
+  var name = String(sel.value || '').trim();
+  var clash = name && groups.some(function(g) {
+    return g.id !== gid && String(g.workItemName || '').trim() === name;
+  });
+  if (clash) {
+    alert('同一個工作項目只能綁定一次');
+    groups.forEach(function(g) {
+      if (g.id === gid) {
+        g.workItemName = '';
+        g.workItemId = '';
+      }
+    });
+  }
   renderMilestonePlanGroups(groups);
 }
 
@@ -9425,7 +9522,7 @@ function saveMilestone() {
   var payPct = parseWeightPctInput(document.getElementById('ms-pay').value);
   var thresholdPct = parseWeightPctInput(document.getElementById('ms-threshold').value);
   if (!thresholdPct) { alert('請填寫可請款工項進度％'); return; }
-  var groups = collectMilestonePlanGroupsFromEditor().map(function(g) {
+  var groups = uniqueMilestonePlanGroups(collectMilestonePlanGroupsFromEditor().map(function(g) {
     return {
       id: g.id,
       workItemName: g.workItemName || '',
@@ -9434,7 +9531,7 @@ function saveMilestone() {
     };
   }).filter(function(g) {
     return g.workItemName;
-  });
+  }));
   if (!groups.length) groups = [emptyMilestonePlanGroup(milestoneDefaultWiName || '')];
   var oldMs = null;
   if (editingMilestoneId) {

@@ -1349,7 +1349,7 @@ async function getTableFieldSchemas(accessToken, appToken, tableId, cache) {
   fields.forEach(function(f) {
     if (f.field_name) {
       set[f.field_name] = 1;
-      meta[f.field_name] = { type: f.type, field_id: f.field_id || f.id || '' };
+      meta[f.field_name] = { type: f.type, field_id: f.field_id || f.id || '', property: f.property || {} };
     }
   });
   cache[setKey] = set;
@@ -2068,6 +2068,23 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
     }
     if (m.type === 5 && val === null) {
       out[name] = null;
+      return;
+    }
+    if (m.type === 2) {
+      const n = normalizeArchiveNumberValue(val);
+      if (n == null) return;
+      const fmt = String((m.property && m.property.formatter) || '');
+      out[name] = (/%/.test(fmt) && Math.abs(n) > 1) ? n / 100 : n;
+      return;
+    }
+    if (m.type === 3) {
+      const text = normalizeArchiveSelectValue(val);
+      if (text == null) return;
+      const options = ((m.property && m.property.options) || []).map(function(o) {
+        return o && o.name;
+      }).filter(Boolean);
+      if (options.length && options.indexOf(text) < 0) return;
+      out[name] = text;
       return;
     }
     if (isNasPathFieldName(name)) {
@@ -3310,33 +3327,69 @@ async function ensureMilestoneTableFields(token) {
   const tableId = tableIdFor('milestones');
   const appToken = appTokenForTable('milestones');
   if (!tableId || !appToken) return;
-  const existing = await listBitableFields(token, appToken, tableId);
-  const names = {};
-  existing.forEach(function(f) {
-    if (f && f.field_name) names[f.field_name] = true;
-  });
-  const specs = [
-    { field_name: '可請款工項進度％', type: 1 },
-    { field_name: '請款金額', type: 2 },
-    { field_name: '實收金額', type: 2 },
-    { field_name: '可申請通知時間', type: 1 }
-  ];
-  for (let i = 0; i < specs.length; i++) {
-    const spec = specs[i];
-    if (names[spec.field_name]) continue;
-    const created = await fetch(
-      BASE_URL + '/bitable/v1/apps/' + encodeURIComponent(appToken)
-        + '/tables/' + encodeURIComponent(tableId) + '/fields',
-      {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ field_name: spec.field_name, type: spec.type })
+  try {
+    const existing = await listBitableFields(token, appToken, tableId);
+    const names = {};
+    existing.forEach(function(f) {
+      if (f && f.field_name) names[f.field_name] = f;
+    });
+    const specs = [
+      { field_name: '可請款工項進度％', type: 1 },
+      { field_name: '請款金額', type: 2 },
+      { field_name: '實收金額', type: 2 },
+      { field_name: '可申請通知時間', type: 1 }
+    ];
+    for (let i = 0; i < specs.length; i++) {
+      const spec = specs[i];
+      if (names[spec.field_name]) continue;
+      const created = await fetch(
+        BASE_URL + '/bitable/v1/apps/' + encodeURIComponent(appToken)
+          + '/tables/' + encodeURIComponent(tableId) + '/fields',
+        {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ field_name: spec.field_name, type: spec.type })
+        }
+      ).then(function(r) { return r.json(); });
+      if (created.code !== 0) {
+        console.warn('新增履約欄位失敗', spec.field_name, created.msg || created.code);
+        continue;
       }
-    ).then(function(r) { return r.json(); });
-    if (created.code !== 0) {
-      throw new Error('新增履約欄位失敗: ' + spec.field_name + ' ' + (created.msg || created.code));
+      names[spec.field_name] = true;
     }
-    names[spec.field_name] = true;
+    const statusField = names['狀態'];
+    const statusFieldId = statusField && (statusField.field_id || statusField.id);
+    if (statusField && statusField.type === 3 && statusFieldId) {
+      const wanted = ['未開始', '可申請', '申請中', '已完成'];
+      const have = {};
+      const options = ((statusField.property && statusField.property.options) || []).slice();
+      options.forEach(function(o) {
+        if (o && o.name) have[o.name] = true;
+      });
+      let changed = false;
+      wanted.forEach(function(name) {
+        if (have[name]) return;
+        options.push({ name: name });
+        changed = true;
+      });
+      if (changed) {
+        const updated = await fetch(
+          BASE_URL + '/bitable/v1/apps/' + encodeURIComponent(appToken)
+            + '/tables/' + encodeURIComponent(tableId)
+            + '/fields/' + encodeURIComponent(statusFieldId),
+          {
+            method: 'PUT',
+            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ field_name: '狀態', type: 3, property: { options: options } })
+          }
+        ).then(function(r) { return r.json(); });
+        if (updated.code !== 0) {
+          console.warn('更新履約狀態選項失敗', updated.msg || updated.code);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('ensureMilestoneTableFields', err && err.message ? err.message : err);
   }
   _milestoneFieldsReady = true;
 }
