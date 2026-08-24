@@ -8415,8 +8415,8 @@ function clientMilestoneToFields(ms, projId) {
   };
   var payN = milestonePercentNumber(ms.payPct);
   var thresholdN = milestonePercentNumber(ms.invoiceProgressPct);
-  if (payN) fields['給付比例'] = payN;
-  if (thresholdN) fields['可請款工項進度％'] = thresholdN;
+  if (payN) fields['給付比例'] = payN + '%';
+  if (thresholdN) fields['可請款工項進度％'] = thresholdN + '%';
   var invoiceN = milestoneMoneyNumber(ms.invoiceAmount);
   var actualN = milestoneMoneyNumber(ms.actualAmount);
   if (invoiceN) fields['請款金額'] = invoiceN;
@@ -8698,6 +8698,11 @@ function milestonePercentNumber(raw) {
     return Math.min(100, Math.max(0, Math.round(raw)));
   }
   return parseWeightPctInput(String(raw));
+}
+
+function formatMilestonePctLabel(raw) {
+  var n = milestonePercentNumber(raw);
+  return n ? (n + '%') : '';
 }
 
 function milestoneMoneyNumber(raw) {
@@ -9030,7 +9035,7 @@ function renderMilestonesPage() {
       + '</td>'
       + '<td>' + (ms.startDate ? escHtml(ms.startDate.replace(/-/g, '/')) : '—') + '</td>'
       + '<td>' + (ms.dueDate ? escHtml(ms.dueDate.replace(/-/g, '/')) : '—') + '</td>'
-      + '<td>' + (ms.payPct ? '<span class="ms-tag pay">' + escHtml(ms.payPct) + '</span>' : '—') + '</td>'
+      + '<td>' + (formatMilestonePctLabel(ms.payPct) ? '<span class="ms-tag pay">' + escHtml(formatMilestonePctLabel(ms.payPct)) + '</span>' : '—') + '</td>'
       + '<td><div style="font-weight:600">' + snap.progressPct + '% / ' + (snap.thresholdPct || 0) + '%</div>'
       + '<div class="ms-sub">綁定權重 ' + (snap.totalWeight ? (snap.totalWeight + '%') : '未設定') + '</div></td>'
       + '<td><span class="ms-tag' + statusCls + '">' + escHtml(ms.status || '未開始') + '</span>'
