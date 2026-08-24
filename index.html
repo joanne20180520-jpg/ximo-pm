@@ -9025,18 +9025,18 @@ function renderMilestonesPage() {
   list.forEach(function(ms) {
     var snap = syncMilestoneComputedStatus(ms, projId);
     var statusCls = ms.status === '已完成' ? ' done' : '';
-    var wiLabel = resolveMilestoneWorkItemName(ms) || '—';
     var open = !!milestoneExpandedIds[ms.id];
     html += '<tr class="ms-main-row' + (open ? ' open' : '') + '" onclick="toggleMilestoneExpand(\'' + ms.id + '\',event)">'
       + '<td><div class="ms-name"><span class="ms-exp-arrow">▶</span>' + escHtml(ms.name || '未命名') + '</div>'
-      + '<div class="ms-sub"><span class="ms-tag">' + escHtml(milestoneTypeLabel(ms.type)) + '</span>'
-      + '綁定工項：' + escHtml(wiLabel) + '</div>'
       + (ms.deliverable ? '<div class="ms-sub">' + escHtml(ms.deliverable) + '</div>' : '')
       + '</td>'
       + '<td>' + (ms.startDate ? escHtml(ms.startDate.replace(/-/g, '/')) : '—') + '</td>'
       + '<td>' + (ms.dueDate ? escHtml(ms.dueDate.replace(/-/g, '/')) : '—') + '</td>'
       + '<td>' + (formatMilestonePctLabel(ms.payPct) ? '<span class="ms-tag pay">' + escHtml(formatMilestonePctLabel(ms.payPct)) + '</span>' : '—') + '</td>'
-      + '<td><div style="font-weight:600;color:' + (snap.progressPct >= (snap.thresholdPct || 0) ? '#167a3a' : '#b42318') + '">' + snap.progressPct + '% / ' + (snap.thresholdPct || 0) + '%</div>'
+      + '<td><div style="font-weight:600;color:' + (snap.progressPct >= (snap.thresholdPct || 0) ? '#167a3a' : '#b42318') + '">'
+      + '<div>進度 ' + snap.progressPct + '%</div>'
+      + '<div>目標 ' + (snap.thresholdPct || 0) + '%</div>'
+      + '</div>'
       + '<div class="ms-sub">綁定權重 ' + (snap.totalWeight ? (snap.totalWeight + '%') : '未設定') + '</div></td>'
       + '<td><span class="ms-tag' + statusCls + '">' + escHtml(ms.status || '未開始') + '</span>'
       + '</td>'
@@ -9048,7 +9048,6 @@ function renderMilestonesPage() {
       + '</div></td></tr>';
     if (open) {
       html += '<tr class="ms-detail-row"><td colspan="8"><div class="ms-sub-wrap">';
-      html += '<div class="ms-sub" style="padding:4px 0 8px">此里程碑僅綁定工項計算可申請時機，不再由這裡產生任務。</div>';
       html += '<table class="ms-sub-table"><thead><tr>'
         + '<th>工作項目</th><th>權重</th><th>執行進度</th><th>貢獻</th>'
         + '</tr></thead><tbody>';
@@ -9075,8 +9074,6 @@ function renderMilestonesPage() {
     html += '<div class="ms-empty" style="padding:12px;text-align:left;background:#fff8e6;border:1px solid #f0d78c;border-radius:8px;margin-top:10px">'
       + '尚未寫入履約表。請確認 Lark 已建立「履約里程碑」表，欄位名稱與格式正確（尤其「所屬標案」關聯、「規劃任務」多行文字）。'
       + '</div>';
-  } else if (milestoneBackendSyncOk === true || getMilestonesFromTable(projId).length) {
-    html += '<div class="ms-sub" style="margin-top:8px;padding:0 2px">已同步獨立表「履約里程碑」</div>';
   }
   area.innerHTML = html;
 }
