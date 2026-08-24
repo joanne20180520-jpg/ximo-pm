@@ -1534,8 +1534,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="fg" style="margin:0"><label>截止日</label><input type="date" id="ms-due"></div>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
-    <div class="fg" style="margin:0"><label>給付比例（選填）</label><input type="text" id="ms-pay" placeholder="40%"></div>
-    <div class="fg" style="margin:0"><label>可請款工項進度％</label><input type="text" id="ms-threshold" placeholder="60%"></div>
+    <div class="fg" style="margin:0"><label>給付比例（選填）</label><input type="text" id="ms-pay" placeholder="40%" onblur="normalizeMilestonePctInput(this)"></div>
+    <div class="fg" style="margin:0"><label>可請款工項進度％</label><input type="text" id="ms-threshold" placeholder="60%" onblur="normalizeMilestonePctInput(this)"></div>
   </div>
   <div class="fg"><label>最終成果（自己看的）</label><textarea id="ms-deliver" rows="2" placeholder="例：最終報告 3 份紙本＋1 份電子檔；審查通過後請款 40%"></textarea></div>
   <div class="ms-sub" style="margin:-4px 0 10px">里程碑是否可申請，會依下方綁定工項的權重與執行進度自動計算；「申請中／已完成」由會計端更新。</div>
@@ -3374,6 +3374,18 @@ function parseWeightPctInput(str) {
 
 function formatWeightPct(n) {
   return n ? (Math.round(n) + '%') : '';
+}
+
+function normalizeMilestonePctInput(el) {
+  if (!el) return '';
+  var raw = String(el.value || '').trim();
+  if (!raw) {
+    el.value = '';
+    return '';
+  }
+  var n = parseWeightPctInput(raw);
+  el.value = formatWeightPct(n);
+  return el.value;
 }
 
 function getProjWiWeightAllocated() {
@@ -9384,7 +9396,9 @@ function openMilestoneEditor(msId) {
     document.getElementById('ms-due').value = ms.dueDate || '';
     document.getElementById('ms-start').value = ms.startDate || '';
     document.getElementById('ms-pay').value = ms.payPct || '';
+    normalizeMilestonePctInput(document.getElementById('ms-pay'));
     document.getElementById('ms-threshold').value = ms.invoiceProgressPct || '';
+    normalizeMilestonePctInput(document.getElementById('ms-threshold'));
     document.getElementById('ms-deliver').value = ms.deliverable || ms.notes || '';
     groups = ensureMilestoneGroups(ms);
   } else {
@@ -9408,6 +9422,7 @@ function saveMilestone() {
   if (!milestonePageProjId) return;
   var name = document.getElementById('ms-name').value.trim();
   if (!name) { alert('請填寫里程碑名稱'); return; }
+  var payPct = parseWeightPctInput(document.getElementById('ms-pay').value);
   var thresholdPct = parseWeightPctInput(document.getElementById('ms-threshold').value);
   if (!thresholdPct) { alert('請填寫可請款工項進度％'); return; }
   var groups = collectMilestonePlanGroupsFromEditor().map(function(g) {
@@ -9434,7 +9449,7 @@ function saveMilestone() {
     status: normalizeMilestoneStatus(oldMs && oldMs.status),
     startDate: document.getElementById('ms-start').value,
     dueDate: document.getElementById('ms-due').value,
-    payPct: document.getElementById('ms-pay').value.trim(),
+    payPct: payPct ? (payPct + '%') : '',
     invoiceProgressPct: thresholdPct ? (thresholdPct + '%') : '',
     deliverable: document.getElementById('ms-deliver').value.trim(),
     workItemName: (groups[0] && groups[0].workItemName) || '',
