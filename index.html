@@ -1247,9 +1247,9 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div id="pg-ms" class="page">
       <div class="ms-toolbar">
         <select id="ms-proj-select" onchange="onMilestoneProjChange()"></select>
-        <select id="ms-default-wi" title="新增里程碑時預設的工作項目" onchange="onMilestoneDefaultWiChange()">
+        <select id="ms-default-wi" title="新增請款時預設的工作項目" onchange="onMilestoneDefaultWiChange()">
         </select>
-        <button type="button" class="bpri" onclick="openMilestoneEditor()">＋ 新增里程碑</button>
+        <button type="button" class="bpri" onclick="openMilestoneEditor()">＋ 新增請款</button>
       </div>
       <div class="ms-area" id="ms-area">
         <div class="ms-empty">請先從上方選擇標案</div>
@@ -1521,8 +1521,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-task-time')">關閉</button></div></div></div>
 
 <!-- 履約里程碑編輯 -->
-<div class="po" id="pp-milestone"><div class="pp" style="width:640px;max-width:96vw"><div class="pph"><h3 id="ms-edit-title">新增里程碑</h3><button class="ppc" onclick="cl('pp-milestone')">✕</button></div><div class="ppb">
-  <div class="fg"><label>里程碑名稱</label><input type="text" id="ms-name" placeholder="最終報告"></div>
+<div class="po" id="pp-milestone"><div class="pp" style="width:640px;max-width:96vw"><div class="pph"><h3 id="ms-edit-title">新增請款</h3><button class="ppc" onclick="cl('pp-milestone')">✕</button></div><div class="ppb">
+  <div class="fg"><label>請款期數</label><input type="text" id="ms-name" placeholder="最終報告"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
     <div class="fg" style="margin:0"><label>類型</label><select id="ms-type"><option value="交付物">交付物</option><option value="審查會">審查會</option><option value="請款">請款</option><option value="活動">活動</option><option value="其他">其他</option></select></div>
     <div class="fg" style="margin:0"><label>狀態</label><select id="ms-status" disabled><option value="未開始">未開始</option><option value="可申請">可申請</option><option value="申請中">申請中</option><option value="已完成">已完成</option></select></div>
@@ -1535,7 +1535,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="fg" style="margin:0"><label>給付比例（選填）</label><input type="text" id="ms-pay" placeholder="40%" onblur="normalizeMilestonePctInput(this)"></div>
     <div class="fg" style="margin:0"><label>可請款工項進度％</label><input type="text" id="ms-threshold" placeholder="60%" onblur="normalizeMilestonePctInput(this)"></div>
   </div>
-  <div class="fg"><label>最終成果（自己看的）</label><textarea id="ms-deliver" rows="2" placeholder="例：最終報告 3 份紙本＋1 份電子檔；審查通過後請款 40%"></textarea></div>
+  <div class="fg"><label>備註</label><textarea id="ms-deliver" rows="2" placeholder="例：最終報告 3 份紙本＋1 份電子檔；審查通過後請款 40%"></textarea></div>
   <div class="ms-sub" style="margin:-4px 0 10px">里程碑是否可申請，會依下方綁定工項的權重與執行進度自動計算；「申請中／已完成」由會計端更新。</div>
   <div class="fg" style="margin-bottom:6px">
     <div id="ms-plan-groups"></div>
@@ -4462,7 +4462,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260825v1';
+var APP_BUILD = '20260825v2';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -9016,7 +9016,7 @@ function renderMilestonesPage() {
     return;
   }
   var html = '<table class="ms-table"><thead><tr>'
-    + '<th>里程碑</th><th>開始</th><th>截止</th><th>給付</th><th>工項請款進度</th><th>狀態</th><th>請款金額</th><th></th>'
+    + '<th>請款期數</th><th>開始</th><th>截止</th><th>給付</th><th>工項請款進度</th><th>狀態</th><th>請款金額</th><th></th>'
     + '</tr></thead><tbody>';
   list.forEach(function(ms) {
     var snap = syncMilestoneComputedStatus(ms, projId);
@@ -9483,7 +9483,7 @@ function openMilestoneEditor(msId) {
   if (msId) {
     var ms = getMilestones(milestonePageProjId).find(function(m) { return m.id === msId; });
     if (!ms) return;
-    if (title) title.textContent = '編輯里程碑 · ' + (ms.name || '');
+    if (title) title.textContent = '編輯請款 · ' + (ms.name || '');
     if (delBtn) delBtn.style.display = '';
     document.getElementById('ms-name').value = ms.name || '';
     document.getElementById('ms-type').value = ms.type || '交付物';
@@ -9497,7 +9497,7 @@ function openMilestoneEditor(msId) {
     document.getElementById('ms-deliver').value = ms.deliverable || ms.notes || '';
     groups = ensureMilestoneGroups(ms);
   } else {
-    if (title) title.textContent = '新增里程碑';
+    if (title) title.textContent = '新增請款';
     if (delBtn) delBtn.style.display = 'none';
     document.getElementById('ms-name').value = '';
     document.getElementById('ms-type').value = '交付物';
@@ -9516,7 +9516,7 @@ function openMilestoneEditor(msId) {
 function saveMilestone() {
   if (!milestonePageProjId) return;
   var name = document.getElementById('ms-name').value.trim();
-  if (!name) { alert('請填寫里程碑名稱'); return; }
+  if (!name) { alert('請填寫請款期數'); return; }
   var payPct = parseWeightPctInput(document.getElementById('ms-pay').value);
   var thresholdPct = parseWeightPctInput(document.getElementById('ms-threshold').value);
   if (!thresholdPct) { alert('請填寫可請款工項進度％'); return; }
