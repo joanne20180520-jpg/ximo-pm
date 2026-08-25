@@ -1513,7 +1513,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="dl-date" id="dl-date-display"></div>
   <div class="fg"><label>回報人</label><select id="dl-author" onchange="onDailyLogAuthorChange()"></select></div>
   <div class="fg"><label>任務分類</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-person-filter" id="dl-person-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">預設只顯示目前回報人負責的項目；若今日已填過日報，會自動帶入先前分類。選「進行中」時可調整右側 10%–90%；選「不列入」可從日報移除該項；誤填可點左下「刪除今日日報」。</div></div>
-  <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="選擇任務後自動產生…"></textarea></div>
+  <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="可直接填寫；選擇任務後也會自動產生摘要…"></textarea></div>
 </div><div class="ppf"><button class="bcan bdel-action" id="dl-delete-btn" onclick="deleteDailyJournal()" style="display:none">刪除今日日報</button><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
 <!-- 任務時間未設定清單 -->
@@ -4477,7 +4477,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260825v5';
+var APP_BUILD = '20260825v6';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -11628,8 +11628,14 @@ function refreshDailyLogContent() {
   if (!ta) return;
   var n = data.groups.doing.length + data.groups.done.length + data.groups.block.length + data.groups.tomorrow.length
     + data.designGroups.doing.length + data.designGroups.done.length + data.designGroups.block.length + data.designGroups.tomorrow.length;
-  if (n) ta.value = formatDailyReportSummary(data.groups, data.designGroups);
-  else ta.value = '';
+  if (n) {
+    ta.value = formatDailyReportSummary(data.groups, data.designGroups);
+    return;
+  }
+  // 無任務時保留／還原已存備註，不要清空（純備註日報）
+  var author = document.getElementById('dl-author') ? document.getElementById('dl-author').value : '';
+  var dayTs = dailyLogDate ? dailyLogDate.getTime() : getSelectedJournalDayStart();
+  ta.value = getMergedJournalNotes(dayTs, author);
 }
 
 function openDailyLog(preselectId, preselectKind) {
@@ -12438,14 +12444,19 @@ function collectJournalPersonData(rec, personName, opts) {
   var total = done.length + doing.length + blocks.length + tomorrow.length;
   var pct = total ? Math.round(done.length / total * 100) : 0;
   var projects = groupJournalTasksByProject(done, doing, blocks, tomorrow);
+  var note = journalPlainNote(rec);
+  var designCats = parseDesignCategories(rec);
+  var designTotal = designCats.doing.length + designCats.done.length
+    + designCats.block.length + designCats.tomorrow.length;
   return {
     name: personName,
     projects: projects,
+    note: note,
     doneCount: done.length,
     total: total,
     pct: pct,
     journalRecId: rec.record_id,
-    empty: !total
+    empty: !total && !designTotal && !note
   };
 }
 
@@ -12498,6 +12509,8 @@ function renderJournalPersonCard(p) {
     html += '<div class="j-proj-stack">';
     p.projects.forEach(function(proj) { html += renderJournalProjCard(proj); });
     html += '</div>';
+  } else if (p.note) {
+    html += '<div class="jc-note">' + formatJournalHtml(p.note) + '</div>';
   } else if (p.empty) {
     if (p.noDataAtAll) {
       html += '<div class="j-empty-note">尚無日誌資料，請點「填寫今日日誌」開始回報</div>';
