@@ -9515,7 +9515,6 @@ function markMilestoneApplying(msId) {
     alert('僅「可申請」狀態可改為申請中');
     return;
   }
-  if (!confirm('確認將「' + (ms.name || '此期請款') + '」改為申請中？\n狀態會同步到 ACC。')) return;
   milestoneApplyingBusy[msId] = 1;
   ms.status = '申請中';
   Promise.resolve()
