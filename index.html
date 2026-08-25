@@ -4569,7 +4569,7 @@ function applyPartialTable(key, part) {
     case 'design_versions': designVersionsData = records; break;
     case 'journal': journalData = records; break;
     case 'members': membersData = records; break;
-    case 'milestones': milestonesData = records; break;
+    case 'milestones': milestonesData = records; milestonesTableReady = true; break;
     case 'payments': paymentsData = mergePaymentApprovalIntoRecords(records); break;
   }
 }
@@ -6921,7 +6921,7 @@ function applyBootstrapPayload(payload) {
   take('design_versions', function(r) { designVersionsData = r; });
   take('journal', function(r) { journalData = r; });
   take('members', function(r) { membersData = r; });
-  take('milestones', function(r) { milestonesData = r; });
+  take('milestones', function(r) { milestonesData = r; milestonesTableReady = true; });
   take('payments', function(r) { paymentsData = mergePaymentApprovalIntoRecords(r); });
   pruneSelectedProjects();
   hydrateMilestonesFromProjects();
@@ -8308,6 +8308,7 @@ var editingMilestoneId = null;
 var msGenerateIds = [];
 var milestoneExpandedIds = {};
 var milestoneBackendSyncOk = null; // null=未知, true=已同步表, false=寫入失敗
+var milestonesTableReady = false; // 獨立履約表是否已成功從雲端同步（含空表）
 
 function readAllMilestonesLocal() {
   try {
@@ -8336,6 +8337,8 @@ function parseMilestoneFieldValue(raw) {
 }
 
 function hydrateMilestonesFromProjects() {
+  // 獨立表已是正式來源時，不要再用標案欄位把已刪除的舊資料灌回本機
+  if (milestonesTableReady) return;
   // 若獨立表尚無資料，把舊的標案欄位／本機快取保留給 getMilestones 備援
   var all = readAllMilestonesLocal();
   var changed = false;
@@ -8352,6 +8355,14 @@ function hydrateMilestonesFromProjects() {
   if (changed) {
     try { localStorage.setItem(MILESTONES_STORAGE_KEY, JSON.stringify(all)); } catch (e) {}
   }
+}
+
+function clearMilestonesLocal(projId) {
+  if (!projId) return;
+  var all = readAllMilestonesLocal();
+  if (!all[projId] || !all[projId].length) return;
+  all[projId] = [];
+  try { localStorage.setItem(MILESTONES_STORAGE_KEY, JSON.stringify(all)); } catch (e) {}
 }
 
 function resolveWorkItemNameById(wiId) {
@@ -8465,7 +8476,14 @@ function getMilestones(projId) {
   var fromTable = getMilestonesFromTable(projId);
   if (fromTable.length) {
     milestoneBackendSyncOk = true;
+    saveMilestonesLocal(projId, fromTable);
     return fromTable;
+  }
+  // 雲端獨立表已同步成功且此標案無紀錄 → 以雲端為準，清掉本機殘留
+  if (milestonesTableReady) {
+    milestoneBackendSyncOk = true;
+    clearMilestonesLocal(projId);
+    return [];
   }
   // 備援：本機／舊標案欄位（尚未遷移到獨立表時）
   var all = readAllMilestonesLocal();
