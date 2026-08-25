@@ -122,13 +122,11 @@ body.manual-open #tr{right:calc(8px + var(--rw) + min(440px,46vw))}
 .si:hover{background:var(--sf2)}
 .si .bdel{background:transparent;color:var(--t3);opacity:0}
 .si:hover .bdel{opacity:1}
-body.role-pm-limited #pl-projects .pr .bdel{display:none !important}
-body.role-admin #pl-projects .si .bdel,
-body.role-pm-limited #pl-projects .si .bdel{opacity:1}
+body.role-pm-limited #pl-projects .bdel{display:none !important}
+body.role-admin #pl-projects .si .bdel{opacity:1}
 .si .bdel:hover{color:#c0392b;background:rgba(192,57,43,.12)}
 .si .bdel[title="修改工作項目"]:hover{color:var(--c2);background:rgba(26,74,122,.1)}
-body.role-admin #pl-projects .si,
-body.role-pm-limited #pl-projects .si{cursor:pointer}
+body.role-admin #pl-projects .si{cursor:pointer}
 .si-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
 .si-name{font-size:11px;font-weight:600;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .si-weight{font-size:9px;color:var(--t3);font-weight:700;flex-shrink:0}
@@ -2397,12 +2395,8 @@ function sf(el,color){
 }
 function op(id){document.getElementById(id).classList.add('open');}
 function openPopup(id) {
-  if (id === 'pp-proj' && !canManageProjects()) {
-    alert('僅管理員可開案');
-    return;
-  }
-  if (id === 'pp-work' && !canManageWorkItems()) {
-    alert('沒有權限建立工作項目');
+  if ((id === 'pp-proj' || id === 'pp-work') && !canManageProjects()) {
+    alert('僅管理員可開案或建立工作項目');
     return;
   }
   preparePopup(id);
@@ -3573,9 +3567,12 @@ function apiProjectImport(projectFields, workItemFieldsList) {
 }
 
 function apiWorkItemsImport(projectId, workItemFieldsList) {
+  var headers = { 'Content-Type': 'application/json' };
+  var tok = getUserAccessToken();
+  if (tok) headers['X-User-Access-Token'] = tok;
   return fetch(API + '?action=workitems-import', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: headers,
     body: JSON.stringify(withUserToken({ projectId: projectId, workitems: workItemFieldsList }))
   }).then(function(r) { return r.json(); }).then(function(res) {
     if (res.error) throw new Error(res.error);
@@ -4465,8 +4462,8 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260824v3';
-var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v6';
+var APP_BUILD = '20260825v1';
+var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
 var AUTH_CACHE_MAX_AGE = 10 * 60 * 1000;
@@ -4760,6 +4757,8 @@ function finalizeHardDelete(recordId) {
     });
   }).catch(function(err) {
     console.warn('確認刪除失敗', recordId, err);
+    alert('刪除失敗：' + ((err && err.message) || '請稍後再試') + '（資料將重新載入）');
+    syncTables(pending.opts.syncKeys || [pending.table]).catch(function() {});
   });
 }
 
@@ -5001,9 +5000,6 @@ function isPageAllowed(pageId) {
 }
 function canManageProjects() {
   return isAdminRole();
-}
-function canManageWorkItems() {
-  return isPMRole();
 }
 
 function authCacheMatchesCurrentUser() {
@@ -5351,11 +5347,10 @@ function applyRolePermissions() {
     btn.style.display = allowed.indexOf(pageId) >= 0 ? '' : 'none';
   });
   var canStruct = canManageProjects();
-  var canWi = canManageWorkItems();
   var addProj = document.getElementById('btn-add-proj');
   var addWi = document.getElementById('btn-add-wi');
   if (addProj) addProj.style.display = canStruct ? '' : 'none';
-  if (addWi) addWi.style.display = canWi ? '' : 'none';
+  if (addWi) addWi.style.display = canStruct ? '' : 'none';
   var activePage = document.querySelector('.page.active');
   if (activePage && allowed.indexOf(activePage.id) < 0 && allowed[0]) {
     var fallbackTab = document.querySelector('.tbar-tab[onclick*="' + allowed[0] + '"]');
@@ -5407,22 +5402,10 @@ function resolveRoleFromMembersForLoginUser() {
   var user = getCurrentLoginUser();
   if (!user || !membersData.length) return '';
   var openId = String(user.openId || '').trim();
-  if (openId && membersMap && Object.keys(membersMap).length) {
-    var mappedRole = '';
-    Object.keys(membersMap).forEach(function(name) {
-      var m = membersMap[name];
-      if (!m || m.id !== openId || !m.role) return;
-      if (m.role === '管理員') mappedRole = '管理員';
-      else if (m.role === '會計' && mappedRole !== '管理員') mappedRole = '會計';
-      else if (m.role === '設計主管' && mappedRole !== '管理員' && mappedRole !== '會計') mappedRole = '設計主管';
-      else if (m.role === '設計師' && !mappedRole) mappedRole = '設計師';
-      else if (!mappedRole) mappedRole = m.role;
-    });
-    if (mappedRole) return mappedRole;
-  }
   var unionId = String(user.unionId || '').trim();
   var userId = String(user.userId || '').trim();
   var userNames = [user.name, user.enName].map(function(s) { return String(s || '').trim(); }).filter(Boolean);
+  // 只依「人員資料」表判定角色，避免任務／工項上的同 openId 別名把管理員降成 PM
   for (var i = 0; i < membersData.length; i++) {
     var f = membersData[i].fields || {};
     var personIds = memberFieldPersonIds(f);
@@ -5449,18 +5432,31 @@ function resolveRoleFromMembersForLoginUser() {
 function resolveSessionRole(result) {
   result = result || {};
   var fromMembers = resolveRoleFromMembersForLoginUser();
-  if (fromMembers) return fromMembers;
   var roleUnknown = !!result.roleUnknown || (result.quotaExceeded && !result.role);
-  if (!roleUnknown && result.role) return result.role;
+  var serverRole = (!roleUnknown && result.role) ? result.role : '';
   var cached = readAuthCache({ ignoreAge: true });
-  if (cached && cached.role) return cached.role;
-  return result.role || currentUserRole || 'PM';
+  var cachedRole = (cached && cached.role) ? cached.role : '';
+  // 人員表明確為管理員時優先；不要被空／PM 別名覆蓋
+  if (fromMembers === '管理員' || fromMembers === '管理员') return '管理員';
+  if (serverRole === '管理員' || serverRole === '管理员') return '管理員';
+  if (cachedRole === '管理員' || cachedRole === '管理员') {
+    // 人員表若已對上且不是管理員，才接受降級（例如標籤真的改了）
+    if (fromMembers && fromMembers !== '管理員' && fromMembers !== '管理员') return fromMembers;
+    return '管理員';
+  }
+  if (fromMembers) return fromMembers;
+  if (serverRole) return serverRole;
+  if (cachedRole) return cachedRole;
+  return currentUserRole || 'PM';
 }
 
 function reconcileCurrentUserRoleFromMembers() {
   if (!authReady) return false;
   var derived = resolveRoleFromMembersForLoginUser();
-  if (!derived || derived === currentUserRole) return false;
+  if (!derived) return false;
+  // 人員表暫時對不上時，不要把已確認的管理員降成 PM
+  if ((currentUserRole === '管理員' || currentUserRole === '管理员') && derived === 'PM') return false;
+  if (derived === currentUserRole) return false;
   currentUserRole = derived;
   applyRolePermissions();
   writeAuthCache({
@@ -7389,10 +7385,10 @@ function buildProjectCardHtml(rec, color) {
     if (wiStart && wiEnd) dateStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
     else if (wiEnd) dateStr = fmt(wiEnd.getTime());
     else if (wiStart) dateStr = fmt(wiStart.getTime()) + '–';
-    subHTML += '<div class="si"' + (canManageWorkItems() ? ' onclick="openEditWorkItem(\'' + wi.record_id + '\')" title="點擊編輯工作項目"' : '') + '>'
+    subHTML += '<div class="si"' + (canManageProjects() ? ' onclick="openEditWorkItem(\'' + wi.record_id + '\')" title="點擊編輯工作項目"' : '') + '>'
       + '<div class="si-row"><span class="si-name">' + escHtml(wName) + '</span>'
       + (weightStr ? '<span class="si-weight" title="進度／權重（—＝尚未分配權重）">' + weightStr + '</span>' : '')
-      + (canManageWorkItems()
+      + (canManageProjects()
         ? ('<button type="button" class="bdel" title="修改工作項目" style="margin-right:2px" onclick="event.stopPropagation();openEditWorkItem(\'' + wi.record_id + '\')">✎</button>'
           + '<button type="button" class="bdel" title="刪除工作項目" onclick="event.stopPropagation();deleteWorkItem(\'' + wi.record_id + '\',\'' + escAttr(wName).replace(/'/g, "\\'") + '\')">×</button>')
         : '')
@@ -15414,6 +15410,7 @@ function apiPost(table, fields) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(withUserToken(fields))
   }).then(function(r) { return r.json(); }).then(function(res) {
+    if (res && res.error) throw new Error(res.error);
     if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '儲存失敗');
     return res;
   });
@@ -15425,6 +15422,7 @@ function apiPut(table, recordId, fields) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(withUserToken(fields))
   }).then(function(r) { return r.json(); }).then(function(res) {
+    if (res && res.error) throw new Error(res.error);
     if (res.code !== undefined && res.code !== 0) throw new Error(res.msg || '更新失敗');
     return res;
   });
@@ -16809,7 +16807,7 @@ function onNwProjChange() {
 }
 
 function openEditWorkItem(wiId) {
-  if (!canManageWorkItems()) { alert('沒有權限修改工作項目'); return; }
+  if (!canManageProjects()) { alert('僅管理員可修改工作項目'); return; }
   var rec = workitemsData.find(function(r){ return r.record_id === wiId; });
   if (!rec) return;
   editingWiId = wiId;
@@ -16833,12 +16831,12 @@ function openEditWorkItem(wiId) {
     hint.textContent = cts ? ('標案合約開始日：' + fmtDate(cts)) : '標案未設定合約開始日';
   }
   var delBtn = document.getElementById('ew-del-btn');
-  if (delBtn) delBtn.style.display = canManageWorkItems() ? '' : 'none';
+  if (delBtn) delBtn.style.display = canManageProjects() ? '' : 'none';
   op('pp-edit-wi');
 }
 
 function deleteWorkItemFromEdit() {
-  if (!canManageWorkItems()) { alert('沒有權限刪除工作項目'); return; }
+  if (!canManageProjects()) { alert('僅管理員可刪除工作項目'); return; }
   if (!editingWiId) return;
   var rec = workitemsData.find(function(r){ return r.record_id === editingWiId; });
   var name = (rec && rec.fields && rec.fields['工作項目名稱']) || (document.getElementById('ew-name') && document.getElementById('ew-name').value) || '未命名';
@@ -16863,7 +16861,7 @@ function deleteWorkItemFromEdit() {
 }
 
 function saveEditWorkItem() {
-  if (!canManageWorkItems()) { alert('沒有權限修改工作項目'); return; }
+  if (!canManageProjects()) { alert('僅管理員可修改工作項目'); return; }
   if (!editingWiId) return;
   var rec = workitemsData.find(function(r){ return r.record_id === editingWiId; });
   var oldFields = rec ? {
@@ -17004,7 +17002,7 @@ function deleteProject(id, name) {
 }
 
 function deleteWorkItem(id, name) {
-  if (!canManageWorkItems()) { alert('沒有權限刪除工作項目'); return; }
+  if (!canManageProjects()) { alert('僅管理員可刪除工作項目'); return; }
   var rec = workitemsData.find(function(r){ return r.record_id === id; });
   showConfirm({
     type: 'del',
@@ -17309,7 +17307,7 @@ function refreshFormSelects() {
 }
 
 function saveWorkItems() {
-  if (!canManageWorkItems()) { alert('沒有權限建立工作項目'); return; }
+  if (!canManageProjects()) { alert('僅管理員可建立工作項目'); return; }
   if (workItemsImportSaving) return;
   var projId = document.getElementById('nw-proj').value;
   if (!projId) { alert('請選擇標案'); return; }

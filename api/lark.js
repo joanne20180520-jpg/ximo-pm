@@ -6547,41 +6547,8 @@ async function requireAdminUser(req, deniedMessage) {
   return { ok: true, auth: auth };
 }
 
-async function requireWorkitemManager(req, deniedMessage) {
-  const userAccessToken = extractUserAccessToken(req);
-  const auth = await checkMemberAuthorization(userAccessToken);
-  if (!auth.authorized) {
-    return { ok: false, status: auth.needLogin ? 401 : 403, error: auth.needLogin ? '請先登入' : '沒有權限' };
-  }
-  const role = auth.role;
-  if (isAccountantRoleToken(role) || isDesignLeadRoleToken(role) || isDesignerRoleToken(role)) {
-    return { ok: false, status: 403, error: deniedMessage || '沒有權限修改工作項目' };
-  }
-  return { ok: true, auth: auth };
-}
-
-function isProjectTable(table) {
-  return table === 'projects';
-}
-
-function isWorkitemTable(table) {
-  return table === 'workitems';
-}
-
-async function requireProjectOrWorkitemWrite(req, table, actionKind) {
-  if (isProjectTable(table)) {
-    const msg = actionKind === 'create' ? '僅管理員可開案'
-      : actionKind === 'update' ? '僅管理員可修改標案'
-      : '僅管理員可刪除標案';
-    return requireAdminUser(req, msg);
-  }
-  if (isWorkitemTable(table)) {
-    const msg = actionKind === 'create' ? '沒有權限建立工作項目'
-      : actionKind === 'update' ? '沒有權限修改工作項目'
-      : '沒有權限刪除工作項目';
-    return requireWorkitemManager(req, msg);
-  }
-  return { ok: true };
+function isProjectStructureTable(table) {
+  return table === 'projects' || table === 'workitems';
 }
 
 function isTaskFieldsCompleted(fields) {
@@ -6796,7 +6763,9 @@ async function fetchTableRecordsSafe(token, tableKey) {
   if (!tableId) return { records: [], error: 'Invalid table: ' + tableKey };
   try {
     const tableAppToken = appTokenForTable(tableKey);
-    const records = await getRecords(token, tableId, tableAppToken);
+    // 人員表必須帶 open_id，否則前端無法用 openId 對上管理員，會被誤判成 PM
+    const readOpts = tableKey === 'members' ? { userIdType: 'open_id' } : undefined;
+    const records = await getRecords(token, tableId, tableAppToken, readOpts);
     return { records: records };
   } catch (err) {
     console.error('bootstrap ' + tableKey, err);
@@ -7187,7 +7156,7 @@ export default async function handler(req, res) {
     }
 
     if (action === 'workitems-import' && req.method === 'POST') {
-      const wiGate = await requireWorkitemManager(req, '沒有權限建立工作項目');
+      const wiGate = await requireAdminUser(req, '僅管理員可建立工作項目');
       if (!wiGate.ok) return res.status(wiGate.status).json({ error: wiGate.error });
       const tenantToken = await getToken();
       const userAccessToken = extractUserAccessToken(req);
@@ -7366,8 +7335,8 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       if (!tableIdFor(table)) return res.status(400).json({ error: 'Invalid table' });
-      if (isProjectTable(table) || isWorkitemTable(table)) {
-        const structGate = await requireProjectOrWorkitemWrite(req, table, 'create');
+      if (isProjectStructureTable(table)) {
+        const structGate = await requireAdminUser(req, table === 'projects' ? '僅管理員可開案' : '僅管理員可建立工作項目');
         if (!structGate.ok) return res.status(structGate.status).json({ error: structGate.error });
       }
       const applicantHint = extractApplicantOpenIdHint(req.body);
@@ -7396,8 +7365,8 @@ export default async function handler(req, res) {
 
     if (req.method === 'PUT') {
       if (!tableIdFor(table) || !recordId) return res.status(400).json({ error: 'Invalid params' });
-      if (isProjectTable(table) || isWorkitemTable(table)) {
-        const structGate = await requireProjectOrWorkitemWrite(req, table, 'update');
+      if (isProjectStructureTable(table)) {
+        const structGate = await requireAdminUser(req, table === 'projects' ? '僅管理員可修改標案' : '僅管理員可修改工作項目');
         if (!structGate.ok) return res.status(structGate.status).json({ error: structGate.error });
       }
       const tableAppToken = appTokenForTable(table);
@@ -7413,8 +7382,8 @@ export default async function handler(req, res) {
 
     if (req.method === 'DELETE') {
       if (!tableIdFor(table) || !recordId) return res.status(400).json({ error: 'Invalid params' });
-      if (isProjectTable(table) || isWorkitemTable(table)) {
-        const structGate = await requireProjectOrWorkitemWrite(req, table, 'delete');
+      if (isProjectStructureTable(table)) {
+        const structGate = await requireAdminUser(req, table === 'projects' ? '僅管理員可刪除標案' : '僅管理員可刪除工作項目');
         if (!structGate.ok) return res.status(structGate.status).json({ error: structGate.error });
       }
       const tableAppToken = appTokenForTable(table);
