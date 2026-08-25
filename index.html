@@ -512,6 +512,8 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .ms-actions{display:flex;gap:4px;flex-wrap:wrap}
 .ms-actions button{border:1px solid var(--border);background:#fff;border-radius:var(--rs);padding:3px 8px;font-size:10px;cursor:pointer}
 .ms-actions button:hover{background:var(--sf2)}
+.ms-actions button.ms-apply-btn{background:#1c1b19;color:#fff;border-color:#1c1b19;font-weight:700}
+.ms-actions button.ms-apply-btn:hover{background:#333;border-color:#333}
 .ms-main-row{cursor:pointer}
 .ms-main-row.open td{background:#faf9f7}
 .ms-exp-arrow{display:inline-block;width:12px;font-size:9px;color:var(--t3);margin-right:6px;transition:transform .15s;vertical-align:middle}
@@ -1536,7 +1538,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="fg" style="margin:0"><label>可請款工項進度％</label><input type="text" id="ms-threshold" placeholder="60%" onblur="normalizeMilestonePctInput(this)"></div>
   </div>
   <div class="fg"><label>備註</label><textarea id="ms-deliver" rows="2" placeholder="例：最終報告 3 份紙本＋1 份電子檔；審查通過後請款 40%"></textarea></div>
-  <div class="ms-sub" style="margin:-4px 0 10px">里程碑是否可申請，會依下方綁定工項的權重與執行進度自動計算；「申請中／已完成」由會計端更新。</div>
+  <div class="ms-sub" style="margin:-4px 0 10px">里程碑是否可申請，會依下方綁定工項的權重與執行進度自動計算；達標後可在此點「改申請中」，「已完成」由會計端入帳更新。</div>
   <div class="fg" style="margin-bottom:6px">
     <div id="ms-plan-groups"></div>
     <div style="display:flex;gap:8px;margin-top:4px">
@@ -9051,6 +9053,9 @@ function renderMilestonesPage() {
       + '<td>' + (snap.defaultAmount ? ntf(snap.defaultAmount) : '—')
       + '</td>'
       + '<td><div class="ms-actions">'
+      + (ms.status === '可申請'
+        ? '<button type="button" class="ms-apply-btn" onclick="event.stopPropagation();markMilestoneApplying(\'' + escAttr(ms.id) + '\')">改申請中</button>'
+        : '')
       + '<button type="button" onclick="event.stopPropagation();openMilestoneEditor(\'' + ms.id + '\')">編輯</button>'
       + '</div></td></tr>';
     if (open) {
@@ -9480,6 +9485,36 @@ function removeMilestonePlanTaskRow(btn) {
       renderMilestonePlanGroups(next);
     }
   });
+}
+
+var milestoneApplyingBusy = {};
+function markMilestoneApplying(msId) {
+  if (!milestonePageProjId || !msId) return;
+  if (milestoneApplyingBusy[msId]) return;
+  var ms = getMilestones(milestonePageProjId).find(function(m) { return m.id === msId; });
+  if (!ms) return;
+  if (normalizeMilestoneStatus(ms.status) !== '可申請') {
+    alert('僅「可申請」狀態可改為申請中');
+    return;
+  }
+  if (!confirm('確認將「' + (ms.name || '此期請款') + '」改為申請中？\n狀態會同步到 ACC。')) return;
+  milestoneApplyingBusy[msId] = 1;
+  ms.status = '申請中';
+  Promise.resolve()
+    .then(function() { return persistMilestone(ms, milestonePageProjId); })
+    .then(function() { return syncTables(['milestones']); })
+    .then(function() {
+      renderMilestonesPage();
+      renderProjects();
+      showUndoToast('已改為申請中，ACC 會同步顯示');
+    })
+    .catch(function(err) {
+      alert('改申請中失敗：' + (err && err.message ? err.message : String(err)));
+      renderMilestonesPage();
+    })
+    .finally(function() {
+      delete milestoneApplyingBusy[msId];
+    });
 }
 
 function openMilestoneEditor(msId) {

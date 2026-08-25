@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>付款申請與請款 · 操作手冊</title>
+<style>
+
+:root{--bg:#f4f1ec;--card:#fff;--text:#1c1b19;--border:#e4dfd7;--accent:#2d6a4f;--accent-soft:#e8f2ec}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;font-family:"PingFang TC","Noto Sans TC","Helvetica Neue",sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
+.hint{position:sticky;top:0;z-index:20;background:#1c1b19;color:#fff;padding:10px 18px;font-size:13px}
+main{max-width:1320px;margin:0 auto;padding:28px 32px 96px}
+.doc-head h1{font-size:28px;font-weight:700;margin:8px 0 20px}
+h2.section-title{font-size:19px;font-weight:700;margin:48px 0 20px;padding:10px 14px;background:var(--accent-soft);border-left:4px solid var(--accent);border-radius:0 8px 8px 0;scroll-margin-top:56px}
+h3.section-step{display:flex;align-items:center;gap:12px;margin:36px 0 14px;padding:0;background:transparent;border:none;scroll-margin-top:56px}
+h3.section-step .step-num{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:var(--accent);color:#fff;font-size:17px;font-weight:700;flex-shrink:0}
+h3.section-step .step-label{font-size:20px;font-weight:700;color:var(--text)}
+.doc-purpose{font-size:16px;color:#3d3a35;margin:0 0 16px;padding:14px 16px;background:#fff;border:1px solid var(--border);border-radius:10px}
+p{font-size:16px;margin:8px 0 12px;color:#2a2926}
+ul{padding-left:1.2em;margin:8px 0 14px}li{font-size:16px;margin:4px 0}
+hr{border:none;border-top:1px solid var(--border);margin:36px 0}
+code{background:#efeae3;padding:1px 6px;border-radius:4px;font-size:.92em}
+.step-block{margin:0 0 8px;padding:22px 26px 26px;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.step-desc{font-size:16.5px;line-height:1.8;color:#2a2926;margin-bottom:20px}
+.step-desc p{margin:0}
+.step-note{margin:0 0 12px;font-size:15px}
+.step-img{margin-top:16px}
+.step-desc + .step-img{margin-top:4px}
+.step-img img{display:block;width:100%;max-width:100%;height:auto;border-radius:10px;border:1px solid var(--border)}
+.table-wrap{margin:12px 0 18px;background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{border-bottom:1px solid var(--border);padding:10px 12px;text-align:left;vertical-align:top;line-height:1.55}
+tr:last-child th,tr:last-child td{border-bottom:none}
+th{background:#f3efe9;font-weight:700;color:#3d3a35}
+.solo{margin:12px 0 18px}.solo img{display:block;width:100%;max-width:100%;height:auto;border-radius:10px;border:1px solid var(--border)}
+
+
+#manual-gate{position:fixed;inset:0;z-index:999;display:flex;align-items:center;justify-content:center;background:#f4f1ec}
+#manual-gate .gate-box{max-width:340px;text-align:center;padding:28px 26px;background:#fff;border:1px solid #e4dfd7;border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+#manual-gate h2{all:unset;display:block;font-size:17px;font-weight:700;color:#1c1b19;margin-bottom:8px}
+#manual-gate p{font-size:13px;color:#6a655c;line-height:1.6;margin:0 0 18px}
+#manual-gate a.gate-btn{display:inline-block;padding:11px 22px;border-radius:8px;background:#2d6a4f;color:#fff;text-decoration:none;font-size:14px;font-weight:600}
+body.gated main,body.gated .hint{display:none}
+
+</style>
+</head>
+<body class="gated">
+<div class="hint">付款申請與請款操作手冊 · 黃數字＝步驟</div>
+<main>
+<header class="doc-head"><h1>付款申請單＋請款 · 操作手冊</h1></header>
+<p class="doc-purpose"><strong>專案目的：</strong> 協助團隊掌握璽墨與 ACC 之間標案同步、付款申請核銷及標案請款入帳的完整操作流程。</p>
+<p>本手冊分三塊：</p>
+<p>1. <strong>璽墨及 ACC 介面同步說明</strong>（說明 1～2）</p>
+<p>2. <strong>付款申請單流程</strong>（步驟 1～5）</p>
+<p>3. <strong>標案請款流程</strong>（步驟 1～9）</p>
+<hr/>
+<h2 class="section-title">一、璽墨及 ACC 介面同步說明</h2>
+<h3 class="section-step" id="step-base-1"><span class="step-num">1</span><span class="step-label">說明 1</span></h3>
+<section class="step-block"><div class="step-desc">在璽墨的介面新增標案後，ACC 的介面就會同步出現該標案</div><div class="step-img"><img src="screenshots/step-01-ximo-add-project.png" alt="說明 1｜璽墨新增標案"/></div><div class="step-img"><img src="screenshots/step-02-acc-sync-project.png" alt="說明 1｜ACC 同步標案"/></div></section>
+<hr/>
+<h3 class="section-step" id="step-base-2"><span class="step-num">2</span><span class="step-label">說明 2</span></h3>
+<section class="step-block"><div class="step-desc">璽墨的任務進度％數會同步顯示在 ACC 的工項列表</div><div class="step-img"><img src="screenshots/step-03-ximo-task-progress.png" alt="說明 2｜璽墨任務進度"/></div><div class="step-img"><img src="screenshots/step-04-acc-work-items.png" alt="說明 2｜ACC 工項進度"/></div></section>
+<hr/>
+<h2 class="section-title">二、付款申請單流程</h2>
+<h3 class="section-step" id="step-pay-1"><span class="step-num">1</span><span class="step-label">步驟 1</span></h3>
+<section class="step-block"><div class="step-desc">填寫付款申請單</div><div class="step-img"><img src="screenshots/step-05-payment-form.png" alt="步驟 1"/></div></section>
+<hr/>
+<h3 class="section-step" id="step-pay-2"><span class="step-num">2</span><span class="step-label">步驟 2</span></h3>
+<section class="step-block"><div class="step-desc">填寫完畢的付款申請單會出現在下方的「已送出的付款申請」</div><div class="step-img"><img src="screenshots/step-06-submitted-payments.png" alt="步驟 2"/></div></section>
+<hr/>
+<h3 class="section-step" id="step-pay-3"><span class="step-num">3</span><span class="step-label">步驟 3</span></h3>
+<section class="step-block"><div class="step-desc">點擊審批進入審核中心，可以看到此付款申請單的細項以及要簽核的人，簽核到最後一個人即結束</div><div class="step-img"><img src="screenshots/step-07-approval-center.png" alt="步驟 3"/></div></section>
+<hr/>
+<h3 class="section-step" id="step-pay-4"><span class="step-num">4</span><span class="step-label">步驟 4</span></h3>
+<section class="step-block"><div class="step-desc">當此審批已經通過的時候，「已送出的付款申請」的狀態就會顯示「已核銷」，並出現在璽墨的支出明細頁面內及費用管理頁面</div><div class="step-img"><img src="screenshots/step-08-expense-detail.png" alt="步驟 4"/></div></section>
+<hr/>
+<h3 class="section-step" id="step-pay-5"><span class="step-num">5</span><span class="step-label">步驟 5</span></h3>
+<section class="step-block"><div class="step-desc">當此審批「已核銷」時，就會出現在 ACC 的管理介面</div><div class="step-img"><img src="screenshots/step-09-acc-expense-sync.png" alt="步驟 5"/></div></section>
+<hr/>
+<h2 class="section-title">三、標案請款流程</h2>
+<h3 class="section-step" id="step-bill-1"><span class="step-num">1</span><span class="step-label">步驟 1</span></h3>
+<section class="step-block"><div class="step-desc">打開璽墨專案介面並選擇履約頁面後點擊新增請款，填寫資訊後儲存</div><div class="step-img"><img src="screenshots/step-10-add-billing.png" alt="步驟 1"/></div></section>
+<hr/>
+<h3 class="section-step" id="step-bill-2"><span class="step-num">2</span><span class="step-label">步驟 2</span></h3>
+<section class="step-block"><div class="step-desc">進度達標為綠色且狀態為可申請，並由 Lark 通知主 PM；進度未達標為紅色且狀態為未開始</div><div class="step-img"><img src="screenshots/step-11-billing-progress.png" alt="步驟 2"/></div></section>
+<hr/>
+<h3 class="section-step" id="step-bill-3"><span class="step-num">3</span><span class="step-label">步驟 3</span></h3>
+<p class="step-note"><span style="color:#c0392b;font-weight:600">（此步驟非系統操作）</span></p>
+<section class="step-block"><div class="step-desc">收到 Lark 可申請通知後手開發票並傳 LINE 給會計</div><div class="step-img"><img src="screenshots/step-12-invoice.png" alt="步驟 3"/></div></section>
+<hr/>
+<h3 class="section-step" id="step-bill-4"><span class="step-num">4</span><span class="step-label">步驟 4</span></h3>
+<section class="step-block"><div class="step-desc">會計送出此請款時請進入 ACC 介面，選擇該專案後即會出現此請款資訊並點擊「改申請中」</div><div class="step-img"><img src="screenshots/step-13-acc-apply.png" alt="步驟 4"/></div></section>
+<hr/>
+<h3 class="section-step" id="step-bill-5"><span class="step-num">5</span><span class="step-label">步驟 5</span></h3>
+<section class="step-block"><div class="step-desc">履約頁面的請款資訊即同步為「申請中」</div><div class="step-img"><img src="screenshots/step-14-ximo-applying.png" alt="步驟 5"/></div></section>
+<hr/>
+<h3 class="section-step" id="step-bill-6"><span class="step-num">6</span><span class="step-label">步驟 6</span></h3>
+<section class="step-block"><div class="step-desc">會計確認入帳後請到 ACC 介面點擊「完成入帳」<span style="color:#888">（金額可手動更改）</span></div><div class="step-img"><img src="screenshots/step-15-acc-complete.png" alt="步驟 6"/></div></section>
+<hr/>
+<h3 class="section-step" id="step-bill-7"><span class="step-num">7</span><span class="step-label">步驟 7</span></h3>
+<section class="step-block"><div class="step-desc">入帳完成後即刻顯示在 ACC 介面上</div><div class="step-img"><img src="screenshots/step-16-acc-billed.png" alt="步驟 7"/></div></section>
+<hr/>
+<h3 class="section-step" id="step-bill-8"><span class="step-num">8</span><span class="step-label">步驟 8</span></h3>
+<section class="step-block"><div class="step-desc">入帳完成後璽墨履約請款狀態為「已完成」</div><div class="step-img"><img src="screenshots/step-17-ximo-completed.png" alt="步驟 8"/></div></section>
+<hr/>
+<h3 class="section-step" id="step-bill-9"><span class="step-num">9</span><span class="step-label">步驟 9</span></h3>
+<section class="step-block"><div class="step-desc">入帳完成後璽墨費用管理同步此專案的入帳金額</div><div class="step-img"><img src="screenshots/step-18-ximo-income.png" alt="步驟 9"/></div></section>
+</main>
+
+<div id="manual-gate"><div class="gate-box"><h2>請先登入系統</h2>
+<p>操作手冊僅供內部人員檢視。請先用<strong>同一個瀏覽器</strong>登入璽墨系統（Lark 帳號），登入成功後會自動回到本頁。</p>
+<a class="gate-btn" href="/" id="manual-gate-login">前往 Lark 登入</a></div></div>
+<script>(function(){var KEY='ximo-login-user',MAX=10*60*60*1000,REDIRECT_KEY='ximo-post-login-redirect';
+function ok(){try{var raw=localStorage.getItem(KEY)||sessionStorage.getItem(KEY);if(!raw)return false;var u=JSON.parse(raw);
+if(!u||!(u.name||u.enName))return false;var started=Number(u.sessionStartedAt||0);if(started&&Date.now()-started>MAX)return false;
+var exp=Number(u.tokenExpiresAt||0);if(exp&&Date.now()>exp)return false;return true;}catch(e){return false;}}
+var gate=document.getElementById('manual-gate');var loginBtn=document.getElementById('manual-gate-login');
+if(loginBtn){loginBtn.addEventListener('click',function(){try{sessionStorage.setItem(REDIRECT_KEY,location.pathname+location.search);}catch(e){}});}
+if(ok()){if(gate)gate.remove();document.body.classList.remove('gated');}else{document.body.classList.add('gated');}})();</script>
+
+</body>
+</html>
