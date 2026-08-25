@@ -4462,7 +4462,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260825v2';
+var APP_BUILD = '20260825v3';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -9032,12 +9032,10 @@ function renderMilestonesPage() {
       + '<td><div style="font-weight:600;color:' + (snap.progressPct >= (snap.thresholdPct || 0) ? '#167a3a' : '#b42318') + '">'
       + '<div>進度 ' + snap.progressPct + '%</div>'
       + '<div>目標 ' + (snap.thresholdPct || 0) + '%</div>'
-      + '</div>'
-      + '<div class="ms-sub">綁定權重 ' + (snap.totalWeight ? (snap.totalWeight + '%') : '未設定') + '</div></td>'
+      + '</div></td>'
       + '<td><span class="ms-tag' + statusCls + '">' + escHtml(ms.status || '未開始') + '</span>'
       + '</td>'
       + '<td>' + (snap.defaultAmount ? ntf(snap.defaultAmount) : '—')
-      + (ms.actualAmount ? '<div class="ms-sub">實收 ' + ntf(milestoneMoneyNumber(ms.actualAmount)) + '</div>' : '')
       + '</td>'
       + '<td><div class="ms-actions">'
       + '<button type="button" onclick="event.stopPropagation();openMilestoneEditor(\'' + ms.id + '\')">編輯</button>'
