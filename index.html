@@ -1522,7 +1522,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
 
 <!-- 履約里程碑編輯 -->
 <div class="po" id="pp-milestone"><div class="pp" style="width:640px;max-width:96vw"><div class="pph"><h3 id="ms-edit-title">新增請款</h3><button class="ppc" onclick="cl('pp-milestone')">✕</button></div><div class="ppb">
-  <div class="fg"><label>請款期數</label><input type="text" id="ms-name" placeholder="最終報告"></div>
+  <div class="fg"><label>請款期數</label><input type="text" id="ms-name"></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
     <div class="fg" style="margin:0"><label>類型</label><select id="ms-type"><option value="交付物">交付物</option><option value="審查會">審查會</option><option value="請款">請款</option><option value="活動">活動</option><option value="其他">其他</option></select></div>
     <div class="fg" style="margin:0"><label>狀態</label><select id="ms-status" disabled><option value="未開始">未開始</option><option value="可申請">可申請</option><option value="申請中">申請中</option><option value="已完成">已完成</option></select></div>
@@ -4462,7 +4462,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260825v3';
+var APP_BUILD = '20260825v4';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
