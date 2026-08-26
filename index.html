@@ -1131,7 +1131,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
   #topbar{padding:0 8px;gap:8px}
   .logo{font-size:13px;letter-spacing:1px}
   .topnav,#btn-manual{display:none !important}
-  #m-proj-picker-mount{display:block}
+  #m-proj-picker-mount{display:block;flex:1;min-width:0}
+  .topbar-actions{margin-left:0}
   .m-nav-btn{display:inline-flex}
   #tl,#tr{display:none !important}
   #body{padding:4px;gap:0}
@@ -1610,7 +1611,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
 <div class="po" id="pp-daily-log"><div class="pp pp-daily"><div class="pph pph-report"><h3>每日工作回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-daily-log')">✕</button></div><div class="ppb">
   <div class="dl-date" id="dl-date-display"></div>
   <div class="fg"><label>回報人</label><select id="dl-author" onchange="onDailyLogAuthorChange()"></select></div>
-  <div class="fg"><label>任務分類</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-person-filter" id="dl-person-filter"></div><div class="dl-task-list" id="dl-task-list"></div><div class="dl-hint">預設只顯示目前回報人負責的項目；若今日已填過日報，會自動帶入先前分類。選「進行中」時可調整右側 10%–90%；選「不列入」可從日報移除該項；誤填可點左下「刪除今日日報」。</div></div>
+  <div class="fg"><label>任務分類</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-person-filter" id="dl-person-filter"></div><div class="dl-task-list" id="dl-task-list"></div></div>
   <div class="fg"><label>備註（自動摘要，可編輯）</label><textarea id="dl-content" rows="7" placeholder="可直接填寫；選擇任務後也會自動產生摘要…"></textarea></div>
 </div><div class="ppf"><button class="bcan bdel-action" id="dl-delete-btn" onclick="deleteDailyJournal()" style="display:none">刪除今日日報</button><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
