@@ -50,7 +50,7 @@ body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);col
 .m-nav-extra{padding:8px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:4px;flex-shrink:0}
 .m-nav-extra button{display:block;width:100%;text-align:left;padding:11px 14px;border:1px solid var(--border);border-radius:10px;background:var(--sf2);font-size:13px;font-weight:600;color:var(--t2);cursor:pointer;font-family:inherit}
 .m-nav-extra button:active{background:var(--accent);color:#fff;border-color:var(--accent)}
-.m-sheet-backdrop{display:none;position:fixed;inset:0;top:var(--th);background:rgba(0,0,0,.28);z-index:240}
+.m-sheet-backdrop{display:none;position:fixed;inset:0;top:var(--th);background:rgba(0,0,0,.28);z-index:270;pointer-events:none}
 .m-sheet-backdrop.open{display:block}
 .m-sheet-closebar{display:none}
 
@@ -1164,8 +1164,10 @@ button.btn-loading::after{content:'…';margin-left:2px}
   body.m-sheet-rp #rp{
     display:flex !important;
     position:fixed;top:var(--th);left:0;right:0;bottom:0;
-    z-index:360;flex-direction:column;overflow:hidden;
+    z-index:280;flex-direction:column;overflow:hidden;
     background:var(--bg);padding:0;border-radius:0;box-shadow:none;
+    pointer-events:auto !important;width:100% !important;max-width:100%;
+    opacity:1 !important;margin:0 !important;
   }
   body.m-sheet-lp #lp .lp-card,
   body.m-sheet-rp #rp{
@@ -2095,22 +2097,50 @@ function swMobile(pageId){
   sw(tab, pageId);
   closeMobileNav();
 }
+var mobileSheetPlace = {};
+function mountMobileSheetPanel(el) {
+  if (!el || !document.body) return;
+  if (el.parentElement === document.body) return;
+  mobileSheetPlace[el.id] = { parent: el.parentNode, next: el.nextSibling };
+  document.body.appendChild(el);
+}
+function restoreMobileSheetPanel(el) {
+  if (!el) return;
+  var place = mobileSheetPlace[el.id];
+  if (!place || !place.parent) return;
+  if (place.next && place.next.parentNode === place.parent) place.parent.insertBefore(el, place.next);
+  else place.parent.appendChild(el);
+  delete mobileSheetPlace[el.id];
+}
 function openMobileSheet(which){
   closeMobileNav();
   if(which!=='lp' && which!=='rp') return;
   if(which==='lp' && document.body.classList.contains('role-designer')) return;
   if(which==='rp' && (document.body.classList.contains('role-designer')||document.body.classList.contains('role-accountant'))) return;
-  document.body.classList.toggle('m-sheet-lp', which==='lp');
-  document.body.classList.toggle('m-sheet-rp', which==='rp');
+  var other = which === 'lp' ? 'rp' : 'lp';
+  restoreMobileSheetPanel(document.getElementById(other));
+  document.body.classList.remove('m-sheet-lp', 'm-sheet-rp');
+  document.body.classList.add(which === 'lp' ? 'm-sheet-lp' : 'm-sheet-rp');
+  var el = document.getElementById(which);
+  if (el) {
+    el.classList.remove('col');
+    if (which === 'lp') lc = false;
+    if (which === 'rp') rc = false;
+    mountMobileSheetPanel(el);
+  }
   var bd=document.getElementById('m-sheet-backdrop');
   if(bd) bd.classList.add('open');
   if(which==='lp'){
     renderProjects();
     renderTasks();
+  } else if (which === 'rp' && typeof renderTeamPanel === 'function') {
+    renderTeamPanel();
   }
 }
 function closeMobileSheet(){
   document.body.classList.remove('m-sheet-lp','m-sheet-rp');
+  restoreMobileSheetPanel(document.getElementById('lp'));
+  restoreMobileSheetPanel(document.getElementById('rp'));
   var bd=document.getElementById('m-sheet-backdrop');
   if(bd) bd.classList.remove('open');
 }
@@ -4651,7 +4681,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260826v1';
+var APP_BUILD = '20260826v3';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
