@@ -10997,9 +10997,11 @@ function getDailyLogTaskItems() {
     var wi = wiId ? wiMap[wiId] : null;
     var projName = (wi && wi.project) ? String(wi.project).trim() : '';
     if (!projName || projName === '其他') return;
+    var split = splitTaskTitleDesc(f['任務名稱'], taskDescFromFields(f));
     items.push({
       id: rec.record_id,
-      taskName: f['任務名稱'] || '未命名',
+      taskName: split.name,
+      taskDesc: split.desc,
       projName: projName,
       wiName: wi ? wi.name : '',
       assignee: personName(f['負責人']),
@@ -11036,6 +11038,7 @@ function getDailyLogDesignItems() {
       id: rec.record_id,
       kind: 'design',
       taskName: getDesignDisplayName(f) || '未命名',
+      taskDesc: fieldPlainText(f['任務說明']) || fieldPlainText(f['說明']) || fieldPlainText(f['設計說明']) || '',
       projName: projName,
       wiName: wi ? wi.name : '',
       assignee: personName(f['設計師']) || personName(f['負責PM']),
@@ -12010,6 +12013,7 @@ function saveDailyJournal() {
     existingRecs.sort(function(a, b) { return (journalTs(b) || 0) - (journalTs(a) || 0); });
     targetRec = existingRecs[0];
   }
+  var freeNote = getMergedJournalNotes(todayTs, author);
 
   var journalFields = {
     '日期': todayTs,
