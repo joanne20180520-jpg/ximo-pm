@@ -11749,7 +11749,13 @@ function renderDailyLogTasks(preselectId) {
       html += '<div class="dl-row-top">';
       html += buildDailyCatSelect(cat, isBlock);
       html += '<div class="dl-task-main"><span class="dl-task-name">' + nameBadge + escHtml(it.taskName) + '</span>';
-      html += '<span class="dl-task-meta">' + escHtml(it.wiName) + ' · ' + escHtml(it.assignee) + '</span></div>';
+      var metaParts = [];
+      if (it.taskDesc) metaParts.push(it.taskDesc);
+      if (it.assignee) metaParts.push(it.assignee);
+      if (metaParts.length) {
+        html += '<span class="dl-task-meta" title="' + escAttr(metaParts.join(' · ')) + '">' + escHtml(metaParts.join(' · ')) + '</span>';
+      }
+      html += '</div>';
       html += buildDailyProgressCellHtml(cat, resolveDailyLogRowProgressPct(null, it));
       html += '</div>';
       html += '<input type="text" class="dl-note" placeholder="補充說明（選填）" value="' + escAttr(noteVal) + '" onclick="event.stopPropagation()">';
