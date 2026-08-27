@@ -3315,7 +3315,8 @@ async function ensureAccCatalogFields(accToken) {
     { field_name: '來源Ximo標案ID', type: 1 },
     { field_name: '合約金額', type: 2 },
     { field_name: '合約未稅', type: 2 },
-    { field_name: '含稅金額', type: 2 }
+    { field_name: '含稅金額', type: 2 },
+    { field_name: '可用成本', type: 2 }
   ]);
   await ensureAccTableFields(accToken, ACC_TABLE_WORKITEMS, [
     { field_name: '來源Ximo工項ID', type: 1 },
@@ -3573,7 +3574,10 @@ async function upsertAccProjectFromXimo(accToken, ximoProject, cachedAccProjects
     body['合約金額'] = contractTaxed;
     body['含稅金額'] = contractTaxed;
   }
-  if (contractUntaxed > 0) body['合約未稅'] = contractUntaxed;
+  if (contractUntaxed > 0) {
+    body['合約未稅'] = contractUntaxed;
+    body['可用成本'] = Math.round(contractUntaxed * 0.5);
+  }
   if (existing && existing.record_id) {
     await updateRecord(accToken, ACC_TABLE_PROJECTS, existing.record_id, body, ACC_APP_TOKEN, false);
     existing.fields = Object.assign({}, existing.fields || {}, body);
