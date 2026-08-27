@@ -10,7 +10,7 @@
 <style>
 :root {
   --bg:#edeae4; --surface:#fff; --sf2:#f7f5f2; --border:#e2ddd8;
-  --text:#1a1916; --t2:#6b6860; --t3:#9e9b96; --accent:#1a1916;
+  --text:#1a1916; --t2:#6b6860; --t3:#c5c1ba; --accent:#1a1916;
   --c1:#2d6a4f; --c2:#1a4a7a; --c3:#7a1a2e; --c4:#4a7a1a; --c5:#5a3a8a;
   --report:#2d6a4f; --report-hover:#245a42; --warn:#b45309; --danger:#b42318;
   --lw:218px; --rw:245px; --th:46px; --r:10px; --rs:6px;
@@ -18,6 +18,7 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,'PingFang TC',sans-serif;background:var(--bg);color:var(--text);height:100vh;height:100dvh;overflow:hidden;font-size:14px}
+input::placeholder,textarea::placeholder{color:var(--t3);opacity:1}
 
 /* topbar */
 #topbar{position:fixed;top:0;left:0;right:0;height:var(--th);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:12px;z-index:100}
@@ -386,8 +387,6 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .dl-task-list{max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:12px}
 .dl-task-summary{background:var(--sf2);color:var(--t2);cursor:default;resize:vertical}
 .dl-task-summary:focus{outline:none;border-color:var(--border);box-shadow:none}
-.dl-free-note-label{display:flex;align-items:baseline;gap:6px}
-.dl-free-note-label .dl-opt{font-size:10px;font-weight:500;color:var(--t3)}
 .dl-proj-group{border:1px solid var(--border);border-radius:var(--rs);margin-bottom:10px;overflow:hidden}
 .dl-proj-group:last-child{margin-bottom:0}
 .dl-proj-hdr{padding:7px 10px;font-size:12px;font-weight:700;color:#fff}
@@ -1619,7 +1618,6 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>回報人</label><select id="dl-author" onchange="onDailyLogAuthorChange()"></select></div>
   <div class="fg"><label>任務分類</label><div class="dl-proj-filter" id="dl-proj-filter"></div><div class="dl-person-filter" id="dl-person-filter"></div><div class="dl-task-list" id="dl-task-list"></div></div>
   <div class="fg"><label>任務摘要</label><textarea id="dl-content" class="dl-task-summary" rows="5" readonly tabindex="-1" placeholder="請在上方任務列選擇分類，並於各項「補充說明」填寫；摘要會自動產生，不可在此編輯。"></textarea></div>
-  <div class="fg"><label class="dl-free-note-label">非任務備註<span class="dl-opt">選填</span></label><textarea id="dl-free-note" rows="3" placeholder="與標案任務無關的備註…"></textarea></div>
 </div><div class="ppf"><button class="bcan bdel-action" id="dl-delete-btn" onclick="deleteDailyJournal()" style="display:none">刪除今日日報</button><button class="bcan" onclick="cl('pp-daily-log')">取消</button><button class="bpri btn-report" onclick="saveDailyJournal()">儲存日報</button></div></div></div>
 
 <!-- 任務時間未設定清單 -->
@@ -11639,8 +11637,6 @@ function renderDailyLogPersonFilter(items) {
 function onDailyLogAuthorChange() {
   var author = document.getElementById('dl-author').value || '';
   dailyLogPersonFilter = author && author !== '（未指定）' ? author : '';
-  var freeEl = document.getElementById('dl-free-note');
-  if (freeEl) freeEl.value = getMergedJournalNotes(dailyLogDate.getTime(), author);
   renderDailyLogPersonFilter(getDailyLogAllItems());
   renderDailyLogTasks(dailyLogPreselectId);
   updateDailyLogDeleteButton();
@@ -11908,9 +11904,6 @@ function openDailyLog(preselectId, preselectKind) {
   var author = selectDailyLogAuthor(getMyPersonName()) || (authorSel ? authorSel.value : '');
   dailyLogPersonFilter = author && author !== '（未指定）' ? author : (getMyPersonName() || '');
 
-  var freeEl = document.getElementById('dl-free-note');
-  if (freeEl) freeEl.value = getMergedJournalNotes(d.getTime(), author);
-
   renderDailyLogProjFilter(getDailyLogAllItems());
   renderDailyLogPersonFilter(getDailyLogAllItems());
   renderDailyLogTasks(preselectId);
@@ -11979,13 +11972,12 @@ function saveDailyJournal() {
   }
   var data = collectDailyLogCategories();
   var author = document.getElementById('dl-author').value || '';
-  var freeNote = stripDesignMarker((document.getElementById('dl-free-note').value || '').trim());
   var taskCount = data.groups.doing.length + data.groups.done.length + data.groups.block.length + data.groups.tomorrow.length;
   var designCount = data.designGroups.doing.length + data.designGroups.done.length + data.designGroups.block.length + data.designGroups.tomorrow.length;
   var totalCount = taskCount + designCount;
 
-  if (!totalCount && !freeNote) {
-    alert('請至少分類一個任務或設計項目，或填寫非任務備註');
+  if (!totalCount) {
+    alert('請至少分類一個任務或設計項目');
     return;
   }
   var missingBlock = data.groups.block.filter(function(row) { return !row.blockReason; });
