@@ -352,6 +352,8 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .j-proj-task-list li{font-size:13px;color:var(--text);padding:4px 0;line-height:1.45}
 .j-proj-task-list li+li{border-top:1px solid rgba(0,0,0,.04)}
 .j-proj-task-reason{font-size:12px;color:#b45309;margin-top:4px;line-height:1.4}
+.j-proj-task-note{font-size:12px;color:var(--t2);margin-top:4px;line-height:1.45;white-space:pre-wrap}
+.jc-task-note{font-size:12px;color:var(--t2);line-height:1.45;padding:2px 2px 0;white-space:pre-wrap}
 .j-proj-block-actions{display:flex;align-items:center;gap:8px;margin-top:8px}
 .j-person-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .j-person-sub{font-size:12px;color:var(--t3)}
@@ -10274,6 +10276,8 @@ function parseDesignCategoriesFromText(text) {
       block: data.block || [],
       tomorrow: data.tomorrow || [],
       blockReasons: data.blockReasons || {},
+      taskNotes: data.taskNotes || {},
+      designNotes: data.designNotes || {},
       freeNote: data.freeNote || ''
     };
   } catch (e) {
@@ -10318,8 +10322,7 @@ function stripDesignMarker(text) {
 function applyJournalDesignData(fields, noteText, data, noteMaps) {
   noteMaps = noteMaps || {};
   var freeNote = stripDesignMarker(noteText || '');
-  fields['備註'] = freeNote;
-  fields['系統資料'] = JSON.stringify({
+  var payload = {
     doing: (data && data.doing) || [],
     done: (data && data.done) || [],
     block: (data && data.block) || [],
@@ -10328,7 +10331,12 @@ function applyJournalDesignData(fields, noteText, data, noteMaps) {
     taskNotes: noteMaps.taskNotes || {},
     designNotes: noteMaps.designNotes || {},
     freeNote: freeNote
-  });
+  };
+  // 系統資料為主；同時把完整 JSON 嵌進備註，避免 Lark 沒有「系統資料」欄時備註遺失
+  fields['系統資料'] = JSON.stringify(payload);
+  fields['備註'] = freeNote
+    ? (freeNote + '\n' + DESIGN_CAT_MARKER + JSON.stringify(payload))
+    : (DESIGN_CAT_MARKER + JSON.stringify(payload));
 }
 
 function mergeJournalNoteMaps(existingRec, patch) {
@@ -11851,13 +11859,41 @@ function renderDailyLogTasks(preselectId) {
   });
   area.innerHTML = html;
   area.querySelectorAll('.dl-note').forEach(function(el) {
-    el.addEventListener('input', refreshDailyLogContent);
+    el.addEventListener('input', function() {
+      var row = el.closest('.dl-row');
+      if (!row) return;
+      var kind = row.dataset.kind || 'task';
+      var id = kind === 'design' ? row.dataset.designId : row.dataset.taskId;
+      if (!id) return;
+      if (kind === 'design') {
+        if (!dailyLogDesignExtras[id]) dailyLogDesignExtras[id] = {};
+        dailyLogDesignExtras[id].note = el.value;
+      } else {
+        if (!dailyLogTaskExtras[id]) dailyLogTaskExtras[id] = {};
+        dailyLogTaskExtras[id].note = el.value;
+      }
+      refreshDailyLogContent();
+    });
   });
   area.querySelectorAll('.dl-cat').forEach(function(el) {
     el.addEventListener('change', function() { onDailyLogCatChange(el); });
   });
   area.querySelectorAll('.dl-block-reason').forEach(function(el) {
-    el.addEventListener('input', refreshDailyLogContent);
+    el.addEventListener('input', function() {
+      var row = el.closest('.dl-row');
+      if (!row) return;
+      var kind = row.dataset.kind || 'task';
+      var id = kind === 'design' ? row.dataset.designId : row.dataset.taskId;
+      if (!id) return;
+      if (kind === 'design') {
+        if (!dailyLogDesignExtras[id]) dailyLogDesignExtras[id] = {};
+        dailyLogDesignExtras[id].blockReason = el.value;
+      } else {
+        if (!dailyLogTaskExtras[id]) dailyLogTaskExtras[id] = {};
+        dailyLogTaskExtras[id].blockReason = el.value;
+      }
+      refreshDailyLogContent();
+    });
   });
   refreshDailyLogContent();
 }
@@ -12062,9 +12098,37 @@ function findDailyJournalRecord(dayStart, authorName, itemId, itemKind) {
   return matches.length ? matches[0] : null;
 }
 
+function collectDailyLogUnlistedNotes() {
+  var names = [];
+  document.querySelectorAll('#dl-task-list .dl-row').forEach(function(row) {
+    var catSel = row.querySelector('.dl-cat');
+    if (!catSel || catSel.value) return;
+    var noteInput = row.querySelector('.dl-note');
+    var note = noteInput ? noteInput.value.trim() : '';
+    if (!note) return;
+    var kind = row.dataset.kind || 'task';
+    var id = kind === 'design' ? row.dataset.designId : row.dataset.taskId;
+    var label = '';
+    if (kind === 'design') {
+      var dctx = getDesignContext(id);
+      label = dctx ? (getDesignDisplayName(dctx.f) || '設計項目') : '設計項目';
+    } else {
+      var ctx = getTaskContext(id);
+      label = ctx ? (ctx.f['任務名稱'] || '任務') : '任務';
+    }
+    names.push(label);
+  });
+  return names;
+}
+
 function saveDailyJournal() {
   if (!isPMRole()) {
     alert('僅 PM 可編輯日報');
+    return;
+  }
+  var unlistedNotes = collectDailyLogUnlistedNotes();
+  if (unlistedNotes.length) {
+    alert('以下項目仍是「不列入」，補充說明不會存進日報，請先改成分類（進行中／今日完成／卡關／明日預計）：\n\n' + unlistedNotes.join('\n'));
     return;
   }
   var data = collectDailyLogCategories();
@@ -12297,11 +12361,29 @@ function journalCardRow(label, val, type) {
     '<div class="jc-val">' + tasksHtml + '</div></div>';
 }
 
+function journalCardTaskItems(rec, fieldKey, label, type) {
+  var ids = getLinkIds((rec.fields || {})[fieldKey]);
+  if (!ids.length) return '';
+  var notes = (parseDesignCategories(rec).taskNotes) || {};
+  var html = '<div class="jc-row' + (type === 'block' ? ' block' : '') + '">';
+  html += '<span class="jc-lbl ' + type + '">' + label + '</span>';
+  html += '<div class="jc-val">';
+  ids.forEach(function(taskId) {
+    html += '<div>';
+    html += '<span class="jc-task">' + escHtml(journalTaskDisplayName(taskId)) + '</span>';
+    if (notes[taskId]) html += '<div class="jc-task-note">' + escHtml(notes[taskId]) + '</div>';
+    html += '</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
 function journalCardBlockedTasks(rec) {
   var f = rec.fields || {};
   var blockIds = getLinkIds(f['卡關任務']);
   if (!blockIds.length) return '';
   var reasonMap = parseBlockReasons(rec);
+  var notes = (parseDesignCategories(rec).taskNotes) || {};
   var html = '';
   blockIds.forEach(function(taskId) {
     var name = journalTaskDisplayName(taskId);
@@ -12309,6 +12391,7 @@ function journalCardBlockedTasks(rec) {
     html += '<div class="jc-row block">';
     html += '<span class="jc-lbl block">卡關</span>';
     html += '<div class="jc-val"><span class="jc-task">' + escHtml(name) + '</span>';
+    if (notes[taskId]) html += '<div class="jc-task-note">' + escHtml(notes[taskId]) + '</div>';
     if (reason) html += '<div class="jc-task-reason">' + escHtml(reason) + '</div>';
     html += '</div></div>';
   });
@@ -12495,10 +12578,10 @@ function renderJournalFeedEntry(rec, opts) {
   if (c.hasBlock) html += '<span class="jblk">卡關</span>';
   if (opts.showDate && dateStr) html += '<span class="jc-date">' + dateStr + '</span>';
   html += '</div><div class="jc-rows">';
-  html += journalCardRow('進行中', c.doing, 'doing');
-  html += journalCardRow('完成', c.done, 'done');
+  html += journalCardTaskItems(rec, '進行中任務', '進行中', 'doing');
+  html += journalCardTaskItems(rec, '已完成今日任務', '完成', 'done');
   html += journalCardBlockedTasks(rec);
-  html += journalCardRow('明日', c.tomorrow, 'tomorrow');
+  html += journalCardTaskItems(rec, '明日預計任務', '明日', 'tomorrow');
   html += '</div>';
   var reasonMap = parseBlockReasons(rec);
   if (reasonMap.legacy && getLinkIds(rec.fields['卡關任務']).length && !Object.keys(reasonMap.byId).length) {
@@ -12733,12 +12816,14 @@ function collectJournalPersonData(rec, personName, opts) {
     return rec.record_id;
   }
   function mapTasks(fieldKey) {
+    var notes = (parseDesignCategories(rec).taskNotes) || {};
     return getLinkIds(rec.fields[fieldKey]).map(function(id) {
       var ctx = getTaskContext(id);
       return {
         id: id,
         name: ctx ? (ctx.f['任務名稱'] || '任務') : '任務',
-        wiName: ctx ? (ctx.wiName || '') : ''
+        wiName: ctx ? (ctx.wiName || '') : '',
+        note: notes[id] || ''
       };
     });
   }
@@ -12747,10 +12832,12 @@ function collectJournalPersonData(rec, personName, opts) {
   var tomorrow = mapTasks('明日預計任務');
   var blocks = getLinkIds(rec.fields['卡關任務']).map(function(id) {
     var ctx = getTaskContext(id);
+    var notes = (parseDesignCategories(rec).taskNotes) || {};
     return {
       id: id,
       name: ctx ? (ctx.f['任務名稱'] || '任務') : '任務',
       wiName: ctx ? (ctx.wiName || '') : '',
+      note: notes[id] || '',
       reason: reasonMap.byId[id] || reasonMap.legacy || '',
       journalRecId: findBlockSourceJournalId(id)
     };
@@ -12782,6 +12869,7 @@ function renderJournalProjSection(cat, title, items) {
   items.forEach(function(item) {
     html += '<li>';
     html += escHtml(item.name);
+    if (item.note) html += '<div class="j-proj-task-note">' + escHtml(item.note) + '</div>';
     if (item.reason) html += '<div class="j-proj-task-reason">' + escHtml(item.reason) + '</div>';
     if (cat === 'block' && item.id) {
       html += '<div class="j-proj-block-actions">';
