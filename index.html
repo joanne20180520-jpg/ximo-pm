@@ -414,7 +414,7 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .dl-progress-menu.open{display:block}
 .dl-progress-opt{display:block;width:100%;padding:6px 8px;border:none;background:transparent;font-size:12px;font-weight:600;color:var(--text);text-align:center;cursor:pointer;border-radius:4px;font-family:inherit}
 .dl-progress-opt:hover,.dl-progress-opt.active{background:#eef4fc;color:var(--c2)}
-.dl-note{width:100%;margin-top:6px;padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:#fff;box-sizing:border-box}
+.dl-note{width:100%;margin-top:6px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:#fff;box-sizing:border-box;font-family:inherit;resize:vertical;min-height:44px;line-height:1.45}
 .dl-block-reason{width:100%;margin-top:6px;padding:6px 9px;border:1px solid #e8a0a0;border-radius:4px;font-size:12px;background:#fff8f8;font-family:inherit;box-sizing:border-box}
 .dl-cat{padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:#fff;flex:0 0 auto;max-width:88px;height:28px;box-sizing:border-box}
 .dl-cat-block{border-color:#e8a0a0;background:#fff8f8}
@@ -4689,7 +4689,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260828v2';
+var APP_BUILD = '20260828v3';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -10242,13 +10242,13 @@ function journalFreeNote(rec) {
     try {
       var parsed = JSON.parse(String(sysRaw).trim());
       if (parsed && Object.prototype.hasOwnProperty.call(parsed, 'freeNote')) {
-        return stripDesignMarker(String(parsed.freeNote || ''));
+        return stripTaskNotesSection(stripDesignMarker(String(parsed.freeNote || '')));
       }
     } catch (e) {}
   }
   var plain = journalPlainNote(rec);
   if (!plain || looksLikeDailyReportSummary(plain)) return '';
-  return plain;
+  return stripTaskNotesSection(plain);
 }
 
 function journalSystemField(rec) {
@@ -10334,9 +10334,55 @@ function stripDesignMarker(text) {
   return String(text).slice(0, idx).trim();
 }
 
-function applyJournalDesignData(fields, noteText, data, noteMaps) {
+function stripTaskNotesSection(text) {
+  var raw = String(text || '');
+  var idx = raw.indexOf('【任務補充說明】');
+  if (idx < 0) return raw.trim();
+  return raw.slice(0, idx).trim();
+}
+
+function formatItemNotesForBase(rows) {
+  var lines = [];
+  (rows || []).forEach(function(row) {
+    if (!row || !row.note) return;
+    var prefix = row.kind === 'design' ? '[設計] ' : '';
+    var title = prefix + (row.taskName || '項目');
+    lines.push('• ' + title);
+    String(row.note).split('\n').forEach(function(line) {
+      lines.push('  ' + line);
+    });
+  });
+  return lines.length ? ('【任務補充說明】\n' + lines.join('\n')) : '';
+}
+
+function formatNoteMapsForBase(noteMaps) {
+  var rows = [];
+  Object.keys((noteMaps && noteMaps.taskNotes) || {}).forEach(function(id) {
+    var note = noteMaps.taskNotes[id];
+    if (!note) return;
+    var ctx = getTaskContext(id);
+    rows.push({
+      kind: 'task',
+      taskName: ctx ? (ctx.f['任務名稱'] || '任務') : '任務',
+      note: note
+    });
+  });
+  Object.keys((noteMaps && noteMaps.designNotes) || {}).forEach(function(id) {
+    var note = noteMaps.designNotes[id];
+    if (!note) return;
+    var dctx = getDesignContext(id);
+    rows.push({
+      kind: 'design',
+      taskName: dctx ? (getDesignDisplayName(dctx.f) || '設計項目') : '設計項目',
+      note: note
+    });
+  });
+  return formatItemNotesForBase(rows);
+}
+
+function applyJournalDesignData(fields, noteText, data, noteMaps, visibleItemNotes) {
   noteMaps = noteMaps || {};
-  var freeNote = stripDesignMarker(noteText || '');
+  var freeNote = stripTaskNotesSection(stripDesignMarker(noteText || ''));
   var payload = {
     doing: (data && data.doing) || [],
     done: (data && data.done) || [],
@@ -10347,10 +10393,16 @@ function applyJournalDesignData(fields, noteText, data, noteMaps) {
     designNotes: noteMaps.designNotes || {},
     freeNote: freeNote
   };
-  // 系統資料為主；同時把完整 JSON 嵌進備註，避免 Lark 沒有「系統資料」欄時備註遺失
+  var itemNotesText = visibleItemNotes || '';
+  var parts = [];
+  if (freeNote) parts.push(freeNote);
+  if (itemNotesText) parts.push(itemNotesText);
+  var visible = parts.join('\n\n');
+  // 系統資料：給前端讀取；任務補充說明／備註：給 Base 人眼可讀
   fields['系統資料'] = JSON.stringify(payload);
-  fields['備註'] = freeNote
-    ? (freeNote + '\n' + DESIGN_CAT_MARKER + JSON.stringify(payload))
+  fields['任務補充說明'] = itemNotesText;
+  fields['備註'] = visible
+    ? (visible + '\n' + DESIGN_CAT_MARKER + JSON.stringify(payload))
     : (DESIGN_CAT_MARKER + JSON.stringify(payload));
 }
 
@@ -10521,15 +10573,16 @@ function confirmDesignReport() {
 
   var journalFields = {};
   var baseNote = existingJournal ? journalFreeNote(existingJournal) : '';
+  var noteMaps = mergeJournalNoteMaps(existingJournal, {
+    designNotes: (function() { var m = {}; m[currentDesignId] = note; return m; })()
+  });
   applyJournalDesignData(journalFields, baseNote, {
     doing: merged.doing,
     done: merged.done,
     block: merged.block,
     tomorrow: merged.tomorrow,
     blockReasons: merged.blockReasons
-  }, mergeJournalNoteMaps(existingJournal, {
-    designNotes: (function() { var m = {}; m[currentDesignId] = note; return m; })()
-  }));
+  }, noteMaps, formatNoteMapsForBase(noteMaps));
   journalFields['日期'] = todayStart;
 
   var pid = findProjectIdByName(ctx.projName);
@@ -11868,7 +11921,7 @@ function renderDailyLogTasks(preselectId) {
       html += '</div>';
       html += buildDailyProgressCellHtml(cat, resolveDailyLogRowProgressPct(null, it));
       html += '</div>';
-      html += '<input type="text" class="dl-note" placeholder="補充說明（選填）" value="' + escAttr(noteVal) + '" onclick="event.stopPropagation()">';
+      html += '<textarea class="dl-note" rows="2" placeholder="補充說明（選填，Enter 可換行）" onclick="event.stopPropagation()">' + escHtml(noteVal) + '</textarea>';
       html += '<textarea class="dl-block-reason" rows="2" placeholder="卡關原因（必填）" style="display:' + (isBlock ? 'block' : 'none') + '" onclick="event.stopPropagation()">' + String(blockVal).replace(/</g, '&lt;') + '</textarea>';
       html += '</div>';
     });
@@ -11876,6 +11929,10 @@ function renderDailyLogTasks(preselectId) {
   });
   area.innerHTML = html;
   area.querySelectorAll('.dl-note').forEach(function(el) {
+    el.addEventListener('keydown', function(ev) {
+      // 避免 Enter 被外層快捷鍵吃掉；textarea 本身可換行
+      ev.stopPropagation();
+    });
     el.addEventListener('input', function() {
       var row = el.closest('.dl-row');
       if (!row) return;
@@ -12208,7 +12265,7 @@ function saveDailyJournal() {
     block: data.designIds.block,
     tomorrow: data.designIds.tomorrow,
     blockReasons: data.designBlockReasons
-  }, mergeJournalNoteMaps(targetRec, buildDailyLogNoteMaps(allItems)));
+  }, mergeJournalNoteMaps(targetRec, buildDailyLogNoteMaps(allItems)), formatItemNotesForBase(allItems));
   if (projIds.length) setJournalProjIds(journalFields, projIds);
 
   var reporter = larkPerson(author);
@@ -12763,10 +12820,11 @@ function mergePersonJournalRecords(recs) {
     if (plain && notes.indexOf(plain) < 0) notes.push(plain);
   });
   designMerged.freeNote = notes.join('\n\n');
-  applyJournalDesignData(fields, designMerged.freeNote, designMerged, {
+  var mergedMaps = {
     taskNotes: designMerged.taskNotes,
     designNotes: designMerged.designNotes
-  });
+  };
+  applyJournalDesignData(fields, designMerged.freeNote, designMerged, mergedMaps, formatNoteMapsForBase(mergedMaps));
   return { record_id: base.record_id, fields: fields };
 }
 
