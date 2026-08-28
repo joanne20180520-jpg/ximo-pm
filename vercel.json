@@ -6,6 +6,9 @@
     },
     "api/lark.js": {
       "maxDuration": 60
+    },
+    "api/upload-file.js": {
+      "maxDuration": 60
     }
   },
   "headers": [
@@ -42,6 +45,7 @@
   ],
   "rewrites": [
     { "source": "/api/parse-budget", "destination": "/api/parse-budget.js" },
+    { "source": "/api/upload-file", "destination": "/api/upload-file.js" },
     { "source": "/api/lark", "destination": "/api/lark.js" },
     { "source": "/api/(.*)", "destination": "/api/lark.js" }
   ]

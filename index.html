@@ -1807,7 +1807,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="attach-dropzone" id="dv-attach-zone" data-des-ver-role="designer" onclick="if(event.target.id!=='dv-attach-file')document.getElementById('dv-attach-file').click()" ondragover="onDesVerAttachDragOver(event)" ondragleave="onDesVerAttachDragLeave(event)" ondrop="onDesVerAttachDrop(event)">
       <input type="file" id="dv-attach-file" accept=".pdf,application/pdf,image/*,.zip,.ai,.psd" multiple style="display:none" onchange="onDesVerAttachSelect(this.files)">
       <div>點擊或拖曳上傳 PDF／圖檔</div>
-      <div style="font-size:10px;margin-top:4px;color:var(--t3)">圖片過大會自動壓縮；PDF 等非圖檔建議 3MB 以下</div>
+      <div style="font-size:10px;margin-top:4px;color:var(--t3)">圖片過大會自動壓縮；PDF 等非圖檔建議 4MB 以下</div>
     </div>
     <div id="dv-attach-list"></div>
     <div id="dv-attach-status" style="font-size:11px;color:var(--t3);margin-top:4px"></div>
@@ -10741,7 +10741,8 @@ function onTaskAttachDrop(ev) {
 }
 
 var UPLOAD_RAW_MAX = 20 * 1024 * 1024;
-var UPLOAD_SAFE_MAX = 3 * 1024 * 1024;
+var UPLOAD_BINARY_MAX = 4 * 1024 * 1024;
+var UPLOAD_SAFE_MAX = UPLOAD_BINARY_MAX;
 
 function isUploadImageFile(file) {
   return /^image\//i.test(file.type || '') || /\.(jpe?g|png|webp|gif|bmp)$/i.test(file.name || '');
@@ -10769,9 +10770,13 @@ function compressImageForUpload(file, maxBytes) {
         ctx.drawImage(img, 0, 0, tw, th);
         canvas.toBlob(function(blob) {
           if (!blob) { reject(new Error('圖片壓縮失敗')); return; }
-          if (blob.size <= maxBytes || (quality <= 0.45 && scale <= 0.35)) {
+          if (blob.size <= maxBytes) {
             var base = (file.name || 'image').replace(/\.[^.]+$/, '');
             resolve(new File([blob], base + '.jpg', { type: 'image/jpeg', lastModified: Date.now() }));
+            return;
+          }
+          if (quality <= 0.4 && scale <= 0.3) {
+            reject(new Error('圖片壓縮後仍過大，請改用較小檔案'));
             return;
           }
           if (quality > 0.5) quality -= 0.08;
@@ -10801,43 +10806,34 @@ function prepareUploadFile(file) {
       compressImageForUpload(file, UPLOAD_SAFE_MAX).then(resolve).catch(reject);
       return;
     }
-    reject(new Error('檔案過大（請壓縮至 3MB 以下再試）：' + file.name));
+    reject(new Error('檔案過大（請壓縮至 4MB 以下再試）：' + file.name));
   });
 }
 
 function postAttachmentUpload(file, table) {
   return new Promise(function(resolve, reject) {
-    var reader = new FileReader();
-    reader.onload = function() {
-      var result = String(reader.result || '');
-      var base64 = result.indexOf(',') >= 0 ? result.split(',')[1] : result;
-      var headers = { 'Content-Type': 'application/json' };
-      var tok = getUserAccessToken();
-      if (tok) headers['X-User-Access-Token'] = tok;
-      fetch(apiUrl('action=upload-attachment'), {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify(withUserToken({
-          fileName: file.name,
-          contentBase64: base64,
-          table: table
-        }))
-      }).then(function(r) {
-        if (!r.ok) {
-          if (r.status === 413) throw new Error('檔案過大，請壓縮後再試');
-          return r.json().catch(function() { throw new Error('上傳失敗（HTTP ' + r.status + '）'); }).then(function(j) {
-            throw new Error((j && j.error) || ('上傳失敗（HTTP ' + r.status + '）'));
-          });
-        }
-        return r.json();
-      }).then(function(res) {
-        if (res.error) throw new Error(res.error);
-        if (!res.file_token) throw new Error('未取得 file_token');
-        resolve({ file_token: res.file_token, name: file.name, size: file.size });
-      }).catch(reject);
-    };
-    reader.onerror = function() { reject(new Error('讀取檔案失敗')); };
-    reader.readAsDataURL(file);
+    var q = 'table=' + encodeURIComponent(table)
+      + '&fileName=' + encodeURIComponent(file.name || 'file');
+    var headers = { 'Content-Type': file.type || 'application/octet-stream' };
+    var tok = getUserAccessToken();
+    if (tok) headers['X-User-Access-Token'] = tok;
+    fetch('/api/upload-file?' + q + '&_b=' + APP_BUILD, {
+      method: 'POST',
+      headers: headers,
+      body: file
+    }).then(function(r) {
+      if (!r.ok) {
+        if (r.status === 413) throw new Error('檔案過大，請壓縮後再試');
+        return r.json().catch(function() { throw new Error('上傳失敗（HTTP ' + r.status + '）'); }).then(function(j) {
+          throw new Error((j && j.error) || ('上傳失敗（HTTP ' + r.status + '）'));
+        });
+      }
+      return r.json();
+    }).then(function(res) {
+      if (res.error) throw new Error(res.error);
+      if (!res.file_token) throw new Error('未取得 file_token');
+      resolve({ file_token: res.file_token, name: file.name, size: file.size });
+    }).catch(reject);
   });
 }
 
