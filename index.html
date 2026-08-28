@@ -4687,7 +4687,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260827v2';
+var APP_BUILD = '20260828v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -10741,7 +10741,7 @@ function onTaskAttachDrop(ev) {
 }
 
 var UPLOAD_RAW_MAX = 20 * 1024 * 1024;
-var UPLOAD_BINARY_MAX = 4 * 1024 * 1024;
+var UPLOAD_BINARY_MAX = 3.5 * 1024 * 1024;
 var UPLOAD_SAFE_MAX = UPLOAD_BINARY_MAX;
 
 function isUploadImageFile(file) {
@@ -10810,6 +10810,19 @@ function prepareUploadFile(file) {
   });
 }
 
+function parseUploadResponse(r) {
+  return r.text().then(function(text) {
+    var body = (text || '').trim();
+    if (!body) return {};
+    try { return JSON.parse(body); } catch (e) {
+      if (/request entity too large/i.test(body) || r.status === 413) {
+        throw new Error('檔案過大，請壓縮後再試');
+      }
+      throw new Error(body.slice(0, 120) || ('上傳失敗（HTTP ' + r.status + '）'));
+    }
+  });
+}
+
 function postAttachmentUpload(file, table) {
   return new Promise(function(resolve, reject) {
     var q = 'table=' + encodeURIComponent(table)
@@ -10822,17 +10835,12 @@ function postAttachmentUpload(file, table) {
       headers: headers,
       body: file
     }).then(function(r) {
-      if (!r.ok) {
-        if (r.status === 413) throw new Error('檔案過大，請壓縮後再試');
-        return r.json().catch(function() { throw new Error('上傳失敗（HTTP ' + r.status + '）'); }).then(function(j) {
-          throw new Error((j && j.error) || ('上傳失敗（HTTP ' + r.status + '）'));
-        });
-      }
-      return r.json();
-    }).then(function(res) {
-      if (res.error) throw new Error(res.error);
-      if (!res.file_token) throw new Error('未取得 file_token');
-      resolve({ file_token: res.file_token, name: file.name, size: file.size });
+      return parseUploadResponse(r).then(function(res) {
+        if (!r.ok) throw new Error((res && res.error) || ('上傳失敗（HTTP ' + r.status + '）'));
+        if (res.error) throw new Error(res.error);
+        if (!res.file_token) throw new Error('未取得 file_token');
+        resolve({ file_token: res.file_token, name: file.name, size: file.size });
+      });
     }).catch(reject);
   });
 }

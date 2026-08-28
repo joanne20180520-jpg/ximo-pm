@@ -3,7 +3,7 @@ const APP_SECRET = (process.env.LARK_APP_SECRET || '').trim();
 const APP_TOKEN = (process.env.LARK_APP_TOKEN || '').trim();
 const APP_TOKEN_BACKEND = (process.env.LARK_APP_TOKEN_BACKEND || '').trim();
 const BASE_URL = 'https://open.larksuite.com/open-apis';
-const MAX_BYTES = 4.2 * 1024 * 1024;
+const MAX_BYTES = 3.5 * 1024 * 1024;
 
 let _tenantTokenCache = null;
 
