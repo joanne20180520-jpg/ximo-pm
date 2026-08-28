@@ -4689,7 +4689,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260828v1';
+var APP_BUILD = '20260828v2';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -10228,7 +10228,7 @@ function emptyDesignCategories() {
 }
 
 function journalPlainNote(rec) {
-  return stripDesignMarker(journalField(rec, ['備註', '日誌內容', '內容']) || '');
+  return stripDesignMarker(fieldPlainText(journalField(rec, ['備註', '日誌內容', '內容']) || ''));
 }
 
 function looksLikeDailyReportSummary(text) {
@@ -10237,7 +10237,7 @@ function looksLikeDailyReportSummary(text) {
 
 function journalFreeNote(rec) {
   if (!rec) return '';
-  var sysRaw = journalSystemField(rec);
+  var sysRaw = fieldPlainText(journalSystemField(rec) || '');
   if (sysRaw) {
     try {
       var parsed = JSON.parse(String(sysRaw).trim());
@@ -10252,7 +10252,7 @@ function journalFreeNote(rec) {
 }
 
 function journalSystemField(rec) {
-  return journalField(rec, JOURNAL_SYS_KEYS);
+  return fieldPlainText(journalField(rec, JOURNAL_SYS_KEYS) || '');
 }
 
 function serializeDesignCategories(data) {
@@ -10266,10 +10266,11 @@ function serializeDesignCategories(data) {
 }
 
 function parseDesignCategoriesFromText(text) {
-  var idx = String(text || '').indexOf(DESIGN_CAT_MARKER);
+  var plain = fieldPlainText(text || '');
+  var idx = plain.indexOf(DESIGN_CAT_MARKER);
   if (idx < 0) return null;
   try {
-    var data = JSON.parse(String(text).slice(idx + DESIGN_CAT_MARKER.length));
+    var data = JSON.parse(plain.slice(idx + DESIGN_CAT_MARKER.length));
     return {
       doing: data.doing || [],
       done: data.done || [],
@@ -10288,10 +10289,11 @@ function parseDesignCategoriesFromText(text) {
 function parseDesignCategories(rec) {
   if (!rec) return emptyDesignCategories();
   var sysRaw = journalSystemField(rec);
+  var fromSys = null;
   if (sysRaw) {
     try {
       var parsed = JSON.parse(String(sysRaw).trim());
-      return {
+      fromSys = {
         doing: parsed.doing || [],
         done: parsed.done || [],
         block: parsed.block || [],
@@ -10304,6 +10306,19 @@ function parseDesignCategories(rec) {
     } catch (e) {}
   }
   var legacy = parseDesignCategoriesFromText(journalField(rec, ['備註', '日誌內容', '內容']) || '');
+  if (fromSys) {
+    if (legacy) {
+      fromSys.taskNotes = fromSys.taskNotes || {};
+      fromSys.designNotes = fromSys.designNotes || {};
+      Object.keys(legacy.taskNotes || {}).forEach(function(id) {
+        if (!fromSys.taskNotes[id]) fromSys.taskNotes[id] = legacy.taskNotes[id];
+      });
+      Object.keys(legacy.designNotes || {}).forEach(function(id) {
+        if (!fromSys.designNotes[id]) fromSys.designNotes[id] = legacy.designNotes[id];
+      });
+    }
+    return fromSys;
+  }
   if (legacy) {
     legacy.taskNotes = legacy.taskNotes || {};
     legacy.designNotes = legacy.designNotes || {};
@@ -11360,7 +11375,7 @@ function setJournalProjIds(fields, projIds) {
 function parseBlockReasons(rec) {
   var result = { byId: {}, legacy: '' };
   if (!rec) return result;
-  var raw = journalField(rec, ['卡關原因']) || '';
+  var raw = fieldPlainText(journalField(rec, ['卡關原因']) || '');
   if (!raw) return result;
   var lines = String(raw).split('\n');
   var structured = false;
@@ -11831,7 +11846,9 @@ function renderDailyLogTasks(preselectId) {
       var isDesign = it.kind === 'design';
       var cat = isDesign ? (designCatMap[it.id] || '') : (catMap[it.id] || '');
       var extra = isDesign ? (dailyLogDesignExtras[it.id] || {}) : (dailyLogTaskExtras[it.id] || {});
-      var noteVal = extra.note !== undefined ? extra.note : (isDesign ? (designNotes[it.id] || '') : (taskNotes[it.id] || ''));
+      var savedNote = isDesign ? (designNotes[it.id] || '') : (taskNotes[it.id] || '');
+      // 只有使用者真的改過補充說明才覆寫已存內容；避免 note:'' 把舊備註蓋掉
+      var noteVal = extra._noteTouched ? String(extra.note || '') : (extra.note || savedNote);
       var blockVal = extra.blockReason !== undefined ? extra.blockReason
         : (isDesign ? (designReasons[it.id] || '') : getBlockReasonForTaskFromJournals(dayTs, author, it.id));
       var isBlock = cat === 'block';
@@ -11868,9 +11885,11 @@ function renderDailyLogTasks(preselectId) {
       if (kind === 'design') {
         if (!dailyLogDesignExtras[id]) dailyLogDesignExtras[id] = {};
         dailyLogDesignExtras[id].note = el.value;
+        dailyLogDesignExtras[id]._noteTouched = true;
       } else {
         if (!dailyLogTaskExtras[id]) dailyLogTaskExtras[id] = {};
         dailyLogTaskExtras[id].note = el.value;
+        dailyLogTaskExtras[id]._noteTouched = true;
       }
       refreshDailyLogContent();
     });
@@ -12010,11 +12029,13 @@ function openDailyLog(preselectId, preselectKind) {
     var tdStatus = document.getElementById('td-status');
     if (!dailyLogTaskExtras[preselectId]) {
       dailyLogTaskExtras = {};
+      // 不要預填 note:''，否則會蓋掉日報已存的補充說明
       dailyLogTaskExtras[preselectId] = {
-        note: '',
         status: tdStatus ? tdStatus.value : '',
         category: 'doing'
       };
+    } else if (dailyLogTaskExtras[preselectId].note === '') {
+      delete dailyLogTaskExtras[preselectId].note;
     }
   } else {
     dailyLogTaskExtras = {};
@@ -12187,7 +12208,7 @@ function saveDailyJournal() {
     block: data.designIds.block,
     tomorrow: data.designIds.tomorrow,
     blockReasons: data.designBlockReasons
-  }, buildDailyLogNoteMaps(allItems));
+  }, mergeJournalNoteMaps(targetRec, buildDailyLogNoteMaps(allItems)));
   if (projIds.length) setJournalProjIds(journalFields, projIds);
 
   var reporter = larkPerson(author);
