@@ -1806,8 +1806,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>稿件檔案（PDF 可上傳）</label>
     <div class="attach-dropzone" id="dv-attach-zone" data-des-ver-role="designer" onclick="if(event.target.id!=='dv-attach-file')document.getElementById('dv-attach-file').click()" ondragover="onDesVerAttachDragOver(event)" ondragleave="onDesVerAttachDragLeave(event)" ondrop="onDesVerAttachDrop(event)">
       <input type="file" id="dv-attach-file" accept=".pdf,application/pdf,image/*,.zip,.ai,.psd" multiple style="display:none" onchange="onDesVerAttachSelect(this.files)">
-      <div>點擊或拖曳上傳 PDF（單檔上限 20MB）</div>
-      <div style="font-size:10px;margin-top:4px;color:var(--t3)">也可上傳圖檔／壓縮檔；檔案存在 Lark，不會塞進網頁</div>
+      <div>點擊或拖曳上傳 PDF／圖檔</div>
+      <div style="font-size:10px;margin-top:4px;color:var(--t3)">圖片過大會自動壓縮；PDF 等非圖檔建議 3MB 以下</div>
     </div>
     <div id="dv-attach-list"></div>
     <div id="dv-attach-status" style="font-size:11px;color:var(--t3);margin-top:4px"></div>
@@ -10739,43 +10739,119 @@ function onTaskAttachDrop(ev) {
   onTaskAttachDragLeave(ev);
   if (ev.dataTransfer && ev.dataTransfer.files) onTaskAttachSelect(ev.dataTransfer.files);
 }
+
+var UPLOAD_RAW_MAX = 20 * 1024 * 1024;
+var UPLOAD_SAFE_MAX = 3 * 1024 * 1024;
+
+function isUploadImageFile(file) {
+  return /^image\//i.test(file.type || '') || /\.(jpe?g|png|webp|gif|bmp)$/i.test(file.name || '');
+}
+
+function compressImageForUpload(file, maxBytes) {
+  return new Promise(function(resolve, reject) {
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      var w = img.naturalWidth || img.width;
+      var h = img.naturalHeight || img.height;
+      if (!w || !h) { reject(new Error('無法讀取圖片尺寸')); return; }
+      var canvas = document.createElement('canvas');
+      var ctx = canvas.getContext('2d');
+      var quality = 0.9;
+      var scale = 1;
+      function attempt() {
+        var tw = Math.max(1, Math.round(w * scale));
+        var th = Math.max(1, Math.round(h * scale));
+        canvas.width = tw;
+        canvas.height = th;
+        ctx.clearRect(0, 0, tw, th);
+        ctx.drawImage(img, 0, 0, tw, th);
+        canvas.toBlob(function(blob) {
+          if (!blob) { reject(new Error('圖片壓縮失敗')); return; }
+          if (blob.size <= maxBytes || (quality <= 0.45 && scale <= 0.35)) {
+            var base = (file.name || 'image').replace(/\.[^.]+$/, '');
+            resolve(new File([blob], base + '.jpg', { type: 'image/jpeg', lastModified: Date.now() }));
+            return;
+          }
+          if (quality > 0.5) quality -= 0.08;
+          else scale *= 0.85;
+          attempt();
+        }, 'image/jpeg', quality);
+      }
+      attempt();
+    };
+    img.onerror = function() {
+      URL.revokeObjectURL(url);
+      reject(new Error('無法讀取圖片'));
+    };
+    img.src = url;
+  });
+}
+
+function prepareUploadFile(file) {
+  return new Promise(function(resolve, reject) {
+    if (!file) { reject(new Error('沒有檔案')); return; }
+    if (file.size > UPLOAD_RAW_MAX) {
+      reject(new Error('檔案過大（上限 20MB）：' + file.name));
+      return;
+    }
+    if (file.size <= UPLOAD_SAFE_MAX) { resolve(file); return; }
+    if (isUploadImageFile(file)) {
+      compressImageForUpload(file, UPLOAD_SAFE_MAX).then(resolve).catch(reject);
+      return;
+    }
+    reject(new Error('檔案過大（請壓縮至 3MB 以下再試）：' + file.name));
+  });
+}
+
+function postAttachmentUpload(file, table) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    reader.onload = function() {
+      var result = String(reader.result || '');
+      var base64 = result.indexOf(',') >= 0 ? result.split(',')[1] : result;
+      var headers = { 'Content-Type': 'application/json' };
+      var tok = getUserAccessToken();
+      if (tok) headers['X-User-Access-Token'] = tok;
+      fetch(apiUrl('action=upload-attachment'), {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(withUserToken({
+          fileName: file.name,
+          contentBase64: base64,
+          table: table
+        }))
+      }).then(function(r) {
+        if (!r.ok) {
+          if (r.status === 413) throw new Error('檔案過大，請壓縮後再試');
+          return r.json().catch(function() { throw new Error('上傳失敗（HTTP ' + r.status + '）'); }).then(function(j) {
+            throw new Error((j && j.error) || ('上傳失敗（HTTP ' + r.status + '）'));
+          });
+        }
+        return r.json();
+      }).then(function(res) {
+        if (res.error) throw new Error(res.error);
+        if (!res.file_token) throw new Error('未取得 file_token');
+        resolve({ file_token: res.file_token, name: file.name, size: file.size });
+      }).catch(reject);
+    };
+    reader.onerror = function() { reject(new Error('讀取檔案失敗')); };
+    reader.readAsDataURL(file);
+  });
+}
+
 function uploadTaskAttachment(file) {
   if (!file || !currentTaskId) return;
-  if (file.size > 20 * 1024 * 1024) {
-    alert('檔案過大（上限 20MB）：' + file.name);
-    return;
-  }
-  var reader = new FileReader();
-  reader.onload = function() {
-    var result = String(reader.result || '');
-    var base64 = result.indexOf(',') >= 0 ? result.split(',')[1] : result;
-    var headers = { 'Content-Type': 'application/json' };
-    var tok = getUserAccessToken();
-    if (tok) headers['X-User-Access-Token'] = tok;
-    fetch(apiUrl('action=upload-attachment'), {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(withUserToken({
-        fileName: file.name,
-        contentBase64: base64,
-        table: 'tasks'
-      }))
-    }).then(function(r) { return r.json(); }).then(function(res) {
-      if (res.error) throw new Error(res.error);
-      if (!res.file_token) throw new Error('未取得 file_token');
-      if (!taskPendingAttachments[currentTaskId]) taskPendingAttachments[currentTaskId] = [];
-      taskPendingAttachments[currentTaskId].push({
-        file_token: res.file_token,
-        name: file.name,
-        size: file.size
-      });
-      renderTaskAttachList();
-    }).catch(function(err) {
-      alert('附件上傳失敗：' + (err.message || '請稍後再試'));
-    });
-  };
-  reader.onerror = function() { alert('讀取檔案失敗'); };
-  reader.readAsDataURL(file);
+  prepareUploadFile(file).then(function(prepared) {
+    return postAttachmentUpload(prepared, 'tasks');
+  }).then(function(res) {
+    if (!taskPendingAttachments[currentTaskId]) taskPendingAttachments[currentTaskId] = [];
+    taskPendingAttachments[currentTaskId].push(res);
+    renderTaskAttachList();
+  }).catch(function(err) {
+    alert('附件上傳失敗：' + (err.message || '請稍後再試'));
+  });
 }
 function removeTaskAttachment(index) {
   if (!currentTaskId || !taskPendingAttachments[currentTaskId]) return;
@@ -13609,38 +13685,21 @@ function onPayAttachDrop(ev) {
 
 function uploadPayAttachment(file) {
   if (!file) return;
-  if (file.size > 20 * 1024 * 1024) {
-    alert('檔案過大（上限 20MB）：' + file.name);
-    return;
-  }
   var pendingIdx = payPendingAttachments.length;
   payPendingAttachments.push({ name: file.name, size: file.size, uploading: true });
   payAttachmentUploading++;
   renderPayAttachList();
-  setPayAttachStatus('上傳中…（' + payAttachmentUploading + '）');
+  var needCompress = file.size > UPLOAD_SAFE_MAX && isUploadImageFile(file);
+  setPayAttachStatus(needCompress ? '圖片較大，壓縮中…' : ('上傳中…（' + payAttachmentUploading + '）'));
   updatePayAttachZoneState();
-  var reader = new FileReader();
-  reader.onload = function() {
-    var result = String(reader.result || '');
-    var base64 = result.indexOf(',') >= 0 ? result.split(',')[1] : result;
-    var headers = { 'Content-Type': 'application/json' };
-    var tok = getUserAccessToken();
-    if (tok) headers['X-User-Access-Token'] = tok;
-    fetch(apiUrl('action=upload-attachment'), {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(withUserToken({
-        fileName: file.name,
-        contentBase64: base64,
-        table: 'payments'
-      }))
-    }).then(function(r) { return r.json(); }).then(function(res) {
-      if (res.error) throw new Error(res.error);
-      if (!res.file_token) throw new Error('未取得 file_token');
+  prepareUploadFile(file).then(function(prepared) {
+    if (prepared !== file) setPayAttachStatus('壓縮完成，上傳中…（' + payAttachmentUploading + '）');
+    return postAttachmentUpload(prepared, 'payments');
+  }).then(function(res) {
       payPendingAttachments[pendingIdx] = {
         file_token: res.file_token,
-        name: file.name,
-        size: file.size
+        name: res.name || file.name,
+        size: res.size || file.size
       };
       renderPayAttachList();
     }).catch(function(err) {
@@ -13652,16 +13711,6 @@ function uploadPayAttachment(file) {
       setPayAttachStatus(payAttachmentUploading ? ('上傳中…（' + payAttachmentUploading + '）') : '');
       updatePayAttachZoneState();
     });
-  };
-  reader.onerror = function() {
-    payPendingAttachments.splice(pendingIdx, 1);
-    renderPayAttachList();
-    payAttachmentUploading = Math.max(0, payAttachmentUploading - 1);
-    setPayAttachStatus(payAttachmentUploading ? ('上傳中…（' + payAttachmentUploading + '）') : '');
-    updatePayAttachZoneState();
-    alert('讀取檔案失敗');
-  };
-  reader.readAsDataURL(file);
 }
 
 function removePayAttachment(index) {
@@ -14918,49 +14967,21 @@ function uploadDesVerAttachment(file) {
     alert('單一版本最多 ' + DES_VER_ATTACH_MAX + ' 個檔案');
     return;
   }
-  if (file.size > 20 * 1024 * 1024) {
-    alert('檔案過大（上限 20MB）：' + file.name);
-    return;
-  }
   designVersionUploading++;
-  setDesVerAttachStatus('上傳中…（' + designVersionUploading + '）');
-  var reader = new FileReader();
-  reader.onload = function() {
-    var result = String(reader.result || '');
-    var base64 = result.indexOf(',') >= 0 ? result.split(',')[1] : result;
-    var headers = { 'Content-Type': 'application/json' };
-    var tok = getUserAccessToken();
-    if (tok) headers['X-User-Access-Token'] = tok;
-    fetch(apiUrl('action=upload-attachment'), {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify(withUserToken({
-        fileName: file.name,
-        contentBase64: base64,
-        table: 'design_versions'
-      }))
-    }).then(function(r) { return r.json(); }).then(function(res) {
-      if (res.error) throw new Error(res.error);
-      if (!res.file_token) throw new Error('未取得 file_token');
-      designVersionPendingFiles.push({
-        file_token: res.file_token,
-        name: file.name,
-        size: file.size
-      });
-      renderDesVerAttachList();
-    }).catch(function(err) {
-      alert('附件上傳失敗：' + (err.message || '請稍後再試'));
-    }).finally(function() {
-      designVersionUploading = Math.max(0, designVersionUploading - 1);
-      setDesVerAttachStatus(designVersionUploading ? ('上傳中…（' + designVersionUploading + '）') : '');
-    });
-  };
-  reader.onerror = function() {
+  var needCompress = file.size > UPLOAD_SAFE_MAX && isUploadImageFile(file);
+  setDesVerAttachStatus(needCompress ? '圖片較大，壓縮中…' : ('上傳中…（' + designVersionUploading + '）'));
+  prepareUploadFile(file).then(function(prepared) {
+    if (prepared !== file) setDesVerAttachStatus('壓縮完成，上傳中…（' + designVersionUploading + '）');
+    return postAttachmentUpload(prepared, 'design_versions');
+  }).then(function(res) {
+    designVersionPendingFiles.push(res);
+    renderDesVerAttachList();
+  }).catch(function(err) {
+    alert('附件上傳失敗：' + (err.message || '請稍後再試'));
+  }).finally(function() {
     designVersionUploading = Math.max(0, designVersionUploading - 1);
     setDesVerAttachStatus(designVersionUploading ? ('上傳中…（' + designVersionUploading + '）') : '');
-    alert('讀取檔案失敗');
-  };
-  reader.readAsDataURL(file);
+  });
 }
 
 function removeDesVerAttachment(index) {
