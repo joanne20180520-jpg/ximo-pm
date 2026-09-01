@@ -1668,8 +1668,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
 <div class="po" id="pp-exp"><div class="pp"><div class="pph"><h3>新增支出明細</h3><button class="ppc" onclick="cl('pp-exp')">✕</button></div><div class="ppb"><div class="fg"><label>支出細項</label><input type="text" id="ex-name" placeholder="茶葉5斤"></div><div class="fg"><label>所屬標案</label><select id="ex-proj" onchange="onExpenseProjChange()"></select></div><div class="fg"><label>所屬工作項目</label><select id="ex-wi"></select></div><div class="fg"><label>負責人</label><select id="ex-assignee" data-members></select></div><div class="fg"><label>日期</label><input type="date" id="ex-date"></div><div class="fg"><label>實際金額</label><input type="text" class="money-input" placeholder="NT$0" id="aa" oninput="calcE()"></div><div class="fg"><label>未稅金額（自動計算）</label><input type="text" id="ua" readonly style="background:#f0f0f0;color:var(--t3)"></div></div><div class="ppf"><button class="bcan" onclick="cl('pp-exp')">取消</button><button class="bpri" onclick="saveExpense()">新增</button></div></div></div>
 
 <div class="po" id="pp-des"><div class="pp" style="width:440px"><div class="pph"><h3>建立新設計任務</h3><button class="ppc" onclick="cl('pp-des')">✕</button></div><div class="ppb">
-  <div class="fg"><label>主類別</label><input type="text" id="ds-name" placeholder="手拿牌" data-des-role="pm"></div>
-  <div class="fg"><label>所屬工作項目</label><select id="ds-wi" data-des-role="pm"></select></div>
+  <div class="fg"><label>主類別</label><input type="text" id="ds-name" placeholder="手拿牌" data-des-role="create_basic"></div>
+  <div class="fg"><label>所屬工作項目</label><select id="ds-wi" data-des-role="create_basic" onchange="onCreateDesignWiChange()"></select></div>
   <div class="fg"><label>負責PM</label><select id="ds-pm" data-members data-des-role="pm"></select></div>
   <div class="fg"><label>設計師</label><select id="ds-designer" data-members="designer" data-des-role="assign_designer"></select>
   <div style="font-size:10px;color:var(--t3);margin-top:4px">新增時自動帶入設計主管；後續由設計主管改派設計師。</div>
@@ -4697,7 +4697,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260901v5';
+var APP_BUILD = '20260901v6';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -10672,7 +10672,7 @@ function openDailyLogFromDesign() {
 }
 
 function openNewDesignFromContext() {
-  if (!isPMRole()) return;
+  if (!canCreateDesignTask()) return;
   var wiId = null;
   if (currentDesignId) {
     var ctx = getDesignContext(currentDesignId);
@@ -10687,7 +10687,7 @@ function openNewDesignFromContext() {
 }
 
 function openDesignForProject(projId) {
-  if (!isPMRole()) return;
+  if (!canCreateDesignTask()) return;
   preparePopup('pp-des');
   var rec = projectsData.find(function(p) { return p.record_id === projId; });
   var wiSel = document.getElementById('ds-wi');
@@ -15402,6 +15402,32 @@ function renderDesignProgressCell(status, num) {
   return '<div class="des-progress"><span class="des-progress-track"><span class="des-progress-fill" style="width:' + pct + '%"></span></span><span class="des-progress-label">' + escHtml(label.indexOf('%') >= 0 ? label : (pct + '%')) + '</span></div>';
 }
 
+function canCreateDesignTask() {
+  return isPMRole() || isDesignerLikeRole();
+}
+
+function getPmPersonForWorkitem(wiId) {
+  var wi = workitemsData.find(function(w) { return w.record_id === wiId; });
+  if (!wi) return null;
+  var f = wi.fields || {};
+  var pm = f['負責PM'] || f['主PM'];
+  if (pm) return larkPerson(pm) || pm;
+  var projIds = getLinkIds(f['所屬標案']);
+  if (projIds[0]) {
+    var proj = projectsData.find(function(p) { return p.record_id === projIds[0]; });
+    return getProjectPmPerson(proj);
+  }
+  return null;
+}
+
+function onCreateDesignWiChange() {
+  var wiSel = document.getElementById('ds-wi');
+  var pmSel = document.getElementById('ds-pm');
+  if (!wiSel || !pmSel || !canCreateDesignTask()) return;
+  var pmPerson = getPmPersonForWorkitem(wiSel.value);
+  if (pmPerson) selectMemberOption(pmSel, pmPerson);
+}
+
 function canSeeDesignProgressCol() {
   if (isDesignerLikeRole() || isAccountantRole()) return false;
   return currentUserRole === 'PM' || currentUserRole === '管理員' || currentUserRole === '管理员';
@@ -15542,10 +15568,11 @@ function renderDesigns() {
 
   function renderProjectBlock(pname, color) {
     var list = byProject[pname] || [];
-    var addBtn = isPMRole() ? '<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-des\')">＋ 新增設計任務單</button>' : '';
+    var canAddDesign = canCreateDesignTask();
+    var addBtn = canAddDesign ? '<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-des\')">＋ 新增設計任務單</button>' : '';
     var header = '<div class="dc"><div class="dch"><div class="pdot" style="background:' + color + '"></div><h3>' + escHtml(pname) + '</h3>' + addBtn + '</div>';
     if (!list.length) {
-      return header + '<div style="padding:12px 16px;color:var(--t3);font-size:12px">' + (isPMRole() ? '此標案尚無設計任務，點右上角新增第一筆' : '此標案尚無設計任務') + '</div></div>';
+      return header + '<div style="padding:12px 16px;color:var(--t3);font-size:12px">' + (canAddDesign ? '此標案尚無設計任務，點右上角新增第一筆' : '此標案尚無設計任務') + '</div></div>';
     }
     var showProgress = canSeeDesignProgressCol();
     var showDesignStatus = canSeeDesignStatusCol();
@@ -16803,6 +16830,7 @@ function toggleDesignSignCheck(id) {
 function canSeeDesignFormRole(role) {
   if (role === 'progress_pm') return canSeeDesignProgressCol();
   if (role === 'design_status') return canSeeDesignStatusCol();
+  if (role === 'create_basic') return canCreateDesignTask();
   return true;
 }
 
@@ -16812,6 +16840,7 @@ function canEditDesignRole(role) {
   if (isAdminRole()) return true;
   if (role === 'progress_pm') return isPMRole();
   if (role === 'design_status') return isDesignerLikeRole();
+  if (role === 'create_basic') return canCreateDesignTask();
   if (role === 'both') return isPMRole() || isDesignerLikeRole();
   // 設計師指派：僅設計主管（PM 新增時預設寫入設計主管，之後不可改）
   if (role === 'assign_designer') return isDesignLeadRole();
@@ -18183,19 +18212,48 @@ function saveExpense() {
 }
 
 function saveDesign() {
-  if (!isPMRole()) { alert('僅 PM／管理員可新增設計任務'); return; }
+  if (!canCreateDesignTask()) { alert('僅 PM／管理員／設計師／設計主管可新增設計任務'); return; }
   var packed = collectDesignBasicFields('ds');
   if (!packed.name) { alert('請填寫主類別'); return; }
   if (!packed.wiId) { alert('請選擇工作項目'); return; }
   var fields = packed.fields;
-  // PM 新增：設計師一律先寫入設計主管，之後由設計主管改派
-  var leadVal = getDefaultDesignLeadSelectValue();
-  var leadPerson = leadVal ? larkPerson(leadVal) : null;
-  if (!leadPerson) {
-    alert('找不到設計主管，請先在人員資料為設計主管加上「設計主管」標籤');
-    return;
+  if (!canSeeDesignProgressCol()) {
+    delete fields['進度狀態'];
+    delete fields['進度數值'];
   }
-  fields['設計師'] = leadPerson;
+  if (isDesignerLikeRole()) {
+    var pmPerson = getPmPersonForWorkitem(packed.wiId);
+    if (pmPerson) fields['負責PM'] = pmPerson;
+    if (isDesignLeadRole()) {
+      var designerSel = document.getElementById('ds-designer');
+      var pickedDesigner = designerSel ? larkPerson(designerSel.value) : null;
+      if (pickedDesigner) fields['設計師'] = pickedDesigner;
+    }
+    if (!fields['設計師']) {
+      if (isDesignerRole()) {
+        var user = getCurrentLoginUser();
+        if (user && user.openId) fields['設計師'] = [{ id: user.openId, name: user.name || '' }];
+      }
+      if (!fields['設計師']) {
+        var leadVal = getDefaultDesignLeadSelectValue();
+        var leadPerson = leadVal ? larkPerson(leadVal) : null;
+        if (!leadPerson) {
+          alert('找不到設計主管，請先在人員資料為設計主管加上「設計主管」標籤');
+          return;
+        }
+        fields['設計師'] = leadPerson;
+      }
+    }
+  } else {
+    // PM 新增：設計師一律先寫入設計主管，之後由設計主管改派
+    var leadVal = getDefaultDesignLeadSelectValue();
+    var leadPerson = leadVal ? larkPerson(leadVal) : null;
+    if (!leadPerson) {
+      alert('找不到設計主管，請先在人員資料為設計主管加上「設計主管」標籤');
+      return;
+    }
+    fields['設計師'] = leadPerson;
+  }
   fields['定稿狀態'] = '未定稿';
   fields['設計狀態'] = '未開始';
 
