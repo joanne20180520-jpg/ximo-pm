@@ -1764,7 +1764,10 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="des-acc" data-acc="money" data-owner="designer">
       <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">發包資訊</span><span class="des-acc-owner">設計師填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
-        <div class="fg"><label>發包廠商</label><input type="text" id="ed-vendor" data-des-role="designer"></div>
+        <div class="fg"><label>發包廠商</label>
+          <select id="ed-vendor" data-des-role="designer" onchange="onDesignVendorChange()"></select>
+          <input type="text" id="ed-vendor-other" data-des-role="designer" placeholder="請填寫廠商名稱" style="display:none;margin-top:6px">
+        </div>
         <div class="fg"><label>價格</label><input type="text" class="money-input" id="ed-price" placeholder="NT$0" data-des-role="designer" oninput="calcDesignPriceTaxed()"></div>
         <div class="fg"><label>價格(含稅)</label><input type="text" id="ed-price-taxed" readonly style="background:#f0f0f0;color:var(--t3)" placeholder="輸入價格後自動計算" title="價格 × 1.05"></div>
         <div class="fg"><label>稅收</label><input type="text" id="ed-tax" data-des-role="designer"></div>
@@ -4694,7 +4697,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260901v3';
+var APP_BUILD = '20260901v4';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -5945,6 +5948,8 @@ var dailyLogProjFilter = '';
 var dailyLogPersonFilter = '';
 var PROGRESS_OPTIONS = ['未開始','進行中10%','進行中20%','進行中30%','進行中40%','進行中50%','進行中60%','進行中70%','進行中80%','進行中90%','已完成','暫停'];
 var DESIGN_STATUS_OPTIONS = ['未開始', '進行中', '已完成'];
+var DESIGN_VENDOR_OPTIONS = ['健豪', '可樂谷', '丞奕', '東方包裝', '旭利紙器', '文心影印', '承辦發印', '自行列印'];
+var DESIGN_VENDOR_OTHER = '__other__';
 
 function personName(field) {
   if (!field) return '';
@@ -15982,6 +15987,60 @@ function getMemberSelectOptions(opts) {
   return { labels: labels, values: values };
 }
 
+function initDesignVendorSelect() {
+  var sel = document.getElementById('ed-vendor');
+  if (!sel || sel.getAttribute('data-vendor-ready')) return;
+  var labels = ['—'].concat(DESIGN_VENDOR_OPTIONS).concat(['其他（自行填寫）']);
+  var values = [''].concat(DESIGN_VENDOR_OPTIONS).concat([DESIGN_VENDOR_OTHER]);
+  fillSelectOptions(sel, labels, values);
+  sel.setAttribute('data-vendor-ready', '1');
+}
+
+function syncDesignVendorOtherUi() {
+  var sel = document.getElementById('ed-vendor');
+  var other = document.getElementById('ed-vendor-other');
+  if (!sel || !other) return;
+  var show = sel.value === DESIGN_VENDOR_OTHER;
+  other.style.display = show ? '' : 'none';
+}
+
+function onDesignVendorChange() {
+  syncDesignVendorOtherUi();
+  if (typeof scheduleDesignDrawerAutoSave === 'function') scheduleDesignDrawerAutoSave();
+}
+
+function setDesignVendorValue(val) {
+  initDesignVendorSelect();
+  var sel = document.getElementById('ed-vendor');
+  var other = document.getElementById('ed-vendor-other');
+  if (!sel) return;
+  val = String(val || '').trim();
+  if (!val) {
+    sel.value = '';
+    if (other) other.value = '';
+    syncDesignVendorOtherUi();
+    return;
+  }
+  if (DESIGN_VENDOR_OPTIONS.indexOf(val) >= 0) {
+    sel.value = val;
+    if (other) other.value = '';
+  } else {
+    sel.value = DESIGN_VENDOR_OTHER;
+    if (other) other.value = val;
+  }
+  syncDesignVendorOtherUi();
+}
+
+function getDesignVendorValue() {
+  var sel = document.getElementById('ed-vendor');
+  if (!sel) return '';
+  if (sel.value === DESIGN_VENDOR_OTHER) {
+    var other = document.getElementById('ed-vendor-other');
+    return other ? other.value.trim() : '';
+  }
+  return sel.value.trim();
+}
+
 function fillSelectOptions(sel, options, values) {
   if (!sel) return;
   var prev = sel.value;
@@ -16866,7 +16925,7 @@ function openEditDesign(desId) {
   designNasPathBaseline = getDesignNasPathInputValue();
   setDesignSelectBool('ed-pm-check', getDesignSignCheckValue(f, DESIGN_PM_CHECK_KEYS));
   document.getElementById('ed-final').value = f['定稿時間'] ? tsToDateInput(f['定稿時間']) : (f['完稿交付日'] ? tsToDateInput(f['完稿交付日']) : '');
-  document.getElementById('ed-vendor').value = f['發包廠商'] || '';
+  setDesignVendorValue(fieldPlainText(f['發包廠商']) || f['發包廠商'] || '');
   var price = parseFloat(f['價格']) || 0;
   document.getElementById('ed-price').value = price ? 'NT$' + Math.round(price).toLocaleString() : '';
   calcDesignPriceTaxed();
@@ -17332,7 +17391,7 @@ function collectDesignDrawerFields() {
     'NAS路徑位置': document.getElementById('ed-path').value.trim(),
     '路徑位置': document.getElementById('ed-path').value.trim(),
     'PM主管內容審核': readDesignSelectBool('ed-pm-check'),
-    '發包廠商': document.getElementById('ed-vendor').value.trim(),
+    '發包廠商': getDesignVendorValue(),
     '稅收': document.getElementById('ed-tax').value.trim(),
     '發票抬頭': document.getElementById('ed-invoice').value.trim(),
     '已完成': readDesignSelectBool('ed-done'),
@@ -17962,6 +18021,7 @@ function refreshFormSelects() {
   });
   var designStatusSel = document.getElementById('ed-design-status');
   if (designStatusSel) fillSelectOptions(designStatusSel, DESIGN_STATUS_OPTIONS);
+  initDesignVendorSelect();
   fillDailyLogAuthorSelect();
 }
 
