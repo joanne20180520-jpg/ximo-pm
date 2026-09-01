@@ -4694,7 +4694,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260901v2';
+var APP_BUILD = '20260901v3';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -15392,11 +15392,13 @@ function renderDesignProgressCell(status, num) {
 }
 
 function canSeeDesignProgressCol() {
-  return isPMRole() || isAdminRole();
+  if (isDesignerLikeRole() || isAccountantRole()) return false;
+  return currentUserRole === 'PM' || currentUserRole === '管理員' || currentUserRole === '管理员';
 }
 
 function canSeeDesignStatusCol() {
-  return isDesignerLikeRole() || isAdminRole();
+  if (isDesignerLikeRole()) return true;
+  return currentUserRole === '管理員' || currentUserRole === '管理员';
 }
 
 function renderDesignStatusCell(status) {
@@ -15449,12 +15451,12 @@ function openDesignStatusPicker(opts) {
   var f = rec.fields || {};
   var options, current, fieldName;
   if (opts.kind === 'progress') {
-    if (!(isPMRole() || isAdminRole())) return;
+    if (!canSeeDesignProgressCol()) return;
     options = PROGRESS_OPTIONS;
     current = f['進度狀態'] || getDesignProgressStatus(f);
     fieldName = '進度狀態';
   } else {
-    if (!(isDesignerLikeRole() || isAdminRole())) return;
+    if (!canSeeDesignStatusCol()) return;
     options = DESIGN_STATUS_OPTIONS;
     current = f['設計狀態'] || '未開始';
     fieldName = '設計狀態';
@@ -15547,10 +15549,10 @@ function renderDesigns() {
       var cellClick = canBasicEdit
         ? ' class="des-cell-edit" onclick="openEditDesignBasic(\'' + d.id + '\',event)"'
         : '';
-      var progressClick = showProgress && (isPMRole() || isAdminRole())
+      var progressClick = showProgress && canSeeDesignProgressCol()
         ? ' class="des-cell-edit" onclick="openDesignProgressMenu(\'' + d.id + '\',event)" title="點選變更進度狀態"'
         : '';
-      var designStatusClick = showDesignStatus && (isDesignerLikeRole() || isAdminRole())
+      var designStatusClick = showDesignStatus && canSeeDesignStatusCol()
         ? ' class="des-cell-edit" onclick="openDesignDesignStatusMenu(\'' + d.id + '\',event)" title="點選變更設計狀態"'
         : '';
       rows += '<tr class="erow des-row">'
@@ -16702,8 +16704,8 @@ function toggleDesignSignCheck(id) {
 }
 
 function canSeeDesignFormRole(role) {
-  if (role === 'progress_pm') return isPMRole() || isAdminRole();
-  if (role === 'design_status') return isDesignerLikeRole() || isAdminRole();
+  if (role === 'progress_pm') return canSeeDesignProgressCol();
+  if (role === 'design_status') return canSeeDesignStatusCol();
   return true;
 }
 
