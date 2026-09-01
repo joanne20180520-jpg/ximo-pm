@@ -1771,7 +1771,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <div class="fg"><label>價格</label><input type="text" class="money-input" id="ed-price" placeholder="NT$0" data-des-role="designer" oninput="calcDesignPriceTaxed()"></div>
         <div class="fg"><label>價格(含稅)</label><input type="text" id="ed-price-taxed" readonly style="background:#f0f0f0;color:var(--t3)" placeholder="輸入價格後自動計算" title="價格 × 1.05"></div>
         <div class="fg"><label>稅收</label><input type="text" id="ed-tax" data-des-role="designer"></div>
-        <div class="fg"><label>發票抬頭</label><textarea id="ed-invoice" rows="2" data-des-role="designer"></textarea></div>
+        <div class="fg"><label>發票抬頭/統編</label><select id="ed-invoice" data-des-role="designer"></select></div>
         <div class="fg"><label>已完成</label><select id="ed-done" data-des-role="designer"><option value="false">否</option><option value="true">是</option></select></div>
       </div>
     </div>
@@ -4697,7 +4697,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260901v4';
+var APP_BUILD = '20260901v5';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -5950,6 +5950,12 @@ var PROGRESS_OPTIONS = ['未開始','進行中10%','進行中20%','進行中30%'
 var DESIGN_STATUS_OPTIONS = ['未開始', '進行中', '已完成'];
 var DESIGN_VENDOR_OPTIONS = ['健豪', '可樂谷', '丞奕', '東方包裝', '旭利紙器', '文心影印', '承辦發印', '自行列印'];
 var DESIGN_VENDOR_OTHER = '__other__';
+var DESIGN_INVOICE_OPTIONS = [
+  '璽墨股份有限公司/統編：60449019',
+  '身士不二股份有限公司/統編：97596625',
+  '元頂國際控股股份有限公司/統編：90107691',
+  '奎爾策略行銷有限公司/統編：60448314'
+];
 
 function personName(field) {
   if (!field) return '';
@@ -16041,6 +16047,38 @@ function getDesignVendorValue() {
   return sel.value.trim();
 }
 
+function initDesignInvoiceSelect() {
+  var sel = document.getElementById('ed-invoice');
+  if (!sel || sel.getAttribute('data-invoice-ready')) return;
+  fillSelectOptions(sel, ['—'].concat(DESIGN_INVOICE_OPTIONS), [''].concat(DESIGN_INVOICE_OPTIONS));
+  sel.setAttribute('data-invoice-ready', '1');
+}
+
+function matchDesignInvoiceValue(val) {
+  val = String(val || '').trim();
+  if (!val) return '';
+  if (DESIGN_INVOICE_OPTIONS.indexOf(val) >= 0) return val;
+  for (var i = 0; i < DESIGN_INVOICE_OPTIONS.length; i++) {
+    var opt = DESIGN_INVOICE_OPTIONS[i];
+    if (val.indexOf(opt) >= 0 || opt.indexOf(val) >= 0) return opt;
+    var tax = (opt.match(/(\d{8})/) || [])[1];
+    if (tax && val.indexOf(tax) >= 0) return opt;
+  }
+  return '';
+}
+
+function setDesignInvoiceValue(val) {
+  initDesignInvoiceSelect();
+  var sel = document.getElementById('ed-invoice');
+  if (!sel) return;
+  sel.value = matchDesignInvoiceValue(val);
+}
+
+function getDesignInvoiceValue() {
+  var sel = document.getElementById('ed-invoice');
+  return sel ? sel.value.trim() : '';
+}
+
 function fillSelectOptions(sel, options, values) {
   if (!sel) return;
   var prev = sel.value;
@@ -16930,7 +16968,7 @@ function openEditDesign(desId) {
   document.getElementById('ed-price').value = price ? 'NT$' + Math.round(price).toLocaleString() : '';
   calcDesignPriceTaxed();
   document.getElementById('ed-tax').value = f['稅收'] != null ? String(f['稅收']) : '';
-  document.getElementById('ed-invoice').value = f['發票抬頭'] || '';
+  setDesignInvoiceValue(fieldPlainText(f['發票抬頭']) || f['發票抬頭'] || '');
   setDesignSelectBool('ed-done', f['已完成']);
   editingDesignRemarkItems = parseDesignRemarkThread(f['備註'] || '');
   renderDesignRemarkThread();
@@ -17393,7 +17431,7 @@ function collectDesignDrawerFields() {
     'PM主管內容審核': readDesignSelectBool('ed-pm-check'),
     '發包廠商': getDesignVendorValue(),
     '稅收': document.getElementById('ed-tax').value.trim(),
-    '發票抬頭': document.getElementById('ed-invoice').value.trim(),
+    '發票抬頭': getDesignInvoiceValue(),
     '已完成': readDesignSelectBool('ed-done'),
     '備註': packDesignRemarkThread(editingDesignRemarkItems),
     '進度狀態': status,
@@ -18022,6 +18060,7 @@ function refreshFormSelects() {
   var designStatusSel = document.getElementById('ed-design-status');
   if (designStatusSel) fillSelectOptions(designStatusSel, DESIGN_STATUS_OPTIONS);
   initDesignVendorSelect();
+  initDesignInvoiceSelect();
   fillDailyLogAuthorSelect();
 }
 
