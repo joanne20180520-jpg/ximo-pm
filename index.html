@@ -1670,7 +1670,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>設計師</label><select id="ds-designer" data-members="designer" data-des-role="assign_designer"></select>
   <div style="font-size:10px;color:var(--t3);margin-top:4px">新增時自動帶入設計主管；後續由設計主管改派設計師。</div>
   </div>
-  <div class="fg"><label>進度狀態</label><select id="ds-status" data-des-role="both"></select></div>
+  <div class="fg"><label>進度狀態</label><select id="ds-status" data-des-role="progress_pm"></select></div>
   <p style="font-size:11px;color:var(--t3);margin:4px 0 0;line-height:1.5">建立後請點列右側 ☰ 側欄填寫規格、製作與財務資料。</p>
 </div><div class="ppf"><button class="bcan" onclick="cl('pp-des')">取消</button><button class="bpri" onclick="saveDesign()">新增</button></div></div></div>
 
@@ -1680,7 +1680,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>所屬工作項目</label><select id="eb-wi" data-des-role="pm"></select></div>
   <div class="fg"><label>負責PM</label><select id="eb-pm" data-members data-des-role="pm"></select></div>
   <div class="fg"><label>設計師</label><select id="eb-designer" data-members="designer" data-des-role="assign_designer"></select></div>
-  <div class="fg"><label>進度狀態</label><select id="eb-status" data-des-role="both"></select></div>
+  <div class="fg"><label>進度狀態</label><select id="eb-status" data-des-role="progress_pm"></select></div>
   <div class="fg"><label>定稿狀態</label>
   <input type="text" id="eb-final-status" readonly style="background:#f0eeea">
   <div style="font-size:10px;color:var(--t3);margin-top:4px">由此不改定稿。請展開版本，在最新版旁勾「定稿」；勾了＝已定稿，沒勾＝未定稿。若需改為未定稿請通知管理員。</div>
@@ -1708,7 +1708,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <div class="fg"><label>所屬工作項目</label><select id="ed-wi" data-des-role="pm"></select></div>
         <div class="fg"><label>負責PM</label><select id="ed-pm" data-members data-des-role="pm"></select></div>
         <div class="fg"><label>設計師</label><select id="ed-designer" data-members="designer" data-des-role="assign_designer"></select></div>
-        <div class="fg"><label>進度狀態</label><select id="ed-status" data-des-role="both"></select></div>
+        <div class="fg"><label>進度狀態</label><select id="ed-status" data-des-role="progress_pm"></select></div>
       </div>
     </div>
     <div class="des-acc" data-acc="req" data-owner="pm">
@@ -1726,6 +1726,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="des-acc" data-acc="make" data-owner="designer">
       <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">製作規格</span><span class="des-acc-owner">設計師填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
+        <div class="fg"><label>設計狀態</label><select id="ed-design-status" data-des-role="design_status"></select></div>
         <div class="fg"><label>材質</label><input type="text" id="ed-material" data-des-role="designer"></div>
         <div class="fg"><label>加工項目</label><input type="text" id="ed-process" data-des-role="designer"></div>
       </div>
@@ -4689,7 +4690,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260828v3';
+var APP_BUILD = '20260901v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -5939,6 +5940,7 @@ var dailyLogDate = new Date(); dailyLogDate.setHours(0,0,0,0);
 var dailyLogProjFilter = '';
 var dailyLogPersonFilter = '';
 var PROGRESS_OPTIONS = ['未開始','進行中10%','進行中20%','進行中30%','進行中40%','進行中50%','進行中60%','進行中70%','進行中80%','進行中90%','已完成','暫停'];
+var DESIGN_STATUS_OPTIONS = ['未開始', '進行中', '已完成'];
 
 function personName(field) {
   if (!field) return '';
@@ -15385,6 +15387,21 @@ function renderDesignProgressCell(status, num) {
   return '<div class="des-progress"><span class="des-progress-track"><span class="des-progress-fill" style="width:' + pct + '%"></span></span><span class="des-progress-label">' + escHtml(label.indexOf('%') >= 0 ? label : (pct + '%')) + '</span></div>';
 }
 
+function canSeeDesignProgressCol() {
+  return isPMRole() || isAdminRole();
+}
+
+function canSeeDesignStatusCol() {
+  return isDesignerLikeRole() || isAdminRole();
+}
+
+function renderDesignStatusCell(status) {
+  var s = String(status || '未開始').trim();
+  if (s === '已完成') return '<span class="ds ds-done">已完成</span>';
+  if (s === '進行中') return '<span class="ds ds-doing">進行中</span>';
+  return '<span class="ds ds-pending">未開始</span>';
+}
+
 function renderDesigns() {
   var area = document.getElementById('design-area');
   if (!area) return;
@@ -15413,6 +15430,7 @@ function renderDesigns() {
       status: getDesignProgressStatus(f),
       progressStatus: f['進度狀態'] || '',
       progressNum: f['進度數值'],
+      designStatus: f['設計狀態'] || '未開始',
       nextStep: getDesignNextStepInfo(f, rec.record_id),
       finalized: isDesignFinalized(f),
       finalStatus: f['定稿狀態'] || '未定稿'
@@ -15426,6 +15444,9 @@ function renderDesigns() {
     if (!list.length) {
       return header + '<div style="padding:12px 16px;color:var(--t3);font-size:12px">' + (isPMRole() ? '此標案尚無設計任務，點右上角新增第一筆' : '此標案尚無設計任務') + '</div></div>';
     }
+    var showProgress = canSeeDesignProgressCol();
+    var showDesignStatus = canSeeDesignStatusCol();
+    var colCount = 5 + (showProgress ? 1 : 0) + (showDesignStatus ? 1 : 0) + 2;
     var rows = '';
     list.forEach(function(d) {
       var expanded = !!designExpandedIds[d.id];
@@ -15436,6 +15457,12 @@ function renderDesigns() {
       var cellClick = canBasicEdit
         ? ' class="des-cell-edit" onclick="openEditDesignBasic(\'' + d.id + '\',event)"'
         : '';
+      var progressClick = (canBasicEdit && showProgress)
+        ? cellClick + ' title="編輯負責PM／設計師／進度"'
+        : '';
+      var designStatusClick = showDesignStatus && (isDesignerLikeRole() || isAdminRole())
+        ? ' class="des-cell-edit" onclick="event.stopPropagation();openEditDesign(\'' + d.id + '\')" title="編輯設計狀態"'
+        : '';
       rows += '<tr class="erow des-row">'
         + '<td class="des-cell-name" style="font-weight:500;white-space:nowrap" onclick="toggleDesignExpand(\'' + d.id + '\',event)" title="展開版本紀錄">'
         + '<button type="button" class="des-toggle" title="展開版本">' + (expanded ? '▼' : '▶') + '</button> '
@@ -15443,18 +15470,27 @@ function renderDesigns() {
         + '</td>'
         + '<td>' + escHtml(d.wiName) + '</td>'
         + '<td' + (canBasicEdit ? cellClick + ' title="編輯負責PM／設計師／進度"' : '') + '>' + renderDesignPersonCell(d.pm) + '</td>'
-        + '<td' + (canBasicEdit ? cellClick + ' title="編輯負責PM／設計師／進度"' : '') + '>' + renderDesignPersonCell(d.designer) + '</td>'
-        + '<td' + (canBasicEdit ? cellClick + ' title="編輯負責PM／設計師／進度"' : '') + '>' + renderDesignProgressCell(d.progressStatus || d.status, d.progressNum) + '</td>'
-        + '<td title="由版本列「定稿」勾選決定：有勾＝已定稿，沒勾＝未定稿">' + finalBadge + '</td>'
+        + '<td' + (canBasicEdit ? cellClick + ' title="編輯負責PM／設計師／進度"' : '') + '>' + renderDesignPersonCell(d.designer) + '</td>';
+      if (showProgress) {
+        rows += '<td' + progressClick + '>' + renderDesignProgressCell(d.progressStatus || d.status, d.progressNum) + '</td>';
+      }
+      if (showDesignStatus) {
+        rows += '<td' + designStatusClick + '>' + renderDesignStatusCell(d.designStatus) + '</td>';
+      }
+      rows += '<td title="由版本列「定稿」勾選決定：有勾＝已定稿，沒勾＝未定稿">' + finalBadge + '</td>'
         + '<td>' + d.nextStep.html + '</td>'
         + '<td class="des-act"><button type="button" class="des-drawer-btn" title="填寫規格詳情" onclick="event.stopPropagation();openEditDesign(\'' + d.id + '\')">☰</button></td>'
         + '</tr>';
       if (expanded) {
-        rows += '<tr class="des-exp-row"><td colspan="8">' + renderDesignVersionPanel(d.id, d.finalized) + '</td></tr>';
+        rows += '<tr class="des-exp-row"><td colspan="' + colCount + '">' + renderDesignVersionPanel(d.id, d.finalized) + '</td></tr>';
       }
     });
+    var ths = ['設計項目名稱', '所屬工作項目', '負責PM', '設計師'];
+    if (showProgress) ths.push('進度狀態');
+    if (showDesignStatus) ths.push('設計狀態');
+    ths.push('定稿狀態', '下一步日期', '');
     return header
-      + '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>設計項目名稱</th><th>所屬工作項目</th><th>負責PM</th><th>設計師</th><th>進度狀態</th><th>定稿狀態</th><th>下一步日期</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+      + '<div style="overflow-x:auto"><table class="dt"><thead><tr>' + ths.map(function(h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }
 
   var html = '';
@@ -16575,10 +16611,18 @@ function toggleDesignSignCheck(id) {
     });
 }
 
+function canSeeDesignFormRole(role) {
+  if (role === 'progress_pm') return isPMRole() || isAdminRole();
+  if (role === 'design_status') return isDesignerLikeRole() || isAdminRole();
+  return true;
+}
+
 function canEditDesignRole(role) {
   if (role === 'design_lead') return isDesignLeadRole();
   if (role === 'admin_sign') return isAdminRole();
   if (isAdminRole()) return true;
+  if (role === 'progress_pm') return isPMRole();
+  if (role === 'design_status') return isDesignerLikeRole();
   if (role === 'both') return isPMRole() || isDesignerLikeRole();
   // 設計師指派：僅設計主管（PM 新增時預設寫入設計主管，之後不可改）
   if (role === 'assign_designer') return isDesignLeadRole();
@@ -16593,7 +16637,10 @@ function applyDesignFormPermissions(rootSel) {
   if (!root) return;
   root.querySelectorAll('[data-des-role]').forEach(function(el) {
     var role = el.getAttribute('data-des-role') || 'pm';
+    var canSee = canSeeDesignFormRole(role);
     var can = canEditDesignRole(role);
+    var fg = el.closest('.fg');
+    if (fg) fg.style.display = canSee ? '' : 'none';
     el.disabled = !can;
   });
   var saveBtn = null;
@@ -16704,6 +16751,11 @@ function openEditDesign(desId) {
     for (var k = 0; k < statusSel.options.length; k++) {
       if (statusSel.options[k].value === progStatus) { statusSel.selectedIndex = k; break; }
     }
+  }
+  var designStatusSel = document.getElementById('ed-design-status');
+  if (designStatusSel) {
+    fillSelectOptions(designStatusSel, DESIGN_STATUS_OPTIONS);
+    designStatusSel.value = f['設計狀態'] || '未開始';
   }
   document.getElementById('ed-item').value = f['項目'] || '';
   document.getElementById('ed-size').value = f['尺寸'] || '';
@@ -16937,10 +16989,14 @@ function designFieldWriteRole(fieldName) {
     '需求交付': 1, '初稿時間': 1, '定稿時間': 1
   };
   var assignFields = { '設計師': 1 };
-  var bothFields = { '備註': 1, '進度狀態': 1, '進度數值': 1 };
+  var bothFields = { '備註': 1 };
+  var progressPmFields = { '進度狀態': 1, '進度數值': 1 };
+  var designStatusFields = { '設計狀態': 1 };
   if (designerFields[fieldName]) return 'designer';
   if (assignFields[fieldName]) return 'assign_designer';
   if (pmFields[fieldName]) return 'pm';
+  if (designStatusFields[fieldName]) return 'design_status';
+  if (progressPmFields[fieldName]) return 'progress_pm';
   if (bothFields[fieldName]) return 'both';
   return 'skip';
 }
@@ -16958,7 +17014,7 @@ function collectDesignDrawerFieldsForSave() {
     var pmOut = {};
     Object.keys(all).forEach(function(k) {
       var role = designFieldWriteRole(k);
-      if (role === 'pm' || role === 'both') pmOut[k] = all[k];
+      if (role === 'pm' || role === 'both' || role === 'progress_pm') pmOut[k] = all[k];
     });
     return pmOut;
   }
@@ -16972,6 +17028,7 @@ function collectDesignDrawerFieldsForSave() {
     }
     if (role === 'assign_designer' && isDesignLeadRole()) out[k] = all[k];
     if (role === 'designer' && isDesignerLikeRole()) out[k] = all[k];
+    if (role === 'design_status' && isDesignerLikeRole()) out[k] = all[k];
     if (role === 'pm' && isPMRole() && !isDesignLeadRole()) out[k] = all[k];
   });
   // NAS 路徑：只要輸入框可編輯就一定帶上
@@ -17149,13 +17206,16 @@ function applyEditDesignPermissions(opts) {
 function collectDesignBasicFields(prefix) {
   var name = document.getElementById(prefix + '-name').value.trim();
   var wiId = document.getElementById(prefix + '-wi').value;
-  var status = document.getElementById(prefix + '-status').value || '未開始';
   var fields = {
     '主類別': name,
-    '所屬工作項目': [wiId],
-    '進度狀態': status,
-    '進度數值': parseProgressVal(status, null)
+    '所屬工作項目': [wiId]
   };
+  var statusEl = document.getElementById(prefix + '-status');
+  if (statusEl) {
+    var status = statusEl.value || '未開始';
+    fields['進度狀態'] = status;
+    fields['進度數值'] = parseProgressVal(status, null);
+  }
   var pm = larkPerson(document.getElementById(prefix + '-pm').value);
   var designer = larkPerson(document.getElementById(prefix + '-designer').value);
   if (pm) fields['負責PM'] = pm;
@@ -17188,6 +17248,8 @@ function collectDesignDrawerFields() {
     '進度狀態': status,
     '進度數值': parseProgressVal(status, null)
   };
+  var designStatusEl = document.getElementById('ed-design-status');
+  if (designStatusEl) fields['設計狀態'] = designStatusEl.value || '未開始';
   if (name) fields['主類別'] = name;
   if (wiId) fields['所屬工作項目'] = [wiId];
   var pm = document.getElementById('ed-pm') ? larkPerson(document.getElementById('ed-pm').value) : null;
@@ -17806,6 +17868,8 @@ function refreshFormSelects() {
     var sel = document.getElementById(id);
     if (sel) fillSelectOptions(sel, PROGRESS_OPTIONS);
   });
+  var designStatusSel = document.getElementById('ed-design-status');
+  if (designStatusSel) fillSelectOptions(designStatusSel, DESIGN_STATUS_OPTIONS);
   fillDailyLogAuthorSelect();
 }
 
@@ -17942,6 +18006,7 @@ function saveDesign() {
   }
   fields['設計師'] = leadPerson;
   fields['定稿狀態'] = '未定稿';
+  fields['設計狀態'] = '未開始';
 
   cl('pp-des');
   document.getElementById('ds-name').value = '';
