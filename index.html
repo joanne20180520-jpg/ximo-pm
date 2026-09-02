@@ -394,12 +394,13 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .dl-proj-group{border:1px solid var(--border);border-radius:var(--rs);margin-bottom:10px;overflow:hidden}
 .dl-proj-group:last-child{margin-bottom:0}
 .dl-proj-hdr{padding:7px 10px;font-size:12px;font-weight:700;color:#fff}
-.dl-row{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:8px 10px;border-bottom:1px solid var(--border)}
+.dl-row{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:10px 12px;border-bottom:1px solid var(--border)}
 .dl-row:last-child{border-bottom:none}
 .dl-row:hover{background:var(--sf2)}
 .dl-row-unlisted{opacity:.78;background:var(--sf2)}
-.dl-row-top{display:flex;align-items:center;gap:8px;min-width:0}
-.dl-row input[type=checkbox]{width:15px;height:15px;flex-shrink:0;cursor:pointer}
+.dl-row-head{display:flex;align-items:flex-start;gap:10px;min-width:0}
+.dl-row-actions{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.dl-row input[type=checkbox]{width:15px;height:15px;flex-shrink:0;cursor:pointer;margin:0}
 .dl-proj-tag{font-size:10px;padding:2px 7px;border-radius:8px;color:#fff;font-weight:600;flex-shrink:0;max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dl-task-main{flex:1 1 auto;min-width:0;overflow:hidden}
 .dl-task-name{font-size:13px;font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -416,8 +417,11 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .dl-progress-opt:hover,.dl-progress-opt.active{background:#eef4fc;color:var(--c2)}
 .dl-note{width:100%;margin-top:6px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:#fff;box-sizing:border-box;font-family:inherit;resize:vertical;min-height:44px;line-height:1.45}
 .dl-block-reason{width:100%;margin-top:6px;padding:6px 9px;border:1px solid #e8a0a0;border-radius:4px;font-size:12px;background:#fff8f8;font-family:inherit;box-sizing:border-box}
-.dl-cat{padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:11px;background:#fff;flex:0 0 auto;max-width:88px;height:28px;box-sizing:border-box}
+.dl-cat{padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#fff;flex:0 0 auto;min-width:88px;height:28px;box-sizing:border-box}
 .dl-cat-block{border-color:#e8a0a0;background:#fff8f8}
+.dl-tomorrow-wrap{display:inline-flex;align-items:center;gap:6px;padding:0 10px;border:1px solid #e8b86a;border-radius:6px;background:#fffaf2;font-size:11px;font-weight:600;color:#c67c00;cursor:pointer;user-select:none;height:28px;box-sizing:border-box;white-space:nowrap}
+.dl-tomorrow-wrap.checked{border-color:#e8a020;background:#fff6e8;color:#b45309}
+.dl-tomorrow-wrap.is-disabled{opacity:.45;cursor:not-allowed}
 .dl-block-box{margin-bottom:10px}
 .dl-block-box textarea{width:100%;padding:6px 9px;border:1px solid #e8a0a0;border-radius:var(--rs);font-size:12px;background:#fff8f8;font-family:inherit}
 .jblk{font-size:9px;padding:1px 6px;border-radius:8px;background:#fde8e8;color:#b42318;font-weight:700;flex-shrink:0}
@@ -4697,7 +4701,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260902v2';
+var APP_BUILD = '20260902v4';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -10248,7 +10252,7 @@ function journalPlainNote(rec) {
 }
 
 function looksLikeDailyReportSummary(text) {
-  return /^【(進行中|今日完成|卡關|明日預計)】/m.test(String(text || '').trim());
+  return /^【(進行中|進行中明日預計|今日完成|卡關|明日預計)】/m.test(String(text || '').trim());
 }
 
 function journalFreeNote(rec) {
@@ -11242,8 +11246,7 @@ var DAILY_CAT_OPTIONS = [
   { value: '', label: '不列入' },
   { value: 'doing', label: '進行中' },
   { value: 'done', label: '今日完成' },
-  { value: 'block', label: '卡關' },
-  { value: 'tomorrow', label: '明日預計' }
+  { value: 'block', label: '卡關' }
 ];
 
 function journalPersonName(rec) {
@@ -11305,26 +11308,37 @@ function journalTaskNames(rec, keys) {
 }
 
 function getMergedTaskCategories(dayStart, author) {
-  var map = {};
+  var catMap = {};
+  var tomorrowMap = {};
   findDailyJournalRecords(dayStart, author).forEach(function(rec) {
-    var m = getExistingTaskCategories(rec);
-    Object.keys(m).forEach(function(id) { map[id] = m[id]; });
+    var f = rec.fields || {};
+    getLinkIds(f['進行中任務']).forEach(function(id) { catMap[id] = 'doing'; });
+    getLinkIds(f['已完成今日任務']).forEach(function(id) { catMap[id] = 'done'; });
+    getLinkIds(f['卡關任務']).forEach(function(id) { catMap[id] = 'block'; });
+    getLinkIds(f['明日預計任務']).forEach(function(id) {
+      tomorrowMap[id] = true;
+      if (!catMap[id]) catMap[id] = 'doing';
+    });
   });
-  return map;
+  return { catMap: catMap, tomorrowMap: tomorrowMap };
 }
 
 function getMergedDesignCategoryMaps(dayStart, author) {
   var catMap = {};
+  var tomorrowMap = {};
   var blockReasons = {};
   findDailyJournalRecords(dayStart, author).forEach(function(rec) {
     var c = parseDesignCategories(rec);
     c.doing.forEach(function(id) { catMap[id] = 'doing'; });
     c.done.forEach(function(id) { catMap[id] = 'done'; });
     c.block.forEach(function(id) { catMap[id] = 'block'; });
-    c.tomorrow.forEach(function(id) { catMap[id] = 'tomorrow'; });
+    c.tomorrow.forEach(function(id) {
+      tomorrowMap[id] = true;
+      if (!catMap[id]) catMap[id] = 'doing';
+    });
     Object.assign(blockReasons, c.blockReasons || {});
   });
-  return { catMap: catMap, blockReasons: blockReasons };
+  return { catMap: catMap, tomorrowMap: tomorrowMap, blockReasons: blockReasons };
 }
 
 function getMergedJournalNotes(dayStart, author) {
@@ -11500,15 +11514,41 @@ function formatDailyReportSummary(groups, designGroups) {
     });
     lines.push('');
   }
-  section('進行中', groups.doing, false);
-  section('進行中', designGroups && designGroups.doing, true);
+  function splitDoingTomorrow(rows, tomorrowRows, designPrefix) {
+    var tomorrowIds = {};
+    (tomorrowRows || []).forEach(function(row) {
+      var key = (designPrefix ? 'd:' : 't:') + row.id;
+      tomorrowIds[key] = 1;
+    });
+    var doingOnly = [];
+    var doingTomorrow = [];
+    (rows || []).forEach(function(row) {
+      var key = (designPrefix ? 'd:' : 't:') + row.id;
+      if (tomorrowIds[key]) doingTomorrow.push(row);
+      else doingOnly.push(row);
+    });
+    return { doingOnly: doingOnly, doingTomorrow: doingTomorrow };
+  }
+  var taskSplit = splitDoingTomorrow(groups.doing, groups.tomorrow, false);
+  var designSplit = designGroups ? splitDoingTomorrow(designGroups.doing, designGroups.tomorrow, true) : { doingOnly: [], doingTomorrow: [] };
+  section('進行中', taskSplit.doingOnly, false);
+  section('進行中', designSplit.doingOnly, true);
+  section('進行中明日預計', taskSplit.doingTomorrow, false);
+  section('進行中明日預計', designSplit.doingTomorrow, true);
   section('今日完成', groups.done, false);
   section('今日完成', designGroups && designGroups.done, true);
   section('卡關', groups.block, false);
   section('卡關', designGroups && designGroups.block, true);
-  section('明日預計', groups.tomorrow, false);
-  section('明日預計', designGroups && designGroups.tomorrow, true);
   return lines.join('\n').trim();
+}
+
+function buildDailyTomorrowCheckbox(checked, cat) {
+  var enabled = cat === 'doing';
+  var cls = 'dl-tomorrow-wrap' + (checked ? ' checked' : '') + (enabled ? '' : ' is-disabled');
+  return '<label class="' + cls + '" onclick="event.stopPropagation()">'
+    + '<input type="checkbox" class="dl-tomorrow"' + (checked ? ' checked' : '') + (enabled ? '' : ' disabled')
+    + ' onchange="onDailyLogTomorrowChange(this)">'
+    + '<span>明日繼續</span></label>';
 }
 
 function buildDailyCatSelect(value, isBlock) {
@@ -11631,23 +11671,36 @@ function getDailyLogRowSelectedProgress(row) {
 }
 
 function updateDailyLogRowProgressCell(row, cat) {
-  var top = row && row.querySelector('.dl-row-top');
-  if (!top) return;
-  var old = top.querySelector('.dl-progress-wrap, .dl-progress');
+  var head = row && row.querySelector('.dl-row-head');
+  if (!head) return;
+  var old = head.querySelector('.dl-progress-wrap, .dl-progress');
   var html = buildDailyProgressCellHtml(cat, resolveDailyLogRowProgressPct(row));
   var wrap = document.createElement('div');
   wrap.innerHTML = html;
   var neu = wrap.firstChild;
   if (!neu) return;
-  if (old) top.replaceChild(neu, old);
-  else top.appendChild(neu);
+  if (old) head.replaceChild(neu, old);
+  else head.appendChild(neu);
 }
 
-function onDailyLogProgressChange(sel) {
-  // 保留相容；新 UI 改走 pickDailyLogProgress
-  var row = sel && sel.closest('.dl-row');
+function syncDailyLogTomorrowControl(row, cat) {
   if (!row) return;
-  applyDailyLogProgressToExtras(row, sel.value);
+  var tomorrowCb = row.querySelector('.dl-tomorrow');
+  var tomorrowWrap = row.querySelector('.dl-tomorrow-wrap');
+  if (!tomorrowCb || !tomorrowWrap) return;
+  var enabled = cat === 'doing';
+  tomorrowCb.disabled = !enabled;
+  tomorrowWrap.classList.toggle('is-disabled', !enabled);
+  if (!enabled) {
+    tomorrowCb.checked = false;
+    tomorrowWrap.classList.remove('checked');
+  }
+}
+
+function onDailyLogTomorrowChange(cb) {
+  var wrap = cb && cb.closest('.dl-tomorrow-wrap');
+  if (wrap) wrap.classList.toggle('checked', !!cb.checked);
+  refreshDailyLogContent();
 }
 
 function onDailyLogCatChange(sel) {
@@ -11657,6 +11710,7 @@ function onDailyLogCatChange(sel) {
     var blockInput = row.querySelector('.dl-block-reason');
     if (blockInput) blockInput.style.display = sel.value === 'block' ? 'block' : 'none';
     row.classList.toggle('dl-row-unlisted', !sel.value);
+    syncDailyLogTomorrowControl(row, sel.value || '');
     updateDailyLogRowProgressCell(row, sel.value || '');
   }
   refreshDailyLogContent();
@@ -11886,12 +11940,15 @@ function renderDailyLogTasks(preselectId) {
   }
   var author = document.getElementById('dl-author') ? document.getElementById('dl-author').value : '';
   var dayTs = dailyLogDate.getTime();
-  var catMap = getMergedTaskCategories(dayTs, author);
+  var taskMaps = getMergedTaskCategories(dayTs, author);
+  var catMap = taskMaps.catMap;
+  var taskTomorrowMap = taskMaps.tomorrowMap;
   var designMaps = getMergedDesignCategoryMaps(dayTs, author);
+  var designCatMap = designMaps.catMap;
+  var designTomorrowMap = designMaps.tomorrowMap;
+  var designReasons = designMaps.blockReasons;
   var taskNotes = getMergedTaskNotes(dayTs, author);
   var designNotes = getMergedDesignNotes(dayTs, author);
-  var designCatMap = designMaps.catMap;
-  var designReasons = designMaps.blockReasons;
   if (preselectId) {
     if (dailyLogPreselectKind === 'design') {
       var extraDes = dailyLogDesignExtras[preselectId] && dailyLogDesignExtras[preselectId].category;
@@ -11913,8 +11970,11 @@ function renderDailyLogTasks(preselectId) {
     html += '<div class="dl-proj-group"><div class="dl-proj-hdr" style="background:' + color + '">' + escHtml(proj) + '</div>';
     byProj[proj].forEach(function(it) {
       var isDesign = it.kind === 'design';
-      var cat = isDesign ? (designCatMap[it.id] || '') : (catMap[it.id] || '');
       var extra = isDesign ? (dailyLogDesignExtras[it.id] || {}) : (dailyLogTaskExtras[it.id] || {});
+      var cat = isDesign ? (designCatMap[it.id] || '') : (catMap[it.id] || '');
+      if (cat === 'tomorrow') cat = 'doing';
+      var tomorrowChecked = isDesign ? !!designTomorrowMap[it.id] : !!taskTomorrowMap[it.id];
+      if (extra.tomorrow != null) tomorrowChecked = !!extra.tomorrow;
       var savedNote = isDesign ? (designNotes[it.id] || '') : (taskNotes[it.id] || '');
       // 只有使用者真的改過補充說明才覆寫已存內容；避免 note:'' 把舊備註蓋掉
       var noteVal = extra._noteTouched ? String(extra.note || '') : (extra.note || savedNote);
@@ -11925,8 +11985,7 @@ function renderDailyLogTasks(preselectId) {
       var nameBadge = isDesign ? '<span class="dl-design-badge">設計</span>' : '';
       var unlistedClass = cat ? '' : ' dl-row-unlisted';
       html += '<div class="dl-row' + unlistedClass + '" ' + rowAttr + '>';
-      html += '<div class="dl-row-top">';
-      html += buildDailyCatSelect(cat, isBlock);
+      html += '<div class="dl-row-head">';
       html += '<div class="dl-task-main"><span class="dl-task-name">' + nameBadge + escHtml(it.taskName) + '</span>';
       var metaParts = [];
       if (it.taskDesc) metaParts.push(it.taskDesc);
@@ -11936,6 +11995,10 @@ function renderDailyLogTasks(preselectId) {
       }
       html += '</div>';
       html += buildDailyProgressCellHtml(cat, resolveDailyLogRowProgressPct(null, it));
+      html += '</div>';
+      html += '<div class="dl-row-actions">';
+      html += buildDailyCatSelect(cat, isBlock);
+      html += buildDailyTomorrowCheckbox(tomorrowChecked, cat);
       html += '</div>';
       html += '<textarea class="dl-note" rows="2" placeholder="補充說明（選填，Enter 可換行）" onclick="event.stopPropagation()">' + escHtml(noteVal) + '</textarea>';
       html += '<textarea class="dl-block-reason" rows="2" placeholder="卡關原因（必填）" style="display:' + (isBlock ? 'block' : 'none') + '" onclick="event.stopPropagation()">' + String(blockVal).replace(/</g, '&lt;') + '</textarea>';
@@ -12000,6 +12063,8 @@ function collectDailyLogCategories() {
     var catSel = row.querySelector('.dl-cat');
     if (!catSel || !catSel.value) return;
     var cat = catSel.value;
+    var tomorrowCb = row.querySelector('.dl-tomorrow');
+    var alsoTomorrow = !!(tomorrowCb && tomorrowCb.checked && cat === 'doing');
     var kind = row.dataset.kind || 'task';
     var id = kind === 'design' ? row.dataset.designId : row.dataset.taskId;
     if (!id) return;
@@ -12032,6 +12097,10 @@ function collectDailyLogCategories() {
       };
       designGroups[cat].push(ditem);
       designIds[cat].push(id);
+      if (alsoTomorrow) {
+        designGroups.tomorrow.push(ditem);
+        designIds.tomorrow.push(id);
+      }
       if (cat === 'block' && blockReason) designBlockReasons[id] = blockReason;
     } else {
       var ctx = getTaskContext(id);
@@ -12059,6 +12128,10 @@ function collectDailyLogCategories() {
       };
       groups[cat].push(item);
       ids[cat].push(id);
+      if (alsoTomorrow) {
+        groups.tomorrow.push(item);
+        ids.tomorrow.push(id);
+      }
     }
   });
   return { groups: groups, ids: ids, designGroups: designGroups, designIds: designIds, designBlockReasons: designBlockReasons };
@@ -12222,7 +12295,7 @@ function saveDailyJournal() {
   }
   var unlistedNotes = collectDailyLogUnlistedNotes();
   if (unlistedNotes.length) {
-    alert('以下項目仍是「不列入」，補充說明不會存進日報，請先改成分類（進行中／今日完成／卡關／明日預計）：\n\n' + unlistedNotes.join('\n'));
+    alert('以下項目仍是「不列入」，補充說明不會存進日報，請先改成分類（進行中／今日完成／卡關）：\n\n' + unlistedNotes.join('\n'));
     return;
   }
   var data = collectDailyLogCategories();
@@ -12984,14 +13057,22 @@ function renderJournalProjCard(proj) {
   html += '<div class="j-proj-card-hdr">' + escHtml(proj.name) + '</div>';
   html += '<div class="j-proj-card-body">';
   (proj.workitems || []).forEach(function(wi) {
-    var hasTasks = wi.done.length || wi.doing.length || wi.blocks.length || wi.tomorrow.length;
+    var tomorrowIds = {};
+    (wi.tomorrow || []).forEach(function(item) { tomorrowIds[item.id] = 1; });
+    var doingOnly = (wi.doing || []).filter(function(item) { return !tomorrowIds[item.id]; });
+    var doingTomorrow = (wi.doing || []).filter(function(item) { return !!tomorrowIds[item.id]; });
+    var tomorrowOnly = (wi.tomorrow || []).filter(function(item) {
+      return !(wi.doing || []).some(function(d) { return d.id === item.id; });
+    });
+    var hasTasks = wi.done.length || doingOnly.length || doingTomorrow.length || wi.blocks.length || tomorrowOnly.length;
     if (!hasTasks) return;
     html += '<div class="j-wi-section">';
     html += '<div class="j-wi-hdr">' + escHtml(wi.name) + '</div>';
     html += renderJournalProjSection('done', '已完成', wi.done);
-    html += renderJournalProjSection('doing', '進行中', wi.doing);
+    html += renderJournalProjSection('doing', '進行中', doingOnly);
+    html += renderJournalProjSection('doing-tomorrow', '進行中明日預計', doingTomorrow);
     html += renderJournalProjSection('block', '需要處理', wi.blocks);
-    html += renderJournalProjSection('tomorrow', '明日預計任務', wi.tomorrow);
+    html += renderJournalProjSection('tomorrow', '明日預計任務', tomorrowOnly);
     html += '</div>';
   });
   html += '</div></div>';
