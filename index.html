@@ -4713,7 +4713,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260902v12';
+var APP_BUILD = '20260902v13';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -11682,6 +11682,58 @@ function getDailyLogRowSelectedProgress(row) {
   return null;
 }
 
+function flushDailyLogRowsFromDom() {
+  document.querySelectorAll('#dl-task-list .dl-row').forEach(function(row) {
+    var kind = row.dataset.kind || 'task';
+    var id = kind === 'design' ? row.dataset.designId : row.dataset.taskId;
+    if (!id) return;
+    var store = kind === 'design' ? dailyLogDesignExtras : dailyLogTaskExtras;
+    if (!store[id]) store[id] = {};
+    var catSel = row.querySelector('.dl-cat');
+    if (catSel) store[id].category = catSel.value;
+    var tomorrowCb = row.querySelector('.dl-tomorrow');
+    if (tomorrowCb) store[id].tomorrow = !!tomorrowCb.checked;
+    var noteInput = row.querySelector('.dl-note');
+    if (noteInput) {
+      store[id].note = noteInput.value;
+      if (noteInput.value) store[id]._noteTouched = true;
+    }
+    var blockInput = row.querySelector('.dl-block-reason');
+    if (blockInput) store[id].blockReason = blockInput.value;
+    var pct = getDailyLogRowSelectedProgress(row);
+    if (pct != null) {
+      store[id].progressPct = pct;
+      store[id].status = statusFromDoingProgressPct(pct);
+    }
+  });
+}
+
+function getDailyLogCollectItems() {
+  var items = getDailyLogAllItems();
+  var author = document.getElementById('dl-author') ? document.getElementById('dl-author').value : '';
+  var journalIds = getDailyLogJournalItemIds(dailyLogDate.getTime(), author);
+  if (dailyLogPersonFilter) {
+    items = items.filter(function(it) {
+      if (dailyLogItemMatchesPerson(it, dailyLogPersonFilter)) return true;
+      if (it.kind === 'design') return !!journalIds.designIds[it.id];
+      return !!journalIds.taskIds[it.id];
+    });
+  }
+  return items;
+}
+
+function resolveDailyLogItemCategory(it, catMap, extra) {
+  var cat = catMap[it.id] || '';
+  if (extra && 'category' in extra) cat = extra.category;
+  if (cat === 'tomorrow') cat = 'doing';
+  return cat;
+}
+
+function resolveDailyLogItemTomorrow(it, tomorrowMap, extra, cat) {
+  if (extra && 'tomorrow' in extra) return !!extra.tomorrow && cat === 'doing';
+  return !!tomorrowMap[it.id] && cat === 'doing';
+}
+
 function updateDailyLogRowProgressCell(row, cat) {
   var head = row && row.querySelector('.dl-row-head');
   if (!head) return;
@@ -11712,6 +11764,16 @@ function syncDailyLogTomorrowControl(row, cat) {
 function onDailyLogTomorrowChange(cb) {
   var wrap = cb && cb.closest('.dl-tomorrow-wrap');
   if (wrap) wrap.classList.toggle('checked', !!cb.checked);
+  var row = cb && cb.closest('.dl-row');
+  if (row) {
+    var kind = row.dataset.kind || 'task';
+    var id = kind === 'design' ? row.dataset.designId : row.dataset.taskId;
+    if (id) {
+      var store = kind === 'design' ? dailyLogDesignExtras : dailyLogTaskExtras;
+      if (!store[id]) store[id] = {};
+      store[id].tomorrow = !!cb.checked;
+    }
+  }
   refreshDailyLogContent();
 }
 
@@ -11724,6 +11786,14 @@ function onDailyLogCatChange(sel) {
     row.classList.toggle('dl-row-unlisted', !sel.value);
     syncDailyLogTomorrowControl(row, sel.value || '');
     updateDailyLogRowProgressCell(row, sel.value || '');
+    var kind = row.dataset.kind || 'task';
+    var id = kind === 'design' ? row.dataset.designId : row.dataset.taskId;
+    if (id) {
+      var store = kind === 'design' ? dailyLogDesignExtras : dailyLogTaskExtras;
+      if (!store[id]) store[id] = {};
+      store[id].category = sel.value;
+      if (sel.value !== 'doing') store[id].tomorrow = false;
+    }
   }
   refreshDailyLogContent();
 }
@@ -11932,6 +12002,7 @@ function renderDailyLogProjFilter(items) {
 function renderDailyLogTasks(preselectId) {
   var area = document.getElementById('dl-task-list');
   if (!area) return;
+  flushDailyLogRowsFromDom();
   var items = getDailyLogVisibleItems();
   if (!items.length) {
     area.innerHTML = '<div style="padding:14px;color:var(--t3);font-size:12px;text-align:center">尚無符合篩選的標案任務或設計項目</div>';
@@ -11971,10 +12042,8 @@ function renderDailyLogTasks(preselectId) {
     byProj[proj].forEach(function(it) {
       var isDesign = it.kind === 'design';
       var extra = isDesign ? (dailyLogDesignExtras[it.id] || {}) : (dailyLogTaskExtras[it.id] || {});
-      var cat = isDesign ? (designCatMap[it.id] || '') : (catMap[it.id] || '');
-      if (cat === 'tomorrow') cat = 'doing';
-      var tomorrowChecked = isDesign ? !!designTomorrowMap[it.id] : !!taskTomorrowMap[it.id];
-      if (extra.tomorrow != null) tomorrowChecked = !!extra.tomorrow;
+      var cat = resolveDailyLogItemCategory(it, isDesign ? designCatMap : catMap, extra);
+      var tomorrowChecked = resolveDailyLogItemTomorrow(it, isDesign ? designTomorrowMap : taskTomorrowMap, extra, cat);
       var savedNote = isDesign ? (designNotes[it.id] || '') : (taskNotes[it.id] || '');
       // 只有使用者真的改過補充說明才覆寫已存內容；避免 note:'' 把舊備註蓋掉
       var noteVal = extra._noteTouched ? String(extra.note || '') : (extra.note || savedNote);
@@ -12054,44 +12123,48 @@ function renderDailyLogTasks(preselectId) {
 }
 
 function collectDailyLogCategories() {
+  flushDailyLogRowsFromDom();
   var groups = { doing: [], done: [], block: [], tomorrow: [] };
   var ids = { doing: [], done: [], block: [], tomorrow: [] };
   var designGroups = { doing: [], done: [], block: [], tomorrow: [] };
   var designIds = { doing: [], done: [], block: [], tomorrow: [] };
   var designBlockReasons = {};
-  document.querySelectorAll('#dl-task-list .dl-row').forEach(function(row) {
-    var catSel = row.querySelector('.dl-cat');
-    if (!catSel || !catSel.value) return;
-    var cat = catSel.value;
-    var tomorrowCb = row.querySelector('.dl-tomorrow');
-    var alsoTomorrow = !!(tomorrowCb && tomorrowCb.checked && cat === 'doing');
-    var kind = row.dataset.kind || 'task';
-    var id = kind === 'design' ? row.dataset.designId : row.dataset.taskId;
-    if (!id) return;
-    var noteInput = row.querySelector('.dl-note');
-    var blockInput = row.querySelector('.dl-block-reason');
-    var blockReason = blockInput ? blockInput.value.trim() : '';
-    if (kind === 'design') {
+  var author = document.getElementById('dl-author') ? document.getElementById('dl-author').value : '';
+  var dayTs = dailyLogDate.getTime();
+  var taskMaps = getMergedTaskCategories(dayTs, author);
+  var catMap = taskMaps.catMap;
+  var taskTomorrowMap = taskMaps.tomorrowMap;
+  var designMaps = getMergedDesignCategoryMaps(dayTs, author);
+  var designCatMap = designMaps.catMap;
+  var designTomorrowMap = designMaps.tomorrowMap;
+  var taskNotes = getMergedTaskNotes(dayTs, author);
+  var designNotes = getMergedDesignNotes(dayTs, author);
+  getDailyLogCollectItems().forEach(function(it) {
+    var isDesign = it.kind === 'design';
+    var id = it.id;
+    var extra = isDesign ? (dailyLogDesignExtras[id] || {}) : (dailyLogTaskExtras[id] || {});
+    var cat = resolveDailyLogItemCategory(it, isDesign ? designCatMap : catMap, extra);
+    if (!cat) return;
+    var alsoTomorrow = resolveDailyLogItemTomorrow(it, isDesign ? designTomorrowMap : taskTomorrowMap, extra, cat);
+    var noteVal = extra._noteTouched ? String(extra.note || '') : (extra.note || (isDesign ? (designNotes[id] || '') : (taskNotes[id] || '')));
+    var blockReason = extra.blockReason !== undefined ? String(extra.blockReason || '').trim()
+      : (isDesign ? String((designMaps.blockReasons || {})[id] || '').trim() : String(getBlockReasonForTaskFromJournals(dayTs, author, id) || '').trim());
+    if (isDesign) {
       var dctx = getDesignContext(id);
       if (!dctx) return;
-      var dBaseStatus = (dailyLogDesignExtras[id] && dailyLogDesignExtras[id].status) || dctx.f['進度狀態'] || '未開始';
+      var dBaseStatus = extra.status || dctx.f['進度狀態'] || '未開始';
       var dOrigStatus = dctx.f['進度狀態'] || getDesignProgressStatus(dctx.f) || '未開始';
-      var dProgPct = getDailyLogRowSelectedProgress(row);
+      var dProgPct = extra.progressPct != null ? snapDoingProgressPct(extra.progressPct) : null;
       var dStatus = null;
-      if (cat === 'doing' && dProgPct != null) {
-        dStatus = statusFromDoingProgressPct(dProgPct);
-      } else if (cat === 'doing') {
-        dStatus = normalizeReportStatusForCategory(dBaseStatus, cat, dOrigStatus);
-      } else if (cat === 'done') {
-        dStatus = '已完成';
-      }
-      // block / tomorrow：不更新設計進度
+      if (cat === 'doing' && dProgPct != null) dStatus = statusFromDoingProgressPct(dProgPct);
+      else if (cat === 'doing') dStatus = normalizeReportStatusForCategory(dBaseStatus, cat, dOrigStatus);
+      else if (cat === 'done') dStatus = '已完成';
       var ditem = {
         id: id,
         kind: 'design',
-        projName: dctx.projName || '其他',
-        taskName: getDesignDisplayName(dctx.f) || '未命名',
-        note: noteInput ? noteInput.value.trim() : '',
+        projName: dctx.projName || it.projName || '其他',
+        taskName: getDesignDisplayName(dctx.f) || it.taskName || '未命名',
+        note: noteVal.trim(),
         blockReason: blockReason,
         status: dStatus
       };
@@ -12105,24 +12178,19 @@ function collectDailyLogCategories() {
     } else {
       var ctx = getTaskContext(id);
       if (!ctx) return;
-      var tBaseStatus = (dailyLogTaskExtras[id] && dailyLogTaskExtras[id].status) || ctx.f['進度狀態'] || '未開始';
+      var tBaseStatus = extra.status || ctx.f['進度狀態'] || '未開始';
       var tOrigStatus = ctx.f['進度狀態'] || '未開始';
-      var tProgPct = getDailyLogRowSelectedProgress(row);
+      var tProgPct = extra.progressPct != null ? snapDoingProgressPct(extra.progressPct) : null;
       var tStatus = null;
-      if (cat === 'doing' && tProgPct != null) {
-        tStatus = statusFromDoingProgressPct(tProgPct);
-      } else if (cat === 'doing') {
-        tStatus = normalizeReportStatusForCategory(tBaseStatus, cat, tOrigStatus);
-      } else if (cat === 'done') {
-        tStatus = '已完成';
-      }
-      // block / tomorrow：不更新任務進度
+      if (cat === 'doing' && tProgPct != null) tStatus = statusFromDoingProgressPct(tProgPct);
+      else if (cat === 'doing') tStatus = normalizeReportStatusForCategory(tBaseStatus, cat, tOrigStatus);
+      else if (cat === 'done') tStatus = '已完成';
       var item = {
         id: id,
         kind: 'task',
-        projName: ctx.projName || '其他',
-        taskName: ctx.f['任務名稱'] || '未命名',
-        note: noteInput ? noteInput.value.trim() : '',
+        projName: ctx.projName || it.projName || '其他',
+        taskName: ctx.f['任務名稱'] || it.taskName || '未命名',
+        note: noteVal.trim(),
         blockReason: blockReason,
         status: tStatus
       };
