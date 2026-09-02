@@ -351,8 +351,12 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .j-proj-task-list{list-style:none;padding:0;margin:0}
 .j-proj-task-list li{font-size:13px;color:var(--text);padding:4px 0;line-height:1.45}
 .j-proj-task-list li+li{border-top:1px solid rgba(0,0,0,.04)}
+.j-proj-task-line{display:flex;align-items:baseline;gap:6px;min-width:0;flex-wrap:wrap}
+.j-proj-task-name{font-weight:600;flex:0 0 auto}
+.j-proj-task-desc{font-size:13px;font-weight:500;color:#245a42;min-width:0;line-height:1.45}
 .j-proj-task-reason{font-size:12px;color:#b45309;margin-top:4px;line-height:1.4}
 .j-proj-task-note{font-size:12px;color:var(--t2);margin-top:4px;line-height:1.45;white-space:pre-wrap}
+.jc-task-desc{font-size:12px;font-weight:500;color:#245a42;margin-left:6px}
 .jc-task-note{font-size:12px;color:var(--t2);line-height:1.45;padding:2px 2px 0;white-space:pre-wrap}
 .j-proj-block-actions{display:flex;align-items:center;gap:8px;margin-top:8px}
 .j-person-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
@@ -4715,7 +4719,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260902v14';
+var APP_BUILD = '20260902v16';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12591,6 +12595,15 @@ function journalIsBlockedActive(rec) {
   return status === '卡關';
 }
 
+function renderJournalTaskTitle(item) {
+  var desc = (item.desc || '').trim();
+  var note = (item.note || '').trim();
+  var inline = desc || note;
+  var html = '<div class="j-proj-task-line"><span class="j-proj-task-name">' + escHtml(item.name) + '</span>';
+  if (inline) html += '<span class="j-proj-task-desc">' + escHtml(inline) + '</span>';
+  return html + '</div>';
+}
+
 function journalCardRow(label, val, type) {
   if (!val) return '';
   var tasks = val.split('、').filter(Boolean);
@@ -12610,8 +12623,12 @@ function journalCardTaskItems(rec, fieldKey, label, type) {
   html += '<span class="jc-lbl ' + type + '">' + label + '</span>';
   html += '<div class="jc-val">';
   ids.forEach(function(taskId) {
+    var ctx = getTaskContext(taskId);
+    var desc = ctx ? taskDescFromFields(ctx.f) : '';
     html += '<div>';
-    html += '<span class="jc-task">' + escHtml(journalTaskDisplayName(taskId)) + '</span>';
+    html += '<span class="jc-task">' + escHtml(journalTaskDisplayName(taskId));
+    if (desc) html += '<span class="jc-task-desc">' + escHtml(desc) + '</span>';
+    html += '</span>';
     if (notes[taskId]) html += '<div class="jc-task-note">' + escHtml(notes[taskId]) + '</div>';
     html += '</div>';
   });
@@ -12627,11 +12644,15 @@ function journalCardBlockedTasks(rec) {
   var notes = (parseDesignCategories(rec).taskNotes) || {};
   var html = '';
   blockIds.forEach(function(taskId) {
+    var ctx = getTaskContext(taskId);
+    var desc = ctx ? taskDescFromFields(ctx.f) : '';
     var name = journalTaskDisplayName(taskId);
     var reason = reasonMap.byId[taskId] || reasonMap.legacy || '';
     html += '<div class="jc-row block">';
     html += '<span class="jc-lbl block">卡關</span>';
-    html += '<div class="jc-val"><span class="jc-task">' + escHtml(name) + '</span>';
+    html += '<div class="jc-val"><span class="jc-task">' + escHtml(name);
+    if (desc) html += '<span class="jc-task-desc">' + escHtml(desc) + '</span>';
+    html += '</span>';
     if (notes[taskId]) html += '<div class="jc-task-note">' + escHtml(notes[taskId]) + '</div>';
     if (reason) html += '<div class="jc-task-reason">' + escHtml(reason) + '</div>';
     html += '</div></div>';
@@ -13064,6 +13085,7 @@ function collectJournalPersonData(rec, personName, opts) {
       return {
         id: id,
         name: ctx ? (ctx.f['任務名稱'] || '任務') : '任務',
+        desc: ctx ? taskDescFromFields(ctx.f) : '',
         wiName: ctx ? (ctx.wiName || '') : '',
         note: notes[id] || ''
       };
@@ -13078,6 +13100,7 @@ function collectJournalPersonData(rec, personName, opts) {
     return {
       id: id,
       name: ctx ? (ctx.f['任務名稱'] || '任務') : '任務',
+      desc: ctx ? taskDescFromFields(ctx.f) : '',
       wiName: ctx ? (ctx.wiName || '') : '',
       note: notes[id] || '',
       reason: reasonMap.byId[id] || reasonMap.legacy || '',
@@ -13110,8 +13133,10 @@ function renderJournalProjSection(cat, title, items) {
   html += '<ul class="j-proj-task-list">';
   items.forEach(function(item) {
     html += '<li>';
-    html += escHtml(item.name);
-    if (item.note) html += '<div class="j-proj-task-note">' + escHtml(item.note) + '</div>';
+    html += renderJournalTaskTitle(item);
+    if (item.note && item.note !== (item.desc || '').trim()) {
+      html += '<div class="j-proj-task-note">' + escHtml(item.note) + '</div>';
+    }
     if (item.reason) html += '<div class="j-proj-task-reason">' + escHtml(item.reason) + '</div>';
     if (cat === 'block' && item.id) {
       html += '<div class="j-proj-block-actions">';
