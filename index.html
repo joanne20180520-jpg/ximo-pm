@@ -194,7 +194,7 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .ti:hover .bdel{opacity:1}
 .ti .bdel:hover{color:#c0392b;background:#fff3f3}
 .tn{font-size:13px;font-weight:700;color:var(--text);line-height:1.4;padding-right:14px;word-break:keep-all;overflow-wrap:break-word}
-.tdesc{font-size:11px;font-weight:normal !important;margin-top:3px;line-height:1.4;padding-right:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tdesc{font-size:11px;font-weight:normal !important;margin-top:3px;line-height:1.4;padding-right:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t2)}
 .ti-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px}
 .ti-assignee{font-size:11px;color:var(--t3);line-height:1.2;margin-left:auto;flex-shrink:0}
 .ti-status{font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;flex-shrink:0;white-space:nowrap;line-height:1.4}
@@ -4697,7 +4697,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260902v1';
+var APP_BUILD = '20260902v2';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -7880,8 +7880,7 @@ function renderTaskRow(t, opts) {
   }
   html += '<div class="tn">' + formatTaskNameHtml(t.name) + '</div>';
   if (t.desc) {
-    var descColor = projDescColorByName(t.projName);
-    html += '<div class="tdesc" style="color:' + descColor + '" title="' + escAttr(t.desc) + '">' + escHtml(t.desc) + '</div>';
+    html += '<div class="tdesc" title="' + escAttr(t.desc) + '">' + escHtml(t.desc) + '</div>';
   }
   html += '<div class="ti-foot">';
   html += '<span class="ti-status ' + kind.replace('paused', 'pause') + '">' + escHtml(statusLabel) + '</span>';
