@@ -399,8 +399,10 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .dl-row:hover{background:var(--sf2)}
 .dl-row-unlisted{opacity:.78;background:var(--sf2)}
 .dl-row-head{display:flex;align-items:flex-start;gap:10px;min-width:0}
-.dl-row-actions{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.dl-row-actions{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:nowrap}
 .dl-row input[type=checkbox]{width:15px;height:15px;flex-shrink:0;cursor:pointer;margin:0}
+.dl-task-list .dl-row-actions .dl-cat{width:auto;min-width:96px;max-width:120px;flex:0 0 auto;padding:4px 24px 4px 8px;height:28px}
+.dl-task-list .dl-row-actions .dl-tomorrow-wrap{flex:0 0 auto;margin:0}
 .dl-proj-tag{font-size:10px;padding:2px 7px;border-radius:8px;color:#fff;font-weight:600;flex-shrink:0;max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dl-task-main{flex:1 1 auto;min-width:0;overflow:hidden}
 .dl-task-name{font-size:13px;font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
