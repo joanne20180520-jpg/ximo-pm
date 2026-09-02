@@ -381,8 +381,8 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .pp-daily .ppb{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 20px;font-size:14px}
 .pp-daily .ppf{flex-shrink:0;background:var(--surface);position:sticky;bottom:0;z-index:2}
 .pp-daily .fg{margin-bottom:14px}
-.pp-daily .fg label{font-size:13px;margin-bottom:5px}
-.pp-daily .fg input,.pp-daily .fg select,.pp-daily .fg textarea{font-size:14px;padding:8px 11px;line-height:1.45}
+.pp-daily .fg > label{font-size:13px;margin-bottom:5px}
+.pp-daily .fg input:not([type=checkbox]):not([type=radio]),.pp-daily .fg select,.pp-daily .fg textarea{font-size:14px;padding:8px 11px;line-height:1.45}
 .dl-date{font-size:15px;font-weight:700;margin-bottom:12px;color:var(--text)}
 .dl-filter-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 .dl-filter-select{width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;background:var(--sf2);color:var(--text);outline:none;font-family:inherit;box-sizing:border-box;line-height:1.45}
@@ -422,7 +422,7 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .dl-cat{padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff;flex:0 0 auto;min-width:110px;max-width:110px;width:auto;height:36px;box-sizing:border-box;line-height:1.2}
 .dl-cat-block{border-color:#e8a0a0;background:#fff8f8}
 .dl-tomorrow-wrap{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 12px;border:1px solid #e8b86a;border-radius:8px;background:#fffaf2;font-size:13px;font-weight:600;color:#c67c00;cursor:pointer;user-select:none;height:36px;box-sizing:border-box;white-space:nowrap;line-height:1;margin:0}
-.dl-tomorrow-wrap input[type=checkbox],.dl-tomorrow-wrap .dl-tomorrow{display:block;width:16px;height:16px;min-width:16px;min-height:16px;flex:0 0 16px;margin:0;padding:0;cursor:pointer;align-self:center;vertical-align:middle;position:relative;top:0;accent-color:#e8a020}
+.dl-tomorrow-wrap input[type=checkbox],.dl-tomorrow-wrap .dl-tomorrow{width:16px;height:16px;min-width:16px;max-width:16px;flex:0 0 16px;margin:0;padding:0;border:none;background:transparent;box-shadow:none;border-radius:0;cursor:pointer;accent-color:#e8a020;vertical-align:middle}
 .dl-tomorrow-wrap span{display:inline-flex;align-items:center;line-height:1;font-size:13px}
 .dl-tomorrow-wrap.checked{border-color:#e8a020;background:#fff6e8;color:#b45309}
 .dl-tomorrow-wrap.is-disabled{opacity:.45;cursor:not-allowed}
@@ -789,9 +789,9 @@ body.role-admin #pl-projects .si{cursor:pointer}
 /* payment form */
 .pfw{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px}
 .fg{margin-bottom:11px}
-.fg label{display:block;font-size:11px;font-weight:600;color:var(--t2);margin-bottom:3px}
-.fg input,.fg select,.fg textarea{width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;background:var(--sf2);color:var(--text);outline:none;font-family:inherit}
-.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--accent);background:#fff}
+.fg > label{display:block;font-size:11px;font-weight:600;color:var(--t2);margin-bottom:3px}
+.fg input:not([type=checkbox]):not([type=radio]),.fg select,.fg textarea{width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;background:var(--sf2);color:var(--text);outline:none;font-family:inherit}
+.fg input:not([type=checkbox]):not([type=radio]):focus,.fg select:focus,.fg textarea:focus{border-color:var(--accent);background:#fff}
 #nt-name,#td-name{resize:vertical;min-height:52px;line-height:1.45}
 .ntags{display:flex;gap:5px;flex-wrap:wrap}
 .ntag{padding:3px 10px;border-radius:20px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--sf2);color:var(--t2)}
@@ -4712,7 +4712,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260902v9';
+var APP_BUILD = '20260902v10';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
