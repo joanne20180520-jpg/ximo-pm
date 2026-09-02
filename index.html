@@ -419,7 +419,7 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .dl-progress-opt:hover,.dl-progress-opt.active{background:#eef4fc;color:var(--c2)}
 .dl-note{width:100%;margin-top:6px;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:#fff;box-sizing:border-box;font-family:inherit;resize:vertical;min-height:44px;line-height:1.45}
 .dl-block-reason{width:100%;margin-top:6px;padding:6px 9px;border:1px solid #e8a0a0;border-radius:4px;font-size:12px;background:#fff8f8;font-family:inherit;box-sizing:border-box}
-.dl-cat{padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#fff;flex:0 0 auto;min-width:88px;height:28px;box-sizing:border-box}
+.dl-cat{padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:#fff;flex:0 0 auto;min-width:88px;max-width:120px;width:auto;height:28px;box-sizing:border-box}
 .dl-cat-block{border-color:#e8a0a0;background:#fff8f8}
 .dl-tomorrow-wrap{display:inline-flex;align-items:center;gap:6px;padding:0 10px;border:1px solid #e8b86a;border-radius:6px;background:#fffaf2;font-size:11px;font-weight:600;color:#c67c00;cursor:pointer;user-select:none;height:28px;box-sizing:border-box;white-space:nowrap}
 .dl-tomorrow-wrap.checked{border-color:#e8a020;background:#fff6e8;color:#b45309}
@@ -803,6 +803,7 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .bss .bsub,.bss .bsub2{margin-top:0}
 .p-upper{font-size:11px;color:var(--t2);margin-top:4px;min-height:16px}
 .pay-list-wrap{padding:0 16px 16px;border-top:1px solid var(--border)}
+#p-reason,#p-remark{resize:vertical;min-height:56px;line-height:1.45}
 .pay-list-head{font-size:12px;font-weight:700;color:var(--text);padding:12px 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .pay-list-head-count{font-size:11px;font-weight:500;color:var(--t3)}
 .pay-query-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;background:var(--sf2);border:1px solid var(--border);border-radius:10px;margin-bottom:14px;flex-wrap:wrap}
@@ -1412,8 +1413,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
           </div>
           <div>
             <div class="fg"><label>支付方式</label><select id="p-method"><option>現金</option><option>匯款</option><option>支票</option></select></div>
-            <div class="fg"><label>事由</label><input type="text" id="p-reason" placeholder="填寫付款事由"></div>
-            <div class="fg"><label>備註</label><input type="text" id="p-remark" placeholder="備註說明"></div>
+            <div class="fg"><label>事由</label><textarea id="p-reason" rows="2" placeholder="填寫付款事由" onkeydown="onPaymentMultilineKeydown(event)"></textarea></div>
+            <div class="fg"><label>備註</label><textarea id="p-remark" rows="2" placeholder="備註說明" onkeydown="onPaymentMultilineKeydown(event)"></textarea></div>
             <div class="fg"><label>付款總金額</label><input type="text" class="money-input" id="p-total" placeholder="NT$0" oninput="updatePayUpper()"><div class="p-upper" id="p-upper"></div></div>
             <div class="fg">
               <label>附件</label>
@@ -4087,6 +4088,12 @@ var PAY_PRINT_BASE = '/payment-print.html';
 var PAY_PRINT_STORAGE_KEY = 'ximo-pay-print';
 var payPreviewUrl = '';
 
+function onPaymentMultilineKeydown(ev) {
+  ev.stopPropagation();
+  if (ev.key === 'Enter' && ev.shiftKey) return;
+  if (ev.key === 'Enter') ev.preventDefault();
+}
+
 function stashPayPrintData() {
   try {
     localStorage.setItem(PAY_PRINT_STORAGE_KEY, JSON.stringify(collectPaymentFields()));
@@ -4703,7 +4710,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260902v4';
+var APP_BUILD = '20260902v5';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
