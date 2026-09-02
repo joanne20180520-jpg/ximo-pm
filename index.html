@@ -4713,7 +4713,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260902v11';
+var APP_BUILD = '20260902v12';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -10264,7 +10264,7 @@ function journalPlainNote(rec) {
 }
 
 function looksLikeDailyReportSummary(text) {
-  return /^【(進行中|進行中明日預計|今日完成|卡關|明日預計)】/m.test(String(text || '').trim());
+  return /^【(進行中|進行中且明日接續|進行中明日預計|今日完成|卡關|明日預計)】/m.test(String(text || '').trim());
 }
 
 function journalFreeNote(rec) {
@@ -11545,8 +11545,8 @@ function formatDailyReportSummary(groups, designGroups) {
   var designSplit = designGroups ? splitDoingTomorrow(designGroups.doing, designGroups.tomorrow, true) : { doingOnly: [], doingTomorrow: [] };
   section('進行中', taskSplit.doingOnly, false);
   section('進行中', designSplit.doingOnly, true);
-  section('進行中明日預計', taskSplit.doingTomorrow, false);
-  section('進行中明日預計', designSplit.doingTomorrow, true);
+  section('進行中且明日接續', taskSplit.doingTomorrow, false);
+  section('進行中且明日接續', designSplit.doingTomorrow, true);
   section('今日完成', groups.done, false);
   section('今日完成', designGroups && designGroups.done, true);
   section('卡關', groups.block, false);
@@ -11560,7 +11560,7 @@ function buildDailyTomorrowCheckbox(checked, cat) {
   return '<label class="' + cls + '" onclick="event.stopPropagation()">'
     + '<span class="dl-tomorrow-box"><input type="checkbox" class="dl-tomorrow"' + (checked ? ' checked' : '') + (enabled ? '' : ' disabled')
     + ' onchange="onDailyLogTomorrowChange(this)"></span>'
-    + '<span class="dl-tomorrow-text">明日繼續</span></label>';
+    + '<span class="dl-tomorrow-text">明日接續</span></label>';
 }
 
 function buildDailyCatSelect(value, isBlock) {
@@ -13070,7 +13070,7 @@ function renderJournalProjCard(proj) {
     html += '<div class="j-wi-hdr">' + escHtml(wi.name) + '</div>';
     html += renderJournalProjSection('done', '已完成', wi.done);
     html += renderJournalProjSection('doing', '進行中', doingOnly);
-    html += renderJournalProjSection('doing-tomorrow', '進行中明日預計', doingTomorrow);
+    html += renderJournalProjSection('doing-tomorrow', '進行中且明日接續', doingTomorrow);
     html += renderJournalProjSection('block', '需要處理', wi.blocks);
     html += renderJournalProjSection('tomorrow', '明日預計任務', tomorrowOnly);
     html += '</div>';
