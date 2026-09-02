@@ -4697,7 +4697,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260901v6';
+var APP_BUILD = '20260902v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -15698,6 +15698,24 @@ function isDesignerRoleToken(raw) {
   return r.toLowerCase() === 'designer';
 }
 
+function isPMRoleToken(raw) {
+  var r = String(raw || '').trim();
+  if (!r) return false;
+  if (isDesignLeadRoleToken(r) || isDesignerRoleToken(r) || isAccountantRoleToken(r)) return false;
+  if (r === 'PM' || r === 'pm') return true;
+  if (/\bPM\b/i.test(r) || r.indexOf('主PM') >= 0) return true;
+  var lower = r.toLowerCase();
+  return lower === 'project_manager' || lower === 'project manager';
+}
+
+function memberHasPMRole(fields) {
+  var tokens = collectMemberRoleTokens(fields);
+  for (var i = 0; i < tokens.length; i++) {
+    if (isPMRoleToken(tokens[i])) return true;
+  }
+  return false;
+}
+
 function isAdminRoleToken(raw) {
   var r = String(raw || '').trim();
   if (!r) return false;
@@ -15745,8 +15763,10 @@ function memberSkipsJournal(fields) {
 
 function memberHidesFromSelects(fields) {
   var tokens = collectMemberRoleTokens(fields);
+  var hasPm = memberHasPMRole(fields);
   for (var i = 0; i < tokens.length; i++) {
-    if (isAdminRoleToken(tokens[i]) || isAccountantRoleToken(tokens[i])) return true;
+    if (isAccountantRoleToken(tokens[i])) return true;
+    if (isAdminRoleToken(tokens[i]) && !hasPm) return true;
   }
   var hideByName = false;
   forEachMemberAccountPerson(fields, function(person) {
@@ -15867,10 +15887,11 @@ function buildMembersMap() {
     meta = meta || {};
     var role = meta.role || 'PM';
     var skipJournal = !!meta.skipJournal;
-    var hideFromSelects = !!meta.hideFromSelects || role === '管理員';
+    var hasPmRole = !!meta.hasPmRole;
+    var hideFromSelects = !!meta.hideFromSelects || (role === '管理員' && !hasPmRole);
     id = String(id || '').trim();
     if (!membersMap[name]) {
-      membersMap[name] = { id: id, name: name, role: role, skipJournal: skipJournal, hideFromSelects: hideFromSelects };
+      membersMap[name] = { id: id, name: name, role: role, skipJournal: skipJournal, hideFromSelects: hideFromSelects, hasPmRole: hasPmRole };
     } else {
       if (id && /^ou_|^on_/i.test(id)) {
         if (!membersMap[name].id || !/^ou_|^on_/i.test(membersMap[name].id)) {
@@ -15881,9 +15902,12 @@ function buildMembersMap() {
       else if (role === '會計' && membersMap[name].role !== '管理員') membersMap[name].role = '會計';
       else if (role === '設計主管' && membersMap[name].role !== '管理員' && membersMap[name].role !== '會計') membersMap[name].role = '設計主管';
       else if (role === '設計師' && membersMap[name].role !== '管理員' && membersMap[name].role !== '會計' && membersMap[name].role !== '設計主管') membersMap[name].role = '設計師';
+      if (hasPmRole) membersMap[name].hasPmRole = true;
       if (skipJournal) membersMap[name].skipJournal = true;
       if (hideFromSelects || role === '會計' || isAccountantMemberName(name)) {
         membersMap[name].hideFromSelects = true;
+      } else if (hasPmRole) {
+        membersMap[name].hideFromSelects = false;
       }
     }
   }
@@ -15899,7 +15923,7 @@ function buildMembersMap() {
     var role = resolveMemberRole(f);
     var skipJournal = memberSkipsJournal(f);
     var hideFromSelects = memberHidesFromSelects(f);
-    var meta = { role: role, skipJournal: skipJournal, hideFromSelects: hideFromSelects };
+    var meta = { role: role, skipJournal: skipJournal, hideFromSelects: hideFromSelects, hasPmRole: memberHasPMRole(f) };
     forEachMemberAccountPerson(f, function(person) {
       addMember(person.name, person.id, meta);
     });
@@ -15970,9 +15994,9 @@ function getMemberNames() {
   return names.sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
 }
 
-/** 下拉選單：value 用 open_id（穩定），label 用顯示名；管理員／會計不列入。
+/** 下拉選單：value 用 open_id（穩定），label 用顯示名；純管理員／會計不列入。
  *  opts.designersOnly=true → 設計主管＋設計師（給「設計師」欄位）
- *  預設 → 只列 PM（排除設計團隊、管理員、會計；工作項目／任務／負責PM 等）
+ *  預設 → PM（含 PM+管理員；排除設計團隊、純管理員、會計）
  */
 function isDesignTeamMemberRole(role) {
   return isDesignLeadRoleToken(role) || isDesignerRoleToken(role)
@@ -15987,7 +16011,8 @@ function getMemberSelectOptions(opts) {
   Object.keys(membersMap).forEach(function(name) {
     var m = membersMap[name];
     if (!m) return;
-    if (m.hideFromSelects || m.role === '管理員' || m.role === '會計' || isAccountantMemberName(name)) return;
+    if (m.hideFromSelects || m.role === '會計' || isAccountantMemberName(name)) return;
+    if (m.role === '管理員' && !m.hasPmRole) return;
     var onDesignTeam = isDesignTeamMemberRole(m.role);
     if (designersOnly) {
       if (!onDesignTeam) return;
