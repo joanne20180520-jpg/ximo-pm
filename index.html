@@ -405,8 +405,10 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .dl-task-list .dl-row-actions .dl-tomorrow-wrap{flex:0 0 auto;min-width:auto;margin:0}
 .dl-proj-tag{font-size:11px;padding:2px 8px;border-radius:8px;color:#fff;font-weight:600;flex-shrink:0;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dl-task-main{flex:1 1 auto;min-width:0;overflow:hidden}
-.dl-task-name{font-size:14px;font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dl-task-meta{font-size:13px;color:var(--t2);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl-task-title-line{display:flex;align-items:baseline;gap:6px;min-width:0;overflow:hidden}
+.dl-task-name{font-size:14px;font-weight:600;flex:0 0 auto;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl-task-desc{font-size:13px;font-weight:500;color:#245a42;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl-task-meta{font-size:12px;color:var(--t2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
 .dl-progress{font-size:13px;font-weight:700;color:var(--report);flex:0 0 auto;min-width:40px;text-align:right;line-height:32px}
 .dl-progress-wrap{position:relative;flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;height:32px;align-self:center;z-index:2}
 .dl-progress-btn{display:inline-flex;align-items:center;justify-content:center;gap:3px;min-width:44px;height:32px;padding:0 7px;border:1px solid var(--c2);border-radius:4px;font-size:13px;font-weight:700;color:var(--c2);background:#eef4fc;font-family:inherit;cursor:pointer;line-height:1;box-sizing:border-box;white-space:nowrap}
@@ -12058,12 +12060,13 @@ function renderDailyLogTasks(preselectId) {
       var unlistedClass = cat ? '' : ' dl-row-unlisted';
       html += '<div class="dl-row' + unlistedClass + '" ' + rowAttr + '>';
       html += '<div class="dl-row-head">';
-      html += '<div class="dl-task-main"><span class="dl-task-name">' + nameBadge + escHtml(it.taskName) + '</span>';
-      var metaParts = [];
-      if (it.taskDesc) metaParts.push(it.taskDesc);
-      if (it.assignee) metaParts.push(it.assignee);
-      if (metaParts.length) {
-        html += '<span class="dl-task-meta" title="' + escAttr(metaParts.join(' · ')) + '">' + escHtml(metaParts.join(' · ')) + '</span>';
+      html += '<div class="dl-task-main"><div class="dl-task-title-line"><span class="dl-task-name">' + nameBadge + escHtml(it.taskName) + '</span>';
+      if (it.taskDesc) {
+        html += '<span class="dl-task-desc" title="' + escAttr(it.taskDesc) + '">' + escHtml(it.taskDesc) + '</span>';
+      }
+      html += '</div>';
+      if (it.assignee) {
+        html += '<span class="dl-task-meta" title="' + escAttr(it.assignee) + '">' + escHtml(it.assignee) + '</span>';
       }
       html += '</div>';
       html += buildDailyProgressCellHtml(cat, resolveDailyLogRowProgressPct(null, it));
