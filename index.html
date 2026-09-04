@@ -387,6 +387,8 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .pp-daily .fg{margin-bottom:14px}
 .pp-daily .fg > label{font-size:13px;margin-bottom:5px}
 .pp-daily .fg input:not([type=checkbox]):not([type=radio]),.pp-daily .fg select,.pp-daily .fg textarea{font-size:14px;padding:8px 11px;line-height:1.45}
+.pp-daily .dl-author-locked{background:var(--sf2);color:var(--t2);cursor:default;border-color:var(--border)}
+.pp-daily .dl-author-locked:focus{outline:none;border-color:var(--border);box-shadow:none;background:var(--sf2)}
 .dl-date{font-size:15px;font-weight:700;margin-bottom:12px;color:var(--text)}
 .dl-filter-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 .dl-filter-select{width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;background:var(--sf2);color:var(--text);outline:none;font-family:inherit;box-sizing:border-box;line-height:1.45}
@@ -1639,7 +1641,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
 
 <div class="po" id="pp-daily-log"><div class="pp pp-daily"><div class="pph pph-report"><h3>每日工作回報</h3><button class="ppc" style="color:rgba(255,255,255,.8)" onclick="cl('pp-daily-log')">✕</button></div><div class="ppb">
   <div class="dl-date" id="dl-date-display"></div>
-  <div class="fg"><label>回報人</label><select id="dl-author" onchange="onDailyLogAuthorChange()"></select></div>
+  <div class="fg"><label>回報人</label><input type="text" id="dl-author" class="dl-author-locked" readonly tabindex="-1" placeholder="登入後自動帶入"></div>
   <div class="fg"><label>任務篩選</label><div class="dl-filter-row"><select id="dl-proj-filter" class="dl-filter-select" onchange="onDailyLogProjFilterChange()"></select><select id="dl-person-filter" class="dl-filter-select" onchange="onDailyLogPersonFilterChange()"></select></div><div class="dl-task-list" id="dl-task-list"></div></div>
   <div class="fg"><label>任務摘要</label><textarea id="dl-content" class="dl-task-summary" rows="5" readonly tabindex="-1" placeholder=""></textarea></div>
   <div class="fg"><label class="dl-free-note-label">非任務備註<span class="dl-opt">選填</span></label><textarea id="dl-free-note" rows="3" placeholder=""></textarea></div>
@@ -6199,10 +6201,8 @@ function applyLoginUserToForms() {
     else payLabel.innerHTML = '<span style="color:var(--warn)">尚未登入</span>';
   }
   if (name) {
-    var authorSel = document.getElementById('dl-author');
-    if (authorSel && !authorSel.dataset.userPicked) {
-      selectMemberOption(authorSel, getLoginLarkPerson() || [{ name: name, id: (getCurrentLoginUser() || {}).openId }]);
-    }
+    var authorEl = document.getElementById('dl-author');
+    if (authorEl) authorEl.value = name;
   }
 }
 function storeLoginUser(user) {
@@ -11843,15 +11843,12 @@ function getDailyLogVisibleItems() {
 }
 
 function selectDailyLogAuthor(name) {
-  var authorSel = document.getElementById('dl-author');
-  if (!authorSel || !name) return '';
-  for (var i = 0; i < authorSel.options.length; i++) {
-    if (namesMatch(authorSel.options[i].text, name) || namesMatch(authorSel.options[i].value, name)) {
-      authorSel.selectedIndex = i;
-      return authorSel.value;
-    }
-  }
-  return authorSel.value || '';
+  var authorEl = document.getElementById('dl-author');
+  if (!authorEl) return '';
+  var locked = (name || getMyPersonName() || '').trim();
+  if (!locked) locked = '（未指定）';
+  authorEl.value = locked;
+  return locked;
 }
 
 function buildDailyLogAuthorNames(items) {
@@ -11876,11 +11873,12 @@ function buildDailyLogAuthorNames(items) {
 }
 
 function fillDailyLogAuthorSelect() {
-  var authorSel = document.getElementById('dl-author');
-  if (!authorSel) return;
-  var prev = authorSel.value;
-  fillSelectOptions(authorSel, buildDailyLogAuthorNames(getDailyLogAllItems()));
-  if (prev) selectDailyLogAuthor(prev);
+  selectDailyLogAuthor(getMyPersonName());
+}
+
+function lockDailyLogAuthorToLogin() {
+  var author = selectDailyLogAuthor(getMyPersonName());
+  return author && author !== '（未指定）' ? author : (getMyPersonName() || '');
 }
 
 function updateDailyLogDeleteButton() {
@@ -11953,14 +11951,8 @@ function renderDailyLogPersonFilter(items) {
 }
 
 function onDailyLogAuthorChange() {
-  var author = document.getElementById('dl-author').value || '';
-  dailyLogPersonFilter = author && author !== '（未指定）' ? author : '';
-  var freeEl = document.getElementById('dl-free-note');
-  if (freeEl) freeEl.value = getMergedJournalNotes(dailyLogDate.getTime(), author);
-  renderDailyLogPersonFilter(getDailyLogAllItems());
-  renderDailyLogTasks(dailyLogPreselectId);
-  updateDailyLogDeleteButton();
-  dailyLogPreselectId = null;
+  // 回報人已鎖定為登入帳號，不可切換
+  lockDailyLogAuthorToLogin();
 }
 
 var dailyLogPreselectId = null;
@@ -12270,14 +12262,8 @@ function openDailyLog(preselectId, preselectKind) {
   var el = document.getElementById('dl-date-display');
   if (el) el.textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日（星期' + weekdayLabel(d) + '）';
 
-  var items = getDailyLogAllItems();
-  var authorSel = document.getElementById('dl-author');
-  if (authorSel) {
-    fillSelectOptions(authorSel, buildDailyLogAuthorNames(items));
-  }
-
-  var author = selectDailyLogAuthor(getMyPersonName()) || (authorSel ? authorSel.value : '');
-  dailyLogPersonFilter = author && author !== '（未指定）' ? author : (getMyPersonName() || '');
+  var author = lockDailyLogAuthorToLogin();
+  dailyLogPersonFilter = author || '';
 
   var freeEl = document.getElementById('dl-free-note');
   if (freeEl) freeEl.value = getMergedJournalNotes(d.getTime(), author);
