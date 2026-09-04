@@ -327,14 +327,38 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .j-kpi-doing .j-kpi-val{color:#1a4a7a}
 .j-kpi-block .j-kpi-val{color:var(--danger)}
 .j-kpi-tomorrow .j-kpi-val{color:var(--warn)}
-.j-person-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px}
-.j-person-section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
-.j-person-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px}
-.j-person-name{font-size:18px;font-weight:700;margin:0}
-.j-proj-stack{display:flex;flex-direction:column;gap:14px}
-.j-proj-card{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff}
-.j-proj-card-hdr{padding:10px 14px;font-size:14px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border);background:var(--sf2)}
-.j-proj-card-body{padding:10px 12px;display:flex;flex-direction:column;gap:10px}
+.j-person-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px}
+.j-person-section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px 16px 16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.j-person-hdr{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
+.j-person-name{font-size:22px;font-weight:700;margin:0;color:var(--text);line-height:1.2}
+.j-person-code{font-size:13px;font-weight:500;color:var(--t3);flex-shrink:0}
+.j-proj-stack{display:flex;flex-direction:column;gap:16px}
+.j-proj-card{border:none;border-radius:0;overflow:visible;background:transparent}
+.j-proj-card-hdr{padding:0 0 10px;font-size:14px;font-weight:600;color:var(--t2);border-bottom:1px solid var(--border);background:transparent;margin-bottom:10px;line-height:1.4}
+.j-proj-card-body{padding:0;display:flex;flex-direction:column;gap:8px}
+.j-wi-acc{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff}
+.j-wi-acc-hdr{display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;user-select:none;background:#fff}
+.j-wi-acc-hdr:hover{background:#faf9f7}
+.j-wi-acc-chev{flex:0 0 auto;width:16px;color:#245a42;font-size:12px;line-height:1}
+.j-wi-acc-name{flex:1 1 auto;min-width:0;font-size:15px;font-weight:700;color:#245a42;line-height:1.35}
+.j-wi-acc-badges{display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+.j-wi-badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.j-wi-badge-doing{background:#f3e6dc;color:#8a5a3a}
+.j-wi-badge-done{background:#e8f2eb;color:#2d6a4f}
+.j-wi-badge-block{background:#fde8e8;color:#b42318}
+.j-wi-acc-body{display:none;padding:0 12px 12px;background:#f7f4ef}
+.j-wi-acc.open .j-wi-acc-body{display:block}
+.j-wi-tabs{display:flex;align-items:center;gap:8px;padding:10px 2px 12px}
+.j-wi-tab{border:1px solid transparent;background:transparent;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--t3);cursor:pointer;font-family:inherit}
+.j-wi-tab.active{background:#fff;border-color:var(--border);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.j-wi-task-list{display:flex;flex-direction:column;gap:8px}
+.j-wi-task-card{background:#fff;border:1px solid #e8e4de;border-radius:10px;padding:12px 14px}
+.j-wi-task-title{font-size:14px;font-weight:700;color:#7a4a2e;line-height:1.4;margin:0 0 4px}
+.j-wi-task-title .j-wi-task-tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;vertical-align:middle}
+.j-wi-task-tag-tomorrow{background:#fff6e8;color:#c67c00}
+.j-wi-task-tag-block{background:#fde8e8;color:#b42318}
+.j-wi-task-desc{font-size:13px;color:#8a8680;line-height:1.5;margin:0;white-space:pre-wrap}
+.j-wi-task-empty{padding:10px 4px;font-size:12px;color:var(--t3);text-align:center}
 .j-wi-section{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fff}
 .j-wi-hdr{padding:8px 12px;font-size:12px;font-weight:700;color:var(--t2);background:var(--sf2);border-bottom:1px solid var(--border)}
 .j-wi-section .j-proj-section{border-left:none;border-radius:0;margin:0}
@@ -361,6 +385,7 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .j-proj-block-actions{display:flex;align-items:center;gap:8px;margin-top:8px}
 .j-person-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .j-person-sub{font-size:12px;color:var(--t3)}
+.j-person-note{margin-top:12px}
 @media (max-width:720px){
   .j-dash-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
@@ -4727,7 +4752,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260904v6';
+var APP_BUILD = '20260904v8';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -13123,6 +13148,65 @@ function collectJournalPersonData(rec, personName, opts) {
   };
 }
 
+var journalWiExpandedIds = {};
+var journalWiTabByKey = {};
+
+function splitPersonNameCode(name) {
+  var s = String(name || '').trim();
+  if (!s) return { name: '', code: '' };
+  var m = s.match(/^(.+?)[_／\/\s]+([A-Za-z]{1,6}\d{2,})$/);
+  if (m) return { name: m[1].trim(), code: m[2].trim() };
+  return { name: s, code: '' };
+}
+
+function journalWiKey(personName, projName, wiName) {
+  return [personName || '', projName || '', wiName || ''].join('|||');
+}
+
+function isJournalWiExpanded(key) {
+  return journalWiExpandedIds[key] !== false;
+}
+
+function toggleJournalWiExpand(key, ev) {
+  if (ev) ev.stopPropagation();
+  key = String(key || '');
+  if (!key) return;
+  if (journalWiExpandedIds[key] === false) journalWiExpandedIds[key] = true;
+  else journalWiExpandedIds[key] = false;
+  renderJournalPage();
+}
+
+function setJournalWiTab(key, tab, ev) {
+  if (ev) ev.stopPropagation();
+  key = String(key || '');
+  journalWiTabByKey[key] = tab === 'done' ? 'done' : 'doing';
+  renderJournalPage();
+}
+
+function renderJournalTaskCard(item, kind) {
+  var title = item.name || '任務';
+  var desc = (item.desc || '').trim() || (item.note || '').trim() || (item.reason || '').trim();
+  var html = '<div class="j-wi-task-card">';
+  html += '<div class="j-wi-task-title">' + escHtml(title);
+  if (kind === 'tomorrow' || kind === 'doing-tomorrow') {
+    html += '<span class="j-wi-task-tag j-wi-task-tag-tomorrow">明日接續</span>';
+  }
+  if (kind === 'block') {
+    html += '<span class="j-wi-task-tag j-wi-task-tag-block">卡關</span>';
+  }
+  html += '</div>';
+  if (desc) html += '<p class="j-wi-task-desc">' + escHtml(desc) + '</p>';
+  if (kind === 'block' && item.id) {
+    html += '<div class="j-proj-block-actions">';
+    html += '<select class="jc-block-status"><option value="">調整狀態…</option>';
+    html += '<option value="doing">改為進行中</option><option value="done">改為完成</option></select>';
+    html += '<button type="button" class="jc-block-btn" data-task-id="' + escAttr(item.id) + '" data-journal-id="' + escAttr(item.journalRecId) + '" onclick="applyBlockStatusChange(this)">確認</button>';
+    html += '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+
 function renderJournalProjSection(cat, title, items) {
   if (!items || !items.length) return '';
   var html = '<div class="j-proj-section j-proj-section-' + cat + '">';
@@ -13148,44 +13232,87 @@ function renderJournalProjSection(cat, title, items) {
   return html;
 }
 
-function renderJournalProjCard(proj) {
+function renderJournalWiAccordion(personName, projName, wi) {
+  var tomorrowIds = {};
+  (wi.tomorrow || []).forEach(function(item) { tomorrowIds[item.id] = 1; });
+  var doingOnly = (wi.doing || []).filter(function(item) { return !tomorrowIds[item.id]; });
+  var doingTomorrow = (wi.doing || []).filter(function(item) { return !!tomorrowIds[item.id]; });
+  var tomorrowOnly = (wi.tomorrow || []).filter(function(item) {
+    return !(wi.doing || []).some(function(d) { return d.id === item.id; });
+  });
+  var blocks = wi.blocks || [];
+  var done = wi.done || [];
+  var doingItems = [];
+  doingOnly.forEach(function(item) { doingItems.push({ item: item, kind: 'doing' }); });
+  doingTomorrow.forEach(function(item) { doingItems.push({ item: item, kind: 'doing-tomorrow' }); });
+  tomorrowOnly.forEach(function(item) { doingItems.push({ item: item, kind: 'tomorrow' }); });
+  blocks.forEach(function(item) { doingItems.push({ item: item, kind: 'block' }); });
+  var doingCount = doingItems.length;
+  var doneCount = done.length;
+  if (!doingCount && !doneCount) return '';
+
+  var key = journalWiKey(personName, projName, wi.name);
+  var open = isJournalWiExpanded(key);
+  var tab = journalWiTabByKey[key] || (doingCount ? 'doing' : 'done');
+  if (tab === 'doing' && !doingCount && doneCount) tab = 'done';
+  if (tab === 'done' && !doneCount && doingCount) tab = 'doing';
+
+  var html = '<div class="j-wi-acc' + (open ? ' open' : '') + '">';
+  html += '<div class="j-wi-acc-hdr" onclick=\'toggleJournalWiExpand(' + JSON.stringify(String(key)) + ',event)\'>';
+  html += '<span class="j-wi-acc-chev">' + (open ? '▼' : '▶') + '</span>';
+  html += '<span class="j-wi-acc-name">' + escHtml(wi.name || '其他') + '</span>';
+  html += '<span class="j-wi-acc-badges">';
+  if (doingCount) html += '<span class="j-wi-badge j-wi-badge-doing">進行中 ' + doingCount + '</span>';
+  if (doneCount) html += '<span class="j-wi-badge j-wi-badge-done">已完成 ' + doneCount + '</span>';
+  if (!doingCount && !doneCount) html += '<span class="j-wi-badge j-wi-badge-doing">進行中 0</span>';
+  html += '</span></div>';
+
+  if (open) {
+    html += '<div class="j-wi-acc-body">';
+    html += '<div class="j-wi-tabs">';
+    html += '<button type="button" class="j-wi-tab' + (tab === 'doing' ? ' active' : '') + '" onclick=\'setJournalWiTab(' + JSON.stringify(String(key)) + ',"doing",event)\'>進行中 ' + doingCount + '</button>';
+    html += '<button type="button" class="j-wi-tab' + (tab === 'done' ? ' active' : '') + '" onclick=\'setJournalWiTab(' + JSON.stringify(String(key)) + ',"done",event)\'>已完成 ' + doneCount + '</button>';
+    html += '</div>';
+    html += '<div class="j-wi-task-list">';
+    if (tab === 'done') {
+      if (!done.length) html += '<div class="j-wi-task-empty">尚無已完成任務</div>';
+      else done.forEach(function(item) { html += renderJournalTaskCard(item, 'done'); });
+    } else {
+      if (!doingItems.length) html += '<div class="j-wi-task-empty">尚無進行中任務</div>';
+      else doingItems.forEach(function(row) { html += renderJournalTaskCard(row.item, row.kind); });
+    }
+    html += '</div></div>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderJournalProjCard(proj, personName) {
   var html = '<div class="j-proj-card">';
   html += '<div class="j-proj-card-hdr">' + escHtml(proj.name) + '</div>';
   html += '<div class="j-proj-card-body">';
   (proj.workitems || []).forEach(function(wi) {
-    var tomorrowIds = {};
-    (wi.tomorrow || []).forEach(function(item) { tomorrowIds[item.id] = 1; });
-    var doingOnly = (wi.doing || []).filter(function(item) { return !tomorrowIds[item.id]; });
-    var doingTomorrow = (wi.doing || []).filter(function(item) { return !!tomorrowIds[item.id]; });
-    var tomorrowOnly = (wi.tomorrow || []).filter(function(item) {
-      return !(wi.doing || []).some(function(d) { return d.id === item.id; });
-    });
-    var hasTasks = wi.done.length || doingOnly.length || doingTomorrow.length || wi.blocks.length || tomorrowOnly.length;
-    if (!hasTasks) return;
-    html += '<div class="j-wi-section">';
-    html += '<div class="j-wi-hdr">' + escHtml(wi.name) + '</div>';
-    html += renderJournalProjSection('done', '已完成', wi.done);
-    html += renderJournalProjSection('doing', '進行中', doingOnly);
-    html += renderJournalProjSection('doing-tomorrow', '進行中且明日接續', doingTomorrow);
-    html += renderJournalProjSection('block', '需要處理', wi.blocks);
-    html += renderJournalProjSection('tomorrow', '明日預計任務', tomorrowOnly);
-    html += '</div>';
+    html += renderJournalWiAccordion(personName || '', proj.name, wi);
   });
   html += '</div></div>';
   return html;
 }
 
 function renderJournalPersonCard(p) {
+  var parts = splitPersonNameCode(p.name);
   var html = '<div class="j-person-section">';
-  html += '<div class="j-person-hdr"><div class="j-person-name">' + escHtml(p.name) + '</div></div>';
+  html += '<div class="j-person-hdr">';
+  html += '<div class="j-person-name">' + escHtml(parts.name || p.name || '—') + '</div>';
+  if (parts.code) html += '<div class="j-person-code">' + escHtml(parts.code) + '</div>';
+  html += '</div>';
 
   if (p.projects && p.projects.length) {
     html += '<div class="j-proj-stack">';
-    p.projects.forEach(function(proj) { html += renderJournalProjCard(proj); });
+    p.projects.forEach(function(proj) { html += renderJournalProjCard(proj, p.name); });
     html += '</div>';
   }
   if (p.note) {
-    html += '<div class="jc-note"><b>非任務備註</b> ' + formatJournalHtml(p.note) + '</div>';
+    html += '<div class="jc-note j-person-note"><b>非任務備註</b> ' + formatJournalHtml(p.note) + '</div>';
   } else if (!(p.projects && p.projects.length) && p.empty) {
     if (p.noDataAtAll) {
       html += '<div class="j-empty-note">尚無日誌資料，請點「填寫今日日誌」開始回報</div>';
