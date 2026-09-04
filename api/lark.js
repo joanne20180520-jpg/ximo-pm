@@ -4042,6 +4042,7 @@ async function syncSettledPaymentToAccPortal(ximoToken, paymentRec) {
 async function syncXimoExpensesToAccPortal(ximoToken, opts) {
   opts = opts || {};
   const dryRun = !!opts.dryRun;
+  const limit = Math.max(0, parseInt(opts.limit, 10) || 0);
   if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_EXPENSES) {
     return { skipped: true, reason: 'acc-env-missing' };
   }
@@ -4070,12 +4071,14 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
 
   const out = {
     dryRun: dryRun,
+    limit: limit || null,
     scanned: 0,
     manualMissing: 0,
     paymentLinkedMissing: 0,
     created: 0,
     backfilled: 0,
     skipped: 0,
+    remaining: 0,
     errors: [],
     missing: []
   };
@@ -4184,6 +4187,10 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
     out.missing.push(item);
 
     if (dryRun) continue;
+    if (limit && out.created >= limit) {
+      out.remaining++;
+      continue;
+    }
 
     try {
       let accProject = await findAccProjectRecord(accToken, labels.projectName, '', accProjects);
@@ -7255,9 +7262,15 @@ export default async function handler(req, res) {
     if (action === 'sync-expenses-to-acc' && (req.method === 'GET' || req.method === 'POST')) {
       try {
         const token = await getToken();
-        const dryRun = String((req.query && req.query.dryRun) || (req.body && req.body.dryRun) || '') === '1'
-          || String((req.query && req.query.dryRun) || (req.body && req.body.dryRun) || '').toLowerCase() === 'true';
-        const result = await syncXimoExpensesToAccPortal(token, { dryRun: dryRun });
+        const q = req.query || {};
+        const b = req.body || {};
+        const dryRun = String(q.dryRun || b.dryRun || '') === '1'
+          || String(q.dryRun || b.dryRun || '').toLowerCase() === 'true';
+        const limit = parseInt(q.limit || b.limit || '40', 10);
+        const result = await syncXimoExpensesToAccPortal(token, {
+          dryRun: dryRun,
+          limit: dryRun ? 0 : (isNaN(limit) ? 40 : limit)
+        });
         return res.status(200).json({ ok: true, sync: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
