@@ -4719,7 +4719,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260904v1';
+var APP_BUILD = '20260904v3';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -15580,16 +15580,33 @@ function designProgressSortRank(status, num) {
   return 1;
 }
 
-function compareDesignTasksByProgress(a, b) {
-  var statusRankA = designStatusSortRank(a.designStatus);
-  var statusRankB = designStatusSortRank(b.designStatus);
-  if (statusRankA !== statusRankB) return statusRankA - statusRankB;
+function isDesignAssignedToMe(designerName) {
+  var me = getMyPersonName();
+  if (!me) return false;
+  return namesMatch(designerName || '', me);
+}
+
+function shouldShowDesignForCurrentRole(designerName) {
+  // 一般設計師只看自己負責的；設計主管／PM／管理員看全部
+  if (isDesignerRole()) return isDesignAssignedToMe(designerName);
+  return true;
+}
+
+function compareDesignTasksForCurrentRole(a, b) {
+  // 設計師／設計主管：依「設計狀態」未開始→進行中→已完成
+  // PM／管理員：依「進度狀態」未開始→進行中→已完成
+  if (isDesignerLikeRole()) {
+    var statusRankA = designStatusSortRank(a.designStatus);
+    var statusRankB = designStatusSortRank(b.designStatus);
+    if (statusRankA !== statusRankB) return statusRankA - statusRankB;
+    return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant');
+  }
   var rankA = designProgressSortRank(a.progressStatus || a.status, a.progressNum);
   var rankB = designProgressSortRank(b.progressStatus || b.status, b.progressNum);
   if (rankA !== rankB) return rankA - rankB;
   var pctA = parseProgressVal(a.progressStatus || a.status, a.progressNum) || 0;
   var pctB = parseProgressVal(b.progressStatus || b.status, b.progressNum) || 0;
-  if (statusRankA === 1 && pctA !== pctB) return pctA - pctB;
+  if (rankA === 1 && pctA !== pctB) return pctA - pctB;
   return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant');
 }
 
@@ -15752,6 +15769,8 @@ function renderDesigns() {
   var byProject = {};
   designsData.forEach(function(rec) {
     var f = rec.fields || {};
+    var designer = personName(f['設計師']);
+    if (!shouldShowDesignForCurrentRole(designer)) return;
     var wiIds = getLinkIds(f['所屬工作項目']);
     var wiId = wiIds[0] || null;
     var wi = wiId ? wiMap[wiId] : null;
@@ -15763,7 +15782,7 @@ function renderDesigns() {
       wiName: wi ? wi.name : getLinkText(f['所屬工作項目']) || '',
       pm: personName(f['負責PM']),
       item: f['項目'] || '',
-      designer: personName(f['設計師']),
+      designer: designer,
       status: getDesignProgressStatus(f),
       progressStatus: f['進度狀態'] || '',
       progressNum: f['進度數值'],
@@ -15775,7 +15794,7 @@ function renderDesigns() {
   });
 
   function renderProjectBlock(pname, color) {
-    var list = (byProject[pname] || []).slice().sort(compareDesignTasksByProgress);
+    var list = (byProject[pname] || []).slice().sort(compareDesignTasksForCurrentRole);
     var canAddDesign = canCreateDesignTask();
     var addBtn = canAddDesign ? '<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-des\')">＋ 新增設計任務單</button>' : '';
     var header = '<div class="dc"><div class="dch"><div class="pdot" style="background:' + color + '"></div><h3>' + escHtml(pname) + '</h3>' + addBtn + '</div>';
