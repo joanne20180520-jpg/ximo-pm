@@ -4064,7 +4064,6 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
     const pid = accFieldText(ef['來源付款ID']);
     if (eid) byExpenseId[eid] = rec;
     if (pid) byPaymentId[pid] = rec;
-    const fp = accExpenseFingerprint(ef);
     const loose = accExpenseFingerprint(ef, '', true);
     if (loose && !eid && !pid) byFingerprint[loose] = rec;
   });
