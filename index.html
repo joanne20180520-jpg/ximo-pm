@@ -4787,7 +4787,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260904v12';
+var APP_BUILD = '20260904v13';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -16728,6 +16728,25 @@ function extractClientRecordId(res) {
   return '';
 }
 
+function isTempRecordId(recordId) {
+  return /^tmp_/i.test(String(recordId || ''));
+}
+
+/** 寫入前清掉無效關聯，避免 Lark 回 RecordIdNotFound */
+function sanitizeDesignWriteFields(fields) {
+  var out = Object.assign({}, fields || {});
+  if (Object.prototype.hasOwnProperty.call(out, '所屬工作項目')) {
+    var wiIds = Array.isArray(out['所屬工作項目']) ? out['所屬工作項目'] : [out['所屬工作項目']];
+    wiIds = wiIds.map(function(id) { return String(id || '').trim(); }).filter(Boolean);
+    var valid = wiIds.filter(function(id) {
+      return !isTempRecordId(id) && workitemsData.some(function(w) { return w.record_id === id; });
+    });
+    if (valid.length) out['所屬工作項目'] = valid;
+    else delete out['所屬工作項目'];
+  }
+  return out;
+}
+
 function cloneRecords(arr) {
   try { return JSON.parse(JSON.stringify(arr || [])); }
   catch (e) { return (arr || []).slice(); }
@@ -16816,6 +16835,13 @@ function optimisticCreate(table, fields, opts) {
 /** 樂觀更新：先更新畫面，背景打 API，失敗則還原 */
 function optimisticUpdate(table, recordId, fields, opts) {
   opts = opts || {};
+  if (isTempRecordId(recordId)) {
+    var pendingMsg = (opts.failMsg || '修改失敗') + '：資料還在建立中，請稍候再改一次';
+    if (!opts.quiet) alert(pendingMsg);
+    else showUndoToast(pendingMsg);
+    return Promise.reject(new Error(pendingMsg));
+  }
+  if (table === 'designs') fields = sanitizeDesignWriteFields(fields);
   var arr = getTableArray(table);
   if (!arr) {
     return apiPut(table, recordId, fields).then(function(res) {
@@ -17443,8 +17469,16 @@ function saveEditDesignBasic() {
 }
 
 function openEditDesign(desId) {
+  if (isTempRecordId(desId)) {
+    showUndoToast('資料還在建立中，請稍候再編輯');
+    return;
+  }
   var rec = designsData.find(function(r) { return r.record_id === desId; });
   if (!rec) return;
+  if (rec._optimistic) {
+    showUndoToast('資料還在建立中，請稍候再編輯');
+    return;
+  }
   editingDesignId = desId;
   var f = rec.fields || {};
   refreshFormSelects();
