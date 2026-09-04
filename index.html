@@ -266,6 +266,20 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .ap-export-list li::before{content:'· ';color:var(--t3)}
 
 /* journal page */
+:root{
+  --j-ink:#2A241C; --j-ink-soft:#6E6759; --j-ink-mid:#57503F; --j-ink-faint:#9B9484;
+  --j-stuck:#B3261E; --j-doing:#B0630F; --j-doing-soft:#F5E3C9; --j-done:#5C7A4E;
+  --j-line:#E7E0D2; --j-paper:#F6F2EA; --j-paper-card:#FFFFFF;
+  --j-seg-bg:#EDE8DF;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --j-ink:#EFE9DD; --j-ink-soft:#ABA290; --j-ink-mid:#C9C0AC; --j-ink-faint:#7A7263;
+    --j-stuck:#F2857D; --j-doing:#E3A75B; --j-doing-soft:#3A2E17; --j-done:#93B57F;
+    --j-line:#362F24; --j-paper:#1C1914; --j-paper-card:#262119;
+    --j-seg-bg:#2E2920;
+  }
+}
 .jpage-single{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);display:flex;flex-direction:column;overflow:hidden;min-height:calc(100vh - var(--th) - 36px)}
 .jpage-toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .jpage-toolbar h3{font-size:14px;font-weight:700;flex:1}
@@ -281,29 +295,29 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .jl{flex:1;overflow-y:auto;padding:6px}
 .ji{padding:0;margin:0}
 .jc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
-.jc.has-block{border-color:#e8c4c4;background:#fffcfc}
+.jc.has-block{border-color:var(--j-stuck);background:#fffcfc}
 .jc-hdr{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)}
 .jn{font-size:13px;font-weight:700}
 .jpt{font-size:10px;padding:3px 9px;border-radius:10px;color:#fff;font-weight:600;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.jblk{font-size:10px;padding:3px 8px;border-radius:10px;background:#fde8e8;color:var(--danger);font-weight:700}
+.jblk{font-size:10px;padding:3px 8px;border-radius:10px;background:var(--j-stuck);color:#fff;font-weight:700}
 .jc-date{font-size:11px;color:var(--t3);margin-left:auto;font-weight:500;white-space:nowrap}
 .jc-rows{display:flex;flex-direction:column;gap:8px}
 .jc-row{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.5}
 .jc-lbl{flex-shrink:0;min-width:58px;padding:4px 8px;border-radius:8px;font-weight:600;text-align:center;font-size:10px;line-height:1.35}
-.jc-lbl.doing{background:#e6f4ee;color:#1a7a45}
-.jc-lbl.done{background:#e8f0fa;color:#1a4a7a}
-.jc-lbl.block{background:#fde8e8;color:var(--danger)}
-.jc-lbl.tomorrow{background:#f3f0e8;color:#6b5a1a}
+.jc-lbl.doing{background:var(--sf2);color:var(--j-ink-soft)}
+.jc-lbl.done{background:var(--sf2);color:var(--j-ink-soft)}
+.jc-lbl.block{background:var(--j-stuck);color:#fff}
+.jc-lbl.tomorrow{background:var(--j-doing-soft);color:var(--j-doing)}
 .jc-val{flex:1;display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;min-width:0;flex-direction:column}
-.jc-task{display:inline-block;padding:4px 10px;background:var(--sf2);border-radius:6px;font-size:12px;color:var(--text);line-height:1.4;word-break:break-word}
-.jc-row.block .jc-task{background:#fff0f0;color:var(--danger)}
-.jc-task-reason{font-size:12px;color:var(--danger);line-height:1.5;padding:2px 0}
-.jc-reason{margin-top:8px;padding:9px 11px;background:#fff8f8;border-radius:6px;border-left:3px solid #e8a0a0;font-size:12px;color:var(--danger);line-height:1.55}
+.jc-task{display:inline-block;padding:4px 10px;background:var(--sf2);border-radius:6px;font-size:12px;color:var(--j-ink);line-height:1.4;word-break:break-word}
+.jc-row.block .jc-task{background:var(--j-paper-card);color:var(--j-ink)}
+.jc-task-reason{font-size:12px;color:var(--j-ink);line-height:1.5;padding:2px 0}
+.jc-reason{margin-top:8px;padding:9px 11px;background:var(--sf2);border-radius:6px;border-left:3px solid var(--j-stuck);font-size:12px;color:var(--j-ink);line-height:1.55}
 .jc-reason b{font-weight:700;margin-right:4px}
-.jc-note{margin-top:8px;padding:9px 11px;background:var(--sf2);border-radius:6px;font-size:12px;color:var(--t2);line-height:1.55}
+.jc-note{margin-top:8px;padding:9px 11px;background:var(--sf2);border-radius:6px;font-size:12px;color:var(--j-ink);line-height:1.55}
 .jc-block-meta{font-size:12px;color:var(--t2);margin-bottom:8px}
-.jc-block-actions{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
-.jc-block-status{padding:5px 8px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;background:#fff;flex:1}
+.jc-block-actions{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--j-line)}
+.jc-block-status{padding:5px 8px;border:1px solid var(--j-line);border-radius:var(--rs);font-size:12px;background:var(--j-paper-card);flex:1}
 .jc-block-btn{padding:5px 12px;border-radius:var(--rs);border:none;background:var(--report);color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
 .jc-block-btn:hover{background:var(--report-hover)}
 .jfeed-proj-hdr{font-size:13px;font-weight:700;padding:9px 12px;border-radius:var(--rs);margin-bottom:10px;display:flex;align-items:center;gap:8px;color:#fff}
@@ -317,77 +331,98 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .j-date-today:hover{border-color:var(--accent);color:var(--accent)}
 .j-date-today.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .j-date-block{padding:4px 10px;border:1px solid var(--border);border-radius:var(--rs);background:var(--sf2);font-size:11px;cursor:pointer;font-weight:600;color:var(--t2)}
-.j-date-block:hover{border-color:var(--danger);color:var(--danger)}
-.j-date-block.active{background:var(--danger);color:#fff;border-color:var(--danger)}
+.j-date-block:hover{border-color:var(--j-stuck);color:var(--j-stuck)}
+.j-date-block.active{background:var(--j-stuck);color:#fff;border-color:var(--j-stuck)}
 .j-dash-kpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
-.j-kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
-.j-kpi-label{font-size:12px;color:var(--t2);margin-bottom:6px}
-.j-kpi-val{font-size:28px;font-weight:700;line-height:1.1}
-.j-kpi-done .j-kpi-val{color:#1a7a45}
-.j-kpi-doing .j-kpi-val{color:#1a4a7a}
-.j-kpi-block .j-kpi-val{color:var(--danger)}
-.j-kpi-tomorrow .j-kpi-val{color:var(--warn)}
-.j-person-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px}
-.j-person-section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px 16px 16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
-.j-person-hdr{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:6px}
-.j-person-name{font-size:22px;font-weight:700;margin:0;color:var(--text);line-height:1.2}
-.j-person-code{font-size:13px;font-weight:500;color:var(--t3);flex-shrink:0}
-.j-proj-stack{display:flex;flex-direction:column;gap:16px}
+.j-kpi-card{background:var(--j-paper-card);border:1px solid var(--j-line);border-radius:16px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.j-kpi-label{font-size:12px;color:var(--j-ink-soft);margin-bottom:6px}
+.j-kpi-val{font-size:28px;font-weight:700;line-height:1.1;color:var(--j-ink)}
+.j-kpi-done .j-kpi-val{color:var(--j-done)}
+.j-kpi-doing .j-kpi-val{color:var(--j-ink)}
+.j-kpi-block .j-kpi-val{color:var(--j-stuck)}
+.j-kpi-tomorrow .j-kpi-val{color:var(--j-doing)}
+.j-person-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.j-person-section{background:var(--j-paper-card);border:1px solid var(--j-line);border-radius:16px;padding:18px 16px 16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.j-person-section.has-block{border-color:var(--j-stuck);box-shadow:0 0 0 1px var(--j-stuck)}
+.j-person-hdr{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+.j-person-name{font-size:22px;font-weight:700;margin:0;color:var(--j-ink);line-height:1.2}
+.j-person-code{font-size:13px;font-weight:500;color:var(--j-ink-faint);flex-shrink:0}
+.j-empty-note{font-size:13px;color:var(--j-ink-soft);line-height:1.5;padding:4px 0}
+.j-proj-stack{display:flex;flex-direction:column;gap:14px}
 .j-proj-card{border:none;border-radius:0;overflow:visible;background:transparent}
-.j-proj-card-hdr{padding:0 0 10px;font-size:14px;font-weight:600;color:var(--t2);border-bottom:1px solid var(--border);background:transparent;margin-bottom:10px;line-height:1.4}
+.j-proj-card-hdr{padding:0 0 8px;font-size:13px;font-weight:600;color:var(--j-ink-soft);border-bottom:1px solid var(--j-line);background:transparent;margin-bottom:10px;line-height:1.4}
 .j-proj-card-body{padding:0;display:flex;flex-direction:column;gap:8px}
-.j-wi-acc{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff}
-.j-wi-acc-hdr{display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;user-select:none;background:#fff}
-.j-wi-acc-hdr:hover{background:#faf9f7}
-.j-wi-acc-chev{flex:0 0 auto;width:16px;color:#245a42;font-size:12px;line-height:1}
-.j-wi-acc-name{flex:1 1 auto;min-width:0;font-size:15px;font-weight:700;color:#245a42;line-height:1.35}
+.j-wi-acc{border:1px solid var(--j-line);border-radius:12px;overflow:hidden;background:var(--j-paper-card)}
+.j-wi-acc-hdr{display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;user-select:none;background:var(--j-paper-card)}
+.j-wi-acc-hdr:hover{background:var(--j-paper)}
+.j-wi-acc-chev{flex:0 0 auto;width:16px;color:var(--j-ink-soft);font-size:12px;line-height:1}
+.j-wi-acc-name{flex:1 1 auto;min-width:0;font-size:15px;font-weight:700;color:var(--j-ink);line-height:1.35}
 .j-wi-acc-badges{display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
-.j-wi-badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
-.j-wi-badge-doing{background:#f3e6dc;color:#8a5a3a}
-.j-wi-badge-done{background:#e8f2eb;color:#2d6a4f}
-.j-wi-badge-block{background:#fde8e8;color:#b42318}
-.j-wi-acc-body{display:none;padding:0 12px 12px;background:#f7f4ef}
+.j-wi-badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap;background:var(--j-paper);color:var(--j-ink-soft)}
+.j-wi-badge-block{background:var(--j-stuck);color:#fff}
+.j-wi-badge-done{color:var(--j-done)}
+.j-wi-acc-body{display:none;padding:0 12px 12px;background:var(--j-paper)}
 .j-wi-acc.open .j-wi-acc-body{display:block}
-.j-wi-tabs{display:flex;align-items:center;gap:8px;padding:10px 2px 12px}
-.j-wi-tab{border:1px solid transparent;background:transparent;border-radius:8px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--t3);cursor:pointer;font-family:inherit}
-.j-wi-tab.active{background:#fff;border-color:var(--border);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.j-wi-seg{display:flex;align-items:center;gap:2px;padding:3px;margin:10px 0 12px;background:var(--j-seg-bg);border-radius:10px;overflow-x:auto}
+.j-wi-seg-btn{border:none;background:transparent;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;color:var(--j-ink-soft);cursor:pointer;font-family:inherit;white-space:nowrap;flex:1 1 auto;min-width:0}
+.j-wi-seg-btn.active{background:var(--j-paper-card);color:var(--j-ink);box-shadow:0 1px 2px rgba(0,0,0,.06)}
 .j-wi-task-list{display:flex;flex-direction:column;gap:8px}
-.j-wi-task-card{background:#fff;border:1px solid #e8e4de;border-radius:10px;padding:12px 14px}
-.j-wi-task-title{font-size:14px;font-weight:700;color:#7a4a2e;line-height:1.4;margin:0 0 4px}
-.j-wi-task-title .j-wi-task-tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:6px;font-size:10px;font-weight:700;vertical-align:middle}
-.j-wi-task-tag-tomorrow{background:#fff6e8;color:#c67c00}
-.j-wi-task-tag-block{background:#fde8e8;color:#b42318}
-.j-wi-task-desc{font-size:13px;color:#8a8680;line-height:1.5;margin:0;white-space:pre-wrap}
-.j-wi-task-empty{padding:10px 4px;font-size:12px;color:var(--t3);text-align:center}
-.j-wi-section{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#fff}
-.j-wi-hdr{padding:8px 12px;font-size:12px;font-weight:700;color:var(--t2);background:var(--sf2);border-bottom:1px solid var(--border)}
+.j-wi-task-card{background:var(--j-paper-card);border:1px solid var(--j-line);border-radius:10px;padding:12px 14px;box-shadow:0 1px 3px rgba(42,36,28,.04)}
+.j-wi-task-card.is-block{border-color:var(--j-stuck)}
+.j-wi-task-card.is-done .j-wi-task-title,
+.j-wi-task-card.is-done .j-wi-task-desc,
+.j-wi-task-card.is-done .j-wi-task-remark{color:var(--j-ink-faint)}
+.j-wi-task-card.is-done .j-wi-task-title{text-decoration:line-through}
+.j-wi-task-title{font-size:14px;font-weight:700;color:var(--j-ink);line-height:1.4;margin:0 0 4px;display:flex;align-items:flex-start;flex-wrap:wrap;gap:6px}
+.j-wi-task-title-text{min-width:0}
+.j-wi-task-tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;line-height:1.3;vertical-align:middle;flex-shrink:0}
+.j-wi-task-tag-tomorrow{background:var(--j-doing-soft);color:var(--j-doing)}
+.j-wi-task-tag-block{background:var(--j-stuck);color:#fff}
+.j-wi-task-desc{font-size:13px;font-weight:400;color:var(--j-ink-soft);line-height:1.5;margin:0;white-space:pre-wrap}
+.j-wi-task-remark{font-size:13px;font-weight:400;color:var(--j-ink);line-height:1.5;margin:4px 0 0;white-space:pre-wrap}
+.j-wi-task-empty{padding:10px 4px;font-size:12px;color:var(--j-ink-faint);text-align:center}
+.j-wi-section{border:1px solid var(--j-line);border-radius:8px;overflow:hidden;background:var(--j-paper-card)}
+.j-wi-hdr{padding:8px 12px;font-size:12px;font-weight:700;color:var(--j-ink-soft);background:var(--j-paper);border-bottom:1px solid var(--j-line)}
 .j-wi-section .j-proj-section{border-left:none;border-radius:0;margin:0}
 .j-proj-section{border-radius:8px;padding:10px 12px;border-left:3px solid transparent}
-.j-proj-section-done{background:#F4F8F5;border-left-color:#2d6a4f}
+.j-proj-section-done{background:#F4F8F5;border-left-color:var(--j-done)}
 .j-proj-section-doing{background:#F7F8FA;border-left-color:#6b7c8f}
-.j-proj-section-block{background:#FCF5F3;border-left-color:#c45c3e}
-.j-proj-section-tomorrow{background:#F8F6F1;border-left-color:#9a846c}
-.j-proj-section-title{font-size:12px;font-weight:700;margin-bottom:8px;color:var(--t2)}
-.j-proj-section-done .j-proj-section-title{color:#2d6a4f}
-.j-proj-section-doing .j-proj-section-title{color:#5a6a7a}
-.j-proj-section-block .j-proj-section-title{color:#b45309}
-.j-proj-section-tomorrow .j-proj-section-title{color:#8a7355}
+.j-proj-section-block{background:#FCF5F3;border-left-color:var(--j-stuck)}
+.j-proj-section-tomorrow{background:#F8F6F1;border-left-color:var(--j-doing)}
+.j-proj-section-title{font-size:12px;font-weight:700;margin-bottom:8px;color:var(--j-ink-soft)}
+.j-proj-section-done .j-proj-section-title{color:var(--j-done)}
+.j-proj-section-doing .j-proj-section-title{color:var(--j-ink-soft)}
+.j-proj-section-block .j-proj-section-title{color:var(--j-stuck)}
+.j-proj-section-tomorrow .j-proj-section-title{color:var(--j-doing)}
 .j-proj-task-list{list-style:none;padding:0;margin:0}
-.j-proj-task-list li{font-size:13px;color:var(--text);padding:4px 0;line-height:1.45}
+.j-proj-task-list li{font-size:13px;color:var(--j-ink);padding:4px 0;line-height:1.45}
 .j-proj-task-list li+li{border-top:1px solid rgba(0,0,0,.04)}
 .j-proj-task-line{display:flex;align-items:baseline;gap:6px;min-width:0;flex-wrap:wrap}
-.j-proj-task-name{font-weight:600;flex:0 0 auto}
-.j-proj-task-desc{font-size:13px;font-weight:500;color:#245a42;min-width:0;line-height:1.45}
-.j-proj-task-reason{font-size:12px;color:#b45309;margin-top:4px;line-height:1.4}
-.j-proj-task-note{font-size:12px;color:var(--t2);margin-top:4px;line-height:1.45;white-space:pre-wrap}
-.jc-task-desc{font-size:12px;font-weight:500;color:#245a42;margin-left:6px}
-.jc-task-note{font-size:12px;color:var(--t2);line-height:1.45;padding:2px 2px 0;white-space:pre-wrap}
+.j-proj-task-name{font-weight:700;flex:0 0 auto;color:var(--j-ink)}
+.j-proj-task-desc{font-size:13px;font-weight:400;color:var(--j-ink-soft);min-width:0;line-height:1.45}
+.j-proj-task-reason{font-size:12px;color:var(--j-ink);margin-top:4px;line-height:1.4}
+.j-proj-task-note{font-size:12px;color:var(--j-ink);margin-top:4px;line-height:1.45;white-space:pre-wrap}
+.jc-task-desc{font-size:12px;font-weight:400;color:var(--j-ink-soft);margin-left:6px}
+.jc-task-note{font-size:12px;color:var(--j-ink);line-height:1.45;padding:2px 2px 0;white-space:pre-wrap}
 .j-proj-block-actions{display:flex;align-items:center;gap:8px;margin-top:8px}
-.j-person-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
-.j-person-sub{font-size:12px;color:var(--t3)}
+.j-person-card{background:var(--j-paper-card);border:1px solid var(--j-line);border-radius:16px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.j-person-sub{font-size:12px;color:var(--j-ink-faint)}
 .j-person-note{margin-top:12px}
+.j-person-grid.j-person-grid-multi .j-person-section{padding:14px 12px 12px}
+.j-person-grid.j-person-grid-multi .j-person-name{font-size:18px}
+.j-person-grid.j-person-grid-multi .j-wi-acc-name{font-size:13px}
+.j-person-grid.j-person-grid-multi .j-wi-task-title{font-size:13px}
+.j-person-grid.j-person-grid-multi .j-wi-task-desc,
+.j-person-grid.j-person-grid-multi .j-wi-task-remark{font-size:12px}
+.j-person-grid.j-person-grid-multi .j-wi-task-card{padding:10px 12px}
+.j-person-grid.j-person-grid-multi .j-wi-acc-hdr{padding:10px 12px}
+.j-person-grid.j-person-grid-multi .j-wi-seg-btn{padding:5px 8px;font-size:11px}
+@media (max-width:1100px){
+  .j-person-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 @media (max-width:720px){
   .j-dash-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .j-person-grid{grid-template-columns:1fr}
 }
 .jday-hdr{font-size:13px;font-weight:700;color:var(--text);padding:10px 4px 8px;border-bottom:2px solid var(--border);margin-bottom:10px}
 .jvbtns{display:flex;gap:3px}
@@ -462,7 +497,7 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .dl-tomorrow-wrap.is-disabled{opacity:.45;cursor:not-allowed}
 .dl-block-box{margin-bottom:10px}
 .dl-block-box textarea{width:100%;padding:8px 10px;border:1px solid #e8a0a0;border-radius:var(--rs);font-size:13px;background:#fff8f8;font-family:inherit}
-.jblk{font-size:10px;padding:1px 7px;border-radius:8px;background:#fde8e8;color:#b42318;font-weight:700;flex-shrink:0}
+.jblk{font-size:10px;padding:1px 7px;border-radius:8px;background:var(--j-stuck);color:#fff;font-weight:700;flex-shrink:0}
 .jsec{font-size:12px;color:var(--t2);margin:4px 0 2px}
 .dl-hint{font-size:12px;color:var(--t3);margin-top:4px;line-height:1.5}
 
@@ -4752,7 +4787,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260904v11';
+var APP_BUILD = '20260904v12';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12618,10 +12653,8 @@ function journalIsBlockedActive(rec) {
 
 function renderJournalTaskTitle(item) {
   var desc = (item.desc || '').trim();
-  var note = (item.note || '').trim();
-  var inline = desc || note;
   var html = '<div class="j-proj-task-line"><span class="j-proj-task-name">' + escHtml(item.name) + '</span>';
-  if (inline) html += '<span class="j-proj-task-desc">' + escHtml(inline) + '</span>';
+  if (desc) html += '<span class="j-proj-task-desc">' + escHtml(desc) + '</span>';
   return html + '</div>';
 }
 
@@ -13162,39 +13195,53 @@ function journalWiKey(personName, projName, wiName) {
   return [personName || '', projName || '', wiName || ''].join('|||');
 }
 
-function isJournalWiExpanded(key) {
-  return journalWiExpandedIds[key] === true;
+function isJournalWiExpanded(key, hasBlock) {
+  if (Object.prototype.hasOwnProperty.call(journalWiExpandedIds, key)) {
+    return journalWiExpandedIds[key] === true;
+  }
+  return !!hasBlock;
 }
 
 function toggleJournalWiExpand(key, ev) {
   if (ev) ev.stopPropagation();
   key = String(key || '');
   if (!key) return;
-  journalWiExpandedIds[key] = !journalWiExpandedIds[key];
+  var acc = ev && ev.currentTarget && ev.currentTarget.closest
+    ? ev.currentTarget.closest('.j-wi-acc')
+    : null;
+  var currentlyOpen = acc ? acc.classList.contains('open') : !!journalWiExpandedIds[key];
+  journalWiExpandedIds[key] = !currentlyOpen;
   renderJournalPage();
 }
 
 function setJournalWiTab(key, tab, ev) {
   if (ev) ev.stopPropagation();
   key = String(key || '');
-  journalWiTabByKey[key] = tab === 'done' ? 'done' : 'doing';
+  var allowed = { all: 1, block: 1, doing: 1, done: 1 };
+  journalWiTabByKey[key] = allowed[tab] ? tab : 'all';
   renderJournalPage();
 }
 
 function renderJournalTaskCard(item, kind) {
   var title = item.name || '任務';
-  var desc = (item.desc || '').trim() || (item.note || '').trim() || (item.reason || '').trim();
-  var html = '<div class="j-wi-task-card">';
-  html += '<div class="j-wi-task-title">' + escHtml(title);
-  if (kind === 'tomorrow' || kind === 'doing-tomorrow') {
-    html += '<span class="j-wi-task-tag j-wi-task-tag-tomorrow">明日接續</span>';
+  var desc = (item.desc || '').trim();
+  var note = (item.note || '').trim();
+  var reason = (item.reason || '').trim();
+  var remark = note;
+  if (reason && reason !== note) {
+    remark = note ? (note + '\n' + reason) : reason;
   }
-  if (kind === 'block') {
-    html += '<span class="j-wi-task-tag j-wi-task-tag-block">卡關</span>';
-  }
+  var isBlock = kind === 'block';
+  var isDone = kind === 'done';
+  var isTomorrow = kind === 'tomorrow' || kind === 'doing-tomorrow';
+  var html = '<div class="j-wi-task-card' + (isBlock ? ' is-block' : '') + (isDone ? ' is-done' : '') + '">';
+  html += '<div class="j-wi-task-title"><span class="j-wi-task-title-text">' + escHtml(title) + '</span>';
+  if (isBlock) html += '<span class="j-wi-task-tag j-wi-task-tag-block">卡關</span>';
+  if (isTomorrow) html += '<span class="j-wi-task-tag j-wi-task-tag-tomorrow">明日接續</span>';
   html += '</div>';
   if (desc) html += '<p class="j-wi-task-desc">' + escHtml(desc) + '</p>';
-  if (kind === 'block' && item.id) {
+  if (remark) html += '<p class="j-wi-task-remark">' + escHtml(remark) + '</p>';
+  if (isBlock && item.id) {
     html += '<div class="j-proj-block-actions">';
     html += '<select class="jc-block-status"><option value="">調整狀態…</option>';
     html += '<option value="doing">改為進行中</option><option value="done">改為完成</option></select>';
@@ -13240,45 +13287,66 @@ function renderJournalWiAccordion(personName, projName, wi) {
   });
   var blocks = wi.blocks || [];
   var done = wi.done || [];
-  var doingItems = [];
-  doingOnly.forEach(function(item) { doingItems.push({ item: item, kind: 'doing' }); });
-  doingTomorrow.forEach(function(item) { doingItems.push({ item: item, kind: 'doing-tomorrow' }); });
-  tomorrowOnly.forEach(function(item) { doingItems.push({ item: item, kind: 'tomorrow' }); });
-  blocks.forEach(function(item) { doingItems.push({ item: item, kind: 'block' }); });
-  var doingCount = doingItems.length;
-  var doneCount = done.length;
-  if (!doingCount && !doneCount) return '';
+  var doingRows = [];
+  doingOnly.forEach(function(item) { doingRows.push({ item: item, kind: 'doing' }); });
+  doingTomorrow.forEach(function(item) { doingRows.push({ item: item, kind: 'doing-tomorrow' }); });
+  tomorrowOnly.forEach(function(item) { doingRows.push({ item: item, kind: 'tomorrow' }); });
+  var blockRows = blocks.map(function(item) { return { item: item, kind: 'block' }; });
+  var doneRows = done.map(function(item) { return { item: item, kind: 'done' }; });
+  var doingCount = doingRows.length;
+  var blockCount = blockRows.length;
+  var doneCount = doneRows.length;
+  if (!doingCount && !blockCount && !doneCount) return '';
 
   var key = journalWiKey(personName, projName, wi.name);
-  var open = isJournalWiExpanded(key);
-  var tab = journalWiTabByKey[key] || (doingCount ? 'doing' : 'done');
-  if (tab === 'doing' && !doingCount && doneCount) tab = 'done';
-  if (tab === 'done' && !doneCount && doingCount) tab = 'doing';
+  var open = isJournalWiExpanded(key, blockCount > 0);
+  var tab = journalWiTabByKey[key] || 'all';
+  if (tab === 'block' && !blockCount) tab = 'all';
+  if (tab === 'doing' && !doingCount) tab = 'all';
+  if (tab === 'done' && !doneCount) tab = 'all';
+  // 相容舊分頁值
+  if (tab !== 'all' && tab !== 'block' && tab !== 'doing' && tab !== 'done') tab = 'all';
+
+  var visible = [];
+  if (tab === 'all') {
+    blockRows.forEach(function(r) { visible.push(r); });
+    doingRows.forEach(function(r) { visible.push(r); });
+    doneRows.forEach(function(r) { visible.push(r); });
+  } else if (tab === 'block') {
+    visible = blockRows.slice();
+  } else if (tab === 'doing') {
+    visible = doingRows.slice();
+  } else {
+    visible = doneRows.slice();
+  }
 
   var html = '<div class="j-wi-acc' + (open ? ' open' : '') + '">';
   html += '<div class="j-wi-acc-hdr" onclick=\'toggleJournalWiExpand(' + JSON.stringify(String(key)) + ',event)\'>';
   html += '<span class="j-wi-acc-chev">' + (open ? '▼' : '▶') + '</span>';
   html += '<span class="j-wi-acc-name">' + escHtml(wi.name || '其他') + '</span>';
   html += '<span class="j-wi-acc-badges">';
+  if (blockCount) html += '<span class="j-wi-badge j-wi-badge-block">卡關 ' + blockCount + '</span>';
   if (doingCount) html += '<span class="j-wi-badge j-wi-badge-doing">進行中 ' + doingCount + '</span>';
-  if (doneCount) html += '<span class="j-wi-badge j-wi-badge-done">已完成 ' + doneCount + '</span>';
-  if (!doingCount && !doneCount) html += '<span class="j-wi-badge j-wi-badge-doing">進行中 0</span>';
+  if (doneCount) html += '<span class="j-wi-badge j-wi-badge-done">今日完成 ' + doneCount + '</span>';
   html += '</span></div>';
 
   if (open) {
     html += '<div class="j-wi-acc-body">';
-    html += '<div class="j-wi-tabs">';
-    html += '<button type="button" class="j-wi-tab' + (tab === 'doing' ? ' active' : '') + '" onclick=\'setJournalWiTab(' + JSON.stringify(String(key)) + ',"doing",event)\'>進行中 ' + doingCount + '</button>';
-    html += '<button type="button" class="j-wi-tab' + (tab === 'done' ? ' active' : '') + '" onclick=\'setJournalWiTab(' + JSON.stringify(String(key)) + ',"done",event)\'>已完成 ' + doneCount + '</button>';
+    html += '<div class="j-wi-seg" role="tablist">';
+    html += '<button type="button" class="j-wi-seg-btn' + (tab === 'all' ? ' active' : '') + '" onclick=\'setJournalWiTab(' + JSON.stringify(String(key)) + ',"all",event)\'>全部</button>';
+    if (blockCount) {
+      html += '<button type="button" class="j-wi-seg-btn' + (tab === 'block' ? ' active' : '') + '" onclick=\'setJournalWiTab(' + JSON.stringify(String(key)) + ',"block",event)\'>卡關</button>';
+    }
+    if (doingCount) {
+      html += '<button type="button" class="j-wi-seg-btn' + (tab === 'doing' ? ' active' : '') + '" onclick=\'setJournalWiTab(' + JSON.stringify(String(key)) + ',"doing",event)\'>進行中</button>';
+    }
+    if (doneCount) {
+      html += '<button type="button" class="j-wi-seg-btn' + (tab === 'done' ? ' active' : '') + '" onclick=\'setJournalWiTab(' + JSON.stringify(String(key)) + ',"done",event)\'>今日完成</button>';
+    }
     html += '</div>';
     html += '<div class="j-wi-task-list">';
-    if (tab === 'done') {
-      if (!done.length) html += '<div class="j-wi-task-empty">尚無已完成任務</div>';
-      else done.forEach(function(item) { html += renderJournalTaskCard(item, 'done'); });
-    } else {
-      if (!doingItems.length) html += '<div class="j-wi-task-empty">尚無進行中任務</div>';
-      else doingItems.forEach(function(row) { html += renderJournalTaskCard(row.item, row.kind); });
-    }
+    if (!visible.length) html += '<div class="j-wi-task-empty">此分類尚無項目</div>';
+    else visible.forEach(function(row) { html += renderJournalTaskCard(row.item, row.kind); });
     html += '</div></div>';
   }
   html += '</div>';
@@ -13296,9 +13364,18 @@ function renderJournalProjCard(proj, personName) {
   return html;
 }
 
+function personJournalHasBlock(p) {
+  return !!(p && p.projects && p.projects.some(function(proj) {
+    return (proj.workitems || []).some(function(wi) {
+      return wi.blocks && wi.blocks.length > 0;
+    });
+  }));
+}
+
 function renderJournalPersonCard(p) {
   var parts = splitPersonNameCode(p.name);
-  var html = '<div class="j-person-section">';
+  var hasBlock = personJournalHasBlock(p);
+  var html = '<div class="j-person-section' + (hasBlock ? ' has-block' : '') + '">';
   html += '<div class="j-person-hdr">';
   html += '<div class="j-person-name">' + escHtml(parts.name || p.name || '—') + '</div>';
   if (parts.code) html += '<div class="j-person-code">' + escHtml(parts.code) + '</div>';
@@ -13369,13 +13446,13 @@ function renderJournalDashboard(area) {
       '</div>';
   }
   html += '<div class="j-dash-kpi">';
-  html += '<div class="j-kpi-card j-kpi-done"><div class="j-kpi-label">完成</div><div class="j-kpi-val">' + kpi.done + '</div></div>';
+  html += '<div class="j-kpi-card j-kpi-done"><div class="j-kpi-label">今日完成</div><div class="j-kpi-val">' + kpi.done + '</div></div>';
   html += '<div class="j-kpi-card j-kpi-doing"><div class="j-kpi-label">進行中</div><div class="j-kpi-val">' + kpi.doing + '</div></div>';
-  html += '<div class="j-kpi-card j-kpi-block"><div class="j-kpi-label">需要處理</div><div class="j-kpi-val">' + kpi.block + '</div></div>';
+  html += '<div class="j-kpi-card j-kpi-block"><div class="j-kpi-label">卡關</div><div class="j-kpi-val">' + kpi.block + '</div></div>';
   html += '<div class="j-kpi-card j-kpi-tomorrow"><div class="j-kpi-label">明日預計任務</div><div class="j-kpi-val">' + kpi.tomorrow + '</div></div>';
   html += '</div>';
 
-  html += '<div class="j-person-grid">';
+  html += '<div class="j-person-grid' + (persons.length > 1 ? ' j-person-grid-multi' : '') + '">';
   persons.forEach(function(p) { html += renderJournalPersonCard(p); });
   html += '</div>';
 
