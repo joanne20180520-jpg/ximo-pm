@@ -637,6 +637,11 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .ds-final{background:#e8f5e9;color:#2e7d32}
 .ds-draft{background:#fff3e0;color:#b06000}
 .des-exp-row td{background:var(--sf2);padding:8px 10px !important;border-bottom:1px solid var(--border)}
+.des-wi-row td{background:#f3f1ed;font-weight:700;font-size:12px;color:var(--text);padding:9px 10px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+.des-wi-row:hover td{background:#ebe8e2}
+.des-wi-row .des-wi-title{display:inline-flex;align-items:center;gap:6px}
+.des-wi-row .des-wi-count{font-size:11px;font-weight:600;color:var(--t3);margin-left:4px}
+.des-row-nested td.des-cell-name{padding-left:28px}
 .des-ver-wrap{border:1px dashed var(--border);border-radius:8px;padding:8px 10px;background:#fff}
 .des-ver-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:11px}
 .des-ver-table th{text-align:left;color:var(--t3);font-size:10px;font-weight:600;padding:4px 6px;border-bottom:1px solid var(--border)}
@@ -4721,7 +4726,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260904v3';
+var APP_BUILD = '20260904v4';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12286,6 +12291,11 @@ function applyDailyLogPermissions() {
   var popup = document.getElementById('pp-daily-log');
   if (!popup) return;
   popup.querySelectorAll('input, select, textarea').forEach(function(el) {
+    if (el.id === 'dl-author') {
+      el.readOnly = true;
+      el.disabled = false;
+      return;
+    }
     el.disabled = !pm;
   });
   var saveBtn = popup.querySelector('.ppf .btn-report');
@@ -14493,6 +14503,21 @@ function renderAccountingPage() {
 
 // ── 設計任務單 ──
 var designExpandedIds = {};
+var designWiExpandedIds = {};
+
+function toggleDesignWiExpand(wiKey, ev) {
+  if (ev) ev.stopPropagation();
+  var key = String(wiKey || '');
+  if (!key) return;
+  // 預設展開；第一次點擊收合
+  if (designWiExpandedIds[key] === false) designWiExpandedIds[key] = true;
+  else designWiExpandedIds[key] = false;
+  renderDesigns();
+}
+
+function isDesignWiExpanded(wiKey) {
+  return designWiExpandedIds[String(wiKey || '')] !== false;
+}
 
 function getDesignDisplayName(f) {
   f = f || {};
@@ -15761,11 +15786,14 @@ function renderDesigns() {
     var wiId = wiIds[0] || null;
     var wi = wiId ? wiMap[wiId] : null;
     var proj = wi ? (wi.project || '其他') : '其他';
+    var wiName = wi ? wi.name : (getLinkText(f['所屬工作項目']) || '其他');
     if (!byProject[proj]) byProject[proj] = [];
     byProject[proj].push({
       id: rec.record_id,
       name: getDesignDisplayName(f),
-      wiName: wi ? wi.name : getLinkText(f['所屬工作項目']) || '',
+      wiId: wiId || '',
+      wiName: wiName,
+      wiKey: wiId || ('name:' + wiName),
       pm: personName(f['負責PM']),
       item: f['項目'] || '',
       designer: designer,
@@ -15779,8 +15807,46 @@ function renderDesigns() {
     });
   });
 
+  function renderDesignTaskRows(d, colCount, showProgress, showDesignStatus) {
+    var expanded = !!designExpandedIds[d.id];
+    var finalBadge = d.finalized
+      ? '<span class="ds ds-final">已定稿</span>'
+      : '<span class="ds ds-draft">未定稿</span>';
+    var canBasicEdit = isAdminRole() || (isPMRole() && !isDesignerLikeRole()) || isDesignLeadRole();
+    var cellClick = canBasicEdit
+      ? ' class="des-cell-edit" onclick="openEditDesignBasic(\'' + d.id + '\',event)"'
+      : '';
+    var progressClick = showProgress && canSeeDesignProgressCol()
+      ? ' class="des-cell-edit" onclick="openDesignProgressMenu(\'' + d.id + '\',event)" title="點選變更進度狀態"'
+      : '';
+    var designStatusClick = showDesignStatus && canSeeDesignStatusCol()
+      ? ' class="des-cell-edit" onclick="openDesignDesignStatusMenu(\'' + d.id + '\',event)" title="點選變更設計狀態"'
+      : '';
+    var rows = '<tr class="erow des-row des-row-nested">'
+      + '<td class="des-cell-name" style="font-weight:500;white-space:nowrap" onclick="toggleDesignExpand(\'' + d.id + '\',event)" title="展開版本紀錄">'
+      + '<button type="button" class="des-toggle" title="展開版本">' + (expanded ? '▼' : '▶') + '</button> '
+      + '<span class="des-name-text">' + escHtml(d.name) + '</span>'
+      + '</td>'
+      + '<td' + (canBasicEdit ? cellClick + ' title="編輯負責PM／設計師／進度"' : '') + '>' + renderDesignPersonCell(d.pm) + '</td>'
+      + '<td' + (canBasicEdit ? cellClick + ' title="編輯負責PM／設計師／進度"' : '') + '>' + renderDesignPersonCell(d.designer) + '</td>';
+    if (showProgress) {
+      rows += '<td' + progressClick + '>' + renderDesignProgressCell(d.progressStatus || d.status, d.progressNum) + '</td>';
+    }
+    if (showDesignStatus) {
+      rows += '<td' + designStatusClick + '>' + renderDesignStatusCell(d.designStatus) + '</td>';
+    }
+    rows += '<td title="由版本列「定稿」勾選決定：有勾＝已定稿，沒勾＝未定稿">' + finalBadge + '</td>'
+      + '<td>' + d.nextStep.html + '</td>'
+      + '<td class="des-act"><button type="button" class="des-drawer-btn" title="填寫規格詳情" onclick="event.stopPropagation();openEditDesign(\'' + d.id + '\')">☰</button></td>'
+      + '</tr>';
+    if (expanded) {
+      rows += '<tr class="des-exp-row"><td colspan="' + colCount + '">' + renderDesignVersionPanel(d.id, d.finalized) + '</td></tr>';
+    }
+    return rows;
+  }
+
   function renderProjectBlock(pname, color) {
-    var list = (byProject[pname] || []).slice().sort(compareDesignTasksForCurrentRole);
+    var list = (byProject[pname] || []).slice();
     var canAddDesign = canCreateDesignTask();
     var addBtn = canAddDesign ? '<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-des\')">＋ 新增設計任務單</button>' : '';
     var header = '<div class="dc"><div class="dch"><div class="pdot" style="background:' + color + '"></div><h3>' + escHtml(pname) + '</h3>' + addBtn + '</div>';
@@ -15789,46 +15855,33 @@ function renderDesigns() {
     }
     var showProgress = canSeeDesignProgressCol();
     var showDesignStatus = canSeeDesignStatusCol();
-    var colCount = 5 + (showProgress ? 1 : 0) + (showDesignStatus ? 1 : 0) + 2;
-    var rows = '';
+    var colCount = 4 + (showProgress ? 1 : 0) + (showDesignStatus ? 1 : 0) + 2;
+    var byWi = {};
     list.forEach(function(d) {
-      var expanded = !!designExpandedIds[d.id];
-      var finalBadge = d.finalized
-        ? '<span class="ds ds-final">已定稿</span>'
-        : '<span class="ds ds-draft">未定稿</span>';
-      var canBasicEdit = isAdminRole() || (isPMRole() && !isDesignerLikeRole()) || isDesignLeadRole();
-      var cellClick = canBasicEdit
-        ? ' class="des-cell-edit" onclick="openEditDesignBasic(\'' + d.id + '\',event)"'
-        : '';
-      var progressClick = showProgress && canSeeDesignProgressCol()
-        ? ' class="des-cell-edit" onclick="openDesignProgressMenu(\'' + d.id + '\',event)" title="點選變更進度狀態"'
-        : '';
-      var designStatusClick = showDesignStatus && canSeeDesignStatusCol()
-        ? ' class="des-cell-edit" onclick="openDesignDesignStatusMenu(\'' + d.id + '\',event)" title="點選變更設計狀態"'
-        : '';
-      rows += '<tr class="erow des-row">'
-        + '<td class="des-cell-name" style="font-weight:500;white-space:nowrap" onclick="toggleDesignExpand(\'' + d.id + '\',event)" title="展開版本紀錄">'
-        + '<button type="button" class="des-toggle" title="展開版本">' + (expanded ? '▼' : '▶') + '</button> '
-        + '<span class="des-name-text">' + escHtml(d.name) + '</span>'
-        + '</td>'
-        + '<td>' + escHtml(d.wiName) + '</td>'
-        + '<td' + (canBasicEdit ? cellClick + ' title="編輯負責PM／設計師／進度"' : '') + '>' + renderDesignPersonCell(d.pm) + '</td>'
-        + '<td' + (canBasicEdit ? cellClick + ' title="編輯負責PM／設計師／進度"' : '') + '>' + renderDesignPersonCell(d.designer) + '</td>';
-      if (showProgress) {
-        rows += '<td' + progressClick + '>' + renderDesignProgressCell(d.progressStatus || d.status, d.progressNum) + '</td>';
-      }
-      if (showDesignStatus) {
-        rows += '<td' + designStatusClick + '>' + renderDesignStatusCell(d.designStatus) + '</td>';
-      }
-      rows += '<td title="由版本列「定稿」勾選決定：有勾＝已定稿，沒勾＝未定稿">' + finalBadge + '</td>'
-        + '<td>' + d.nextStep.html + '</td>'
-        + '<td class="des-act"><button type="button" class="des-drawer-btn" title="填寫規格詳情" onclick="event.stopPropagation();openEditDesign(\'' + d.id + '\')">☰</button></td>'
-        + '</tr>';
-      if (expanded) {
-        rows += '<tr class="des-exp-row"><td colspan="' + colCount + '">' + renderDesignVersionPanel(d.id, d.finalized) + '</td></tr>';
-      }
+      var key = d.wiKey || ('name:' + (d.wiName || '其他'));
+      if (!byWi[key]) byWi[key] = { key: key, name: d.wiName || '其他', designs: [] };
+      byWi[key].designs.push(d);
     });
-    var ths = ['設計項目名稱', '所屬工作項目', '負責PM', '設計師'];
+    var wiGroups = Object.keys(byWi).map(function(k) { return byWi[k]; });
+    wiGroups.sort(function(a, b) { return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant'); });
+    wiGroups.forEach(function(g) {
+      g.designs.sort(compareDesignTasksForCurrentRole);
+    });
+    var rows = '';
+    wiGroups.forEach(function(g) {
+      var wiOpen = isDesignWiExpanded(g.key);
+      rows += '<tr class="des-wi-row" onclick="toggleDesignWiExpand(' + JSON.stringify(String(g.key)) + ',event)">'
+        + '<td colspan="' + colCount + '"><span class="des-wi-title">'
+        + '<button type="button" class="des-toggle" title="展開工作項目">' + (wiOpen ? '▼' : '▶') + '</button>'
+        + '<span>' + escHtml(g.name) + '</span>'
+        + '<span class="des-wi-count">' + g.designs.length + '</span>'
+        + '</span></td></tr>';
+      if (!wiOpen) return;
+      g.designs.forEach(function(d) {
+        rows += renderDesignTaskRows(d, colCount, showProgress, showDesignStatus);
+      });
+    });
+    var ths = ['設計項目名稱', '負責PM', '設計師'];
     if (showProgress) ths.push('進度狀態');
     if (showDesignStatus) ths.push('設計狀態');
     ths.push('定稿狀態', '下一步日期', '');
