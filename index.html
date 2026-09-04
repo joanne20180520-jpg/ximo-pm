@@ -15564,6 +15564,13 @@ function renderDesignPersonCell(name) {
   return '<span class="des-person"><span class="av ' + avatarClass(n) + '">' + personInitial(n) + '</span><span>' + escHtml(n) + '</span></span>';
 }
 
+function designStatusSortRank(designStatus) {
+  var s = String(designStatus || '未開始').trim();
+  if (s === '已完成' || s === '完成') return 2;
+  if (s === '進行中') return 1;
+  return 0;
+}
+
 function designProgressSortRank(status, num) {
   var label = formatProgressLabel(status, num);
   var pct = parseProgressVal(status, num);
@@ -15574,12 +15581,15 @@ function designProgressSortRank(status, num) {
 }
 
 function compareDesignTasksByProgress(a, b) {
+  var statusRankA = designStatusSortRank(a.designStatus);
+  var statusRankB = designStatusSortRank(b.designStatus);
+  if (statusRankA !== statusRankB) return statusRankA - statusRankB;
   var rankA = designProgressSortRank(a.progressStatus || a.status, a.progressNum);
   var rankB = designProgressSortRank(b.progressStatus || b.status, b.progressNum);
   if (rankA !== rankB) return rankA - rankB;
   var pctA = parseProgressVal(a.progressStatus || a.status, a.progressNum) || 0;
   var pctB = parseProgressVal(b.progressStatus || b.status, b.progressNum) || 0;
-  if (rankA === 1 && pctA !== pctB) return pctA - pctB;
+  if (statusRankA === 1 && pctA !== pctB) return pctA - pctB;
   return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant');
 }
 
