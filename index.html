@@ -629,7 +629,7 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .stp{background:#fff3e0;color:#b06000}
 .ds{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500;background:#fff3e0;color:#b06000}
 .ds-done{background:#e8f5e9;color:#2e7d32}
-.ds-doing{background:#e8f5e9;color:#2e7d32}
+.ds-doing{background:#fff3e0;color:#c05600}
 .ds-pending{background:#f0f0f0;color:#888}
 .ds-pause{background:#eef4fc;color:#1a4a7a}
 .ds-final{background:#e8f5e9;color:#2e7d32}
@@ -766,9 +766,9 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .des-person{display:inline-flex;align-items:center;gap:5px;max-width:100%}
 .des-person .av{width:18px;height:18px;font-size:9px}
 .des-progress{display:flex;align-items:center;gap:8px;min-width:90px}
-.des-progress-track{flex:1;height:6px;border-radius:99px;background:var(--border);overflow:hidden;min-width:48px}
-.des-progress-fill{height:100%;border-radius:99px;background:var(--accent)}
-.des-progress-label{font-size:11px;color:var(--t2);font-variant-numeric:tabular-nums;flex-shrink:0}
+.des-progress-track{flex:1;height:6px;border-radius:99px;background:#f0e6d8;overflow:hidden;min-width:48px}
+.des-progress-fill{height:100%;border-radius:99px;background:#e08a2e}
+.des-progress-label{font-size:11px;color:#c05600;font-variant-numeric:tabular-nums;flex-shrink:0;font-weight:600}
 .des-ver-file{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--c2);background:#e4ecf3;padding:3px 8px;border-radius:6px;text-decoration:none;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-sizing:border-box}
 .des-ver-file:hover{text-decoration:underline}
 .des-ver-file.is-downloading,.attach-item-link.is-downloading{opacity:.65;pointer-events:none;cursor:wait;text-decoration:none}
@@ -4719,7 +4719,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260902v16';
+var APP_BUILD = '20260904v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -15564,6 +15564,25 @@ function renderDesignPersonCell(name) {
   return '<span class="des-person"><span class="av ' + avatarClass(n) + '">' + personInitial(n) + '</span><span>' + escHtml(n) + '</span></span>';
 }
 
+function designProgressSortRank(status, num) {
+  var label = formatProgressLabel(status, num);
+  var pct = parseProgressVal(status, num);
+  if (label === '已完成' || pct >= 100) return 2;
+  if (label === '未開始' || label === '待開始') return 0;
+  if (label === '暫停') return 1;
+  return 1;
+}
+
+function compareDesignTasksByProgress(a, b) {
+  var rankA = designProgressSortRank(a.progressStatus || a.status, a.progressNum);
+  var rankB = designProgressSortRank(b.progressStatus || b.status, b.progressNum);
+  if (rankA !== rankB) return rankA - rankB;
+  var pctA = parseProgressVal(a.progressStatus || a.status, a.progressNum) || 0;
+  var pctB = parseProgressVal(b.progressStatus || b.status, b.progressNum) || 0;
+  if (rankA === 1 && pctA !== pctB) return pctA - pctB;
+  return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant');
+}
+
 function renderDesignProgressCell(status, num) {
   var label = formatProgressLabel(status, num);
   if (label === '暫停') {
@@ -15746,7 +15765,7 @@ function renderDesigns() {
   });
 
   function renderProjectBlock(pname, color) {
-    var list = byProject[pname] || [];
+    var list = (byProject[pname] || []).slice().sort(compareDesignTasksByProgress);
     var canAddDesign = canCreateDesignTask();
     var addBtn = canAddDesign ? '<button class="bsm" style="margin-left:auto" onclick="openPopup(\'pp-des\')">＋ 新增設計任務單</button>' : '';
     var header = '<div class="dc"><div class="dch"><div class="pdot" style="background:' + color + '"></div><h3>' + escHtml(pname) + '</h3>' + addBtn + '</div>';
