@@ -637,10 +637,11 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .ds-final{background:#e8f5e9;color:#2e7d32}
 .ds-draft{background:#fff3e0;color:#b06000}
 .des-exp-row td{background:var(--sf2);padding:8px 10px !important;border-bottom:1px solid var(--border)}
-.des-wi-row td{background:#f3f1ed;font-weight:700;font-size:12px;color:var(--text);padding:9px 10px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+.des-wi-row td{background:#f3f1ed;font-weight:700;font-size:12px;color:#245a42;padding:9px 10px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
 .des-wi-row:hover td{background:#ebe8e2}
-.des-wi-row .des-wi-title{display:inline-flex;align-items:center;gap:6px}
-.des-wi-row .des-wi-count{font-size:11px;font-weight:600;color:var(--t3);margin-left:4px}
+.des-wi-row .des-wi-title{display:inline-flex;align-items:center;gap:6px;color:#245a42}
+.des-wi-row .des-toggle{color:#245a42}
+.des-wi-row .des-wi-count{font-size:11px;font-weight:600;color:#6b8f7a;margin-left:4px}
 .des-row-nested td.des-cell-name{padding-left:28px}
 .des-ver-wrap{border:1px dashed var(--border);border-radius:8px;padding:8px 10px;background:#fff}
 .des-ver-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:11px}
@@ -4726,7 +4727,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260904v5';
+var APP_BUILD = '20260904v6';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -15870,9 +15871,9 @@ function renderDesigns() {
     var rows = '';
     wiGroups.forEach(function(g) {
       var wiOpen = isDesignWiExpanded(g.key);
-      rows += '<tr class="des-wi-row" onclick="toggleDesignWiExpand(' + JSON.stringify(String(g.key)) + ',event)">'
+      rows += '<tr class="des-wi-row" onclick=\'toggleDesignWiExpand(' + JSON.stringify(String(g.key)) + ',event)\'>'
         + '<td colspan="' + colCount + '"><span class="des-wi-title">'
-        + '<button type="button" class="des-toggle" title="展開工作項目">' + (wiOpen ? '▼' : '▶') + '</button>'
+        + '<button type="button" class="des-toggle" title="收合／展開工作項目">' + (wiOpen ? '▼' : '▶') + '</button>'
         + '<span>' + escHtml(g.name) + '</span>'
         + '<span class="des-wi-count">' + g.designs.length + '</span>'
         + '</span></td></tr>';
