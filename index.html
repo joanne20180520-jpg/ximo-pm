@@ -15725,8 +15725,7 @@ function isDesignAssignedToMe(designerName) {
 }
 
 function shouldShowDesignForCurrentRole(designerName) {
-  // 一般設計師只看自己負責的；設計主管／PM／管理員看全部
-  if (isDesignerRole()) return isDesignAssignedToMe(designerName);
+  // 設計師／設計主管／PM／管理員皆可看全部設計任務
   return true;
 }
 
