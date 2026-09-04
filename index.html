@@ -4752,7 +4752,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260904v8';
+var APP_BUILD = '20260904v9';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -13164,15 +13164,14 @@ function journalWiKey(personName, projName, wiName) {
 }
 
 function isJournalWiExpanded(key) {
-  return journalWiExpandedIds[key] !== false;
+  return journalWiExpandedIds[key] === true;
 }
 
 function toggleJournalWiExpand(key, ev) {
   if (ev) ev.stopPropagation();
   key = String(key || '');
   if (!key) return;
-  if (journalWiExpandedIds[key] === false) journalWiExpandedIds[key] = true;
-  else journalWiExpandedIds[key] = false;
+  journalWiExpandedIds[key] = !journalWiExpandedIds[key];
   renderJournalPage();
 }
 
