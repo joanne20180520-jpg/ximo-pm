@@ -785,6 +785,10 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .des-drawer-body{flex:1;overflow:auto;padding:0 0 12px}
 .des-drawer-foot{display:flex;gap:8px;align-items:center;padding:12px 16px;border-top:1px solid var(--border);background:#fff;flex-shrink:0}
 .des-drawer-foot .bdel-action{margin-right:auto}
+.des-save-status{font-size:12px;color:var(--t3);margin-right:8px;min-width:4.5em;text-align:right}
+.des-save-status.is-saving{color:var(--t2)}
+.des-save-status.is-ok{color:#2e7d32;font-weight:600}
+.des-save-status.is-err{color:var(--danger);font-weight:600}
 .des-acc{border-bottom:1px solid var(--border)}
 .des-acc-head{width:100%;display:flex;align-items:center;gap:8px;padding:12px 16px;border:none;background:#fff;cursor:pointer;font-family:inherit;text-align:left}
 .des-acc-head:hover{background:var(--sf2)}
@@ -1887,8 +1891,9 @@ button.btn-loading::after{content:'…';margin-left:2px}
   </div>
   <div class="des-drawer-foot">
     <button class="bcan bdel-action" id="ed-del-btn" onclick="deleteDesignFromEdit()">刪除此任務</button>
+    <span class="des-save-status" id="ed-save-status" aria-live="polite"></span>
     <button class="bcan" onclick="event.stopPropagation();closeDesignDrawer()">關閉</button>
-    <button class="bpri" onclick="event.stopPropagation();saveEditDesign()">儲存並關閉</button>
+    <button class="bpri" id="ed-save-btn" onclick="event.stopPropagation();saveEditDesign()">儲存</button>
   </div>
 </aside>
 
@@ -4787,7 +4792,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260914v1';
+var APP_BUILD = '20260914v2';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -17557,6 +17562,8 @@ function openEditDesign(desId) {
   applyEditDesignPermissions({ resetOpen: true });
   designDrawerHydrating = true;
   designDrawerDirty = false;
+  setDesignDrawerSaveStatus('', '');
+  designDrawerSaving = false;
   designDrawerAccReady = true;
   openDesignDrawer();
   refreshOpenDesignDrawerFromServer();
@@ -17679,18 +17686,40 @@ function isDesignNasPathChanged() {
   return getDesignNasPathInputValue() !== String(designNasPathBaseline || '').trim();
 }
 
-function setDesignDrawerSaveStatus() {
-  // 不在畫面上顯示自動儲存狀態（改背景存）
+function setDesignDrawerSaveStatus(msg, kind) {
+  var el = document.getElementById('ed-save-status');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.classList.remove('is-saving', 'is-ok', 'is-err');
+  if (kind === 'saving') el.classList.add('is-saving');
+  if (kind === 'ok') el.classList.add('is-ok');
+  if (kind === 'err') el.classList.add('is-err');
+  clearTimeout(setDesignDrawerSaveStatus._timer);
+  if (kind === 'ok') {
+    setDesignDrawerSaveStatus._timer = setTimeout(function() {
+      if (el.textContent === msg) {
+        el.textContent = '';
+        el.classList.remove('is-ok');
+      }
+    }, 3500);
+  }
 }
 
 function scheduleDesignDrawerAutoSave() {
   if (designDrawerHydrating || !editingDesignId) return;
   if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return;
   designDrawerDirty = true;
+  setDesignDrawerSaveStatus('未儲存', '');
   clearTimeout(designAutoSaveTimer);
   designAutoSaveTimer = setTimeout(function() {
-    flushDesignDrawerAutoSave({ silent: true });
+    flushDesignDrawerAutoSave({ silent: true, skipToast: true });
   }, 800);
+}
+
+function mergeDesignFieldsIntoLocal(id, fields) {
+  var rec = designsData.find(function(r) { return r.record_id === id; });
+  if (!rec || !fields) return;
+  rec.fields = Object.assign({}, rec.fields || {}, normalizeOptimisticFields(fields));
 }
 
 function flushDesignDrawerAutoSave(opts) {
@@ -17703,25 +17732,30 @@ function flushDesignDrawerAutoSave(opts) {
   commitInProgressRemarkEdits();
   var id = editingDesignId;
   var fields = collectDesignDrawerFieldsForSave();
+  if (!Object.keys(fields).length) {
+    designDrawerDirty = false;
+    setDesignDrawerSaveStatus('已儲存', 'ok');
+    return Promise.resolve(true);
+  }
   designDrawerDirty = false;
   designDrawerSaving = true;
+  setDesignDrawerSaveStatus('儲存中…', 'saving');
   return optimisticUpdate('designs', id, fields, {
     failMsg: '自動儲存失敗',
     skipSync: true,
     quiet: true
   })
     .then(function() {
-      var rec = designsData.find(function(r) { return r.record_id === id; });
-      if (rec && fields['NAS路徑位置'] != null) {
-        rec.fields = rec.fields || {};
-        rec.fields['NAS路徑位置'] = fields['NAS路徑位置'];
-        if (fields['路徑位置'] != null) rec.fields['路徑位置'] = fields['路徑位置'];
-      }
+      mergeDesignFieldsIntoLocal(id, fields);
+      if (fields['NAS路徑位置'] != null) designNasPathBaseline = getDesignNasPathInputValue();
+      setDesignDrawerSaveStatus('已儲存', 'ok');
+      if (!opts.skipToast) showUndoToast('已儲存');
       syncTables(['designs']).catch(function() {});
       return true;
     })
     .catch(function() {
       designDrawerDirty = true;
+      setDesignDrawerSaveStatus('儲存失敗', 'err');
       return false;
     })
     .finally(function() {
@@ -17881,7 +17915,7 @@ function ensureDesignDrawerAutoSaveBound() {
       saveDesignNasPathNow();
       return;
     }
-    if (designDrawerDirty) flushDesignDrawerAutoSave({ silent: true });
+    if (designDrawerDirty) flushDesignDrawerAutoSave({ silent: true, skipToast: true });
   }, true);
 }
 
@@ -18034,8 +18068,11 @@ function collectDesignFormFields(prefix) {
 function saveEditDesign() {
   if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return;
   if (!editingDesignId) return;
+  // 儲存後留在側欄，方便確認欄位是否寫入成功
   designDrawerDirty = true;
-  closeDesignDrawer();
+  flushDesignDrawerAutoSave({ force: true, skipToast: false }).then(function(ok) {
+    if (ok) setDesignDrawerSaveStatus('已儲存', 'ok');
+  });
 }
 
 function openEditExpense(expId) {
