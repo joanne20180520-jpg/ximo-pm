@@ -4792,7 +4792,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260914v2';
+var APP_BUILD = '20260914v3';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -17598,13 +17598,14 @@ function onDesignDrawerBackdropClick(e) {
   closeDesignDrawer();
 }
 
-function closeDesignDrawer() {
+function closeDesignDrawer(opts) {
+  opts = opts || {};
   clearTimeout(designAutoSaveTimer);
   designAutoSaveTimer = null;
   clearTimeout(saveDesignNasPathNow._timer);
 
   var id = editingDesignId;
-  var canSave = !!(id && (isPMRole() || isDesignerLikeRole() || isAdminRole()));
+  var canSave = !opts.skipSave && !!(id && (isPMRole() || isDesignerLikeRole() || isAdminRole()));
   var shouldSave = canSave && (designDrawerDirty || isDesignNasPathChanged());
   var fields = null;
   if (shouldSave) {
@@ -17637,6 +17638,7 @@ function closeDesignDrawer() {
   designDrawerAccReady = false;
   designDrawerSaving = false;
   designNasPathBaseline = '';
+  setDesignDrawerSaveStatus('', '');
 
   if (shouldSave && fields && id && Object.keys(fields).length) {
     optimisticUpdate('designs', id, fields, {
@@ -18068,10 +18070,15 @@ function collectDesignFormFields(prefix) {
 function saveEditDesign() {
   if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return;
   if (!editingDesignId) return;
-  // 儲存後留在側欄，方便確認欄位是否寫入成功
   designDrawerDirty = true;
   flushDesignDrawerAutoSave({ force: true, skipToast: false }).then(function(ok) {
-    if (ok) setDesignDrawerSaveStatus('已儲存', 'ok');
+    if (!ok) return;
+    setDesignDrawerSaveStatus('已儲存', 'ok');
+    // 顯示「已儲存」後再關閉，讓使用者看得到成功
+    setTimeout(function() {
+      var drawer = document.getElementById('des-drawer');
+      if (drawer && drawer.classList.contains('open')) closeDesignDrawer({ skipSave: true });
+    }, 700);
   });
 }
 
