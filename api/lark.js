@@ -2083,8 +2083,27 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
       const options = ((m.property && m.property.options) || []).map(function(o) {
         return o && o.name;
       }).filter(Boolean);
-      // 狀態可能剛補選項；仍嘗試寫入，避免被靜默略過
-      if (options.length && options.indexOf(text) < 0 && name !== '狀態') return;
+      // 狀態／廠商／抬頭／設計狀態：允許寫入未在清單中的選項（Lark 會自動建新選項）
+      var allowNewSelect = (
+        name === '狀態' ||
+        name === '發包廠商' ||
+        name === '發票抬頭' ||
+        name === '設計狀態'
+      );
+      if (options.length && options.indexOf(text) < 0) {
+        var soft = '';
+        for (var oi = 0; oi < options.length; oi++) {
+          if (String(options[oi]).trim() === text.trim()) {
+            soft = options[oi];
+            break;
+          }
+        }
+        if (soft) {
+          out[name] = soft;
+          return;
+        }
+        if (!allowNewSelect) return;
+      }
       out[name] = text;
       return;
     }

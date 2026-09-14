@@ -4787,7 +4787,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260904v13';
+var APP_BUILD = '20260914v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -6040,6 +6040,7 @@ var PROGRESS_OPTIONS = ['未開始','進行中10%','進行中20%','進行中30%'
 var DESIGN_STATUS_OPTIONS = ['未開始', '進行中', '已完成'];
 var DESIGN_VENDOR_OPTIONS = ['健豪', '可樂谷', '丞奕', '東方包裝', '旭利紙器', '文心影印', '承辦發印', '自行列印'];
 var DESIGN_VENDOR_OTHER = '__other__';
+var DESIGN_VENDOR_OTHER_LABELS = ['其他（自行填寫）', '其他(可自行填寫功能)', '其他（可自行填寫）', '其他'];
 var DESIGN_INVOICE_OPTIONS = [
   '璽墨股份有限公司/統編：60449019',
   '身士不二股份有限公司/統編：97596625',
@@ -16540,7 +16541,7 @@ function setDesignVendorValue(val) {
   var sel = document.getElementById('ed-vendor');
   var other = document.getElementById('ed-vendor-other');
   if (!sel) return;
-  val = String(val || '').trim();
+  val = fieldPlainText(val);
   if (!val) {
     sel.value = '';
     if (other) other.value = '';
@@ -16549,6 +16550,9 @@ function setDesignVendorValue(val) {
   }
   if (DESIGN_VENDOR_OPTIONS.indexOf(val) >= 0) {
     sel.value = val;
+    if (other) other.value = '';
+  } else if (DESIGN_VENDOR_OTHER_LABELS.indexOf(val) >= 0) {
+    sel.value = DESIGN_VENDOR_OTHER;
     if (other) other.value = '';
   } else {
     sel.value = DESIGN_VENDOR_OTHER;
@@ -16562,7 +16566,9 @@ function getDesignVendorValue() {
   if (!sel) return '';
   if (sel.value === DESIGN_VENDOR_OTHER) {
     var other = document.getElementById('ed-vendor-other');
-    return other ? other.value.trim() : '';
+    var custom = other ? other.value.trim() : '';
+    // 有自填就存自填；沒填就不要寫 __other__ 假值
+    return custom;
   }
   return sel.value.trim();
 }
@@ -17753,6 +17759,9 @@ function collectDesignDrawerFieldsForSave() {
   delete all['PM主管內容審核'];
   delete all['設計主管圖面審核'];
   delete all['PM主管內容檢核'];
+  // 空字串不要覆寫既有廠商（避免側欄未帶入時把值清掉）
+  if (all['發包廠商'] === '' || all['發包廠商'] === DESIGN_VENDOR_OTHER) delete all['發包廠商'];
+  if (all['發票抬頭'] === '') delete all['發票抬頭'];
   if (isAdminRole()) return all;
   // PM：只寫 PM／共用欄；設計師填寫欄與指派不可覆寫
   if (isPMRole() && !isDesignerLikeRole()) {
