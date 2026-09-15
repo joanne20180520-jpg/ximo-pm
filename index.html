@@ -4787,7 +4787,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260914v4';
+var APP_BUILD = '20260915v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -15379,7 +15379,7 @@ function renderDesignVersionPanel(designId, finalized) {
   if (finalized) {
     actions += '<span class="ds ds-final">已定稿（版本鎖定；若需改為未定稿請通知管理員）</span>';
     if (isAdminRole()) {
-      actions += '<button class="bsm" onclick="event.stopPropagation();unfinalizeDesign(\'' + designId + '\')">改回未定稿</button>';
+      actions += '<button class="bsm" style="color:var(--danger);border-color:#f0c2bc" onclick="event.stopPropagation();unfinalizeDesign(\'' + designId + '\')">改回未定稿</button>';
     }
   }
   actions += '</div>';
