@@ -3398,10 +3398,30 @@ async function deleteAccExpensesLinkedToXimoExpense(expenseId, paymentId, opts) 
   return out;
 }
 
+function accExpenseDupGroupKey(fields) {
+  const f = fields || {};
+  const ad = accExpenseAmountDayKey(f);
+  if (!ad) return '';
+  const wi = accFieldText(f['來源工項']) || getLinkIds(f['工項'] || [])[0] || '';
+  return ad + '|' + String(wi || '').trim().toLowerCase();
+}
+
+function accExpenseKeepScore(fields) {
+  const f = fields || {};
+  let score = 0;
+  if (accFieldText(f['來源支出ID'])) score += 4;
+  if (accFieldText(f['來源付款ID'])) score += 4;
+  if (accFieldText(f['摘要'])) score += 2;
+  if (accFieldText(f['對象'])) score += 1;
+  if (accFieldText(f['來源工項']) || getLinkIds(f['工項'] || []).length) score += 1;
+  return score;
+}
+
 /**
- * 清理 ACC 支出孤兒：
+ * 清理 ACC 支出孤兒／重複：
  * 1) 有來源支出ID 但璽墨已無該列
- * 2) 無來源 ID、摘要空白，且與已有來源 ID 的列同金額+同日（畫面重複數字）
+ * 2) 無來源 ID、摘要空白，且與已有來源 ID 的列同金額+同日
+ * 3) 同金額+同日+同工項出現多筆時，保留來源較完整的一筆，刪掉較弱重複列
  */
 async function pruneAccOrphanExpenses(ximoToken, opts) {
   opts = opts || {};
@@ -3410,8 +3430,10 @@ async function pruneAccOrphanExpenses(ximoToken, opts) {
     dryRun: dryRun,
     missingSourceDeleted: 0,
     blankDupDeleted: 0,
+    sameGroupDupDeleted: 0,
     scanned: 0,
     deletedIds: [],
+    keptGroups: [],
     errors: []
   };
   if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_EXPENSES) {
@@ -3428,16 +3450,38 @@ async function pruneAccOrphanExpenses(ximoToken, opts) {
   const accExpenses = await getRecords(accToken, ACC_TABLE_EXPENSES, ACC_APP_TOKEN);
   out.scanned = accExpenses.length;
 
+  const deleteIds = {};
+  async function markDelete(rec, reason) {
+    if (!rec || !rec.record_id || deleteIds[rec.record_id]) return;
+    deleteIds[rec.record_id] = reason;
+    try {
+      if (!dryRun) {
+        await deleteRecord(accToken, ACC_TABLE_EXPENSES, rec.record_id, ACC_APP_TOKEN, false);
+      }
+      out.deletedIds.push({ id: rec.record_id, reason: reason });
+      if (reason === 'missing-ximo-expense') out.missingSourceDeleted++;
+      else if (reason === 'blank-summary-dup') out.blankDupDeleted++;
+      else if (reason === 'same-group-dup') out.sameGroupDupDeleted++;
+    } catch (e) {
+      out.errors.push({ id: rec.record_id, error: e.message || String(e) });
+    }
+  }
+
   const sourcedByAmountDay = {};
+  const byGroup = {};
   accExpenses.forEach(function(rec) {
     const ef = rec.fields || {};
     const eid = accFieldText(ef['來源支出ID']);
     const pid = accFieldText(ef['來源付款ID']);
-    if (!eid && !pid) return;
-    const key = accExpenseAmountDayKey(ef);
-    if (!key) return;
-    if (!sourcedByAmountDay[key]) sourcedByAmountDay[key] = [];
-    sourcedByAmountDay[key].push(rec);
+    const ad = accExpenseAmountDayKey(ef);
+    if ((eid || pid) && ad) {
+      if (!sourcedByAmountDay[ad]) sourcedByAmountDay[ad] = [];
+      sourcedByAmountDay[ad].push(rec);
+    }
+    const gk = accExpenseDupGroupKey(ef);
+    if (!gk) return;
+    if (!byGroup[gk]) byGroup[gk] = [];
+    byGroup[gk].push(rec);
   });
 
   for (let i = 0; i < accExpenses.length; i++) {
@@ -3446,29 +3490,60 @@ async function pruneAccOrphanExpenses(ximoToken, opts) {
     const eid = accFieldText(ef['來源支出ID']);
     const pid = accFieldText(ef['來源付款ID']);
     const summary = accFieldText(ef['摘要']);
-    let reason = '';
-
     if (eid && !liveExpenseIds[eid]) {
-      reason = 'missing-ximo-expense';
-    } else if (!eid && !pid && !summary) {
+      await markDelete(rec, 'missing-ximo-expense');
+      continue;
+    }
+    if (!eid && !pid && !summary) {
       const key = accExpenseAmountDayKey(ef);
       if (key && sourcedByAmountDay[key] && sourcedByAmountDay[key].length) {
-        reason = 'blank-summary-dup';
+        await markDelete(rec, 'blank-summary-dup');
       }
-    }
-    if (!reason) continue;
-
-    try {
-      if (!dryRun) {
-        await deleteRecord(accToken, ACC_TABLE_EXPENSES, rec.record_id, ACC_APP_TOKEN, false);
-      }
-      out.deletedIds.push({ id: rec.record_id, reason: reason });
-      if (reason === 'missing-ximo-expense') out.missingSourceDeleted++;
-      else out.blankDupDeleted++;
-    } catch (e) {
-      out.errors.push({ id: rec.record_id, error: e.message || String(e) });
     }
   }
+
+  // 同金額+同日+同工項：保留來源較完整的一筆
+  const groupKeys = Object.keys(byGroup);
+  for (let gi = 0; gi < groupKeys.length; gi++) {
+    const gk = groupKeys[gi];
+    const group = (byGroup[gk] || []).filter(function(rec) { return !deleteIds[rec.record_id]; });
+    if (group.length < 2) continue;
+    group.sort(function(a, b) {
+      const sa = accExpenseKeepScore(a.fields || {});
+      const sb = accExpenseKeepScore(b.fields || {});
+      if (sb !== sa) return sb - sa;
+      return String(a.record_id).localeCompare(String(b.record_id));
+    });
+    const keep = group[0];
+    out.keptGroups.push({
+      key: gk,
+      keepId: keep.record_id,
+      dropCount: group.length - 1
+    });
+    const keepScore = accExpenseKeepScore(keep.fields || {});
+    const keepFields = keep.fields || {};
+    const keepHasSource = !!(accFieldText(keepFields['來源支出ID']) || accFieldText(keepFields['來源付款ID']));
+    for (let i = 1; i < group.length; i++) {
+      const drop = group[i];
+      const df = drop.fields || {};
+      const dropHasSource = !!(accFieldText(df['來源支出ID']) || accFieldText(df['來源付款ID']));
+      const dropScore = accExpenseKeepScore(df);
+      // 安全條件：弱的那筆沒來源，或分數明顯較低且保留列有來源
+      const safe = (!dropHasSource)
+        || (keepHasSource && dropScore < keepScore)
+        || (keepHasSource && dropHasSource
+            && accFieldText(keepFields['來源付款ID'])
+            && accFieldText(df['來源支出ID'])
+            && !accFieldText(df['來源付款ID'])
+            && accFieldText(keepFields['來源付款ID']) === accFieldText(df['來源付款ID']));
+      // 也處理：一筆有付款來源、一筆有支出來源但金額日工項相同 → 留分數高的
+      const bothSourcedSameLogical = keepHasSource && dropHasSource && dropScore <= keepScore;
+      if (safe || bothSourcedSameLogical) {
+        await markDelete(drop, 'same-group-dup');
+      }
+    }
+  }
+
   return out;
 }
 
