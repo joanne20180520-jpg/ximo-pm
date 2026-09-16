@@ -3409,12 +3409,43 @@ function accExpenseDupGroupKey(fields) {
 function accExpenseKeepScore(fields) {
   const f = fields || {};
   let score = 0;
-  if (accFieldText(f['來源支出ID'])) score += 4;
-  if (accFieldText(f['來源付款ID'])) score += 4;
+  // 來源支出ID 優先於付款ID，避免同分時刪掉剛補同步的列
+  if (accFieldText(f['來源支出ID'])) score += 6;
+  if (accFieldText(f['來源付款ID'])) score += 3;
   if (accFieldText(f['摘要'])) score += 2;
   if (accFieldText(f['對象'])) score += 1;
   if (accFieldText(f['來源工項']) || getLinkIds(f['工項'] || []).length) score += 1;
   return score;
+}
+
+/** 找可合併的 ACC 列：同金額同日、尚無來源支出ID，工項／標案相容 */
+function findSoftAccExpenseByAmountDay(accList, amount, dateMs, workitemName, projectName, claimedIds) {
+  const ad = accExpenseAmountDayKey({ '金額': amount, '日期': dateMs });
+  if (!ad) return null;
+  const claimed = claimedIds || {};
+  const cands = [];
+  for (let i = 0; i < (accList || []).length; i++) {
+    const rec = accList[i];
+    if (!rec || !rec.record_id || claimed[rec.record_id]) continue;
+    const ef = rec.fields || {};
+    if (accFieldText(ef['來源支出ID'])) continue;
+    if (accExpenseAmountDayKey(ef) !== ad) continue;
+    const softWi = accFieldText(ef['來源工項']);
+    if (workitemName && softWi && !accNamesMatch(softWi, workitemName)) continue;
+    const softProj = accFieldText(ef['來源標案']);
+    if (projectName && softProj && !accNamesMatch(softProj, projectName)) continue;
+    cands.push(rec);
+  }
+  if (!cands.length) return null;
+  if (cands.length === 1) return cands[0];
+  if (workitemName) {
+    const exact = cands.filter(function(r) {
+      return accNamesMatch(accFieldText((r.fields || {})['來源工項']), workitemName);
+    });
+    if (exact.length === 1) return exact[0];
+    if (exact.length > 1) return exact[0];
+  }
+  return cands[0];
 }
 
 /**
@@ -4365,6 +4396,16 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
     }
   });
 
+  const claimedAccIds = {};
+  Object.keys(byExpenseId).forEach(function(k) {
+    const rec = byExpenseId[k];
+    if (rec && rec.record_id) claimedAccIds[rec.record_id] = true;
+  });
+  Object.keys(byPaymentId).forEach(function(k) {
+    const rec = byPaymentId[k];
+    if (rec && rec.record_id) claimedAccIds[rec.record_id] = true;
+  });
+
   const out = {
     dryRun: dryRun,
     limit: limit || null,
@@ -4442,6 +4483,16 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
       });
       soft = gk && byGroupNoExpenseId[gk] ? byGroupNoExpenseId[gk] : null;
     }
+    if (!soft) {
+      soft = findSoftAccExpenseByAmountDay(
+        accExpenses,
+        amount,
+        dateMs,
+        labels.workitemName,
+        labels.projectName,
+        claimedAccIds
+      );
+    }
     if (soft) {
       const softProj = accFieldText((soft.fields || {})['來源標案']);
       if (softProj && labels.projectName && !accNamesMatch(softProj, labels.projectName)) {
@@ -4465,6 +4516,7 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
           await updateRecord(accToken, ACC_TABLE_EXPENSES, soft.record_id, patch, ACC_APP_TOKEN, false);
           byExpenseId[expenseId] = soft;
           if (paymentId) byPaymentId[paymentId] = soft;
+          if (soft.record_id) claimedAccIds[soft.record_id] = true;
           delete byFingerprint[loose];
           const adClear = accExpenseAmountDayKey(soft.fields || {});
           if (adClear) delete byAmountDayBlank[adClear];
