@@ -3487,6 +3487,11 @@ async function pruneAccOrphanExpenses(ximoToken, opts) {
   const deleteIds = {};
   async function markDelete(rec, reason) {
     if (!rec || !rec.record_id || deleteIds[rec.record_id]) return false;
+    const liveEid = accFieldText((rec.fields || {})['來源支出ID']);
+    if (liveEid && liveExpenseIds[liveEid]) {
+      // 對應璽墨尚存在的支出：不可刪
+      return false;
+    }
     if (limit && out.deletedIds.length >= limit) {
       out.remaining++;
       return false;
@@ -3549,6 +3554,9 @@ async function pruneAccOrphanExpenses(ximoToken, opts) {
     const group = (byGroup[gk] || []).filter(function(rec) { return !deleteIds[rec.record_id]; });
     if (group.length < 2) continue;
     group.sort(function(a, b) {
+      const aLive = liveExpenseIds[accFieldText((a.fields || {})['來源支出ID'])] ? 1 : 0;
+      const bLive = liveExpenseIds[accFieldText((b.fields || {})['來源支出ID'])] ? 1 : 0;
+      if (bLive !== aLive) return bLive - aLive;
       const sa = accExpenseKeepScore(a.fields || {});
       const sb = accExpenseKeepScore(b.fields || {});
       if (sb !== sa) return sb - sa;
@@ -4396,13 +4404,10 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
     }
   });
 
+  // 只鎖「已有來源支出ID」的 ACC 列；有付款ID但無支出ID者仍可供手動支出合併
   const claimedAccIds = {};
   Object.keys(byExpenseId).forEach(function(k) {
     const rec = byExpenseId[k];
-    if (rec && rec.record_id) claimedAccIds[rec.record_id] = true;
-  });
-  Object.keys(byPaymentId).forEach(function(k) {
-    const rec = byPaymentId[k];
     if (rec && rec.record_id) claimedAccIds[rec.record_id] = true;
   });
 
