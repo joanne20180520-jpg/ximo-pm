@@ -3515,32 +3515,43 @@ async function pruneAccOrphanExpenses(ximoToken, opts) {
       return String(a.record_id).localeCompare(String(b.record_id));
     });
     const keep = group[0];
-    out.keptGroups.push({
-      key: gk,
-      keepId: keep.record_id,
-      dropCount: group.length - 1
-    });
     const keepScore = accExpenseKeepScore(keep.fields || {});
     const keepFields = keep.fields || {};
     const keepHasSource = !!(accFieldText(keepFields['來源支出ID']) || accFieldText(keepFields['來源付款ID']));
+    const groupHasWorkitem = gk.split('|').length >= 3 && !!gk.split('|').slice(2).join('|');
+    let dropped = 0;
     for (let i = 1; i < group.length; i++) {
       const drop = group[i];
       const df = drop.fields || {};
       const dropHasSource = !!(accFieldText(df['來源支出ID']) || accFieldText(df['來源付款ID']));
       const dropScore = accExpenseKeepScore(df);
-      // 安全條件：弱的那筆沒來源，或分數明顯較低且保留列有來源
-      const safe = (!dropHasSource)
+      // 無工項時只刪「完全沒來源 ID」的弱列，避免誤刪同日同額的不同支出
+      if (!groupHasWorkitem) {
+        if (!dropHasSource && keepHasSource) {
+          await markDelete(drop, 'same-group-dup');
+          dropped++;
+        }
+        continue;
+      }
+      const safe = (!dropHasSource && keepHasSource)
         || (keepHasSource && dropScore < keepScore)
         || (keepHasSource && dropHasSource
             && accFieldText(keepFields['來源付款ID'])
             && accFieldText(df['來源支出ID'])
             && !accFieldText(df['來源付款ID'])
             && accFieldText(keepFields['來源付款ID']) === accFieldText(df['來源付款ID']));
-      // 也處理：一筆有付款來源、一筆有支出來源但金額日工項相同 → 留分數高的
       const bothSourcedSameLogical = keepHasSource && dropHasSource && dropScore <= keepScore;
       if (safe || bothSourcedSameLogical) {
         await markDelete(drop, 'same-group-dup');
+        dropped++;
       }
+    }
+    if (dropped) {
+      out.keptGroups.push({
+        key: gk,
+        keepId: keep.record_id,
+        dropCount: dropped
+      });
     }
   }
 
