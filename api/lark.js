@@ -3464,6 +3464,7 @@ async function pruneAccOrphanExpenses(ximoToken, opts) {
     missingSourceDeleted: 0,
     blankDupDeleted: 0,
     sameGroupDupDeleted: 0,
+    amountDayOrphanDeleted: 0,
     scanned: 0,
     deletedIds: [],
     keptGroups: [],
@@ -3505,6 +3506,7 @@ async function pruneAccOrphanExpenses(ximoToken, opts) {
       if (reason === 'missing-ximo-expense') out.missingSourceDeleted++;
       else if (reason === 'blank-summary-dup') out.blankDupDeleted++;
       else if (reason === 'same-group-dup') out.sameGroupDupDeleted++;
+      else if (reason === 'amount-day-orphan-dup') out.amountDayOrphanDeleted++;
       return true;
     } catch (e) {
       out.errors.push({ id: rec.record_id, error: e.message || String(e) });
@@ -3601,6 +3603,34 @@ async function pruneAccOrphanExpenses(ximoToken, opts) {
         dropCount: dropped
       });
     }
+  }
+
+  // 額外：有活著來源支出ID 的列，清掉同金額同日且無來源支出ID 的舊列（工項鍵不一致時）
+  const liveByAmountDay = {};
+  for (let i = 0; i < accExpenses.length; i++) {
+    const rec = accExpenses[i];
+    if (!rec || deleteIds[rec.record_id]) continue;
+    const ef = rec.fields || {};
+    const eid = accFieldText(ef['來源支出ID']);
+    if (!eid || !liveExpenseIds[eid]) continue;
+    const ad = accExpenseAmountDayKey(ef);
+    if (!ad) continue;
+    if (!liveByAmountDay[ad]) liveByAmountDay[ad] = rec;
+  }
+  for (let i = 0; i < accExpenses.length; i++) {
+    const rec = accExpenses[i];
+    if (!rec || deleteIds[rec.record_id]) continue;
+    const ef = rec.fields || {};
+    const eid = accFieldText(ef['來源支出ID']);
+    if (eid && liveExpenseIds[eid]) continue;
+    const ad = accExpenseAmountDayKey(ef);
+    if (!ad || !liveByAmountDay[ad]) continue;
+    const liveRec = liveByAmountDay[ad];
+    if (liveRec.record_id === rec.record_id) continue;
+    const liveProj = accFieldText((liveRec.fields || {})['來源標案']);
+    const recProj = accFieldText(ef['來源標案']);
+    if (liveProj && recProj && !accNamesMatch(liveProj, recProj)) continue;
+    await markDelete(rec, 'amount-day-orphan-dup');
   }
 
   return out;
