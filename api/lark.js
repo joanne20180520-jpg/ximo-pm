@@ -4344,6 +4344,7 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
   const byPaymentId = {};
   const byFingerprint = {};
   const byAmountDayBlank = {};
+  const byGroupNoExpenseId = {};
   accExpenses.forEach(function(rec) {
     const ef = rec.fields || {};
     const eid = accFieldText(ef['來源支出ID']);
@@ -4356,6 +4357,11 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
     if (!eid && !pid && !accFieldText(ef['摘要'])) {
       const ad = accExpenseAmountDayKey(ef);
       if (ad && !byAmountDayBlank[ad]) byAmountDayBlank[ad] = rec;
+    }
+    // 尚無來源支出ID：可用金額+日期+工項合併，避免重複建列
+    if (!eid) {
+      const gk = accExpenseDupGroupKey(ef);
+      if (gk && !byGroupNoExpenseId[gk]) byGroupNoExpenseId[gk] = rec;
     }
   });
 
@@ -4428,6 +4434,14 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
       const ad = accExpenseAmountDayKey({ '金額': amount, '日期': dateMs });
       soft = ad && byAmountDayBlank[ad] ? byAmountDayBlank[ad] : null;
     }
+    if (!soft) {
+      const gk = accExpenseDupGroupKey({
+        '金額': amount,
+        '日期': dateMs,
+        '來源工項': labels.workitemName
+      });
+      soft = gk && byGroupNoExpenseId[gk] ? byGroupNoExpenseId[gk] : null;
+    }
     if (soft) {
       const softProj = accFieldText((soft.fields || {})['來源標案']);
       if (softProj && labels.projectName && !accNamesMatch(softProj, labels.projectName)) {
@@ -4454,6 +4468,10 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
           delete byFingerprint[loose];
           const adClear = accExpenseAmountDayKey(soft.fields || {});
           if (adClear) delete byAmountDayBlank[adClear];
+          const gkClear = accExpenseDupGroupKey(Object.assign({}, soft.fields || {}, {
+            '來源工項': labels.workitemName || accFieldText((soft.fields || {})['來源工項'])
+          }));
+          if (gkClear) delete byGroupNoExpenseId[gkClear];
           out.backfilled++;
         } catch (err) {
           out.errors.push({
