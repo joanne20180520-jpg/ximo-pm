@@ -3636,6 +3636,186 @@ async function pruneAccOrphanExpenses(ximoToken, opts) {
   return out;
 }
 
+/**
+ * 以璽墨支出為主，對齊 ACC：
+ * 1) 先把璽墨缺的補進 ACC
+ * 2) 盡量把僅有付款來源／無來源的 ACC 列補上來源支出ID
+ * 3) 刪掉沒有對應璽墨支出的 ACC 列（含失效來源、純 ACC 舊資料）
+ * 4) 同一來源支出ID 多列時只留一筆
+ */
+async function reconcileAccExpensesToXimo(ximoToken, opts) {
+  opts = opts || {};
+  const dryRun = !!opts.dryRun;
+  const limit = Math.max(0, parseInt(opts.limit, 10) || 0);
+  const out = {
+    dryRun: dryRun,
+    limit: limit || null,
+    sync: null,
+    scanned: 0,
+    kept: 0,
+    backfilled: 0,
+    deleted: 0,
+    deletedIds: [],
+    remaining: 0,
+    errors: []
+  };
+  if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_EXPENSES) {
+    return { skipped: true, reason: 'acc-env-missing' };
+  }
+
+  out.sync = await syncXimoExpensesToAccPortal(ximoToken, {
+    dryRun: dryRun,
+    limit: dryRun ? 0 : (limit || 80)
+  });
+
+  const accToken = await getAccTenantToken();
+  await ensureAccExpenseSourceFields(accToken);
+  const ximoExpenses = await loadExpenseRecords(ximoToken);
+  const liveExpenseIds = {};
+  const byPaymentId = {};
+  const ximoByAmountDay = {};
+  ximoExpenses.forEach(function(rec) {
+    if (!rec || !rec.record_id) return;
+    liveExpenseIds[rec.record_id] = rec;
+    const fields = rec.fields || {};
+    const pid = expenseLinkedPaymentId(fields);
+    if (pid && !byPaymentId[pid]) byPaymentId[pid] = rec.record_id;
+    const amount = expenseAmountNumber(fields);
+    const dateMs = accExpenseDateMs(fields) || 0;
+    const ad = accExpenseAmountDayKey({ '金額': amount, '日期': dateMs });
+    if (!ad) return;
+    if (!ximoByAmountDay[ad]) ximoByAmountDay[ad] = [];
+    ximoByAmountDay[ad].push(rec);
+  });
+
+  const accExpenses = await getRecords(accToken, ACC_TABLE_EXPENSES, ACC_APP_TOKEN);
+  out.scanned = accExpenses.length;
+
+  const claimedExpenseIds = {};
+  const byLiveExpenseAcc = {};
+  accExpenses.forEach(function(rec) {
+    const eid = accFieldText((rec.fields || {})['來源支出ID']);
+    if (eid && liveExpenseIds[eid]) {
+      if (!byLiveExpenseAcc[eid]) byLiveExpenseAcc[eid] = [];
+      byLiveExpenseAcc[eid].push(rec);
+      claimedExpenseIds[eid] = true;
+    }
+  });
+
+  async function del(rec, reason) {
+    if (!rec || !rec.record_id) return false;
+    if (limit && out.deleted >= limit) {
+      out.remaining++;
+      return false;
+    }
+    try {
+      if (!dryRun) {
+        await deleteRecord(accToken, ACC_TABLE_EXPENSES, rec.record_id, ACC_APP_TOKEN, false);
+      }
+      out.deleted++;
+      out.deletedIds.push({ id: rec.record_id, reason: reason });
+      return true;
+    } catch (e) {
+      out.errors.push({ id: rec.record_id, error: e.message || String(e) });
+      return false;
+    }
+  }
+
+  // 同一來源支出ID 多列 → 留分數最高
+  const dupKeys = Object.keys(byLiveExpenseAcc);
+  for (let i = 0; i < dupKeys.length; i++) {
+    const eid = dupKeys[i];
+    const group = byLiveExpenseAcc[eid] || [];
+    if (group.length < 2) continue;
+    group.sort(function(a, b) {
+      const sa = accExpenseKeepScore(a.fields || {});
+      const sb = accExpenseKeepScore(b.fields || {});
+      if (sb !== sa) return sb - sa;
+      return String(a.record_id).localeCompare(String(b.record_id));
+    });
+    for (let j = 1; j < group.length; j++) {
+      await del(group[j], 'dup-same-expense-id');
+    }
+  }
+
+  for (let i = 0; i < accExpenses.length; i++) {
+    const rec = accExpenses[i];
+    if (!rec || !rec.record_id) continue;
+    // 已被當重複刪掉的略過（dryRun 時仍在列表，靠 deletedIds 判斷）
+    if (out.deletedIds.some(function(d) { return d.id === rec.record_id; })) continue;
+
+    const ef = rec.fields || {};
+    const eid = accFieldText(ef['來源支出ID']);
+    const pid = accFieldText(ef['來源付款ID']);
+
+    if (eid && liveExpenseIds[eid]) {
+      out.kept++;
+      continue;
+    }
+
+    // 來源支出已不在璽墨
+    if (eid && !liveExpenseIds[eid]) {
+      await del(rec, 'not-in-ximo');
+      continue;
+    }
+
+    // 無來源支出ID：嘗試用付款ID / 金額日期掛回璽墨
+    let linkExpenseId = '';
+    if (pid && byPaymentId[pid] && !claimedExpenseIds[byPaymentId[pid]]) {
+      linkExpenseId = byPaymentId[pid];
+    }
+    if (!linkExpenseId) {
+      const ad = accExpenseAmountDayKey(ef);
+      const cands = (ad && ximoByAmountDay[ad]) ? ximoByAmountDay[ad] : [];
+      const free = cands.filter(function(xr) {
+        return xr && xr.record_id && !claimedExpenseIds[xr.record_id];
+      });
+      let pick = null;
+      if (free.length === 1) pick = free[0];
+      else if (free.length > 1) {
+        const wi = accFieldText(ef['來源工項']);
+        const proj = accFieldText(ef['來源標案']);
+        const matched = free.filter(function(xr) {
+          const xf = xr.fields || {};
+          const xwi = getLinkText(xf['所屬工作項目']) || accFieldText(xf['工作項目名稱']);
+          const xproj = getLinkText(xf['所屬標案'] || xf['所數標案']) || accFieldText(xf['標案名稱']);
+          if (wi && xwi && !accNamesMatch(wi, xwi)) return false;
+          if (proj && xproj && !accNamesMatch(proj, xproj)) return false;
+          return true;
+        });
+        pick = matched.length ? matched[0] : null;
+      }
+      if (pick) linkExpenseId = pick.record_id;
+    }
+
+    if (linkExpenseId) {
+      if (!dryRun) {
+        try {
+          const patch = { '來源支出ID': linkExpenseId };
+          if (pid) patch['來源付款ID'] = pid;
+          await updateRecord(accToken, ACC_TABLE_EXPENSES, rec.record_id, patch, ACC_APP_TOKEN, false);
+          out.backfilled++;
+          claimedExpenseIds[linkExpenseId] = true;
+          out.kept++;
+          continue;
+        } catch (e) {
+          out.errors.push({ id: rec.record_id, error: e.message || String(e) });
+        }
+      } else {
+        out.backfilled++;
+        claimedExpenseIds[linkExpenseId] = true;
+        out.kept++;
+        continue;
+      }
+    }
+
+    // 對不上璽墨 → 刪（以璽墨為主）
+    await del(rec, 'not-in-ximo');
+  }
+
+  return out;
+}
+
 async function resolveXimoPaymentLabels(ximoToken, fields) {
   let projectName = getLinkText(fields['所屬標案'] || fields['所數標案'])
     || accFieldText(fields['標案名稱']);
@@ -7708,6 +7888,24 @@ export default async function handler(req, res) {
           limit: dryRun ? 0 : (isNaN(limit) ? 40 : limit)
         });
         return res.status(200).json({ ok: true, prune: result });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'reconcile-acc-expenses-to-ximo' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const token = await getToken();
+        const q = req.query || {};
+        const b = req.body || {};
+        const dryRun = String(q.dryRun || b.dryRun || '') === '1'
+          || String(q.dryRun || b.dryRun || '').toLowerCase() === 'true';
+        const limit = parseInt(q.limit || b.limit || '80', 10);
+        const result = await reconcileAccExpensesToXimo(token, {
+          dryRun: dryRun,
+          limit: dryRun ? 0 : (isNaN(limit) ? 80 : limit)
+        });
+        return res.status(200).json({ ok: true, reconcile: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
