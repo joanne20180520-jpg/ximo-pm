@@ -2340,24 +2340,39 @@ function matchApprovalWidgetOption(widget, label) {
 
 function approvalWidgetShouldSkip(name) {
   const n = String(name || '').replace(/\s+/g, '');
+  // 所屬標案／標案名稱改為文字帶入審批；工作項目關聯 ID 仍略過（避免把 record_id 塞進表單）
   const skip = {
-    '所屬標案': 1,
-    '所屬專案': 1,
-    '所屬個案': 1,
     '所數標案': 1,
     '所屬工作項目': 1,
     '工作項目': 1,
-    '工作項目名稱': 1,
-    '標案名稱': 1
+    '工作項目名稱': 1
   };
   return !!skip[n];
 }
 
 function paymentFieldsForApproval(fields) {
   const f = Object.assign({}, fields || {});
+  const projName = String(f['標案名稱'] || '').trim()
+    || getLinkText(f['所屬標案'] || f['所數標案'] || f['所屬專案'])
+    || '';
+  const wiName = String(f['工作項目名稱'] || '').trim()
+    || getLinkText(f['所屬工作項目'])
+    || '';
+  // 關聯欄改成文字再送審批（Lark 審批表單是短答，不是多維表格關聯）
   delete f['所屬標案'];
   delete f['所數標案'];
   delete f['所屬工作項目'];
+  if (projName) {
+    f['標案名稱'] = projName;
+    f['所屬標案'] = projName;
+    f['所屬專案'] = projName;
+    f['所屬個案'] = projName;
+  }
+  if (wiName) {
+    f['工作項目名稱'] = wiName;
+    f['所屬工作項目'] = wiName;
+    f['工作項目'] = wiName;
+  }
   return f;
 }
 

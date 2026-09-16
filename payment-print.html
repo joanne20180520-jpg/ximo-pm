@@ -65,6 +65,10 @@ textarea.filled { background:#f0fff4; }
     <input type="text" id="month" style="width:28px">月
     <input type="text" id="day" style="width:28px">日
   </div>
+  <div class="header-row">
+    所屬標案：
+    <input type="text" id="proj" style="flex:1;min-width:0">
+  </div>
  
   <table>
     <!-- Row 1: 部門/支付對象/廠商名稱 -->
@@ -190,6 +194,7 @@ function applyPayPrintData(data) {
   setText('payee', data.payee);
   setText('vendor', data.vendor);
   setText('serial', data.serial);
+  setText('proj', data.projName || data.proj || data.project || '');
   if (data.applicant) {
     document.getElementById('applicant_show').textContent = data.applicant;
     filled = true;
@@ -269,7 +274,8 @@ function payDataFromUrlParams(p) {
     total: p.get('total'),
     nature: p.get('nature'),
     pay: p.get('pay'),
-    date: p.get('date')
+    date: p.get('date'),
+    projName: p.get('projName') || p.get('proj') || ''
   };
 }
 
