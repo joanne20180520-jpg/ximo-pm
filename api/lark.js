@@ -3426,14 +3426,17 @@ function accExpenseKeepScore(fields) {
 async function pruneAccOrphanExpenses(ximoToken, opts) {
   opts = opts || {};
   const dryRun = !!opts.dryRun;
+  const limit = Math.max(0, parseInt(opts.limit, 10) || 0);
   const out = {
     dryRun: dryRun,
+    limit: limit || null,
     missingSourceDeleted: 0,
     blankDupDeleted: 0,
     sameGroupDupDeleted: 0,
     scanned: 0,
     deletedIds: [],
     keptGroups: [],
+    remaining: 0,
     errors: []
   };
   if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_EXPENSES) {
@@ -3452,7 +3455,11 @@ async function pruneAccOrphanExpenses(ximoToken, opts) {
 
   const deleteIds = {};
   async function markDelete(rec, reason) {
-    if (!rec || !rec.record_id || deleteIds[rec.record_id]) return;
+    if (!rec || !rec.record_id || deleteIds[rec.record_id]) return false;
+    if (limit && out.deletedIds.length >= limit) {
+      out.remaining++;
+      return false;
+    }
     deleteIds[rec.record_id] = reason;
     try {
       if (!dryRun) {
@@ -3462,8 +3469,10 @@ async function pruneAccOrphanExpenses(ximoToken, opts) {
       if (reason === 'missing-ximo-expense') out.missingSourceDeleted++;
       else if (reason === 'blank-summary-dup') out.blankDupDeleted++;
       else if (reason === 'same-group-dup') out.sameGroupDupDeleted++;
+      return true;
     } catch (e) {
       out.errors.push({ id: rec.record_id, error: e.message || String(e) });
+      return false;
     }
   }
 
@@ -7588,7 +7597,11 @@ export default async function handler(req, res) {
         const b = req.body || {};
         const dryRun = String(q.dryRun || b.dryRun || '') === '1'
           || String(q.dryRun || b.dryRun || '').toLowerCase() === 'true';
-        const result = await pruneAccOrphanExpenses(token, { dryRun: dryRun });
+        const limit = parseInt(q.limit || b.limit || '40', 10);
+        const result = await pruneAccOrphanExpenses(token, {
+          dryRun: dryRun,
+          limit: dryRun ? 0 : (isNaN(limit) ? 40 : limit)
+        });
         return res.status(200).json({ ok: true, prune: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
