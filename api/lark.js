@@ -3341,6 +3341,137 @@ function accExpenseFingerprint(fields, projectName, loose) {
   return [amount, day, summary, proj].join('|');
 }
 
+/** 無摘要時仍可比對：金額+日期（用來合併 ACC 空白摘要孤兒） */
+function accExpenseAmountDayKey(fields) {
+  const f = fields || {};
+  const amount = Math.round(expenseAmountNumber(f));
+  const day = accExpenseDayKey(accExpenseDateMs(f) || (typeof f['日期'] === 'number' ? f['日期'] : 0));
+  if (!amount || !day) return '';
+  return amount + '|' + day;
+}
+
+/**
+ * 璽墨刪支出後，同步刪 ACC 對應列（來源支出ID / 來源付款ID）。
+ */
+async function deleteAccExpensesLinkedToXimoExpense(expenseId, paymentId, opts) {
+  opts = opts || {};
+  const out = { ok: true, deleted: 0, matched: [], skipped: false, reason: '' };
+  if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_EXPENSES) {
+    out.skipped = true;
+    out.reason = 'acc-env-missing';
+    return out;
+  }
+  const eid = String(expenseId || '').trim();
+  const pid = String(paymentId || '').trim();
+  if (!eid && !pid) {
+    out.skipped = true;
+    out.reason = 'no-source-id';
+    return out;
+  }
+
+  const accToken = await getAccTenantToken();
+  await ensureAccExpenseSourceFields(accToken);
+  const accExpenses = await getRecords(accToken, ACC_TABLE_EXPENSES, ACC_APP_TOKEN);
+  const toDelete = [];
+  for (let i = 0; i < accExpenses.length; i++) {
+    const rec = accExpenses[i];
+    const ef = rec.fields || {};
+    const srcEid = accFieldText(ef['來源支出ID']);
+    const srcPid = accFieldText(ef['來源付款ID']);
+    if ((eid && srcEid === eid) || (pid && srcPid === pid)) {
+      toDelete.push(rec);
+    }
+  }
+  for (let i = 0; i < toDelete.length; i++) {
+    const rec = toDelete[i];
+    try {
+      if (!opts.dryRun) {
+        await deleteRecord(accToken, ACC_TABLE_EXPENSES, rec.record_id, ACC_APP_TOKEN, false);
+      }
+      out.deleted++;
+      out.matched.push(rec.record_id);
+    } catch (e) {
+      out.ok = false;
+      out.error = (out.error ? out.error + '; ' : '') + (e.message || String(e));
+    }
+  }
+  return out;
+}
+
+/**
+ * 清理 ACC 支出孤兒：
+ * 1) 有來源支出ID 但璽墨已無該列
+ * 2) 無來源 ID、摘要空白，且與已有來源 ID 的列同金額+同日（畫面重複數字）
+ */
+async function pruneAccOrphanExpenses(ximoToken, opts) {
+  opts = opts || {};
+  const dryRun = !!opts.dryRun;
+  const out = {
+    dryRun: dryRun,
+    missingSourceDeleted: 0,
+    blankDupDeleted: 0,
+    scanned: 0,
+    deletedIds: [],
+    errors: []
+  };
+  if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_EXPENSES) {
+    return { skipped: true, reason: 'acc-env-missing' };
+  }
+
+  const accToken = await getAccTenantToken();
+  await ensureAccExpenseSourceFields(accToken);
+  const ximoExpenses = await loadExpenseRecords(ximoToken);
+  const liveExpenseIds = {};
+  ximoExpenses.forEach(function(rec) {
+    if (rec && rec.record_id) liveExpenseIds[rec.record_id] = true;
+  });
+  const accExpenses = await getRecords(accToken, ACC_TABLE_EXPENSES, ACC_APP_TOKEN);
+  out.scanned = accExpenses.length;
+
+  const sourcedByAmountDay = {};
+  accExpenses.forEach(function(rec) {
+    const ef = rec.fields || {};
+    const eid = accFieldText(ef['來源支出ID']);
+    const pid = accFieldText(ef['來源付款ID']);
+    if (!eid && !pid) return;
+    const key = accExpenseAmountDayKey(ef);
+    if (!key) return;
+    if (!sourcedByAmountDay[key]) sourcedByAmountDay[key] = [];
+    sourcedByAmountDay[key].push(rec);
+  });
+
+  for (let i = 0; i < accExpenses.length; i++) {
+    const rec = accExpenses[i];
+    const ef = rec.fields || {};
+    const eid = accFieldText(ef['來源支出ID']);
+    const pid = accFieldText(ef['來源付款ID']);
+    const summary = accFieldText(ef['摘要']);
+    let reason = '';
+
+    if (eid && !liveExpenseIds[eid]) {
+      reason = 'missing-ximo-expense';
+    } else if (!eid && !pid && !summary) {
+      const key = accExpenseAmountDayKey(ef);
+      if (key && sourcedByAmountDay[key] && sourcedByAmountDay[key].length) {
+        reason = 'blank-summary-dup';
+      }
+    }
+    if (!reason) continue;
+
+    try {
+      if (!dryRun) {
+        await deleteRecord(accToken, ACC_TABLE_EXPENSES, rec.record_id, ACC_APP_TOKEN, false);
+      }
+      out.deletedIds.push({ id: rec.record_id, reason: reason });
+      if (reason === 'missing-ximo-expense') out.missingSourceDeleted++;
+      else out.blankDupDeleted++;
+    } catch (e) {
+      out.errors.push({ id: rec.record_id, error: e.message || String(e) });
+    }
+  }
+  return out;
+}
+
 async function resolveXimoPaymentLabels(ximoToken, fields) {
   let projectName = getLinkText(fields['所屬標案'] || fields['所數標案'])
     || accFieldText(fields['標案名稱']);
@@ -4047,17 +4178,41 @@ async function syncSettledPaymentToAccPortal(ximoToken, paymentRec) {
   const payee = accFieldText(fields['支付對象']);
   const reason = accFieldText(fields['事由']) || accFieldText(fields['支出細項']);
   const summary = payee && reason ? (payee + '｜' + reason) : (payee || reason || '付款申請');
+  const amount = paymentAmountNumber(fields);
+  const dateMs = accPaymentDateMs(fields);
   const out = {
     '摘要': summary,
-    '金額': paymentAmountNumber(fields),
+    '金額': amount,
     '對象': payee,
-    '日期': accPaymentDateMs(fields),
+    '日期': dateMs,
     '來源付款ID': paymentId,
     '來源標案': labels.projectName,
     '來源工項': labels.workitemName
   };
   if (accProject) out['所屬案件'] = [accProject.record_id];
   if (accWorkitem) out['工項'] = [accWorkitem.record_id];
+
+  // 若 ACC 已有同金額同日、無來源 ID 的空白摘要列，直接覆寫合併，避免重複數字
+  const softKey = accExpenseAmountDayKey({ '金額': amount, '日期': dateMs });
+  if (softKey) {
+    for (let i = 0; i < existing.length; i++) {
+      const soft = existing[i];
+      const ef = soft.fields || {};
+      if (accFieldText(ef['來源支出ID']) || accFieldText(ef['來源付款ID'])) continue;
+      if (accExpenseAmountDayKey(ef) !== softKey) continue;
+      const softProj = accFieldText(ef['來源標案']);
+      if (softProj && labels.projectName && !accNamesMatch(softProj, labels.projectName)) continue;
+      await updateRecord(accToken, ACC_TABLE_EXPENSES, soft.record_id, out, ACC_APP_TOKEN, false);
+      return {
+        ok: true,
+        merged: true,
+        recordId: soft.record_id,
+        linkedProject: !!(accProject),
+        linkedWorkitem: !!(accWorkitem),
+        sourceProject: labels.projectName
+      };
+    }
+  }
 
   const created = await createRecord(accToken, ACC_TABLE_EXPENSES, out, ACC_APP_TOKEN, false);
   return {
@@ -4093,6 +4248,7 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
   const byExpenseId = {};
   const byPaymentId = {};
   const byFingerprint = {};
+  const byAmountDayBlank = {};
   accExpenses.forEach(function(rec) {
     const ef = rec.fields || {};
     const eid = accFieldText(ef['來源支出ID']);
@@ -4101,6 +4257,11 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
     if (pid) byPaymentId[pid] = rec;
     const loose = accExpenseFingerprint(ef, '', true);
     if (loose && !eid && !pid) byFingerprint[loose] = rec;
+    // 空白摘要、無來源 ID 的舊列：用金額+日期當軟指紋
+    if (!eid && !pid && !accFieldText(ef['摘要'])) {
+      const ad = accExpenseAmountDayKey(ef);
+      if (ad && !byAmountDayBlank[ad]) byAmountDayBlank[ad] = rec;
+    }
   });
 
   const out = {
@@ -4168,6 +4329,10 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
     }, '', true);
 
     let soft = loose && byFingerprint[loose] ? byFingerprint[loose] : null;
+    if (!soft) {
+      const ad = accExpenseAmountDayKey({ '金額': amount, '日期': dateMs });
+      soft = ad && byAmountDayBlank[ad] ? byAmountDayBlank[ad] : null;
+    }
     if (soft) {
       const softProj = accFieldText((soft.fields || {})['來源標案']);
       if (softProj && labels.projectName && !accNamesMatch(softProj, labels.projectName)) {
@@ -4181,6 +4346,7 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
         try {
           const patch = { '來源支出ID': expenseId };
           if (paymentId) patch['來源付款ID'] = paymentId;
+          if (!accFieldText((soft.fields || {})['摘要']) && summary) patch['摘要'] = summary;
           if (labels.projectName && !accFieldText((soft.fields || {})['來源標案'])) {
             patch['來源標案'] = labels.projectName;
           }
@@ -4191,6 +4357,8 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
           byExpenseId[expenseId] = soft;
           if (paymentId) byPaymentId[paymentId] = soft;
           delete byFingerprint[loose];
+          const adClear = accExpenseAmountDayKey(soft.fields || {});
+          if (adClear) delete byAmountDayBlank[adClear];
           out.backfilled++;
         } catch (err) {
           out.errors.push({
@@ -4288,7 +4456,17 @@ async function deleteDuplicatePaymentExpenses(tenantToken, keepId, extraIds) {
   for (let i = 0; i < extraIds.length; i++) {
     if (!extraIds[i] || extraIds[i] === keepId) continue;
     try {
+      let paymentId = '';
+      try {
+        const snap = await getRecordById(tenantToken, tableId, extraIds[i], appToken);
+        paymentId = expenseLinkedPaymentId((snap && snap.fields) || {});
+      } catch (e) {}
       await deleteRecord(tenantToken, tableId, extraIds[i], appToken, false);
+      try {
+        await deleteAccExpensesLinkedToXimoExpense(extraIds[i], paymentId);
+      } catch (accErr) {
+        console.warn('ACC expense delete sync failed', extraIds[i], accErr.message || accErr);
+      }
       removed++;
     } catch (e) {}
   }
@@ -7301,11 +7479,31 @@ export default async function handler(req, res) {
         const dryRun = String(q.dryRun || b.dryRun || '') === '1'
           || String(q.dryRun || b.dryRun || '').toLowerCase() === 'true';
         const limit = parseInt(q.limit || b.limit || '40', 10);
+        const alsoPrune = String(q.prune || b.prune || '') === '1'
+          || String(q.prune || b.prune || '').toLowerCase() === 'true';
         const result = await syncXimoExpensesToAccPortal(token, {
           dryRun: dryRun,
           limit: dryRun ? 0 : (isNaN(limit) ? 40 : limit)
         });
-        return res.status(200).json({ ok: true, sync: result });
+        let prune = null;
+        if (alsoPrune) {
+          prune = await pruneAccOrphanExpenses(token, { dryRun: dryRun });
+        }
+        return res.status(200).json({ ok: true, sync: result, prune: prune });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'prune-acc-expense-orphans' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const token = await getToken();
+        const q = req.query || {};
+        const b = req.body || {};
+        const dryRun = String(q.dryRun || b.dryRun || '') === '1'
+          || String(q.dryRun || b.dryRun || '').toLowerCase() === 'true';
+        const result = await pruneAccOrphanExpenses(token, { dryRun: dryRun });
+        return res.status(200).json({ ok: true, prune: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
@@ -7765,9 +7963,25 @@ export default async function handler(req, res) {
           console.warn('task delete precheck', readErr.message || readErr);
         }
       }
+      let expenseSnapshot = null;
+      if (table === 'expenses') {
+        try {
+          expenseSnapshot = await getRecordById(tenantToken, tableIdFor('expenses'), recordId, tableAppToken);
+        } catch (readErr) {
+          console.warn('expense delete precheck', readErr.message || readErr);
+        }
+      }
       const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
         return deleteRecord(tok, tableIdFor(table), recordId, tableAppToken, asUser);
       });
+      if (table === 'expenses') {
+        try {
+          const paymentId = expenseLinkedPaymentId((expenseSnapshot && expenseSnapshot.fields) || {});
+          result.accSync = await deleteAccExpensesLinkedToXimoExpense(recordId, paymentId);
+        } catch (accErr) {
+          result.accSync = { ok: false, error: accErr.message || String(accErr) };
+        }
+      }
       return res.status(200).json(result);
     }
 
