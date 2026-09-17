@@ -3234,10 +3234,13 @@ async function loadPaymentCompanyMap(ximoToken) {
   return map;
 }
 
-async function stampAccProjectCompany(accToken, accProject, company) {
+async function stampAccProjectCompany(accToken, accProject, company, opts) {
+  opts = opts || {};
   if (!accProject || !accProject.record_id || !company) return false;
   const current = normalizeAccCompany(accFieldText((accProject.fields || {})['公司']));
   if (current === company) return false;
+  // 預設不覆蓋已有公司（標案公司為準）；force=true 才覆寫
+  if (current && !opts.force) return false;
   await updateRecord(accToken, ACC_TABLE_PROJECTS, accProject.record_id, { '公司': company }, ACC_APP_TOKEN, false);
   accProject.fields = Object.assign({}, accProject.fields || {}, { '公司': company });
   return true;
@@ -3699,6 +3702,7 @@ async function backfillAccCompanyFromPayments(ximoToken, opts) {
     dryRun: dryRun,
     scannedExpenses: 0,
     scannedPayments: 0,
+    scannedXimoProjects: 0,
     expenseUpdated: 0,
     projectUpdated: 0,
     remaining: 0,
@@ -3713,8 +3717,30 @@ async function backfillAccCompanyFromPayments(ximoToken, opts) {
   try { await ensureAccCatalogFields(accToken); } catch (e) {}
 
   const paymentCompanyMap = await loadPaymentCompanyMap(ximoToken);
-  // 從付款單依標案投票公司（歷史支出常沒有 payment: 連結）
-  const companyVotesByXimoProjectId = {};
+  out.scannedPayments = Object.keys(paymentCompanyMap).length;
+
+  // 標案公司為準（優先於付款單）
+  const companyByXimoProjectId = {};
+  const companyByProjectName = {};
+  try {
+    const ximoProjects = await getRecords(ximoToken, tableIdFor('projects'), appTokenForTable('projects'));
+    out.scannedXimoProjects = ximoProjects.length;
+    ximoProjects.forEach(function(rec) {
+      if (!rec || !rec.record_id) return;
+      const fields = rec.fields || {};
+      const company = normalizeAccCompany(
+        accFieldText(fields['公司']) || accFieldText(fields['所屬公司']) || accFieldText(fields['Company'])
+      );
+      if (!company) return;
+      companyByXimoProjectId[rec.record_id] = company;
+      const name = accFieldText(fields['標案名稱']);
+      if (name) companyByProjectName[String(name).trim().toLowerCase()] = company;
+    });
+  } catch (e) {
+    out.errors.push({ id: 'ximo-projects', error: e.message || String(e) });
+  }
+
+  // 付款單公司僅作備援
   const companyVotesByProjectName = {};
   try {
     const frontCfg = paymentsFrontConfig();
@@ -3726,13 +3752,8 @@ async function backfillAccCompanyFromPayments(ximoToken, opts) {
       const company = paymentCompanyValue(fields);
       if (!company) return;
       if (rec.record_id) paymentCompanyMap[rec.record_id] = company;
-      const projIds = getLinkIds(fields['所屬標案'] || fields['所數標案'] || []);
       const projName = getLinkText(fields['所屬標案'] || fields['所數標案'] || [])
         || accFieldText(fields['標案名稱']);
-      projIds.forEach(function(pid) {
-        if (!companyVotesByXimoProjectId[pid]) companyVotesByXimoProjectId[pid] = {};
-        companyVotesByXimoProjectId[pid][company] = (companyVotesByXimoProjectId[pid][company] || 0) + 1;
-      });
       if (projName) {
         const key = String(projName).trim().toLowerCase();
         if (!companyVotesByProjectName[key]) companyVotesByProjectName[key] = {};
@@ -3756,16 +3777,14 @@ async function backfillAccCompanyFromPayments(ximoToken, opts) {
     if (!rec || !rec.record_id) return;
     const pid = expenseLinkedPaymentId(rec.fields || {});
     if (pid) expensePaymentMap[rec.record_id] = pid;
-    const c = normalizeAccCompany(accFieldText((rec.fields || {})['公司']));
-    if (c && pid) paymentCompanyMap[pid] = paymentCompanyMap[pid] || c;
   });
 
   const accExpenses = await getRecords(accToken, ACC_TABLE_EXPENSES, ACC_APP_TOKEN);
   const accProjects = await getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN).catch(function() { return []; });
-  const projectCompanyVotes = {};
+  const projectCompanyByAccId = {};
   out.scannedExpenses = accExpenses.length;
 
-  // 先依付款標案投票，決定 ACC 案件公司
+  // 先用璽墨標案公司寫入 ACC 案件
   for (let i = 0; i < accProjects.length; i++) {
     const proj = accProjects[i];
     if (!proj || !proj.record_id) continue;
@@ -3773,12 +3792,24 @@ async function backfillAccCompanyFromPayments(ximoToken, opts) {
     const ximoId = accFieldText(pf['來源Ximo標案ID']);
     const name = accFieldText(pf['案名']) || accFieldText(pf['完整名稱']);
     let company = '';
-    if (ximoId) company = topCompany(companyVotesByXimoProjectId[ximoId]);
+    if (ximoId && companyByXimoProjectId[ximoId]) company = companyByXimoProjectId[ximoId];
+    if (!company && name && companyByProjectName[String(name).trim().toLowerCase()]) {
+      company = companyByProjectName[String(name).trim().toLowerCase()];
+    }
     if (!company && name) company = topCompany(companyVotesByProjectName[String(name).trim().toLowerCase()]);
     if (!company) continue;
     out.paymentCompanyByProject[name || proj.record_id] = company;
-    if (!projectCompanyVotes[proj.record_id]) projectCompanyVotes[proj.record_id] = {};
-    projectCompanyVotes[proj.record_id][company] = (projectCompanyVotes[proj.record_id][company] || 0) + 1000;
+    projectCompanyByAccId[proj.record_id] = company;
+    const current = normalizeAccCompany(accFieldText(pf['公司']));
+    if (current === company) continue;
+    try {
+      if (!dryRun) {
+        await stampAccProjectCompany(accToken, proj, company, { force: true });
+      }
+      out.projectUpdated++;
+    } catch (e) {
+      out.errors.push({ id: proj.record_id, error: e.message || String(e) });
+    }
   }
 
   for (let i = 0; i < accExpenses.length; i++) {
@@ -3788,24 +3819,22 @@ async function backfillAccCompanyFromPayments(ximoToken, opts) {
     const paymentId = accFieldText(ef['來源付款ID']);
     const expenseId = accFieldText(ef['來源支出ID']);
     const sourceProject = accFieldText(ef['來源標案']);
+    const projectIds = getLinkIds(ef['所屬案件'] || []);
     let company = '';
-    if (paymentId && paymentCompanyMap[paymentId]) company = paymentCompanyMap[paymentId];
+    // 優先：所屬 ACC 案件／來源標案對應的標案公司
+    if (projectIds[0] && projectCompanyByAccId[projectIds[0]]) company = projectCompanyByAccId[projectIds[0]];
+    if (!company && sourceProject && companyByProjectName[String(sourceProject).trim().toLowerCase()]) {
+      company = companyByProjectName[String(sourceProject).trim().toLowerCase()];
+    }
+    // 備援：付款單公司
+    if (!company && paymentId && paymentCompanyMap[paymentId]) company = paymentCompanyMap[paymentId];
     if (!company && expenseId && expensePaymentMap[expenseId] && paymentCompanyMap[expensePaymentMap[expenseId]]) {
       company = paymentCompanyMap[expensePaymentMap[expenseId]];
     }
     if (!company && sourceProject) {
       company = topCompany(companyVotesByProjectName[String(sourceProject).trim().toLowerCase()]);
     }
-    const projectIds = getLinkIds(ef['所屬案件'] || []);
-    if (!company && projectIds[0] && projectCompanyVotes[projectIds[0]]) {
-      company = topCompany(projectCompanyVotes[projectIds[0]]);
-    }
     if (!company) continue;
-
-    projectIds.forEach(function(pid) {
-      if (!projectCompanyVotes[pid]) projectCompanyVotes[pid] = {};
-      projectCompanyVotes[pid][company] = (projectCompanyVotes[pid][company] || 0) + 1;
-    });
 
     if (current === company) continue;
     if (limit && out.expenseUpdated >= limit) {
@@ -3819,24 +3848,6 @@ async function backfillAccCompanyFromPayments(ximoToken, opts) {
       out.expenseUpdated++;
     } catch (e) {
       out.errors.push({ id: rec.record_id, error: e.message || String(e) });
-    }
-  }
-
-  for (let i = 0; i < accProjects.length; i++) {
-    const proj = accProjects[i];
-    if (!proj || !proj.record_id) continue;
-    const votes = projectCompanyVotes[proj.record_id] || {};
-    const company = topCompany(votes);
-    if (!company) continue;
-    const current = normalizeAccCompany(accFieldText((proj.fields || {})['公司']));
-    if (current === company) continue;
-    try {
-      if (!dryRun) {
-        await stampAccProjectCompany(accToken, proj, company);
-      }
-      out.projectUpdated++;
-    } catch (e) {
-      out.errors.push({ id: proj.record_id, error: e.message || String(e) });
     }
   }
 
@@ -4324,6 +4335,10 @@ async function upsertAccProjectFromXimo(accToken, ximoProject, cachedAccProjects
     '年度': parseXimoProjectYear(name, fields),
     '來源Ximo標案ID': ximoId
   };
+  const projectCompany = normalizeAccCompany(
+    accFieldText(fields['公司']) || accFieldText(fields['所屬公司']) || accFieldText(fields['Company'])
+  );
+  if (projectCompany) body['公司'] = projectCompany;
   if (due) body['到期日'] = due;
   if (contractTaxed > 0) {
     body['合約金額'] = contractTaxed;
