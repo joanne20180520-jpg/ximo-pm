@@ -3698,9 +3698,11 @@ async function backfillAccCompanyFromPayments(ximoToken, opts) {
   const out = {
     dryRun: dryRun,
     scannedExpenses: 0,
+    scannedPayments: 0,
     expenseUpdated: 0,
     projectUpdated: 0,
     remaining: 0,
+    paymentCompanyByProject: {},
     errors: []
   };
   if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_EXPENSES) {
@@ -3711,6 +3713,43 @@ async function backfillAccCompanyFromPayments(ximoToken, opts) {
   try { await ensureAccCatalogFields(accToken); } catch (e) {}
 
   const paymentCompanyMap = await loadPaymentCompanyMap(ximoToken);
+  // 從付款單依標案投票公司（歷史支出常沒有 payment: 連結）
+  const companyVotesByXimoProjectId = {};
+  const companyVotesByProjectName = {};
+  try {
+    const frontCfg = paymentsFrontConfig();
+    const tableId = await resolvePaymentsTableId(ximoToken, frontCfg.appToken, frontCfg.tableId);
+    const rows = tableId ? await getRecords(ximoToken, tableId, frontCfg.appToken) : [];
+    out.scannedPayments = rows.length;
+    rows.forEach(function(rec) {
+      const fields = rec.fields || {};
+      const company = paymentCompanyValue(fields);
+      if (!company) return;
+      if (rec.record_id) paymentCompanyMap[rec.record_id] = company;
+      const projIds = getLinkIds(fields['所屬標案'] || fields['所數標案'] || []);
+      const projName = getLinkText(fields['所屬標案'] || fields['所數標案'] || [])
+        || accFieldText(fields['標案名稱']);
+      projIds.forEach(function(pid) {
+        if (!companyVotesByXimoProjectId[pid]) companyVotesByXimoProjectId[pid] = {};
+        companyVotesByXimoProjectId[pid][company] = (companyVotesByXimoProjectId[pid][company] || 0) + 1;
+      });
+      if (projName) {
+        const key = String(projName).trim().toLowerCase();
+        if (!companyVotesByProjectName[key]) companyVotesByProjectName[key] = {};
+        companyVotesByProjectName[key][company] = (companyVotesByProjectName[key][company] || 0) + 1;
+      }
+    });
+  } catch (e) {
+    out.errors.push({ id: 'payments', error: e.message || String(e) });
+  }
+
+  function topCompany(votes) {
+    const keys = Object.keys(votes || {});
+    if (!keys.length) return '';
+    keys.sort(function(a, b) { return votes[b] - votes[a]; });
+    return keys[0];
+  }
+
   const ximoExpenses = await loadExpenseRecords(ximoToken);
   const expensePaymentMap = {};
   ximoExpenses.forEach(function(rec) {
@@ -3726,20 +3765,43 @@ async function backfillAccCompanyFromPayments(ximoToken, opts) {
   const projectCompanyVotes = {};
   out.scannedExpenses = accExpenses.length;
 
+  // 先依付款標案投票，決定 ACC 案件公司
+  for (let i = 0; i < accProjects.length; i++) {
+    const proj = accProjects[i];
+    if (!proj || !proj.record_id) continue;
+    const pf = proj.fields || {};
+    const ximoId = accFieldText(pf['來源Ximo標案ID']);
+    const name = accFieldText(pf['案名']) || accFieldText(pf['完整名稱']);
+    let company = '';
+    if (ximoId) company = topCompany(companyVotesByXimoProjectId[ximoId]);
+    if (!company && name) company = topCompany(companyVotesByProjectName[String(name).trim().toLowerCase()]);
+    if (!company) continue;
+    out.paymentCompanyByProject[name || proj.record_id] = company;
+    if (!projectCompanyVotes[proj.record_id]) projectCompanyVotes[proj.record_id] = {};
+    projectCompanyVotes[proj.record_id][company] = (projectCompanyVotes[proj.record_id][company] || 0) + 1000;
+  }
+
   for (let i = 0; i < accExpenses.length; i++) {
     const rec = accExpenses[i];
     const ef = rec.fields || {};
     const current = normalizeAccCompany(accFieldText(ef['公司']));
     const paymentId = accFieldText(ef['來源付款ID']);
     const expenseId = accFieldText(ef['來源支出ID']);
+    const sourceProject = accFieldText(ef['來源標案']);
     let company = '';
     if (paymentId && paymentCompanyMap[paymentId]) company = paymentCompanyMap[paymentId];
     if (!company && expenseId && expensePaymentMap[expenseId] && paymentCompanyMap[expensePaymentMap[expenseId]]) {
       company = paymentCompanyMap[expensePaymentMap[expenseId]];
     }
+    if (!company && sourceProject) {
+      company = topCompany(companyVotesByProjectName[String(sourceProject).trim().toLowerCase()]);
+    }
+    const projectIds = getLinkIds(ef['所屬案件'] || []);
+    if (!company && projectIds[0] && projectCompanyVotes[projectIds[0]]) {
+      company = topCompany(projectCompanyVotes[projectIds[0]]);
+    }
     if (!company) continue;
 
-    const projectIds = getLinkIds(ef['所屬案件'] || []);
     projectIds.forEach(function(pid) {
       if (!projectCompanyVotes[pid]) projectCompanyVotes[pid] = {};
       projectCompanyVotes[pid][company] = (projectCompanyVotes[pid][company] || 0) + 1;
@@ -3764,8 +3826,7 @@ async function backfillAccCompanyFromPayments(ximoToken, opts) {
     const proj = accProjects[i];
     if (!proj || !proj.record_id) continue;
     const votes = projectCompanyVotes[proj.record_id] || {};
-    const ranked = Object.keys(votes).sort(function(a, b) { return votes[b] - votes[a]; });
-    const company = ranked[0] || '';
+    const company = topCompany(votes);
     if (!company) continue;
     const current = normalizeAccCompany(accFieldText((proj.fields || {})['公司']));
     if (current === company) continue;
