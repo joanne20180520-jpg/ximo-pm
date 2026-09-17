@@ -3179,6 +3179,8 @@ function buildExpenseFieldsFromPayment(fields, paymentRecordId) {
     '狀態': '已合銷'
   };
   if (fields['申請日期']) expense['日期'] = fields['申請日期'];
+  const company = paymentCompanyValue(fields);
+  if (company) expense['公司'] = company;
   if (wiIds.length) expense['所屬工作項目'] = wiIds;
   if (projIds.length) {
     expense['所屬標案'] = projIds;
@@ -3197,6 +3199,50 @@ function expenseLinkedPaymentId(fields) {
   const m = remark.match(/payment:([A-Za-z0-9_-]+)/);
   return m ? m[1] : '';
 }
+
+function normalizeAccCompany(raw) {
+  const t = String(raw || '').trim();
+  if (!t) return '';
+  if (t === '身土' || t.indexOf('身土') >= 0 || t.indexOf('身士') >= 0) return '身土';
+  if (t === '璽墨' || t.indexOf('璽墨') >= 0 || t.indexOf('喜墨') >= 0) return '璽墨';
+  return t;
+}
+
+function paymentCompanyValue(fields) {
+  return normalizeAccCompany(
+    accFieldText((fields || {})['公司'])
+      || accFieldText((fields || {})['所屬公司'])
+      || accFieldText((fields || {})['Company'])
+  );
+}
+
+async function loadPaymentCompanyMap(ximoToken) {
+  const map = {};
+  try {
+    const frontCfg = paymentsFrontConfig();
+    const tableId = await resolvePaymentsTableId(ximoToken, frontCfg.appToken, frontCfg.tableId);
+    if (!tableId || !frontCfg.appToken) return map;
+    const rows = await getRecords(ximoToken, tableId, frontCfg.appToken);
+    rows.forEach(function(rec) {
+      if (!rec || !rec.record_id) return;
+      const company = paymentCompanyValue(rec.fields || {});
+      if (company) map[rec.record_id] = company;
+    });
+  } catch (e) {
+    console.warn('loadPaymentCompanyMap', e.message || e);
+  }
+  return map;
+}
+
+async function stampAccProjectCompany(accToken, accProject, company) {
+  if (!accProject || !accProject.record_id || !company) return false;
+  const current = normalizeAccCompany(accFieldText((accProject.fields || {})['公司']));
+  if (current === company) return false;
+  await updateRecord(accToken, ACC_TABLE_PROJECTS, accProject.record_id, { '公司': company }, ACC_APP_TOKEN, false);
+  accProject.fields = Object.assign({}, accProject.fields || {}, { '公司': company });
+  return true;
+}
+
 
 let _accTenantTokenCache = null;
 let _accExpenseFieldsReady = false;
@@ -3281,7 +3327,7 @@ async function ensureAccExpenseSourceFields(accToken) {
   (data.data && data.data.items || []).forEach(function(f) {
     names[f.field_name] = true;
   });
-  const extras = ['來源付款ID', '來源支出ID', '來源標案', '來源工項'];
+  const extras = ['來源付款ID', '來源支出ID', '來源標案', '來源工項', '公司'];
   for (let i = 0; i < extras.length; i++) {
     if (names[extras[i]]) continue;
     const created = await fetch(
@@ -3645,6 +3691,97 @@ async function pruneAccOrphanExpenses(ximoToken, opts) {
  * 3) 刪掉沒有對應璽墨支出的 ACC 列（含失效來源、純 ACC 舊資料）
  * 4) 同一來源支出ID 多列時只留一筆
  */
+async function backfillAccCompanyFromPayments(ximoToken, opts) {
+  opts = opts || {};
+  const dryRun = !!opts.dryRun;
+  const limit = Math.max(0, parseInt(opts.limit, 10) || 0);
+  const out = {
+    dryRun: dryRun,
+    scannedExpenses: 0,
+    expenseUpdated: 0,
+    projectUpdated: 0,
+    remaining: 0,
+    errors: []
+  };
+  if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_EXPENSES) {
+    return { skipped: true, reason: 'acc-env-missing' };
+  }
+  const accToken = await getAccTenantToken();
+  await ensureAccExpenseSourceFields(accToken);
+  try { await ensureAccCatalogFields(accToken); } catch (e) {}
+
+  const paymentCompanyMap = await loadPaymentCompanyMap(ximoToken);
+  const ximoExpenses = await loadExpenseRecords(ximoToken);
+  const expensePaymentMap = {};
+  ximoExpenses.forEach(function(rec) {
+    if (!rec || !rec.record_id) return;
+    const pid = expenseLinkedPaymentId(rec.fields || {});
+    if (pid) expensePaymentMap[rec.record_id] = pid;
+    const c = normalizeAccCompany(accFieldText((rec.fields || {})['公司']));
+    if (c && pid) paymentCompanyMap[pid] = paymentCompanyMap[pid] || c;
+  });
+
+  const accExpenses = await getRecords(accToken, ACC_TABLE_EXPENSES, ACC_APP_TOKEN);
+  const accProjects = await getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN).catch(function() { return []; });
+  const projectCompanyVotes = {};
+  out.scannedExpenses = accExpenses.length;
+
+  for (let i = 0; i < accExpenses.length; i++) {
+    const rec = accExpenses[i];
+    const ef = rec.fields || {};
+    const current = normalizeAccCompany(accFieldText(ef['公司']));
+    const paymentId = accFieldText(ef['來源付款ID']);
+    const expenseId = accFieldText(ef['來源支出ID']);
+    let company = '';
+    if (paymentId && paymentCompanyMap[paymentId]) company = paymentCompanyMap[paymentId];
+    if (!company && expenseId && expensePaymentMap[expenseId] && paymentCompanyMap[expensePaymentMap[expenseId]]) {
+      company = paymentCompanyMap[expensePaymentMap[expenseId]];
+    }
+    if (!company) continue;
+
+    const projectIds = getLinkIds(ef['所屬案件'] || []);
+    projectIds.forEach(function(pid) {
+      if (!projectCompanyVotes[pid]) projectCompanyVotes[pid] = {};
+      projectCompanyVotes[pid][company] = (projectCompanyVotes[pid][company] || 0) + 1;
+    });
+
+    if (current === company) continue;
+    if (limit && out.expenseUpdated >= limit) {
+      out.remaining++;
+      continue;
+    }
+    try {
+      if (!dryRun) {
+        await updateRecord(accToken, ACC_TABLE_EXPENSES, rec.record_id, { '公司': company }, ACC_APP_TOKEN, false);
+      }
+      out.expenseUpdated++;
+    } catch (e) {
+      out.errors.push({ id: rec.record_id, error: e.message || String(e) });
+    }
+  }
+
+  for (let i = 0; i < accProjects.length; i++) {
+    const proj = accProjects[i];
+    if (!proj || !proj.record_id) continue;
+    const votes = projectCompanyVotes[proj.record_id] || {};
+    const ranked = Object.keys(votes).sort(function(a, b) { return votes[b] - votes[a]; });
+    const company = ranked[0] || '';
+    if (!company) continue;
+    const current = normalizeAccCompany(accFieldText((proj.fields || {})['公司']));
+    if (current === company) continue;
+    try {
+      if (!dryRun) {
+        await stampAccProjectCompany(accToken, proj, company);
+      }
+      out.projectUpdated++;
+    } catch (e) {
+      out.errors.push({ id: proj.record_id, error: e.message || String(e) });
+    }
+  }
+
+  return out;
+}
+
 async function reconcileAccExpensesToXimo(ximoToken, opts) {
   opts = opts || {};
   const dryRun = !!opts.dryRun;
@@ -3872,7 +4009,8 @@ async function ensureAccCatalogFields(accToken) {
     { field_name: '合約金額', type: 2 },
     { field_name: '合約未稅', type: 2 },
     { field_name: '含稅金額', type: 2 },
-    { field_name: '可用成本', type: 2 }
+    { field_name: '可用成本', type: 2 },
+    { field_name: '公司', type: 1 }
   ]);
   await ensureAccTableFields(accToken, ACC_TABLE_WORKITEMS, [
     { field_name: '來源Ximo工項ID', type: 1 },
@@ -4498,11 +4636,18 @@ async function syncSettledPaymentToAccPortal(ximoToken, paymentRec) {
   const accToken = await getAccTenantToken();
   await ensureAccExpenseSourceFields(accToken);
 
+  const company = paymentCompanyValue(fields);
   const existing = await getRecords(accToken, ACC_TABLE_EXPENSES, ACC_APP_TOKEN);
   for (let i = 0; i < existing.length; i++) {
     const ef = existing[i].fields || {};
     if (accFieldText(ef['來源付款ID']) === paymentId) {
-      return { skipped: true, reason: 'already-synced', recordId: existing[i].record_id };
+      // 已同步：補公司欄位
+      if (company && normalizeAccCompany(accFieldText(ef['公司'])) !== company) {
+        try {
+          await updateRecord(accToken, ACC_TABLE_EXPENSES, existing[i].record_id, { '公司': company }, ACC_APP_TOKEN, false);
+        } catch (e) {}
+      }
+      return { skipped: true, reason: 'already-synced', recordId: existing[i].record_id, company: company };
     }
   }
 
@@ -4535,8 +4680,12 @@ async function syncSettledPaymentToAccPortal(ximoToken, paymentRec) {
     '來源標案': labels.projectName,
     '來源工項': labels.workitemName
   };
+  if (company) out['公司'] = company;
   if (accProject) out['所屬案件'] = [accProject.record_id];
   if (accWorkitem) out['工項'] = [accWorkitem.record_id];
+  if (accProject && company) {
+    try { await stampAccProjectCompany(accToken, accProject, company); } catch (e) {}
+  }
 
   // 若 ACC 已有同金額同日、無來源 ID 的空白摘要列，直接覆寫合併，避免重複數字
   const softKey = accExpenseAmountDayKey({ '金額': amount, '日期': dateMs });
@@ -4587,6 +4736,7 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
   try { await ensureAccCatalogFields(accToken); } catch (e) {}
 
   const ximoExpenses = await loadExpenseRecords(ximoToken);
+  const paymentCompanyMap = await loadPaymentCompanyMap(ximoToken);
   const accExpenses = await getRecords(accToken, ACC_TABLE_EXPENSES, ACC_APP_TOKEN);
   const accProjects = await getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN).catch(function() { return []; });
   const accWorkitems = await getRecords(accToken, ACC_TABLE_WORKITEMS, ACC_APP_TOKEN).catch(function() { return []; });
@@ -4723,6 +4873,12 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
         try {
           const patch = { '來源支出ID': expenseId };
           if (paymentId) patch['來源付款ID'] = paymentId;
+          const softCompany = normalizeAccCompany(
+            accFieldText(fields['公司']) || (paymentId ? paymentCompanyMap[paymentId] : '')
+          );
+          if (softCompany && !normalizeAccCompany(accFieldText((soft.fields || {})['公司']))) {
+            patch['公司'] = softCompany;
+          }
           if (!accFieldText((soft.fields || {})['摘要']) && summary) patch['摘要'] = summary;
           if (labels.projectName && !accFieldText((soft.fields || {})['來源標案'])) {
             patch['來源標案'] = labels.projectName;
@@ -4795,8 +4951,15 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
         '來源工項': labels.workitemName
       };
       if (paymentId) body['來源付款ID'] = paymentId;
+      const company = normalizeAccCompany(
+        accFieldText(fields['公司']) || (paymentId ? paymentCompanyMap[paymentId] : '')
+      );
+      if (company) body['公司'] = company;
       if (accProject) body['所屬案件'] = [accProject.record_id];
       if (accWorkitem) body['工項'] = [accWorkitem.record_id];
+      if (accProject && company && !dryRun) {
+        try { await stampAccProjectCompany(accToken, accProject, company); } catch (e) {}
+      }
 
       const created = await createRecord(accToken, ACC_TABLE_EXPENSES, body, ACC_APP_TOKEN, false);
       const newId = extractRecordId(created);
@@ -7890,6 +8053,24 @@ export default async function handler(req, res) {
           limit: dryRun ? 0 : (isNaN(limit) ? 40 : limit)
         });
         return res.status(200).json({ ok: true, prune: result });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'backfill-acc-company' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const token = await getToken();
+        const q = req.query || {};
+        const b = req.body || {};
+        const dryRun = String(q.dryRun || b.dryRun || '') === '1'
+          || String(q.dryRun || b.dryRun || '').toLowerCase() === 'true';
+        const limit = parseInt(q.limit || b.limit || '200', 10);
+        const result = await backfillAccCompanyFromPayments(token, {
+          dryRun: dryRun,
+          limit: dryRun ? 0 : (isNaN(limit) ? 200 : limit)
+        });
+        return res.status(200).json({ ok: true, backfill: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
