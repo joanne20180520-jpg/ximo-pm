@@ -5433,7 +5433,9 @@ async function auditStuckPaymentApprovals(tenantToken) {
   return out;
 }
 
-async function repairStuckPaymentApprovals(tenantToken) {
+async function repairStuckPaymentApprovals(tenantToken, opts) {
+  opts = opts || {};
+  const limit = Math.max(1, parseInt(opts.limit, 10) || 8);
   const frontCfg = paymentsFrontConfig();
   const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
   if (!tableId) return { repaired: 0, errors: ['no-payments-table'] };
@@ -5453,12 +5455,15 @@ async function repairStuckPaymentApprovals(tenantToken) {
   const out = {
     pending: pending.length,
     checkedInstances: matched.checkedInstances,
+    limit: limit,
     repaired: 0,
     skipped: 0,
+    remainingApproved: 0,
     details: [],
     errors: matched.errors || []
   };
 
+  const approvedPending = [];
   for (let i = 0; i < pending.length; i++) {
     const rec = pending[i];
     const m = matched.matches[rec.record_id];
@@ -5466,6 +5471,13 @@ async function repairStuckPaymentApprovals(tenantToken) {
       out.skipped++;
       continue;
     }
+    approvedPending.push({ rec: rec, m: m });
+  }
+  out.remainingApproved = Math.max(0, approvedPending.length - limit);
+
+  for (let i = 0; i < approvedPending.length && out.repaired < limit; i++) {
+    const rec = approvedPending[i].rec;
+    const m = approvedPending[i].m;
     try {
       rec.fields = rec.fields || {};
       if (!paymentApprovalInstanceCode(rec.fields)) {
@@ -8392,7 +8404,10 @@ export default async function handler(req, res) {
     if (action === 'repair-stuck-payment-approvals' && (req.method === 'GET' || req.method === 'POST')) {
       try {
         const token = await getToken();
-        const result = await repairStuckPaymentApprovals(token);
+        const q = req.query || {};
+        const b = req.body || {};
+        const limit = parseInt(q.limit || b.limit || '6', 10);
+        const result = await repairStuckPaymentApprovals(token, { limit: limit });
         return res.status(200).json({ ok: true, repair: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
