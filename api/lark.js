@@ -5435,7 +5435,7 @@ async function auditStuckPaymentApprovals(tenantToken) {
 
 async function repairStuckPaymentApprovals(tenantToken, opts) {
   opts = opts || {};
-  const limit = Math.max(1, parseInt(opts.limit, 10) || 8);
+  const limit = Math.max(1, parseInt(opts.limit, 10) || 3);
   const frontCfg = paymentsFrontConfig();
   const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
   if (!tableId) return { repaired: 0, errors: ['no-payments-table'] };
@@ -5448,49 +5448,104 @@ async function repairStuckPaymentApprovals(tenantToken, opts) {
   const pending = records.filter(function(rec) {
     return isPaymentPendingStatus(paymentRecordStatus(rec.fields || {}));
   });
-  const matched = await matchPendingPaymentsToApprovals(tenantToken, pending);
-  let expenseCache = [];
-  try { expenseCache = await loadExpenseRecords(tenantToken); } catch (e) { expenseCache = []; }
 
   const out = {
     pending: pending.length,
-    checkedInstances: matched.checkedInstances,
+    checkedInstances: 0,
+    scannedDetails: 0,
     limit: limit,
     repaired: 0,
-    skipped: 0,
-    remainingApproved: 0,
     details: [],
-    errors: matched.errors || []
+    errors: []
   };
+  if (!pending.length) return out;
 
-  const approvedPending = [];
-  for (let i = 0; i < pending.length; i++) {
-    const rec = pending[i];
-    const m = matched.matches[rec.record_id];
-    if (!m || !m.approved) {
-      out.skipped++;
+  const approvalCode = paymentApprovalCode();
+  if (!approvalCode) {
+    out.errors.push('未設定付款審批代碼');
+    return out;
+  }
+
+  let widgets = [];
+  try {
+    const def = await getPaymentApprovalDefinition(tenantToken);
+    widgets = parseApprovalFormWidgets(def.form || def.approval_form || (def.approval && def.approval.form));
+  } catch (e) {
+    out.errors.push('讀取審批定義：' + (e.message || String(e)));
+  }
+
+  let minTs = Date.now();
+  let maxTs = 0;
+  pending.forEach(function(rec) {
+    const t = parsePaymentTs((rec.fields || {})['申請日期']);
+    const ms = t ? t.getTime() : 0;
+    if (ms && ms < minTs) minTs = ms;
+    if (ms && ms > maxTs) maxTs = ms;
+  });
+  if (!maxTs) maxTs = Date.now();
+  if (!minTs || minTs === Date.now()) minTs = maxTs - 45 * 86400000;
+
+  let instanceCodes = [];
+  try {
+    instanceCodes = await listApprovalInstanceCodes(
+      tenantToken,
+      approvalCode,
+      minTs - 2 * 86400000,
+      Math.max(maxTs + 3 * 86400000, Date.now())
+    );
+  } catch (e) {
+    out.errors.push('列出審批實例：' + (e.message || String(e)));
+    return out;
+  }
+  out.checkedInstances = instanceCodes.length;
+
+  let expenseCache = [];
+  try { expenseCache = await loadExpenseRecords(tenantToken); } catch (e) { expenseCache = []; }
+
+  const remaining = pending.slice();
+  const usedCodes = {};
+  // 邊掃邊核銷：找到 limit 筆已通過就停，避免一次拉完全部 detail 逾時
+  for (let i = 0; i < instanceCodes.length && out.repaired < limit; i++) {
+    const ic = instanceCodes[i];
+    if (usedCodes[ic]) continue;
+    let detail;
+    try {
+      detail = await getApprovalInstanceDetail(tenantToken, ic);
+      out.scannedDetails++;
+    } catch (e) {
       continue;
     }
-    approvedPending.push({ rec: rec, m: m });
-  }
-  out.remainingApproved = Math.max(0, approvedPending.length - limit);
+    const st = normalizeApprovalInstanceStatus(detail);
+    const approved = isApprovalDetailEffectivelyApproved(detail)
+      || isApprovalInstanceApprovedStatus(st)
+      || isXimoStageCompleteForAccounting(st, '');
+    if (!approved) continue;
 
-  for (let i = 0; i < approvedPending.length && out.repaired < limit; i++) {
-    const rec = approvedPending[i].rec;
-    const m = approvedPending[i].m;
+    let hitIdx = -1;
+    for (let p = 0; p < remaining.length; p++) {
+      const fields = remaining[p].fields || {};
+      const existing = paymentApprovalInstanceCode(fields);
+      if (existing && existing !== ic) continue;
+      if (existing === ic || paymentMatchesApprovalDetail(fields, detail, widgets)) {
+        hitIdx = p;
+        break;
+      }
+    }
+    if (hitIdx < 0) continue;
+
+    const rec = remaining.splice(hitIdx, 1)[0];
+    usedCodes[ic] = rec.record_id;
     try {
       rec.fields = rec.fields || {};
-      if (!paymentApprovalInstanceCode(rec.fields)) {
-        rec.fields['審批編號'] = m.instanceCode;
-        try { await writePaymentApprovalCode(tenantToken, null, rec.record_id, m.instanceCode); } catch (e) {}
-      }
+      rec.fields['審批編號'] = ic;
+      try { await writePaymentApprovalCode(tenantToken, null, rec.record_id, ic); } catch (e) {}
       const done = await finalizeApprovedPaymentRecord(tenantToken, rec, expenseCache, {
         approvalStatus: 'APPROVED'
       });
       out.repaired++;
       out.details.push({
         recordId: rec.record_id,
-        instanceCode: m.instanceCode,
+        instanceCode: ic,
         expenseId: done.expenseId || '',
         expenseError: done.expenseError || '',
         accPortal: done.accPortal || null,
@@ -5502,6 +5557,7 @@ async function repairStuckPaymentApprovals(tenantToken, opts) {
       out.errors.push({ recordId: rec.record_id, error: err.message || String(err) });
     }
   }
+  out.remainingPending = remaining.length;
   return out;
 }
 
@@ -8406,7 +8462,7 @@ export default async function handler(req, res) {
         const token = await getToken();
         const q = req.query || {};
         const b = req.body || {};
-        const limit = parseInt(q.limit || b.limit || '6', 10);
+        const limit = parseInt(q.limit || b.limit || '3', 10);
         const result = await repairStuckPaymentApprovals(token, { limit: limit });
         return res.status(200).json({ ok: true, repair: result });
       } catch (err) {
