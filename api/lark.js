@@ -5436,6 +5436,8 @@ async function auditStuckPaymentApprovals(tenantToken) {
 async function repairStuckPaymentApprovals(tenantToken, opts) {
   opts = opts || {};
   const limit = Math.max(1, parseInt(opts.limit, 10) || 3);
+  const offset = Math.max(0, parseInt(opts.offset, 10) || 0);
+  const maxScan = Math.max(limit, parseInt(opts.maxScan, 10) || 25);
   const frontCfg = paymentsFrontConfig();
   const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
   if (!tableId) return { repaired: 0, errors: ['no-payments-table'] };
@@ -5498,14 +5500,17 @@ async function repairStuckPaymentApprovals(tenantToken, opts) {
     return out;
   }
   out.checkedInstances = instanceCodes.length;
+  out.offset = offset;
+  out.maxScan = maxScan;
 
   let expenseCache = [];
   try { expenseCache = await loadExpenseRecords(tenantToken); } catch (e) { expenseCache = []; }
 
   const remaining = pending.slice();
   const usedCodes = {};
-  // 邊掃邊核銷：找到 limit 筆已通過就停，避免一次拉完全部 detail 逾時
-  for (let i = 0; i < instanceCodes.length && out.repaired < limit; i++) {
+  // 邊掃邊核銷：找到 limit 筆已通過就停；可用 offset/maxScan 分段掃
+  const end = Math.min(instanceCodes.length, offset + maxScan);
+  for (let i = offset; i < end && out.repaired < limit; i++) {
     const ic = instanceCodes[i];
     if (usedCodes[ic]) continue;
     let detail;
@@ -8463,7 +8468,9 @@ export default async function handler(req, res) {
         const q = req.query || {};
         const b = req.body || {};
         const limit = parseInt(q.limit || b.limit || '3', 10);
-        const result = await repairStuckPaymentApprovals(token, { limit: limit });
+        const offset = parseInt(q.offset || b.offset || '0', 10);
+        const maxScan = parseInt(q.maxScan || b.maxScan || '25', 10);
+        const result = await repairStuckPaymentApprovals(token, { limit: limit, offset: offset, maxScan: maxScan });
         return res.status(200).json({ ok: true, repair: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
