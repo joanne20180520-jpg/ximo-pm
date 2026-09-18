@@ -6162,7 +6162,7 @@ var dailyLogProjFilter = '';
 var dailyLogPersonFilter = '';
 var PROGRESS_OPTIONS = ['未開始','進行中10%','進行中20%','進行中30%','進行中40%','進行中50%','進行中60%','進行中70%','進行中80%','進行中90%','已完成','暫停'];
 var DESIGN_STATUS_OPTIONS = ['未開始', '進行中', '已完成'];
-var DESIGN_VENDOR_OPTIONS = ['健豪', '可樂谷', '丞奕', '東方包裝', '旭利紙器', '文心影印', '承辦發印', '自行列印'];
+var DESIGN_VENDOR_OPTIONS = ['健豪', '可樂谷', '丞奕', '東方包裝', '旭利紙器', '文心影印', '承辦發印', '高雄松林影印', '自行列印'];
 var DESIGN_VENDOR_OTHER = '__other__';
 var DESIGN_VENDOR_OTHER_LABELS = ['其他（自行填寫）', '其他(可自行填寫功能)', '其他（可自行填寫）', '其他'];
 var DESIGN_INVOICE_OPTIONS = [
@@ -18100,6 +18100,7 @@ function onDesignDrawerBackdropClick(e) {
 
 function closeDesignDrawer(opts) {
   opts = opts || {};
+  try { closeSafeDatePicker(); } catch (eClosePick) {}
   clearTimeout(designAutoSaveTimer);
   designAutoSaveTimer = null;
   clearTimeout(saveDesignNasPathNow._timer);
