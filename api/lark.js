@@ -3497,18 +3497,20 @@ async function ensureXimoExpenseAccSourceFields(ximoToken) {
     (existing || []).forEach(function(f) {
       if (f && f.field_name) names[f.field_name] = true;
     });
-    if (!names['來源ACC支出ID']) {
+    const extras = ['來源ACC支出ID', '建立來源'];
+    for (let i = 0; i < extras.length; i++) {
+      if (names[extras[i]]) continue;
       const created = await fetch(
         BASE_URL + '/bitable/v1/apps/' + encodeURIComponent(appToken)
           + '/tables/' + encodeURIComponent(tableId) + '/fields',
         {
           method: 'POST',
           headers: { Authorization: 'Bearer ' + ximoToken, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ field_name: '來源ACC支出ID', type: 1 })
+          body: JSON.stringify({ field_name: extras[i], type: 1 })
         }
       ).then(function(r) { return r.json(); });
       if (created.code !== 0) {
-        console.warn('新增璽墨支出欄位失敗 來源ACC支出ID', created.msg || created.code);
+        console.warn('新增璽墨支出欄位失敗', extras[i], created.msg || created.code);
       }
     }
   } catch (err) {
@@ -3526,9 +3528,23 @@ function expenseLinkedAccId(fields) {
   return m ? m[1] : '';
 }
 
+function stripAccExpenseSummaryPrefix(summary) {
+  return String(summary || '').replace(/^【會計】\s*/, '').trim();
+}
+
 /**
- * ACC 新增／更新支出 → 寫入璽墨支出明細（費用管理會跟著加總）。
- * payload: { accExpenseId, summary, amount, date, target, company, ximoProjectId, ximoWorkitemId, ximoExpenseId? }
+ * 欄位對應（必須雙向一致）：
+ * ACC.摘要 ↔ 璽墨.支出細項
+ * ACC.金額 ↔ 璽墨.實際金額（並寫未稅）
+ * ACC.日期 ↔ 璽墨.日期
+ * ACC.對象 ↔ 璽墨.負責人（人名／person）
+ * ACC.公司 ↔ 璽墨.公司
+ * ACC.所屬案件 ↔ 璽墨.所屬標案（以來源Ximo標案ID對）
+ * ACC.工項 ↔ 璽墨.所屬工作項目（以來源Ximo工項ID對）
+ * ACC.來源標案／來源工項 ↔ 標案／工項名稱文字
+ * ACC.來源支出ID ↔ 璽墨 record_id
+ * 璽墨.來源ACC支出ID ↔ ACC record_id
+ * ACC.建立來源 ↔ 璽墨.建立來源（會計｜璽墨｜付款核銷）
  */
 async function upsertXimoExpenseFromAcc(ximoToken, payload) {
   const p = payload || {};
@@ -3542,9 +3558,10 @@ async function upsertXimoExpenseFromAcc(ximoToken, payload) {
   await ensureXimoExpenseAccSourceFields(ximoToken);
 
   const amount = Math.round(Number(p.amount) || 0);
-  const summary = String(p.summary || '').trim() || 'ACC 支出';
+  const summary = stripAccExpenseSummaryPrefix(p.summary) || 'ACC 支出';
   const target = String(p.target || '').trim();
   const company = normalizeAccCompany(p.company);
+  const origin = String(p.origin || '會計').trim() || '會計';
   const dateRaw = p.date;
   let dateMs = 0;
   if (typeof dateRaw === 'number' && dateRaw > 0) {
@@ -3575,7 +3592,8 @@ async function upsertXimoExpenseFromAcc(ximoToken, payload) {
     '未稅金額(X)': Math.round(amount / 1.05),
     '狀態': '已合銷',
     '日期': dateMs,
-    '來源ACC支出ID': accExpenseId
+    '來源ACC支出ID': accExpenseId,
+    '建立來源': origin
   };
   if (company) fields['公司'] = company;
   if (ximoWorkitemId) fields['所屬工作項目'] = [ximoWorkitemId];
@@ -3583,15 +3601,20 @@ async function upsertXimoExpenseFromAcc(ximoToken, payload) {
     fields['所屬標案'] = [ximoProjectId];
     fields['所數標案'] = [ximoProjectId];
   }
+
+  // 對象 → 負責人（人員）
+  if (target) {
+    try {
+      const openId = await resolvePersonOpenIdFromMembers(ximoToken, target);
+      if (openId) fields['負責人'] = [{ id: openId }];
+    } catch (e) {}
+  }
+
   const remarkBits = [];
   if (target) remarkBits.push('對象:' + target);
-  remarkBits.push('來源:會計');
+  remarkBits.push('建立來源:' + origin);
   remarkBits.push('acc:' + accExpenseId);
   fields['備註'] = remarkBits.join(' · ');
-  // 摘要前綴方便在璽墨一眼辨識
-  if (String(p.origin || '會計') === '會計' && summary.indexOf('【會計】') !== 0) {
-    fields['支出細項'] = '【會計】' + summary;
-  }
 
   const body = await normalizeWriteFields(ximoToken, tableId, fields, appToken);
   if (!body || !Object.keys(body).length) {
@@ -3606,6 +3629,116 @@ async function upsertXimoExpenseFromAcc(ximoToken, payload) {
   const created = await createRecord(ximoToken, tableId, body, appToken, false);
   const newId = extractRecordId(created);
   return { ok: true, created: true, ximoExpenseId: newId, accExpenseId: accExpenseId };
+}
+
+/**
+ * 璽墨單筆支出 → ACC（欄位對齊寫入／更新）
+ */
+async function upsertAccExpenseFromXimoRecord(ximoToken, expenseRec, opts) {
+  opts = opts || {};
+  const rec = expenseRec || {};
+  const expenseId = String(rec.record_id || opts.ximoExpenseId || '').trim();
+  if (!expenseId) return { ok: false, error: 'missing-ximo-expense-id' };
+  if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_EXPENSES) {
+    return { ok: false, skipped: true, reason: 'acc-env-missing' };
+  }
+
+  const fields = rec.fields || {};
+  const accToken = await getAccTenantToken();
+  await ensureAccExpenseSourceFields(accToken);
+  try { await ensureAccCatalogFields(accToken); } catch (e) {}
+
+  let labels = { projectName: '', workitemName: '' };
+  try { labels = await resolveXimoPaymentLabels(ximoToken, fields); } catch (e) {}
+
+  const amount = expenseAmountNumber(fields);
+  const summary = stripAccExpenseSummaryPrefix(accFieldText(fields['支出細項']) || '支出明細');
+  const assignee = personDisplayName(fields['負責人'])
+    || getLinkText(fields['負責人'])
+    || accFieldText(fields['負責人'])
+    || '';
+  const dateMs = accExpenseDateMs(fields) || Date.now();
+  const paymentId = expenseLinkedPaymentId(fields);
+  const accOriginId = expenseLinkedAccId(fields);
+  const company = normalizeAccCompany(accFieldText(fields['公司']));
+  let origin = accFieldText(fields['建立來源']);
+  if (!origin) {
+    if (paymentId) origin = '付款核銷';
+    else if (accOriginId) origin = '會計';
+    else origin = '璽墨';
+  }
+
+  const accProjects = await getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN).catch(function() { return []; });
+  const accWorkitems = await getRecords(accToken, ACC_TABLE_WORKITEMS, ACC_APP_TOKEN).catch(function() { return []; });
+  let accProject = await findAccProjectRecord(accToken, labels.projectName, '', accProjects);
+  let accWorkitem = await findAccWorkitemRecord(
+    accToken,
+    accProject ? accProject.record_id : '',
+    labels.workitemName,
+    '',
+    accWorkitems
+  );
+
+  const body = {
+    '摘要': summary,
+    '金額': amount,
+    '對象': assignee,
+    '日期': dateMs,
+    '來源支出ID': expenseId,
+    '來源標案': labels.projectName,
+    '來源工項': labels.workitemName,
+    '建立來源': origin
+  };
+  if (paymentId) body['來源付款ID'] = paymentId;
+  if (company) body['公司'] = company;
+  if (accProject) body['所屬案件'] = [accProject.record_id];
+  if (accWorkitem) body['工項'] = [accWorkitem.record_id];
+
+  // 找既有 ACC 列：來源支出ID → 來源ACC支出ID → 來源付款ID
+  const accExpenses = await getRecords(accToken, ACC_TABLE_EXPENSES, ACC_APP_TOKEN);
+  let hit = null;
+  for (let i = 0; i < accExpenses.length; i++) {
+    const ef = accExpenses[i].fields || {};
+    if (accFieldText(ef['來源支出ID']) === expenseId) {
+      hit = accExpenses[i];
+      break;
+    }
+  }
+  if (!hit && accOriginId) {
+    hit = accExpenses.find(function(r) { return r && r.record_id === accOriginId; }) || null;
+  }
+  if (!hit && paymentId) {
+    for (let i = 0; i < accExpenses.length; i++) {
+      if (accFieldText((accExpenses[i].fields || {})['來源付款ID']) === paymentId) {
+        hit = accExpenses[i];
+        break;
+      }
+    }
+  }
+
+  if (hit && hit.record_id) {
+    await updateRecord(accToken, ACC_TABLE_EXPENSES, hit.record_id, body, ACC_APP_TOKEN, false);
+    // 回寫璽墨來源ACC支出ID，兩邊 ID 互鎖
+    if (!accOriginId || accOriginId !== hit.record_id) {
+      try {
+        const xTable = tableIdFor('expenses');
+        const xApp = appTokenForTable('expenses');
+        await updateRecord(ximoToken, xTable, expenseId, { '來源ACC支出ID': hit.record_id }, xApp, false);
+      } catch (e) {}
+    }
+    return { ok: true, updated: true, accExpenseId: hit.record_id, ximoExpenseId: expenseId, origin: origin };
+  }
+
+  const created = await createRecord(accToken, ACC_TABLE_EXPENSES, body, ACC_APP_TOKEN, false);
+  const newId = extractRecordId(created);
+  if (newId) {
+    try {
+      const xTable = tableIdFor('expenses');
+      const xApp = appTokenForTable('expenses');
+      await updateRecord(ximoToken, xTable, expenseId, { '來源ACC支出ID': newId }, xApp, false);
+    } catch (e) {}
+  }
+  return { ok: true, created: true, accExpenseId: newId, ximoExpenseId: expenseId, origin: origin };
 }
 
 /**
@@ -5139,7 +5272,18 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
     const paymentId = expenseLinkedPaymentId(fields);
     const existingByExpense = byExpenseId[expenseId];
     if (existingByExpense) {
-      out.skipped++;
+      // 已有對應列：欄位對齊更新（摘要／金額／日期／對象／公司／工項…）
+      if (!dryRun) {
+        try {
+          const up = await upsertAccExpenseFromXimoRecord(ximoToken, rec, {});
+          if (up && up.ok && (up.updated || up.created)) out.backfilled++;
+          else out.skipped++;
+        } catch (e) {
+          out.skipped++;
+        }
+      } else {
+        out.skipped++;
+      }
       continue;
     }
 
@@ -5455,6 +5599,32 @@ async function finalizeApprovedPaymentRecord(tenantToken, paymentRec, expenseCac
     accPortal = await syncSettledPaymentToAccPortal(tenantToken, rec);
   } catch (e) {
     accPortal = { error: e.message || String(e) };
+  }
+  // 付款核銷後立刻用支出列對齊 ACC 全部欄位（含來源支出ID／建立來源）
+  if (expenseId) {
+    try {
+      const expenseApp = appTokenForTable('expenses');
+      const expenseRec = await getRecordById(tenantToken, tableIdFor('expenses'), expenseId, expenseApp);
+      if (expenseRec) {
+        // 標成付款核銷
+        try {
+          await ensureXimoExpenseAccSourceFields(tenantToken);
+          await updateRecord(
+            tenantToken,
+            tableIdFor('expenses'),
+            expenseId,
+            { '建立來源': '付款核銷' },
+            expenseApp,
+            false
+          );
+          expenseRec.fields = Object.assign({}, expenseRec.fields || {}, { '建立來源': '付款核銷' });
+        } catch (e) {}
+        const linked = await upsertAccExpenseFromXimoRecord(tenantToken, expenseRec, {});
+        accPortal = Object.assign({}, accPortal || {}, { expenseSync: linked });
+      }
+    } catch (e) {
+      accPortal = Object.assign({}, accPortal || {}, { expenseSyncError: e.message || String(e) });
+    }
   }
   return {
     recordId: recordId,
@@ -9247,10 +9417,26 @@ export default async function handler(req, res) {
       const tableAppToken = appTokenForTable(table);
       const tid = tableIdFor(table);
       if (table === 'milestones') await ensureMilestoneTableFields(tenantToken);
+      if (table === 'expenses') await ensureXimoExpenseAccSourceFields(tenantToken);
       const body = await normalizeWriteFields(tenantToken, tid, cleanBody, tableAppToken);
+      // 璽墨手動／API 新增支出：預設建立來源
+      if (table === 'expenses' && !body['建立來源'] && !cleanBody['建立來源']) {
+        body['建立來源'] = expenseLinkedAccId(cleanBody) ? '會計' : '璽墨';
+      }
       const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
         return createRecord(tok, tid, body, tableAppToken, asUser);
       });
+      if (table === 'expenses') {
+        try {
+          const newId = extractRecordId(result);
+          if (newId) {
+            const snap = { record_id: newId, fields: Object.assign({}, body) };
+            result.accSync = await upsertAccExpenseFromXimoRecord(tenantToken, snap, {});
+          }
+        } catch (accErr) {
+          result.accSync = { ok: false, error: accErr.message || String(accErr) };
+        }
+      }
       return res.status(200).json(result);
     }
 
@@ -9264,6 +9450,7 @@ export default async function handler(req, res) {
       const tid = tableIdFor(table);
       const cleanBody = stripAuthFromBody(req.body || {});
       if (table === 'milestones') await ensureMilestoneTableFields(tenantToken);
+      if (table === 'expenses') await ensureXimoExpenseAccSourceFields(tenantToken);
       const body = await normalizeWriteFields(tenantToken, tid, cleanBody, tableAppToken);
       const result = await writeWithUserFallback(tenantToken, userAccessToken, function(tok, asUser) {
         return updateRecord(tok, tid, recordId, body, tableAppToken, asUser);
@@ -9290,6 +9477,19 @@ export default async function handler(req, res) {
             skipPrune: true,
             skipExpenseRematch: true
           });
+        } catch (accErr) {
+          result.accSync = { ok: false, error: accErr.message || String(accErr) };
+        }
+      }
+      if (table === 'expenses') {
+        try {
+          let snap = null;
+          try {
+            snap = await getRecordById(tenantToken, tid, recordId, tableAppToken);
+          } catch (e) {
+            snap = { record_id: recordId, fields: body };
+          }
+          result.accSync = await upsertAccExpenseFromXimoRecord(tenantToken, snap, {});
         } catch (accErr) {
           result.accSync = { ok: false, error: accErr.message || String(accErr) };
         }
