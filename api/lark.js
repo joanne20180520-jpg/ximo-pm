@@ -3485,6 +3485,176 @@ async function deleteAccExpensesLinkedToXimoExpense(expenseId, paymentId, opts) 
   return out;
 }
 
+let _ximoExpenseAccSourceFieldsReady = false;
+async function ensureXimoExpenseAccSourceFields(ximoToken) {
+  if (_ximoExpenseAccSourceFieldsReady) return;
+  const tableId = tableIdFor('expenses');
+  const appToken = appTokenForTable('expenses');
+  if (!tableId || !appToken) return;
+  try {
+    const existing = await listBitableFields(ximoToken, appToken, tableId);
+    const names = {};
+    (existing || []).forEach(function(f) {
+      if (f && f.field_name) names[f.field_name] = true;
+    });
+    if (!names['來源ACC支出ID']) {
+      const created = await fetch(
+        BASE_URL + '/bitable/v1/apps/' + encodeURIComponent(appToken)
+          + '/tables/' + encodeURIComponent(tableId) + '/fields',
+        {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + ximoToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ field_name: '來源ACC支出ID', type: 1 })
+        }
+      ).then(function(r) { return r.json(); });
+      if (created.code !== 0) {
+        console.warn('新增璽墨支出欄位失敗 來源ACC支出ID', created.msg || created.code);
+      }
+    }
+  } catch (err) {
+    console.warn('ensureXimoExpenseAccSourceFields', err && err.message ? err.message : err);
+  }
+  _ximoExpenseAccSourceFieldsReady = true;
+}
+
+function expenseLinkedAccId(fields) {
+  const f = fields || {};
+  const direct = accFieldText(f['來源ACC支出ID']);
+  if (direct) return direct;
+  const remark = String(f['備註'] || f['說明'] || '');
+  const m = remark.match(/acc:([A-Za-z0-9_-]+)/);
+  return m ? m[1] : '';
+}
+
+/**
+ * ACC 新增／更新支出 → 寫入璽墨支出明細（費用管理會跟著加總）。
+ * payload: { accExpenseId, summary, amount, date, target, company, ximoProjectId, ximoWorkitemId, ximoExpenseId? }
+ */
+async function upsertXimoExpenseFromAcc(ximoToken, payload) {
+  const p = payload || {};
+  const accExpenseId = String(p.accExpenseId || '').trim();
+  if (!accExpenseId) return { ok: false, error: 'missing-acc-expense-id' };
+
+  const tableId = tableIdFor('expenses');
+  const appToken = appTokenForTable('expenses');
+  if (!tableId || !appToken) return { ok: false, error: 'ximo-expenses-table-missing' };
+
+  await ensureXimoExpenseAccSourceFields(ximoToken);
+
+  const amount = Math.round(Number(p.amount) || 0);
+  const summary = String(p.summary || '').trim() || 'ACC 支出';
+  const target = String(p.target || '').trim();
+  const company = normalizeAccCompany(p.company);
+  const dateRaw = p.date;
+  let dateMs = 0;
+  if (typeof dateRaw === 'number' && dateRaw > 0) {
+    dateMs = dateRaw < 1e11 ? dateRaw * 1000 : dateRaw;
+  } else if (dateRaw) {
+    dateMs = accExpenseDateMs({ '日期': dateRaw });
+  }
+  if (!dateMs) dateMs = Date.now();
+
+  const ximoProjectId = String(p.ximoProjectId || '').trim();
+  const ximoWorkitemId = String(p.ximoWorkitemId || '').trim();
+  let ximoExpenseId = String(p.ximoExpenseId || '').trim();
+
+  const rows = await loadExpenseRecords(ximoToken);
+  let hit = null;
+  if (ximoExpenseId) {
+    hit = rows.find(function(r) { return r && r.record_id === ximoExpenseId; }) || null;
+  }
+  if (!hit) {
+    hit = rows.find(function(r) { return expenseLinkedAccId((r && r.fields) || {}) === accExpenseId; }) || null;
+  }
+  if (hit && hit.record_id) ximoExpenseId = hit.record_id;
+
+  const fields = {
+    '支出細項': summary,
+    '實際金額': amount,
+    '未稅金額': Math.round(amount / 1.05),
+    '未稅金額(X)': Math.round(amount / 1.05),
+    '狀態': '已合銷',
+    '日期': dateMs,
+    '來源ACC支出ID': accExpenseId
+  };
+  if (company) fields['公司'] = company;
+  if (ximoWorkitemId) fields['所屬工作項目'] = [ximoWorkitemId];
+  if (ximoProjectId) {
+    fields['所屬標案'] = [ximoProjectId];
+    fields['所數標案'] = [ximoProjectId];
+  }
+  const remarkBits = [];
+  if (target) remarkBits.push('對象:' + target);
+  remarkBits.push('acc:' + accExpenseId);
+  fields['備註'] = remarkBits.join(' · ');
+
+  const body = await normalizeWriteFields(ximoToken, tableId, fields, appToken);
+  if (!body || !Object.keys(body).length) {
+    return { ok: false, error: 'ximo-expense-fields-empty' };
+  }
+
+  if (ximoExpenseId) {
+    await updateRecord(ximoToken, tableId, ximoExpenseId, body, appToken, false);
+    return { ok: true, updated: true, ximoExpenseId: ximoExpenseId, accExpenseId: accExpenseId };
+  }
+
+  const created = await createRecord(ximoToken, tableId, body, appToken, false);
+  const newId = extractRecordId(created);
+  return { ok: true, created: true, ximoExpenseId: newId, accExpenseId: accExpenseId };
+}
+
+/**
+ * ACC 刪支出 → 同步刪璽墨對應列（來源ACC支出ID / 明確 ximoExpenseId）。
+ */
+async function deleteXimoExpenseLinkedToAcc(ximoToken, accExpenseId, ximoExpenseId) {
+  const out = { ok: true, deleted: 0, matched: [], skipped: false, reason: '' };
+  const eid = String(accExpenseId || '').trim();
+  const xid = String(ximoExpenseId || '').trim();
+  if (!eid && !xid) {
+    out.skipped = true;
+    out.reason = 'no-source-id';
+    return out;
+  }
+  const tableId = tableIdFor('expenses');
+  const appToken = appTokenForTable('expenses');
+  if (!tableId || !appToken) {
+    out.skipped = true;
+    out.reason = 'ximo-expenses-table-missing';
+    return out;
+  }
+
+  await ensureXimoExpenseAccSourceFields(ximoToken);
+  const rows = await loadExpenseRecords(ximoToken);
+  const toDelete = [];
+  for (let i = 0; i < rows.length; i++) {
+    const rec = rows[i];
+    if (!rec || !rec.record_id) continue;
+    if (xid && rec.record_id === xid) {
+      toDelete.push(rec);
+      continue;
+    }
+    if (eid && expenseLinkedAccId(rec.fields || {}) === eid) {
+      toDelete.push(rec);
+    }
+  }
+  // 去重
+  const seen = {};
+  for (let i = 0; i < toDelete.length; i++) {
+    const rec = toDelete[i];
+    if (seen[rec.record_id]) continue;
+    seen[rec.record_id] = true;
+    try {
+      await deleteRecord(ximoToken, tableId, rec.record_id, appToken, false);
+      out.deleted++;
+      out.matched.push(rec.record_id);
+    } catch (e) {
+      out.ok = false;
+      out.error = (out.error ? out.error + '; ' : '') + (e.message || String(e));
+    }
+  }
+  return out;
+}
+
 function accExpenseDupGroupKey(fields) {
   const f = fields || {};
   const ad = accExpenseAmountDayKey(f);
@@ -4056,8 +4226,62 @@ async function reconcileAccExpensesToXimo(ximoToken, opts) {
       }
     }
 
-    // 對不上璽墨 → 刪（以璽墨為主）
-    await del(rec, 'not-in-ximo');
+    // ACC 獨有列 → 同步新增到璽墨（雙向），不再刪 ACC
+    try {
+      let ximoProjectId = '';
+      let ximoWorkitemId = '';
+      const accProjectId = getLinkIds(ef['所屬案件'])[0] || '';
+      const accWorkitemId = getLinkIds(ef['工項'])[0] || '';
+      if (accProjectId) {
+        try {
+          const pref = await getRecordById(accToken, ACC_TABLE_PROJECTS, accProjectId, ACC_APP_TOKEN);
+          ximoProjectId = accFieldText(((pref && pref.fields) || {})['來源Ximo標案ID']);
+        } catch (e) {}
+      }
+      if (accWorkitemId) {
+        try {
+          const wref = await getRecordById(accToken, ACC_TABLE_WORKITEMS, accWorkitemId, ACC_APP_TOKEN);
+          ximoWorkitemId = accFieldText(((wref && wref.fields) || {})['來源Ximo工項ID']);
+        } catch (e) {}
+      }
+      if (!dryRun) {
+        const up = await upsertXimoExpenseFromAcc(ximoToken, {
+          accExpenseId: rec.record_id,
+          summary: accFieldText(ef['摘要']) || 'ACC 支出',
+          amount: expenseAmountNumber(ef),
+          date: ef['日期'],
+          target: accFieldText(ef['對象']),
+          company: normalizeAccCompany(ef['公司']),
+          ximoProjectId: ximoProjectId,
+          ximoWorkitemId: ximoWorkitemId
+        });
+        if (up && up.ok && up.ximoExpenseId) {
+          try {
+            await updateRecord(
+              accToken,
+              ACC_TABLE_EXPENSES,
+              rec.record_id,
+              { '來源支出ID': up.ximoExpenseId },
+              ACC_APP_TOKEN,
+              false
+            );
+          } catch (e) {}
+          claimedExpenseIds[up.ximoExpenseId] = true;
+          out.backfilled++;
+          out.kept++;
+          continue;
+        }
+        out.errors.push({
+          id: rec.record_id,
+          error: (up && up.error) || 'upsert-ximo-failed'
+        });
+      } else {
+        out.backfilled++;
+        out.kept++;
+      }
+    } catch (e) {
+      out.errors.push({ id: rec.record_id, error: e.message || String(e) });
+    }
   }
 
   return out;
@@ -4912,6 +5136,30 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
       out.skipped++;
       continue;
     }
+
+    // ACC 建的支出已有 record_id：補寫來源支出ID，避免再開一筆
+    const accOriginId = expenseLinkedAccId(fields);
+    if (accOriginId) {
+      const accHit = accExpenses.find(function(r) { return r && r.record_id === accOriginId; });
+      if (accHit) {
+        if (!dryRun) {
+          try {
+            const patch = { '來源支出ID': expenseId };
+            if (paymentId) patch['來源付款ID'] = paymentId;
+            await updateRecord(accToken, ACC_TABLE_EXPENSES, accOriginId, patch, ACC_APP_TOKEN, false);
+            byExpenseId[expenseId] = accHit;
+            if (accHit.record_id) claimedAccIds[accHit.record_id] = true;
+            out.backfilled++;
+          } catch (e) {
+            out.skipped++;
+          }
+        } else {
+          out.backfilled++;
+        }
+        continue;
+      }
+    }
+
     if (paymentId && byPaymentId[paymentId]) {
       // 已由付款申請同步；補寫來源支出ID 避免之後重複
       if (!dryRun) {
@@ -8570,6 +8818,36 @@ export default async function handler(req, res) {
           limit: dryRun ? 0 : (isNaN(limit) ? 80 : limit)
         });
         return res.status(200).json({ ok: true, reconcile: result });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'upsert-acc-expense' && req.method === 'POST') {
+      try {
+        const token = await getToken();
+        const b = req.body || {};
+        const result = await upsertXimoExpenseFromAcc(token, b);
+        if (!result || !result.ok) {
+          return res.status(400).json({ ok: false, error: (result && result.error) || 'upsert-failed' });
+        }
+        return res.status(200).json(result);
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'delete-acc-expense' && (req.method === 'POST' || req.method === 'DELETE')) {
+      try {
+        const token = await getToken();
+        const b = req.body || {};
+        const q = req.query || {};
+        const result = await deleteXimoExpenseLinkedToAcc(
+          token,
+          b.accExpenseId || q.accExpenseId || '',
+          b.ximoExpenseId || q.ximoExpenseId || ''
+        );
+        return res.status(200).json(result);
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
