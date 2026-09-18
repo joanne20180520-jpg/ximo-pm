@@ -5867,12 +5867,14 @@ async function auditStuckPaymentApprovals(tenantToken) {
 async function auditPaymentApprovalCoverage(tenantToken, opts) {
   opts = opts || {};
   const days = Math.max(7, Math.min(180, parseInt(opts.days, 10) || 60));
-  const maxDetail = Math.max(20, Math.min(200, parseInt(opts.maxDetail, 10) || 120));
+  const maxDetail = Math.max(10, Math.min(80, parseInt(opts.maxDetail, 10) || 30));
+  const offset = Math.max(0, parseInt(opts.offset, 10) || 0);
   const frontCfg = paymentsFrontConfig();
   const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
   const out = {
     days: days,
     maxDetail: maxDetail,
+    offset: offset,
     approvalCode: paymentApprovalCode(),
     baseTotal: 0,
     baseWithCode: 0,
@@ -5930,8 +5932,16 @@ async function auditPaymentApprovalCoverage(tenantToken, opts) {
   out.approvalListed = instanceCodes.length;
 
   const usedBaseIds = {};
-  const scanN = Math.min(instanceCodes.length, maxDetail);
-  for (let i = 0; i < scanN; i++) {
+  // 已被審批編號佔用的 Base，分段掃描時避免互搶
+  Object.keys(byCode).forEach(function(k) {
+    const rec = byCode[k];
+    if (rec && rec.record_id) usedBaseIds[rec.record_id] = 1;
+  });
+
+  const end = Math.min(instanceCodes.length, offset + maxDetail);
+  out.sliceStart = offset;
+  out.sliceEnd = end;
+  for (let i = offset; i < end; i++) {
     const ic = instanceCodes[i];
     let detail;
     try {
@@ -5985,7 +5995,6 @@ async function auditPaymentApprovalCoverage(tenantToken, opts) {
         }
       }
     }
-    // 已核銷但缺審批編號：也允許用金額／對象／事由對上
     if (!rec) {
       for (let r = 0; r < records.length; r++) {
         const cand = records[r];
@@ -6032,13 +6041,16 @@ async function auditPaymentApprovalCoverage(tenantToken, opts) {
   }
 
   out.summary = {
+    approvalListed: out.approvalListed,
     approvalScanned: out.approvalScanned,
+    slice: offset + '-' + end,
+    nextOffset: end < instanceCodes.length ? end : null,
     linked: out.linked.length,
     orphanApprovals: out.orphanApprovals.length,
     stuckStatus: out.stuckStatus.length,
     pendingInLark: out.pendingInLark.length,
     rejectedOrCanceled: out.rejectedOrCanceled.length,
-    notScannedYet: Math.max(0, out.approvalListed - out.approvalScanned)
+    notScannedYet: Math.max(0, out.approvalListed - end)
   };
   out.reasons = [
     '付款流程是「前台先寫 Base → 再建立 Lark 審批」；同步只更新已存在的 Base，不會從審批補建漏掉的列。',
@@ -9084,8 +9096,13 @@ export default async function handler(req, res) {
         const q = req.query || {};
         const b = req.body || {};
         const days = parseInt(q.days || b.days || '60', 10);
-        const maxDetail = parseInt(q.maxDetail || b.maxDetail || '120', 10);
-        const result = await auditPaymentApprovalCoverage(token, { days: days, maxDetail: maxDetail });
+        const maxDetail = parseInt(q.maxDetail || b.maxDetail || '30', 10);
+        const offset = parseInt(q.offset || b.offset || '0', 10);
+        const result = await auditPaymentApprovalCoverage(token, {
+          days: days,
+          maxDetail: maxDetail,
+          offset: offset
+        });
         return res.status(200).json({ ok: true, coverage: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
