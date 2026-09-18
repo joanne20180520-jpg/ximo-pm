@@ -1095,6 +1095,44 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .pay-save-notice-btn{padding:8px 22px;border:none;border-radius:8px;background:#dbeafe;color:#1d4ed8;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s,transform .1s}
 .pay-save-notice-btn:hover{background:#bfdbfe}
 .pay-save-notice-btn:active{transform:scale(0.97)}
+.pay-fix-dialog{position:fixed;inset:0;z-index:3600;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(42,40,36,.28);backdrop-filter:blur(4px);animation:payNoticeFadeIn .2s ease}
+.pay-fix-dialog.hidden{display:none}
+.pay-fix-card{width:100%;max-width:420px;background:#fff;border:1px solid #eceae6;border-radius:16px;padding:22px 22px 16px;box-shadow:0 16px 48px rgba(0,0,0,.14);animation:payNoticePop .28s cubic-bezier(.22,1,.36,1)}
+.pay-fix-card.is-error .pay-fix-icon{background:#fde8e8;color:#b91c1c}
+.pay-fix-card.is-run .pay-fix-icon{background:#f3f1ed;color:#6b6860}
+.pay-fix-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px}
+.pay-fix-icon{width:42px;height:42px;border-radius:12px;background:#e8f5ee;color:#2d6a4f;font-size:18px;line-height:42px;text-align:center;font-weight:700;flex-shrink:0}
+.pay-fix-title{font-size:16px;font-weight:700;color:#1a1916;line-height:1.4;margin:2px 0 0}
+.pay-fix-lead{font-size:13px;color:#6b6860;line-height:1.55;margin:6px 0 0}
+.pay-fix-list{list-style:none;margin:0 0 14px;padding:12px 14px;background:#f7f5f2;border:1px solid #eceae6;border-radius:12px}
+.pay-fix-list li{position:relative;padding:7px 0 7px 18px;font-size:12.5px;color:#3d3a35;line-height:1.5;border-bottom:1px solid #eceae6}
+.pay-fix-list li:last-child{border-bottom:none;padding-bottom:0}
+.pay-fix-list li:first-child{padding-top:0}
+.pay-fix-list li::before{content:'';position:absolute;left:0;top:13px;width:7px;height:7px;border-radius:50%;background:#2d6a4f}
+.pay-fix-note{font-size:12px;color:#9e9b96;line-height:1.5;margin:0 0 16px}
+.pay-fix-progress{display:none;margin:0 0 16px;padding:12px 14px;background:#f7f5f2;border:1px solid #eceae6;border-radius:12px;font-size:13px;color:#3d3a35;line-height:1.5}
+.pay-fix-card.is-run .pay-fix-list,
+.pay-fix-card.is-run .pay-fix-note{display:none}
+.pay-fix-card.is-run .pay-fix-progress{display:block}
+.pay-fix-card.is-done .pay-fix-list,
+.pay-fix-card.is-done .pay-fix-note{display:none}
+.pay-fix-card.is-done .pay-fix-progress{display:block;background:#e8f5ee;border-color:#d5ebdd;color:#1f4d38}
+.pay-fix-card.is-error .pay-fix-list,
+.pay-fix-card.is-error .pay-fix-note{display:none}
+.pay-fix-card.is-error .pay-fix-progress{display:block;background:#fde8e8;border-color:#f5c2c2;color:#7f1d1d}
+.pay-fix-foot{display:flex;justify-content:flex-end;gap:8px}
+.pay-fix-foot .bcan,
+.pay-fix-foot .bpri{padding:9px 18px;font-size:13px;border-radius:8px}
+.pay-fix-card.is-run .pay-fix-cancel,
+.pay-fix-card.is-run .pay-fix-ok{display:none}
+.pay-fix-card.is-run .pay-fix-close-done{display:none}
+.pay-fix-card.is-done .pay-fix-cancel,
+.pay-fix-card.is-done .pay-fix-ok,
+.pay-fix-card.is-error .pay-fix-cancel,
+.pay-fix-card.is-error .pay-fix-ok{display:none}
+.pay-fix-close-done{display:none}
+.pay-fix-card.is-done .pay-fix-close-done,
+.pay-fix-card.is-error .pay-fix-close-done{display:inline-flex}
 body.role-designer #lp,body.role-designer #rp,body.role-designer #tl,body.role-designer #tr,
 body.role-accountant .lp-task-card,
 body.role-accountant #rp,
@@ -1327,6 +1365,30 @@ button.btn-loading::after{content:'…';margin-left:2px}
     </div>
     <div class="pay-save-notice-foot">
       <button type="button" class="pay-save-notice-btn" onclick="hidePaymentSaveNotice()">確定</button>
+    </div>
+  </div>
+</div>
+
+<div id="pay-fix-dialog" class="pay-fix-dialog hidden" onclick="if(event.target===this)cancelPayFixDialog()">
+  <div class="pay-fix-card" id="pay-fix-card" role="dialog" aria-modal="true" aria-labelledby="pay-fix-title">
+    <div class="pay-fix-head">
+      <div class="pay-fix-icon" id="pay-fix-icon">↻</div>
+      <div>
+        <h3 class="pay-fix-title" id="pay-fix-title">修復付款對帳</h3>
+        <p class="pay-fix-lead" id="pay-fix-lead">將掃描近 60 日付款審批並自動修復：</p>
+      </div>
+    </div>
+    <ul class="pay-fix-list">
+      <li>狀態卡在「審批中」但 Lark 已通過 → 改為已核銷</li>
+      <li>Lark 有、Base 沒有 → 補建並核銷</li>
+      <li>同步寫入支出明細／會計後台</li>
+    </ul>
+    <p class="pay-fix-note">約需 1～3 分鐘，執行期間請勿關閉頁面。</p>
+    <div class="pay-fix-progress" id="pay-fix-progress">準備中…</div>
+    <div class="pay-fix-foot">
+      <button type="button" class="bcan pay-fix-cancel" id="pay-fix-cancel" onclick="cancelPayFixDialog()">取消</button>
+      <button type="button" class="bpri pay-fix-ok" id="pay-fix-ok" onclick="confirmPayFixDialog()">開始修復</button>
+      <button type="button" class="bpri pay-fix-close-done" id="pay-fix-close-done" onclick="hidePayFixDialog()">確定</button>
     </div>
   </div>
 </div>
@@ -4809,7 +4871,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260918v4';
+var APP_BUILD = '20260918v5';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -14409,9 +14471,13 @@ function syncPaymentApprovals(force) {
 }
 
 var _payFixRunning = false;
+var _payFixConfirmResolve = null;
+
 function setPayFixStatus(text) {
   var el = document.getElementById('pay-fix-status');
   if (el) el.textContent = text || '';
+  var prog = document.getElementById('pay-fix-progress');
+  if (prog && _payFixRunning) prog.textContent = text || '處理中…';
 }
 function setPayFixBusy(busy) {
   _payFixRunning = !!busy;
@@ -14421,71 +14487,154 @@ function setPayFixBusy(busy) {
     btn.textContent = busy ? '修復中…' : '修復對帳';
   }
 }
+function hidePayFixDialog() {
+  var el = document.getElementById('pay-fix-dialog');
+  if (el) el.classList.add('hidden');
+  if (_payFixConfirmResolve) {
+    var resolve = _payFixConfirmResolve;
+    _payFixConfirmResolve = null;
+    resolve(false);
+  }
+}
+function cancelPayFixDialog() {
+  if (_payFixRunning) return;
+  hidePayFixDialog();
+}
+function confirmPayFixDialog() {
+  if (!_payFixConfirmResolve) return;
+  var resolve = _payFixConfirmResolve;
+  _payFixConfirmResolve = null;
+  resolve(true);
+}
+function showPayFixConfirmDialog() {
+  return new Promise(function(resolve) {
+    var el = document.getElementById('pay-fix-dialog');
+    var card = document.getElementById('pay-fix-card');
+    var icon = document.getElementById('pay-fix-icon');
+    var title = document.getElementById('pay-fix-title');
+    var lead = document.getElementById('pay-fix-lead');
+    var prog = document.getElementById('pay-fix-progress');
+    if (!el || !card) {
+      resolve(window.confirm('確定執行修復對帳？'));
+      return;
+    }
+    _payFixConfirmResolve = resolve;
+    card.classList.remove('is-run', 'is-done', 'is-error');
+    if (icon) icon.textContent = '↻';
+    if (title) title.textContent = '修復付款對帳';
+    if (lead) lead.textContent = '將掃描近 60 日付款審批並自動修復：';
+    if (prog) prog.textContent = '準備中…';
+    el.classList.remove('hidden');
+  });
+}
+function showPayFixRunningDialog() {
+  var el = document.getElementById('pay-fix-dialog');
+  var card = document.getElementById('pay-fix-card');
+  var icon = document.getElementById('pay-fix-icon');
+  var title = document.getElementById('pay-fix-title');
+  var lead = document.getElementById('pay-fix-lead');
+  var prog = document.getElementById('pay-fix-progress');
+  if (!el || !card) return;
+  card.classList.remove('is-done', 'is-error');
+  card.classList.add('is-run');
+  if (icon) icon.textContent = '…';
+  if (title) title.textContent = '正在修復對帳';
+  if (lead) lead.textContent = '請稍候，系統正在掃描並寫回狀態。';
+  if (prog) prog.textContent = '開始掃描…';
+  el.classList.remove('hidden');
+}
+function showPayFixResultDialog(ok, message) {
+  var el = document.getElementById('pay-fix-dialog');
+  var card = document.getElementById('pay-fix-card');
+  var icon = document.getElementById('pay-fix-icon');
+  var title = document.getElementById('pay-fix-title');
+  var lead = document.getElementById('pay-fix-lead');
+  var prog = document.getElementById('pay-fix-progress');
+  if (!el || !card) {
+    alert(message || (ok ? '修復完成' : '修復失敗'));
+    return;
+  }
+  _payFixConfirmResolve = null;
+  card.classList.remove('is-run');
+  card.classList.toggle('is-error', !ok);
+  card.classList.toggle('is-done', !!ok);
+  if (icon) icon.textContent = ok ? '✓' : '!';
+  if (title) title.textContent = ok ? '修復完成' : '修復失敗';
+  if (lead) lead.textContent = ok ? '付款狀態與後台已更新。' : '請稍後再試，或通知管理員。';
+  if (prog) prog.textContent = message || '';
+  el.classList.remove('hidden');
+}
 function fixPaymentApprovalGaps() {
   if (_payFixRunning) return;
-  if (!confirm('將掃描近 60 日付款審批並自動修復：\n\n• 狀態卡在「審批中」但 Lark 已通過 → 改為已核銷\n• Lark 有、Base 沒有 → 補建並核銷\n• 同步寫入支出明細／會計後台\n\n約需 1～3 分鐘，確定執行？')) return;
-  setPayFixBusy(true);
-  setPayFixStatus('開始掃描…');
-  var totals = { repaired: 0, imported: 0, finalized: 0, foundStuck: 0, foundOrphan: 0, errors: [] };
-  var offset = 0;
-  var pass = 0;
+  showPayFixConfirmDialog().then(function(ok) {
+    if (!ok) {
+      hidePayFixDialog();
+      return;
+    }
+    setPayFixBusy(true);
+    showPayFixRunningDialog();
+    setPayFixStatus('開始掃描…');
+    var totals = { repaired: 0, imported: 0, finalized: 0, foundStuck: 0, foundOrphan: 0, errors: [] };
+    var offset = 0;
+    var pass = 0;
 
-  function postFix(body) {
-    return fetch(apiUrl('action=fix-payment-approval-gaps'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body || {})
-    }).then(function(r) { return r.json(); });
-  }
+    function postFix(body) {
+      return fetch(apiUrl('action=fix-payment-approval-gaps'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {})
+      }).then(function(r) { return r.json(); });
+    }
 
-  function step() {
-    pass += 1;
-    setPayFixStatus('掃描修復中（第 ' + pass + ' 段）…');
-    return postFix({ days: 60, maxDetail: 20, offset: offset }).then(function(res) {
-      if (!res || !res.ok) throw new Error((res && res.error) || '修復失敗');
-      var fix = res.fix || {};
-      var found = fix.found || {};
-      totals.foundStuck += found.stuckStatus || 0;
-      totals.foundOrphan += found.orphanApprovals || 0;
-      if (fix.repair) {
-        totals.repaired += fix.repair.repaired || 0;
-        (fix.repair.errors || []).forEach(function(e) { totals.errors.push(e); });
-      }
-      if (fix.import) {
-        totals.imported += fix.import.imported || 0;
-        totals.finalized += fix.import.finalized || 0;
-        (fix.import.errors || []).forEach(function(e) { totals.errors.push(e); });
-      }
-      var listed = (fix.summary && fix.summary.approvalListed) || 0;
-      var end = (fix.summary && fix.summary.slice) || '';
-      setPayFixStatus('已處理 ' + end + (listed ? '／共 ' + listed + ' 筆' : ''));
-      if (fix.nextOffset != null) {
-        offset = fix.nextOffset;
-        return step();
-      }
-      return fix;
-    });
-  }
+    function step() {
+      pass += 1;
+      setPayFixStatus('掃描修復中（第 ' + pass + ' 段）…');
+      return postFix({ days: 60, maxDetail: 20, offset: offset }).then(function(res) {
+        if (!res || !res.ok) throw new Error((res && res.error) || '修復失敗');
+        var fix = res.fix || {};
+        var found = fix.found || {};
+        totals.foundStuck += found.stuckStatus || 0;
+        totals.foundOrphan += found.orphanApprovals || 0;
+        if (fix.repair) {
+          totals.repaired += fix.repair.repaired || 0;
+          (fix.repair.errors || []).forEach(function(e) { totals.errors.push(e); });
+        }
+        if (fix.import) {
+          totals.imported += fix.import.imported || 0;
+          totals.finalized += fix.import.finalized || 0;
+          (fix.import.errors || []).forEach(function(e) { totals.errors.push(e); });
+        }
+        var listed = (fix.summary && fix.summary.approvalListed) || 0;
+        var end = (fix.summary && fix.summary.slice) || '';
+        setPayFixStatus('已處理 ' + end + (listed ? '／共 ' + listed + ' 筆' : ''));
+        if (fix.nextOffset != null) {
+          offset = fix.nextOffset;
+          return step();
+        }
+        return fix;
+      });
+    }
 
-  return step().then(function() {
-    _lastPaymentApprovalSyncAt = 0;
-    return syncTables(['payments', 'expenses']).then(function() {
-      return syncPaymentApprovals(true).catch(function() { return null; });
+    return step().then(function() {
+      _lastPaymentApprovalSyncAt = 0;
+      return syncTables(['payments', 'expenses']).then(function() {
+        return syncPaymentApprovals(true).catch(function() { return null; });
+      }).then(function() {
+        renderPaymentsList();
+        renderAccountingPage();
+        var msg = '核銷 ' + totals.repaired + ' 筆、補建 ' + totals.imported
+          + ' 筆（其中核銷 ' + totals.finalized + '）'
+          + '；掃描到卡住 ' + totals.foundStuck + '、漏建 ' + totals.foundOrphan + '。';
+        if (totals.errors.length) msg += ' 另有 ' + totals.errors.length + ' 筆錯誤。';
+        setPayFixStatus('完成：核銷 ' + totals.repaired + '／補建 ' + totals.imported);
+        showPayFixResultDialog(true, msg);
+      });
+    }).catch(function(err) {
+      setPayFixStatus('失敗：' + (err.message || '請稍後再試'));
+      showPayFixResultDialog(false, err.message || '請稍後再試');
     }).then(function() {
-      renderPaymentsList();
-      renderAccountingPage();
-      var msg = '修復完成：核銷 ' + totals.repaired + ' 筆、補建 ' + totals.imported
-        + ' 筆（其中核銷 ' + totals.finalized + '）'
-        + '；掃描到卡住 ' + totals.foundStuck + '、漏建 ' + totals.foundOrphan + '。';
-      if (totals.errors.length) msg += '\n有 ' + totals.errors.length + ' 筆錯誤，請稍後再試或通知管理員。';
-      setPayFixStatus('完成：核銷 ' + totals.repaired + '／補建 ' + totals.imported);
-      alert(msg);
+      setPayFixBusy(false);
     });
-  }).catch(function(err) {
-    setPayFixStatus('失敗：' + (err.message || '請稍後再試'));
-    alert('修復對帳失敗：' + (err.message || '請稍後再試'));
-  }).then(function() {
-    setPayFixBusy(false);
   });
 }
 
