@@ -3366,7 +3366,7 @@ async function ensureAccExpenseSourceFields(accToken) {
   (data.data && data.data.items || []).forEach(function(f) {
     names[f.field_name] = true;
   });
-  const extras = ['來源付款ID', '來源支出ID', '來源標案', '來源工項', '公司'];
+  const extras = ['來源付款ID', '來源支出ID', '來源標案', '來源工項', '公司', '建立來源'];
   for (let i = 0; i < extras.length; i++) {
     if (names[extras[i]]) continue;
     const created = await fetch(
@@ -3585,8 +3585,13 @@ async function upsertXimoExpenseFromAcc(ximoToken, payload) {
   }
   const remarkBits = [];
   if (target) remarkBits.push('對象:' + target);
+  remarkBits.push('來源:會計');
   remarkBits.push('acc:' + accExpenseId);
   fields['備註'] = remarkBits.join(' · ');
+  // 摘要前綴方便在璽墨一眼辨識
+  if (String(p.origin || '會計') === '會計' && summary.indexOf('【會計】') !== 0) {
+    fields['支出細項'] = '【會計】' + summary;
+  }
 
   const body = await normalizeWriteFields(ximoToken, tableId, fields, appToken);
   if (!body || !Object.keys(body).length) {
@@ -5014,7 +5019,8 @@ async function syncSettledPaymentToAccPortal(ximoToken, paymentRec) {
     '日期': dateMs,
     '來源付款ID': paymentId,
     '來源標案': labels.projectName,
-    '來源工項': labels.workitemName
+    '來源工項': labels.workitemName,
+    '建立來源': '付款核銷'
   };
   if (company) out['公司'] = company;
   if (accProject) out['所屬案件'] = [accProject.record_id];
@@ -5308,7 +5314,8 @@ async function syncXimoExpensesToAccPortal(ximoToken, opts) {
         '日期': dateMs,
         '來源支出ID': expenseId,
         '來源標案': labels.projectName,
-        '來源工項': labels.workitemName
+        '來源工項': labels.workitemName,
+        '建立來源': paymentId ? '付款核銷' : (expenseLinkedAccId(fields) ? '會計' : '璽墨')
       };
       if (paymentId) body['來源付款ID'] = paymentId;
       const company = normalizeAccCompany(
