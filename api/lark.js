@@ -3551,6 +3551,12 @@ async function upsertXimoExpenseFromAcc(ximoToken, payload) {
   const accExpenseId = String(p.accExpenseId || '').trim();
   if (!accExpenseId) return { ok: false, error: 'missing-acc-expense-id' };
 
+  // ACC 端可能已刪除（競態）：先確認來源ACC支出ID 仍有效由呼叫端保證；
+  // 若 payload.skipIfMissingAcc 且帶了確認旗標，略過建立。
+  if (p.requireAccAlive === true && p.accAlive === false) {
+    return { ok: true, skipped: true, reason: 'acc-already-deleted' };
+  }
+
   const tableId = tableIdFor('expenses');
   const appToken = appTokenForTable('expenses');
   if (!tableId || !appToken) return { ok: false, error: 'ximo-expenses-table-missing' };
@@ -3742,13 +3748,15 @@ async function upsertAccExpenseFromXimoRecord(ximoToken, expenseRec, opts) {
 }
 
 /**
- * ACC 刪支出 → 同步刪璽墨對應列（來源ACC支出ID / 明確 ximoExpenseId）。
+ * ACC 刪支出 → 同步刪璽墨對應列（來源ACC支出ID / 明確 ximoExpenseId / 指紋備援）。
+ * fingerprint: { summary, amount, date, target } 用於對不到 ID 時清會計殘留列
  */
-async function deleteXimoExpenseLinkedToAcc(ximoToken, accExpenseId, ximoExpenseId) {
+async function deleteXimoExpenseLinkedToAcc(ximoToken, accExpenseId, ximoExpenseId, fingerprint) {
   const out = { ok: true, deleted: 0, matched: [], skipped: false, reason: '' };
   const eid = String(accExpenseId || '').trim();
   const xid = String(ximoExpenseId || '').trim();
-  if (!eid && !xid) {
+  const fp = fingerprint && typeof fingerprint === 'object' ? fingerprint : null;
+  if (!eid && !xid && !fp) {
     out.skipped = true;
     out.reason = 'no-source-id';
     return out;
@@ -3764,6 +3772,36 @@ async function deleteXimoExpenseLinkedToAcc(ximoToken, accExpenseId, ximoExpense
   await ensureXimoExpenseAccSourceFields(ximoToken);
   const rows = await loadExpenseRecords(ximoToken);
   const toDelete = [];
+
+  function fpMatch(fields) {
+    if (!fp) return false;
+    const origin = accFieldText(fields['建立來源']);
+    if (origin && origin !== '會計') return false;
+    const summary = stripAccExpenseSummaryPrefix(accFieldText(fields['支出細項']));
+    const wantSummary = stripAccExpenseSummaryPrefix(fp.summary);
+    if (wantSummary && summary !== wantSummary) return false;
+    const amount = expenseAmountNumber(fields);
+    const wantAmount = Math.round(Number(fp.amount) || 0);
+    if (wantAmount && amount !== wantAmount) return false;
+    const day = accExpenseDayKey(accExpenseDateMs(fields) || 0);
+    let wantDay = '';
+    if (fp.date) {
+      const ms = accExpenseDateMs({ '日期': fp.date });
+      wantDay = accExpenseDayKey(ms || 0);
+    }
+    if (wantDay && day !== wantDay) return false;
+    if (fp.target) {
+      const assignee = personDisplayName(fields['負責人']) || accFieldText(fields['負責人']) || '';
+      const t = String(fp.target || '').trim();
+      if (t && assignee && assignee.indexOf(t.split('_')[0]) < 0 && t.indexOf(assignee.split('_')[0]) < 0) {
+        // 寬鬆：有指定對象但不符就不刪，避免誤刪
+        if (assignee !== t) return false;
+      }
+    }
+    // 至少要有摘要或金額對上，避免空指紋掃光
+    return !!(wantSummary || wantAmount);
+  }
+
   for (let i = 0; i < rows.length; i++) {
     const rec = rows[i];
     if (!rec || !rec.record_id) continue;
@@ -3772,6 +3810,10 @@ async function deleteXimoExpenseLinkedToAcc(ximoToken, accExpenseId, ximoExpense
       continue;
     }
     if (eid && expenseLinkedAccId(rec.fields || {}) === eid) {
+      toDelete.push(rec);
+      continue;
+    }
+    if (fpMatch(rec.fields || {})) {
       toDelete.push(rec);
     }
   }
@@ -9589,7 +9631,8 @@ export default async function handler(req, res) {
         const result = await deleteXimoExpenseLinkedToAcc(
           token,
           b.accExpenseId || q.accExpenseId || '',
-          b.ximoExpenseId || q.ximoExpenseId || ''
+          b.ximoExpenseId || q.ximoExpenseId || '',
+          b.fingerprint || null
         );
         return res.status(200).json(result);
       } catch (err) {
