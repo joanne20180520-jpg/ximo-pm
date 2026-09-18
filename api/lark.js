@@ -6194,6 +6194,238 @@ async function repairStuckPaymentApprovals(tenantToken, opts) {
   return out;
 }
 
+function buildPaymentFieldsFromApprovalForm(formValues, detail) {
+  const fv = formValues || {};
+  const amount = extractApprovalFormAmount(fv, detail);
+  const startMs = paymentDetailStartMs(detail);
+  const fields = {
+    '支付對象': String(fv['支付對象'] || fv['收款人'] || '').trim(),
+    '事由': String(fv['事由'] || fv['付款事由'] || '').trim(),
+    '支付方式': String(fv['支付方式'] || fv['付款方式'] || '').trim(),
+    '付款總金額': amount || 0,
+    '廠商名稱': String(fv['廠商名稱'] || fv['廠商'] || '').trim(),
+    '備註': String(fv['備註'] || '').trim(),
+    '公司': String(fv['公司'] || fv['所屬公司'] || '').trim(),
+    '申請部門': String(fv['申請部門'] || '企劃部').trim() || '企劃部',
+    '標案名稱': String(fv['所屬標案'] || fv['標案名稱'] || fv['所屬專案'] || fv['所屬個案'] || '').trim(),
+    '工作項目名稱': String(fv['工作項目名稱'] || fv['所屬工作項目'] || fv['工作項目'] || '').trim(),
+    '狀態': '審批中'
+  };
+  const nature = fv['支付性質'] || fv['付款性質'];
+  if (nature) fields['支付性質'] = nature;
+  if (startMs) fields['申請日期'] = startMs;
+  Object.keys(fields).forEach(function(k) {
+    if (fields[k] === '' || fields[k] == null) delete fields[k];
+  });
+  return fields;
+}
+
+async function resolvePaymentProjectLinks(tenantToken, fields) {
+  const name = String((fields && fields['標案名稱']) || '').trim();
+  if (!name) return fields;
+  const cfg = getFrontBitableConfig();
+  let projId = null;
+  try {
+    projId = await findProjectIdByName(tenantToken, cfg, name);
+  } catch (e) {}
+  if (!projId) {
+    try {
+      const tableId = cfg.tables.projects;
+      if (tableId) {
+        const rows = await getRecords(tenantToken, tableId, cfg.appToken);
+        const hit = rows.find(function(r) {
+          const n = String((r.fields || {})['標案名稱'] || '').trim();
+          return n && (n === name || accNamesMatch(n, name));
+        });
+        if (hit) projId = hit.record_id;
+      }
+    } catch (e) {}
+  }
+  if (projId) {
+    fields['所屬標案'] = [projId];
+    fields['所數標案'] = [projId];
+  }
+  return fields;
+}
+
+/**
+ * 依已知 stuck 清單（recordId + instanceCode）直接核銷，不必掃整批審批。
+ */
+async function repairStuckPaymentRecordsDirect(tenantToken, stuckList) {
+  const list = Array.isArray(stuckList) ? stuckList : [];
+  const out = { requested: list.length, repaired: 0, details: [], errors: [], skipped: [] };
+  if (!list.length) return out;
+
+  const frontCfg = paymentsFrontConfig();
+  const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
+  if (!tableId) {
+    out.errors.push('找不到付款資料表');
+    return out;
+  }
+  try { await ensurePaymentApprovalFields(tenantToken, frontCfg.appToken, tableId); } catch (e) {}
+
+  let expenseCache = [];
+  try { expenseCache = await loadExpenseRecords(tenantToken); } catch (e) { expenseCache = []; }
+
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i] || {};
+    const recordId = String(item.recordId || item.record_id || '').trim();
+    const instanceCode = String(item.instanceCode || item.instance_code || '').trim();
+    if (!recordId) {
+      out.skipped.push({ item: item, why: 'missing recordId' });
+      continue;
+    }
+    try {
+      let rec = await getRecordById(tenantToken, tableId, recordId, frontCfg.appToken);
+      if (!rec) {
+        out.errors.push({ recordId: recordId, error: 'record not found' });
+        continue;
+      }
+      const status = paymentRecordStatus(rec.fields || {});
+      if (isPaymentApprovedStatus(status)) {
+        out.skipped.push({ recordId: recordId, why: 'already approved', status: status });
+        continue;
+      }
+      if (instanceCode) {
+        rec.fields = Object.assign({}, rec.fields || {}, { '審批編號': instanceCode });
+        try { await writePaymentApprovalCode(tenantToken, null, recordId, instanceCode); } catch (e) {}
+      }
+      const done = await finalizeApprovedPaymentRecord(tenantToken, rec, expenseCache, {
+        approvalStatus: 'APPROVED'
+      });
+      out.repaired++;
+      out.details.push({
+        recordId: recordId,
+        instanceCode: instanceCode,
+        payee: String((rec.fields || {})['支付對象'] || '').slice(0, 30),
+        amount: paymentAmountNumber(rec.fields || {}),
+        expenseId: done.expenseId || '',
+        expenseError: done.expenseError || ''
+      });
+    } catch (err) {
+      out.errors.push({ recordId: recordId, error: err.message || String(err) });
+    }
+  }
+  return out;
+}
+
+/**
+ * 把 Lark 有、Base 沒有的已通過審批補建成付款列，並直接核銷。
+ * 不會再送一次審批（沿用既有 instanceCode）。
+ */
+async function importOrphanPaymentApprovals(tenantToken, opts) {
+  opts = opts || {};
+  const instanceCodes = Array.isArray(opts.instanceCodes) ? opts.instanceCodes.filter(Boolean) : [];
+  const out = {
+    requested: instanceCodes.length,
+    imported: 0,
+    finalized: 0,
+    details: [],
+    errors: [],
+    skipped: []
+  };
+  if (!instanceCodes.length) return out;
+
+  const frontCfg = paymentsFrontConfig();
+  const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
+  if (!tableId) {
+    out.errors.push('找不到付款資料表');
+    return out;
+  }
+  try { await ensurePaymentApprovalFields(tenantToken, frontCfg.appToken, tableId); } catch (e) {}
+
+  let widgets = [];
+  try {
+    const def = await getPaymentApprovalDefinition(tenantToken);
+    widgets = parseApprovalFormWidgets(def.form || def.approval_form || (def.approval && def.approval.form));
+  } catch (e) {
+    out.errors.push('讀取審批定義：' + (e.message || String(e)));
+  }
+
+  const existing = await getRecords(tenantToken, tableId, frontCfg.appToken);
+  const byCode = {};
+  existing.forEach(function(rec) {
+    const code = paymentApprovalInstanceCode(rec.fields || {});
+    if (code) byCode[String(code).toUpperCase()] = rec;
+  });
+
+  let expenseCache = [];
+  try { expenseCache = await loadExpenseRecords(tenantToken); } catch (e) { expenseCache = []; }
+
+  for (let i = 0; i < instanceCodes.length; i++) {
+    const ic = String(instanceCodes[i] || '').trim();
+    if (!ic) continue;
+    if (byCode[ic.toUpperCase()]) {
+      out.skipped.push({ instanceCode: ic, why: 'already in Base', recordId: byCode[ic.toUpperCase()].record_id });
+      continue;
+    }
+    try {
+      const detail = await getApprovalInstanceDetail(tenantToken, ic);
+      const formValues = parseApprovalInstanceForm(detail, widgets);
+      const st = normalizeApprovalInstanceStatus(detail);
+      const approved = isApprovalDetailEffectivelyApproved(detail)
+        || isApprovalInstanceApprovedStatus(st)
+        || isXimoStageCompleteForAccounting(st, '');
+      const canceled = /CANCEL|REJECT|DELETED|TERMINAT/i.test(st || '');
+      if (canceled) {
+        out.skipped.push({ instanceCode: ic, why: 'canceled/rejected', status: st });
+        continue;
+      }
+      let fields = buildPaymentFieldsFromApprovalForm(formValues, detail);
+      fields['審批編號'] = ic;
+      fields['審批實例'] = ic;
+      if (!fields['付款總金額']) {
+        out.errors.push({ instanceCode: ic, error: 'approval form missing amount' });
+        continue;
+      }
+      fields = await resolvePaymentProjectLinks(tenantToken, fields);
+      const body = await normalizeWriteFields(tenantToken, tableId, fields, frontCfg.appToken);
+      if (!body || !Object.keys(body).length) {
+        out.errors.push({ instanceCode: ic, error: 'normalizeWriteFields empty' });
+        continue;
+      }
+      const created = await createRecord(tenantToken, tableId, body, frontCfg.appToken, false);
+      const recordId = extractRecordId(created);
+      if (!recordId) {
+        out.errors.push({ instanceCode: ic, error: 'createRecord returned no id' });
+        continue;
+      }
+      out.imported++;
+      byCode[ic.toUpperCase()] = { record_id: recordId, fields: fields };
+      try { await writePaymentApprovalCode(tenantToken, null, recordId, ic); } catch (e) {}
+
+      const serial = String(detail.serial_number || detail.serial_no || '').trim();
+      const row = {
+        instanceCode: ic,
+        serial: serial,
+        recordId: recordId,
+        amount: fields['付款總金額'],
+        payee: String(fields['支付對象'] || '').slice(0, 30),
+        method: String(fields['支付方式'] || '').slice(0, 20),
+        approved: !!approved,
+        status: st || ''
+      };
+
+      if (approved) {
+        const rec = { record_id: recordId, fields: Object.assign({}, fields, { '審批編號': ic }) };
+        const done = await finalizeApprovedPaymentRecord(tenantToken, rec, expenseCache, {
+          approvalStatus: 'APPROVED'
+        });
+        out.finalized++;
+        row.expenseId = done.expenseId || '';
+        row.expenseError = done.expenseError || '';
+        row.finalStatus = '已核銷';
+      } else {
+        row.finalStatus = '審批中';
+      }
+      out.details.push(row);
+    } catch (err) {
+      out.errors.push({ instanceCode: ic, error: err.message || String(err) });
+    }
+  }
+  return out;
+}
+
 async function syncPendingPaymentApprovalsInner(tenantToken) {
   const frontCfg = paymentsFrontConfig();
   const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
@@ -9114,11 +9346,43 @@ export default async function handler(req, res) {
         const token = await getToken();
         const q = req.query || {};
         const b = req.body || {};
+        // 若帶 stuck 清單（recordId+instanceCode），走直接核銷，避免掃整批逾時
+        const stuckList = Array.isArray(b.stuck) ? b.stuck
+          : (Array.isArray(b.records) ? b.records : null);
+        if (stuckList && stuckList.length) {
+          const result = await repairStuckPaymentRecordsDirect(token, stuckList);
+          return res.status(200).json({ ok: true, repair: result, mode: 'direct' });
+        }
         const limit = parseInt(q.limit || b.limit || '3', 10);
         const offset = parseInt(q.offset || b.offset || '0', 10);
         const maxScan = parseInt(q.maxScan || b.maxScan || '25', 10);
         const result = await repairStuckPaymentApprovals(token, { limit: limit, offset: offset, maxScan: maxScan });
-        return res.status(200).json({ ok: true, repair: result });
+        return res.status(200).json({ ok: true, repair: result, mode: 'scan' });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'import-orphan-payment-approvals' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const token = await getToken();
+        const q = req.query || {};
+        const b = req.body || {};
+        let codes = Array.isArray(b.instanceCodes) ? b.instanceCodes : [];
+        if (!codes.length && (q.instanceCode || b.instanceCode)) {
+          codes = String(q.instanceCode || b.instanceCode).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+        }
+        if (!codes.length) {
+          return res.status(400).json({ ok: false, error: '需要 instanceCodes' });
+        }
+        // 避免單次逾時：預設最多 4 筆
+        const limit = Math.max(1, Math.min(8, parseInt(q.limit || b.limit || '4', 10) || 4));
+        const offset = Math.max(0, parseInt(q.offset || b.offset || '0', 10) || 0);
+        const slice = codes.slice(offset, offset + limit);
+        const result = await importOrphanPaymentApprovals(token, { instanceCodes: slice });
+        result.totalRequested = codes.length;
+        result.nextOffset = (offset + limit) < codes.length ? (offset + limit) : null;
+        return res.status(200).json({ ok: true, import: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
