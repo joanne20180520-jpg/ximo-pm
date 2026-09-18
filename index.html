@@ -6,6 +6,20 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<meta name="ximo-build" content="20260918v8">
+<script>
+(function () {
+  try {
+    var m = document.querySelector('meta[name="ximo-build"]');
+    var ver = m && m.getAttribute('content');
+    if (!ver) return;
+    var u = new URL(location.href);
+    if (u.searchParams.get('_hb') === ver) return;
+    u.searchParams.set('_hb', ver);
+    location.replace(u.toString());
+  } catch (e) {}
+})();
+</script>
 <title>璽墨 專案管理系統</title>
 <style>
 :root {
@@ -1096,8 +1110,8 @@ body.role-admin .pay-list-head-actions{display:flex}
 .pay-save-notice-btn{padding:8px 22px;border:none;border-radius:8px;background:#dbeafe;color:#1d4ed8;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s,transform .1s}
 .pay-save-notice-btn:hover{background:#bfdbfe}
 .pay-save-notice-btn:active{transform:scale(0.97)}
-.pay-fix-dialog{position:fixed;inset:0;z-index:3600;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(42,40,36,.28);backdrop-filter:blur(4px);animation:payNoticeFadeIn .2s ease}
-.pay-fix-dialog.hidden{display:none}
+.pay-fix-dialog{position:fixed;inset:0;z-index:3600;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(42,40,36,.28);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);animation:payNoticeFadeIn .2s ease}
+.pay-fix-dialog.hidden{display:none !important}
 .pay-fix-card{width:100%;max-width:420px;background:#fff;border:1px solid #eceae6;border-radius:16px;padding:22px 22px 16px;box-shadow:0 16px 48px rgba(0,0,0,.14);animation:payNoticePop .28s cubic-bezier(.22,1,.36,1)}
 .pay-fix-card.is-error .pay-fix-icon{background:#fde8e8;color:#b91c1c}
 .pay-fix-card.is-run .pay-fix-icon{background:#f3f1ed;color:#6b6860}
@@ -4872,7 +4886,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260918v7';
+var APP_BUILD = '20260918v8';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -14486,9 +14500,23 @@ function setPayFixBusy(busy) {
     btn.textContent = busy ? '修復中…' : '修復對帳';
   }
 }
-function hidePayFixDialog() {
+function openPayFixOverlay() {
   var el = document.getElementById('pay-fix-dialog');
-  if (el) el.classList.add('hidden');
+  if (!el) return false;
+  el.classList.remove('hidden');
+  el.style.display = 'flex';
+  el.setAttribute('aria-hidden', 'false');
+  return true;
+}
+function closePayFixOverlay() {
+  var el = document.getElementById('pay-fix-dialog');
+  if (!el) return;
+  el.classList.add('hidden');
+  el.style.display = 'none';
+  el.setAttribute('aria-hidden', 'true');
+}
+function hidePayFixDialog() {
+  closePayFixOverlay();
   if (_payFixConfirmResolve) {
     var resolve = _payFixConfirmResolve;
     _payFixConfirmResolve = null;
@@ -14507,14 +14535,14 @@ function confirmPayFixDialog() {
 }
 function showPayFixConfirmDialog() {
   return new Promise(function(resolve) {
-    var el = document.getElementById('pay-fix-dialog');
     var card = document.getElementById('pay-fix-card');
     var icon = document.getElementById('pay-fix-icon');
     var title = document.getElementById('pay-fix-title');
     var lead = document.getElementById('pay-fix-lead');
     var prog = document.getElementById('pay-fix-progress');
-    if (!el || !card) {
-      resolve(window.confirm('確定執行修復對帳？'));
+    if (!openPayFixOverlay() || !card) {
+      resolve(false);
+      showNotice('無法開啟修復視窗，請重新整理後再試（build ' + APP_BUILD + '）');
       return;
     }
     _payFixConfirmResolve = resolve;
@@ -14523,34 +14551,30 @@ function showPayFixConfirmDialog() {
     if (title) title.textContent = '修復付款對帳';
     if (lead) lead.textContent = '將掃描近 60 日付款審批並自動修復：';
     if (prog) prog.textContent = '準備中…';
-    el.classList.remove('hidden');
   });
 }
 function showPayFixRunningDialog() {
-  var el = document.getElementById('pay-fix-dialog');
   var card = document.getElementById('pay-fix-card');
   var icon = document.getElementById('pay-fix-icon');
   var title = document.getElementById('pay-fix-title');
   var lead = document.getElementById('pay-fix-lead');
   var prog = document.getElementById('pay-fix-progress');
-  if (!el || !card) return;
+  if (!openPayFixOverlay() || !card) return;
   card.classList.remove('is-done', 'is-error');
   card.classList.add('is-run');
   if (icon) icon.textContent = '…';
   if (title) title.textContent = '正在修復對帳';
   if (lead) lead.textContent = '請稍候，系統正在掃描並寫回狀態。';
   if (prog) prog.textContent = '開始掃描…';
-  el.classList.remove('hidden');
 }
 function showPayFixResultDialog(ok, message) {
-  var el = document.getElementById('pay-fix-dialog');
   var card = document.getElementById('pay-fix-card');
   var icon = document.getElementById('pay-fix-icon');
   var title = document.getElementById('pay-fix-title');
   var lead = document.getElementById('pay-fix-lead');
   var prog = document.getElementById('pay-fix-progress');
-  if (!el || !card) {
-    alert(message || (ok ? '修復完成' : '修復失敗'));
+  if (!openPayFixOverlay() || !card) {
+    showNotice(message || (ok ? '修復完成' : '修復失敗'));
     return;
   }
   _payFixConfirmResolve = null;
@@ -14561,7 +14585,6 @@ function showPayFixResultDialog(ok, message) {
   if (title) title.textContent = ok ? '修復完成' : '修復失敗';
   if (lead) lead.textContent = ok ? '付款狀態與後台已更新。' : '請稍後再試，或通知管理員。';
   if (prog) prog.textContent = message || '';
-  el.classList.remove('hidden');
 }
 function fixPaymentApprovalGaps() {
   if (!isAdminRole()) {
