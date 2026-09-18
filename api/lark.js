@@ -5858,6 +5858,197 @@ async function auditStuckPaymentApprovals(tenantToken) {
   return out;
 }
 
+/**
+ * 全量對帳：以 Lark 付款審批為主，檢查是否都有對應 Base 列。
+ * - linked: 審批有、Base 有（含審批編號或模糊比對）
+ * - orphanApprovals: 審批有、Base 沒有（漏建／未匯入）
+ * - stuckStatus: Base 仍審批中，但 Lark 已通過
+ */
+async function auditPaymentApprovalCoverage(tenantToken, opts) {
+  opts = opts || {};
+  const days = Math.max(7, Math.min(180, parseInt(opts.days, 10) || 60));
+  const maxDetail = Math.max(20, Math.min(200, parseInt(opts.maxDetail, 10) || 120));
+  const frontCfg = paymentsFrontConfig();
+  const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
+  const out = {
+    days: days,
+    maxDetail: maxDetail,
+    approvalCode: paymentApprovalCode(),
+    baseTotal: 0,
+    baseWithCode: 0,
+    approvalListed: 0,
+    approvalScanned: 0,
+    linked: [],
+    orphanApprovals: [],
+    stuckStatus: [],
+    rejectedOrCanceled: [],
+    pendingInLark: [],
+    errors: [],
+    reasons: []
+  };
+  if (!tableId) {
+    out.errors.push('找不到付款 Base 資料表');
+    return out;
+  }
+  if (!out.approvalCode) {
+    out.errors.push('未設定付款審批代碼');
+    return out;
+  }
+
+  let widgets = [];
+  try {
+    const def = await getPaymentApprovalDefinition(tenantToken);
+    widgets = parseApprovalFormWidgets(def.form || def.approval_form || (def.approval && def.approval.form));
+  } catch (e) {
+    out.errors.push('讀取審批定義：' + (e.message || String(e)));
+  }
+
+  const records = await getRecords(tenantToken, tableId, frontCfg.appToken);
+  out.baseTotal = records.length;
+  const byCode = {};
+  const pendingWithoutCode = [];
+  records.forEach(function(rec) {
+    const fields = rec.fields || {};
+    const code = paymentApprovalInstanceCode(fields);
+    if (code) {
+      out.baseWithCode++;
+      byCode[String(code).toUpperCase()] = rec;
+    } else if (isPaymentPendingStatus(paymentRecordStatus(fields))) {
+      pendingWithoutCode.push(rec);
+    }
+  });
+
+  const endMs = Date.now();
+  const startMs = endMs - days * 86400000;
+  let instanceCodes = [];
+  try {
+    instanceCodes = await listApprovalInstanceCodes(tenantToken, out.approvalCode, startMs, endMs);
+  } catch (e) {
+    out.errors.push('列出審批實例：' + (e.message || String(e)));
+    return out;
+  }
+  out.approvalListed = instanceCodes.length;
+
+  const usedBaseIds = {};
+  const scanN = Math.min(instanceCodes.length, maxDetail);
+  for (let i = 0; i < scanN; i++) {
+    const ic = instanceCodes[i];
+    let detail;
+    try {
+      detail = await getApprovalInstanceDetail(tenantToken, ic);
+      out.approvalScanned++;
+    } catch (e) {
+      out.errors.push({ instanceCode: ic, error: e.message || String(e) });
+      continue;
+    }
+    const formValues = parseApprovalInstanceForm(detail, widgets);
+    const st = normalizeApprovalInstanceStatus(detail);
+    const approved = isApprovalDetailEffectivelyApproved(detail)
+      || isApprovalInstanceApprovedStatus(st)
+      || isXimoStageCompleteForAccounting(st, '');
+    const canceled = /CANCEL|REJECT|DELETED|TERMINAT/i.test(st || '');
+    const serial = String(detail.serial_number || detail.serial_no || '').trim();
+    const amount = extractApprovalFormAmount(formValues, detail);
+    const payee = String(formValues['支付對象'] || formValues['收款人'] || '').slice(0, 40);
+    const reason = String(formValues['事由'] || formValues['付款事由'] || '').slice(0, 60);
+    const method = String(formValues['支付方式'] || formValues['付款方式'] || '').slice(0, 20);
+    const startLabel = detail.start_time
+      ? new Date((Number(detail.start_time) < 1e12 ? Number(detail.start_time) * 1000 : Number(detail.start_time))).toISOString().slice(0, 10)
+      : '';
+    const row = {
+      instanceCode: ic,
+      serial: serial,
+      approvalStatus: st || '',
+      approved: !!approved,
+      amount: amount,
+      payee: payee,
+      reason: reason,
+      method: method,
+      startDate: startLabel
+    };
+
+    if (canceled) {
+      out.rejectedOrCanceled.push(row);
+      continue;
+    }
+
+    let rec = byCode[String(ic).toUpperCase()] || null;
+    let matchHow = rec ? 'instanceCode' : '';
+    if (!rec) {
+      for (let p = 0; p < pendingWithoutCode.length; p++) {
+        const cand = pendingWithoutCode[p];
+        if (usedBaseIds[cand.record_id]) continue;
+        if (paymentMatchesApprovalDetail(cand.fields || {}, detail, widgets)) {
+          rec = cand;
+          matchHow = 'fuzzy';
+          break;
+        }
+      }
+    }
+    // 已核銷但缺審批編號：也允許用金額／對象／事由對上
+    if (!rec) {
+      for (let r = 0; r < records.length; r++) {
+        const cand = records[r];
+        if (usedBaseIds[cand.record_id]) continue;
+        if (paymentApprovalInstanceCode(cand.fields || {})) continue;
+        if (paymentMatchesApprovalDetail(cand.fields || {}, detail, widgets)) {
+          rec = cand;
+          matchHow = 'fuzzy-any';
+          break;
+        }
+      }
+    }
+
+    if (!rec) {
+      out.orphanApprovals.push(Object.assign({}, row, {
+        why: 'Lark 審批存在，付款 Base 找不到對應列（系統不會從審批自動建 Base）'
+      }));
+      continue;
+    }
+
+    usedBaseIds[rec.record_id] = 1;
+    const fields = rec.fields || {};
+    const baseStatus = paymentRecordStatus(fields) || '';
+    const linked = {
+      recordId: rec.record_id,
+      baseStatus: baseStatus,
+      matchHow: matchHow,
+      instanceCode: ic,
+      serial: serial,
+      approvalStatus: st || '',
+      amount: amount || paymentAmountNumber(fields),
+      payee: payee || String(fields['支付對象'] || '').slice(0, 40),
+      reason: reason || String(fields['事由'] || '').slice(0, 60)
+    };
+    out.linked.push(linked);
+    if (approved && isPaymentPendingStatus(baseStatus)) {
+      out.stuckStatus.push(Object.assign({}, linked, {
+        why: 'Base 仍審批中，但 Lark 已通過；同步尚未把狀態改成已核銷'
+      }));
+    }
+    if (!approved && !canceled) {
+      out.pendingInLark.push(linked);
+    }
+  }
+
+  out.summary = {
+    approvalScanned: out.approvalScanned,
+    linked: out.linked.length,
+    orphanApprovals: out.orphanApprovals.length,
+    stuckStatus: out.stuckStatus.length,
+    pendingInLark: out.pendingInLark.length,
+    rejectedOrCanceled: out.rejectedOrCanceled.length,
+    notScannedYet: Math.max(0, out.approvalListed - out.approvalScanned)
+  };
+  out.reasons = [
+    '付款流程是「前台先寫 Base → 再建立 Lark 審批」；同步只更新已存在的 Base，不會從審批補建漏掉的列。',
+    '例行同步每次最多抓約 40 筆審批詳情，且前台有節流；通過後可能暫時仍顯示審批中。',
+    '缺審批編號時靠金額／對象／事由模糊比對，相似單（同金額同對象）可能對錯或對不到。',
+    '若 API 配額超限會跳過同步，狀態更慢更新。'
+  ];
+  return out;
+}
+
 async function repairStuckPaymentApprovals(tenantToken, opts) {
   opts = opts || {};
   const limit = Math.max(1, parseInt(opts.limit, 10) || 3);
@@ -8882,6 +9073,20 @@ export default async function handler(req, res) {
         const token = await getToken();
         const result = await auditStuckPaymentApprovals(token);
         return res.status(200).json({ ok: true, audit: result });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'audit-payment-approval-coverage' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const token = await getToken();
+        const q = req.query || {};
+        const b = req.body || {};
+        const days = parseInt(q.days || b.days || '60', 10);
+        const maxDetail = parseInt(q.maxDetail || b.maxDetail || '120', 10);
+        const result = await auditPaymentApprovalCoverage(token, { days: days, maxDetail: maxDetail });
+        return res.status(200).json({ ok: true, coverage: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
