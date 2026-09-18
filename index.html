@@ -883,7 +883,8 @@ body.role-admin #pl-projects .si{cursor:pointer}
 #p-reason,#p-remark{resize:vertical;min-height:56px;line-height:1.45}
 .pay-list-head{font-size:12px;font-weight:700;color:var(--text);padding:12px 0 8px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .pay-list-head-count{font-size:11px;font-weight:500;color:var(--t3)}
-.pay-list-head-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.pay-list-head-actions{display:none;align-items:center;gap:8px;margin-left:auto}
+body.role-admin .pay-list-head-actions{display:flex}
 .pay-fix-btn{padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;line-height:1.2;white-space:nowrap}
 .pay-fix-btn:hover{border-color:var(--accent);color:var(--accent)}
 .pay-fix-btn:disabled{opacity:.55;cursor:not-allowed}
