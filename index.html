@@ -810,6 +810,9 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .des-drawer .fg{display:grid;grid-template-columns:118px 1fr;gap:6px 12px;align-items:start;margin-bottom:10px}
 .des-drawer .fg label{margin:0;padding-top:7px;line-height:1.3}
 .des-drawer .fg textarea{min-height:52px}
+/* Lark WebView 點原生 type=date 會閃退；側欄改文字日期 */
+.des-drawer input.safe-date-input{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.des-drawer input.safe-date-input:invalid:not(:placeholder-shown){border-color:#e2a3a3;background:#fff8f8}
 .dt tr.des-row{cursor:default}
 .dt tr.des-row td.des-cell-edit{cursor:pointer}
 .dt tr.des-row td.des-cell-edit:hover{background:#eef4fc}
@@ -1596,7 +1599,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
             <span class="pay-list-head-count" id="pay-list-count"></span>
             <div class="pay-list-head-actions">
               <span class="pay-fix-status" id="pay-fix-status"></span>
-              <button type="button" class="pay-fix-btn" id="pay-fix-btn" onclick="fixPaymentApprovalGaps()">修復對帳</button>
+              <button type="button" class="pay-fix-btn" id="pay-fix-btn" onclick="fixPaymentApprovalGaps()" title="管理員專用">修復對帳</button>
             </div>
           </div>
           <div class="pay-query-bar">
@@ -1894,8 +1897,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <div class="fg"><label>單雙面</label><select id="ed-side" data-des-role="pm"><option value="">—</option><option>單面</option><option>雙面</option></select></div>
         <div class="fg"><label>文案</label><textarea id="ed-copy" rows="2" data-des-role="pm"></textarea></div>
         <div class="fg"><label>設計需求參考資料</label><textarea id="ed-req" rows="2" data-des-role="pm"></textarea></div>
-        <div class="fg"><label>需求交付</label><input type="date" id="ed-need" onchange="onOptionalDateClear(this)" data-des-role="pm"></div>
-        <div class="fg"><label>初稿時間</label><input type="date" id="ed-draft" onchange="onOptionalDateClear(this)" data-des-role="pm"></div>
+        <div class="fg"><label>需求交付</label><input type="text" class="safe-date-input" id="ed-need" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="pm" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"></div>
+        <div class="fg"><label>初稿時間</label><input type="text" class="safe-date-input" id="ed-draft" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="pm" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"></div>
       </div>
     </div>
     <div class="des-acc" data-acc="make" data-owner="designer">
@@ -1928,7 +1931,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="des-acc" data-acc="pm" data-owner="pm">
       <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">定稿資訊</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
-        <div class="fg"><label>定稿時間</label><input type="date" id="ed-final" onchange="onOptionalDateClear(this)" data-des-role="pm"></div>
+        <div class="fg"><label>定稿時間</label><input type="text" class="safe-date-input" id="ed-final" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="pm" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"></div>
         <div class="fg"><label>定稿狀態</label><input type="text" id="ed-final-status" readonly style="background:#f0eeea" title="請展開版本，在最新版旁勾選定稿"></div>
       </div>
     </div>
@@ -1949,8 +1952,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="des-acc" data-acc="deliver" data-owner="designer">
       <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">到貨與交付</span><span class="des-acc-owner">設計師填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
-        <div class="fg"><label>發包時間</label><input type="date" id="ed-outsource-date" onchange="onOptionalDateClear(this)" data-des-role="designer"></div>
-        <div class="fg"><label>到貨時間</label><input type="date" id="ed-arrive" onchange="onOptionalDateClear(this)" data-des-role="designer"></div>
+        <div class="fg"><label>發包時間</label><input type="text" class="safe-date-input" id="ed-outsource-date" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="designer" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"></div>
+        <div class="fg"><label>到貨時間</label><input type="text" class="safe-date-input" id="ed-arrive" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="designer" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"></div>
         <div class="fg"><label>數量</label><input type="text" id="ed-qty" data-des-role="designer"></div>
         <div class="fg"><label>NAS路徑位置</label><input type="text" id="ed-path" data-des-role="designer"></div>
       </div>
@@ -4886,7 +4889,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260918v8';
+var APP_BUILD = '20260918v9';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -6831,22 +6834,58 @@ function tsToDateInput(ts) {
   if (!d) return '';
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
+/** 接受 YYYY-MM-DD / YYYY/MM/DD / YYYY.MM.DD / 8 碼數字，回傳標準 YYYY-MM-DD 或 '' */
+function normalizeDateText(str) {
+  var raw = String(str || '').trim();
+  if (!raw) return '';
+  var m = raw.match(/^(\d{4})[-\/.年](\d{1,2})[-\/.月](\d{1,2})日?$/);
+  if (!m) {
+    var digits = raw.replace(/\D/g, '');
+    if (digits.length === 8) m = [null, digits.slice(0, 4), digits.slice(4, 6), digits.slice(6, 8)];
+  }
+  if (!m) return '';
+  var y = parseInt(m[1], 10);
+  var mo = parseInt(m[2], 10);
+  var day = parseInt(m[3], 10);
+  if (!y || mo < 1 || mo > 12 || day < 1 || day > 31) return '';
+  var d = new Date(y, mo - 1, day);
+  if (d.getFullYear() !== y || d.getMonth() !== mo - 1 || d.getDate() !== day) return '';
+  return y + '-' + String(mo).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+}
 function dateInputToTs(str) {
-  if (!str) return Date.now();
-  var p = str.split('-');
+  var norm = normalizeDateText(str);
+  if (!norm) return Date.now();
+  var p = norm.split('-');
   return new Date(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10)).getTime();
 }
 function optionalDateInputToTs(str) {
-  if (!str || !String(str).trim()) return null;
-  return dateInputToTs(str);
+  var norm = normalizeDateText(str);
+  if (!norm) return null;
+  return dateInputToTs(norm);
 }
 function resetDateInput(el) {
   if (!el) return;
-  // 不可 cloneNode／replaceChild：Lark 內建 WebView 開啟原生 date picker 時
-  // 換掉節點會讓頁面崩潰重載，看起來像被強制登出。
   el.value = '';
-  try { el.valueAsDate = null; } catch (e) {}
   try { el.defaultValue = ''; } catch (e2) {}
+}
+function normalizeSafeDateInput(el) {
+  if (!el) return '';
+  var norm = normalizeDateText(el.value);
+  if (el.value && !norm) {
+    showUndoToast('日期格式請用 年/月/日，例如 2026/09/18');
+    return '';
+  }
+  if (norm && el.value !== norm) el.value = norm;
+  if (!norm) el.value = '';
+  return norm;
+}
+function onSafeDateInputChange(el) {
+  if (!el) return;
+  normalizeSafeDateInput(el);
+  if (DESIGN_DRAWER_DATE_FIELDS && DESIGN_DRAWER_DATE_FIELDS[el.id]) {
+    clearTimeout(saveDesignDateFieldNow._timer);
+    saveDesignDateFieldNow._timer = setTimeout(function() { saveDesignDateFieldNow(el); }, 50);
+  }
 }
 function onOptionalDateClear(el) {
   if (!el || el.value) return;
@@ -18146,6 +18185,7 @@ function saveDesignDateFieldNow(inputEl) {
   if (!fieldName) return Promise.resolve(false);
   var role = designFieldWriteRole(fieldName);
   if (!canEditDesignRole(role === 'skip' ? 'designer' : role)) return Promise.resolve(false);
+  normalizeSafeDateInput(inputEl);
   var fields = {};
   applyOptionalDateField(fields, fieldName, inputEl.value);
   var id = editingDesignId;
@@ -18179,30 +18219,25 @@ function commitInProgressRemarkEdits() {
   });
 }
 
+function isDesignDrawerDateInput(el) {
+  return !!(el && el.id && DESIGN_DRAWER_DATE_FIELDS[el.id]);
+}
+
 function ensureDesignDrawerAutoSaveBound() {
   if (designDrawerAutoSaveBound) return;
   var root = document.getElementById('pp-edit-des');
   if (!root) return;
   designDrawerAutoSaveBound = true;
-  // 阻擋原生 date picker 的點擊穿透到 backdrop（部分 Lark WebView 會關側欄／重載）
-  root.addEventListener('mousedown', function(e) {
-    var t = e.target;
-    if (t && t.tagName === 'INPUT' && t.type === 'date') {
-      try { e.stopPropagation(); } catch (err) {}
-    }
-  }, true);
-  root.addEventListener('click', function(e) {
-    var t = e.target;
-    if (t && t.tagName === 'INPUT' && t.type === 'date') {
-      try { e.stopPropagation(); } catch (err) {}
-    }
-  }, true);
   root.addEventListener('input', function(e) {
     var t = e.target;
     if (!t || !t.id) return;
     if (t.id === 'ed-remark-input' || (t.id && t.id.indexOf('ed-remark-edit-') === 0)) return;
     if (t.id === 'ed-price') calcDesignPriceTaxed();
-    if (t.type === 'date' && DESIGN_DRAWER_DATE_FIELDS[t.id]) return;
+    if (isDesignDrawerDateInput(t)) {
+      clearTimeout(saveDesignDateFieldNow._timer);
+      saveDesignDateFieldNow._timer = setTimeout(function() { saveDesignDateFieldNow(t); }, 700);
+      return;
+    }
     if (t.id === 'ed-path') {
       if (!isDesignNasPathChanged()) return;
       designDrawerDirty = true;
@@ -18217,7 +18252,7 @@ function ensureDesignDrawerAutoSaveBound() {
     if (!t || !t.id) return;
     if (t.id === 'ed-remark-input' || (t.id && t.id.indexOf('ed-remark-edit-') === 0)) return;
     if (t.id === 'ed-price') calcDesignPriceTaxed();
-    if (t.type === 'date' && DESIGN_DRAWER_DATE_FIELDS[t.id]) {
+    if (isDesignDrawerDateInput(t)) {
       clearTimeout(saveDesignDateFieldNow._timer);
       saveDesignDateFieldNow._timer = setTimeout(function() { saveDesignDateFieldNow(t); }, 50);
       return;
@@ -18235,8 +18270,12 @@ function ensureDesignDrawerAutoSaveBound() {
     if (t.id === 'ed-remark-input' || (t.id && t.id.indexOf('ed-remark-edit-') === 0)) return;
     if (t.classList && t.classList.contains('money-input')) formatMoneyField(t);
     if (t.id === 'ed-price') calcDesignPriceTaxed();
-    // date blur 常發生在原生選單還開著時，此時整表 flush 易觸發 WebView 異常
-    if (t.type === 'date') return;
+    if (isDesignDrawerDateInput(t)) {
+      normalizeSafeDateInput(t);
+      clearTimeout(saveDesignDateFieldNow._timer);
+      saveDesignDateFieldNow(t);
+      return;
+    }
     if (t.id === 'ed-path') {
       clearTimeout(saveDesignNasPathNow._timer);
       if (!isDesignNasPathChanged()) return;
