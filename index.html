@@ -810,8 +810,30 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .des-drawer .fg{display:grid;grid-template-columns:118px 1fr;gap:6px 12px;align-items:start;margin-bottom:10px}
 .des-drawer .fg label{margin:0;padding-top:7px;line-height:1.3}
 .des-drawer .fg textarea{min-height:52px}
-/* Lark WebView 點原生 type=date 會閃退；側欄改文字日期 */
-.des-drawer input.safe-date-input{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+/* Lark WebView 點原生 type=date 會閃退；側欄用自訂日曆 */
+.safe-date-wrap{display:flex;align-items:center;gap:6px;min-width:0}
+.safe-date-wrap .safe-date-input{flex:1;min-width:0;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.safe-date-btn{flex-shrink:0;width:32px;height:32px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--c2);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;font-family:inherit}
+.safe-date-btn:hover{background:#eef4fc;border-color:#c5d6ea}
+.safe-date-btn:disabled{opacity:.45;cursor:not-allowed}
+.safe-date-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.safe-date-pop{position:fixed;z-index:3600;width:268px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.16);padding:10px;font-family:inherit}
+.safe-date-pop-head{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:8px}
+.safe-date-pop-title{font-size:13px;font-weight:700;color:var(--text);flex:1;text-align:center}
+.safe-date-pop-nav{width:28px;height:28px;border:1px solid var(--border);border-radius:7px;background:#fff;cursor:pointer;font-size:14px;color:var(--t2);line-height:1}
+.safe-date-pop-nav:hover{background:var(--sf2)}
+.safe-date-pop-week{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px}
+.safe-date-pop-week span{text-align:center;font-size:10px;color:var(--t3);padding:4px 0}
+.safe-date-pop-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.safe-date-pop-grid button{border:none;background:transparent;border-radius:8px;height:32px;font-size:12px;font-family:inherit;cursor:pointer;color:var(--text)}
+.safe-date-pop-grid button:hover{background:#eef4fc}
+.safe-date-pop-grid button.is-other{color:#c5c2bc}
+.safe-date-pop-grid button.is-today{box-shadow:inset 0 0 0 1px #c5d6ea}
+.safe-date-pop-grid button.is-selected{background:var(--c2);color:#fff;font-weight:700}
+.safe-date-pop-foot{display:flex;justify-content:space-between;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.safe-date-pop-foot button{border:none;background:transparent;font-size:12px;font-family:inherit;cursor:pointer;color:var(--c2);padding:4px 6px;border-radius:6px}
+.safe-date-pop-foot button:hover{background:#eef4fc}
+.safe-date-pop-foot .safe-date-clear{color:var(--t3)}
 .des-drawer input.safe-date-input:invalid:not(:placeholder-shown){border-color:#e2a3a3;background:#fff8f8}
 .dt tr.des-row{cursor:default}
 .dt tr.des-row td.des-cell-edit{cursor:pointer}
@@ -1897,8 +1919,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <div class="fg"><label>單雙面</label><select id="ed-side" data-des-role="pm"><option value="">—</option><option>單面</option><option>雙面</option></select></div>
         <div class="fg"><label>文案</label><textarea id="ed-copy" rows="2" data-des-role="pm"></textarea></div>
         <div class="fg"><label>設計需求參考資料</label><textarea id="ed-req" rows="2" data-des-role="pm"></textarea></div>
-        <div class="fg"><label>需求交付</label><input type="text" class="safe-date-input" id="ed-need" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="pm" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"></div>
-        <div class="fg"><label>初稿時間</label><input type="text" class="safe-date-input" id="ed-draft" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="pm" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"></div>
+        <div class="fg"><label>需求交付</label><div class="safe-date-wrap"><input type="text" class="safe-date-input" id="ed-need" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="pm" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"><button type="button" class="safe-date-btn" data-des-role="pm" onclick="openSafeDatePicker('ed-need',event)" aria-label="選擇日期"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg></button></div></div>
+        <div class="fg"><label>初稿時間</label><div class="safe-date-wrap"><input type="text" class="safe-date-input" id="ed-draft" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="pm" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"><button type="button" class="safe-date-btn" data-des-role="pm" onclick="openSafeDatePicker('ed-draft',event)" aria-label="選擇日期"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg></button></div></div>
       </div>
     </div>
     <div class="des-acc" data-acc="make" data-owner="designer">
@@ -1931,7 +1953,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="des-acc" data-acc="pm" data-owner="pm">
       <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">定稿資訊</span><span class="des-acc-owner">PM填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
-        <div class="fg"><label>定稿時間</label><input type="text" class="safe-date-input" id="ed-final" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="pm" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"></div>
+        <div class="fg"><label>定稿時間</label><div class="safe-date-wrap"><input type="text" class="safe-date-input" id="ed-final" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="pm" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"><button type="button" class="safe-date-btn" data-des-role="pm" onclick="openSafeDatePicker('ed-final',event)" aria-label="選擇日期"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg></button></div></div>
         <div class="fg"><label>定稿狀態</label><input type="text" id="ed-final-status" readonly style="background:#f0eeea" title="請展開版本，在最新版旁勾選定稿"></div>
       </div>
     </div>
@@ -1952,8 +1974,8 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <div class="des-acc" data-acc="deliver" data-owner="designer">
       <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">到貨與交付</span><span class="des-acc-owner">設計師填</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
-        <div class="fg"><label>發包時間</label><input type="text" class="safe-date-input" id="ed-outsource-date" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="designer" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"></div>
-        <div class="fg"><label>到貨時間</label><input type="text" class="safe-date-input" id="ed-arrive" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="designer" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"></div>
+        <div class="fg"><label>發包時間</label><div class="safe-date-wrap"><input type="text" class="safe-date-input" id="ed-outsource-date" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="designer" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"><button type="button" class="safe-date-btn" data-des-role="designer" onclick="openSafeDatePicker('ed-outsource-date',event)" aria-label="選擇日期"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg></button></div></div>
+        <div class="fg"><label>到貨時間</label><div class="safe-date-wrap"><input type="text" class="safe-date-input" id="ed-arrive" inputmode="numeric" placeholder="年/月/日" autocomplete="off" data-des-role="designer" onblur="normalizeSafeDateInput(this)" onchange="onSafeDateInputChange(this)"><button type="button" class="safe-date-btn" data-des-role="designer" onclick="openSafeDatePicker('ed-arrive',event)" aria-label="選擇日期"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg></button></div></div>
         <div class="fg"><label>數量</label><input type="text" id="ed-qty" data-des-role="designer"></div>
         <div class="fg"><label>NAS路徑位置</label><input type="text" id="ed-path" data-des-role="designer"></div>
       </div>
@@ -4889,7 +4911,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260918v9';
+var APP_BUILD = '20260918v10';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -6887,6 +6909,160 @@ function onSafeDateInputChange(el) {
     saveDesignDateFieldNow._timer = setTimeout(function() { saveDesignDateFieldNow(el); }, 50);
   }
 }
+
+var safeDatePicker = { inputId: '', year: 0, month: 0, el: null, bound: false };
+
+function closeSafeDatePicker() {
+  if (safeDatePicker.el && safeDatePicker.el.parentNode) {
+    safeDatePicker.el.parentNode.removeChild(safeDatePicker.el);
+  }
+  safeDatePicker.el = null;
+  safeDatePicker.inputId = '';
+}
+
+function shiftSafeDatePickerMonth(delta) {
+  if (!safeDatePicker.inputId) return;
+  var d = new Date(safeDatePicker.year, safeDatePicker.month + delta, 1);
+  safeDatePicker.year = d.getFullYear();
+  safeDatePicker.month = d.getMonth();
+  renderSafeDatePicker();
+}
+
+function pickSafeDate(iso) {
+  var input = document.getElementById(safeDatePicker.inputId);
+  if (!input || input.disabled) { closeSafeDatePicker(); return; }
+  input.value = iso || '';
+  normalizeSafeDateInput(input);
+  onSafeDateInputChange(input);
+  closeSafeDatePicker();
+}
+
+function renderSafeDatePicker() {
+  var pop = safeDatePicker.el;
+  if (!pop) return;
+  var y = safeDatePicker.year;
+  var m = safeDatePicker.month;
+  var input = document.getElementById(safeDatePicker.inputId);
+  var selected = normalizeDateText(input && input.value);
+  var today = tsToDateInput(Date.now());
+  var first = new Date(y, m, 1);
+  var startPad = first.getDay();
+  var daysInMonth = new Date(y, m + 1, 0).getDate();
+  var prevDays = new Date(y, m, 0).getDate();
+  var title = y + ' 年 ' + (m + 1) + ' 月';
+  var cells = '';
+  var i;
+  for (i = 0; i < startPad; i++) {
+    var pd = prevDays - startPad + i + 1;
+    var pIso = tsToDateInput(new Date(y, m - 1, pd).getTime());
+    cells += '<button type="button" class="is-other" data-iso="' + pIso + '">' + pd + '</button>';
+  }
+  for (i = 1; i <= daysInMonth; i++) {
+    var iso = y + '-' + String(m + 1).padStart(2, '0') + '-' + String(i).padStart(2, '0');
+    var cls = [];
+    if (iso === today) cls.push('is-today');
+    if (iso === selected) cls.push('is-selected');
+    cells += '<button type="button" class="' + cls.join(' ') + '" data-iso="' + iso + '">' + i + '</button>';
+  }
+  var total = startPad + daysInMonth;
+  var trail = (7 - (total % 7)) % 7;
+  for (i = 1; i <= trail; i++) {
+    var nIso = tsToDateInput(new Date(y, m + 1, i).getTime());
+    cells += '<button type="button" class="is-other" data-iso="' + nIso + '">' + i + '</button>';
+  }
+  pop.innerHTML = ''
+    + '<div class="safe-date-pop-head">'
+    + '<button type="button" class="safe-date-pop-nav" data-nav="-1" aria-label="上月">‹</button>'
+    + '<div class="safe-date-pop-title">' + title + '</div>'
+    + '<button type="button" class="safe-date-pop-nav" data-nav="1" aria-label="下月">›</button>'
+    + '</div>'
+    + '<div class="safe-date-pop-week"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>'
+    + '<div class="safe-date-pop-grid">' + cells + '</div>'
+    + '<div class="safe-date-pop-foot">'
+    + '<button type="button" class="safe-date-clear" data-act="clear">清除</button>'
+    + '<button type="button" data-act="today">今天</button>'
+    + '</div>';
+}
+
+function positionSafeDatePicker(anchor) {
+  var pop = safeDatePicker.el;
+  if (!pop || !anchor) return;
+  var rect = anchor.getBoundingClientRect();
+  var w = 268;
+  var left = Math.min(Math.max(8, rect.left), window.innerWidth - w - 8);
+  var top = rect.bottom + 6;
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+  pop.style.visibility = 'hidden';
+  document.body.appendChild(pop);
+  var h = pop.offsetHeight || 280;
+  if (top + h > window.innerHeight - 8 && rect.top - h - 6 > 8) {
+    top = rect.top - h - 6;
+  }
+  pop.style.top = top + 'px';
+  pop.style.visibility = 'visible';
+}
+
+function ensureSafeDatePickerBound() {
+  if (safeDatePicker.bound) return;
+  safeDatePicker.bound = true;
+  document.addEventListener('mousedown', function(e) {
+    if (!safeDatePicker.el) return;
+    if (safeDatePicker.el.contains(e.target)) return;
+    if (e.target && e.target.closest && e.target.closest('.safe-date-btn')) return;
+    closeSafeDatePicker();
+  }, true);
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeSafeDatePicker();
+  });
+}
+
+function openSafeDatePicker(inputId, ev) {
+  if (ev) {
+    try { ev.preventDefault(); } catch (e0) {}
+    try { ev.stopPropagation(); } catch (e1) {}
+  }
+  var input = document.getElementById(inputId);
+  if (!input || input.disabled) return;
+  var btn = ev && ev.currentTarget ? ev.currentTarget : (input.parentNode && input.parentNode.querySelector('.safe-date-btn'));
+  if (btn && btn.disabled) return;
+  ensureSafeDatePickerBound();
+  if (safeDatePicker.inputId === inputId && safeDatePicker.el) {
+    closeSafeDatePicker();
+    return;
+  }
+  closeSafeDatePicker();
+  var base = normalizeDateText(input.value);
+  var d = base ? new Date(dateInputToTs(base)) : new Date();
+  safeDatePicker.inputId = inputId;
+  safeDatePicker.year = d.getFullYear();
+  safeDatePicker.month = d.getMonth();
+  var pop = document.createElement('div');
+  pop.className = 'safe-date-pop';
+  pop.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+  pop.addEventListener('click', function(e) {
+    var t = e.target.closest('button');
+    if (!t) return;
+    if (t.getAttribute('data-nav')) {
+      shiftSafeDatePickerMonth(parseInt(t.getAttribute('data-nav'), 10) || 0);
+      return;
+    }
+    if (t.getAttribute('data-act') === 'clear') {
+      pickSafeDate('');
+      return;
+    }
+    if (t.getAttribute('data-act') === 'today') {
+      pickSafeDate(tsToDateInput(Date.now()));
+      return;
+    }
+    var iso = t.getAttribute('data-iso');
+    if (iso) pickSafeDate(iso);
+  });
+  safeDatePicker.el = pop;
+  renderSafeDatePicker();
+  positionSafeDatePicker(btn || input);
+}
+
 function onOptionalDateClear(el) {
   if (!el || el.value) return;
   resetDateInput(el);
@@ -18343,7 +18519,7 @@ function applyEditDesignPermissions(opts) {
     var lock = acc.querySelector('.des-acc-lock');
     if (lock) lock.hidden = mine;
     acc.style.display = '';
-    acc.querySelectorAll('input, select, textarea, button.des-sign-check').forEach(function(el) {
+    acc.querySelectorAll('input, select, textarea, button.des-sign-check, button.safe-date-btn').forEach(function(el) {
       if (!mine) {
         el.disabled = true;
         return;
