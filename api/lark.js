@@ -6426,6 +6426,69 @@ async function importOrphanPaymentApprovals(tenantToken, opts) {
   return out;
 }
 
+/**
+ * 前台一鍵修復：掃一段 coverage，並立刻修 stuck、匯入 orphan（含核銷／支出／ACC）。
+ * 用 offset 分段呼叫，避免 timeout。
+ */
+async function fixPaymentApprovalGapsSlice(tenantToken, opts) {
+  opts = opts || {};
+  const days = Math.max(7, Math.min(180, parseInt(opts.days, 10) || 60));
+  const maxDetail = Math.max(8, Math.min(30, parseInt(opts.maxDetail, 10) || 20));
+  const offset = Math.max(0, parseInt(opts.offset, 10) || 0);
+  const dryRun = !!opts.dryRun;
+  const coverage = await auditPaymentApprovalCoverage(tenantToken, {
+    days: days,
+    maxDetail: maxDetail,
+    offset: offset
+  });
+  const orphans = (coverage.orphanApprovals || []).filter(function(o) { return o && o.approved; });
+  const stuckRows = coverage.stuckStatus || [];
+  const out = {
+    dryRun: dryRun,
+    days: days,
+    offset: offset,
+    maxDetail: maxDetail,
+    summary: coverage.summary || null,
+    found: {
+      orphanApprovals: orphans.length,
+      stuckStatus: stuckRows.length,
+      linked: (coverage.linked || []).length,
+      pendingInLark: (coverage.pendingInLark || []).length
+    },
+    repair: null,
+    import: null,
+    nextOffset: coverage.summary && coverage.summary.nextOffset != null
+      ? coverage.summary.nextOffset
+      : null
+  };
+
+  if (dryRun) {
+    out.stuckPreview = stuckRows.slice(0, 20);
+    out.orphanPreview = orphans.slice(0, 20);
+    return out;
+  }
+
+  if (stuckRows.length) {
+    out.repair = await repairStuckPaymentRecordsDirect(
+      tenantToken,
+      stuckRows.map(function(s) {
+        return { recordId: s.recordId, instanceCode: s.instanceCode };
+      })
+    );
+  } else {
+    out.repair = { requested: 0, repaired: 0, details: [], errors: [], skipped: [] };
+  }
+
+  if (orphans.length) {
+    out.import = await importOrphanPaymentApprovals(tenantToken, {
+      instanceCodes: orphans.map(function(o) { return o.instanceCode; })
+    });
+  } else {
+    out.import = { requested: 0, imported: 0, finalized: 0, details: [], errors: [], skipped: [] };
+  }
+  return out;
+}
+
 async function syncPendingPaymentApprovalsInner(tenantToken) {
   const frontCfg = paymentsFrontConfig();
   const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
@@ -9383,6 +9446,24 @@ export default async function handler(req, res) {
         result.totalRequested = codes.length;
         result.nextOffset = (offset + limit) < codes.length ? (offset + limit) : null;
         return res.status(200).json({ ok: true, import: result });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'fix-payment-approval-gaps' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const token = await getToken();
+        const q = req.query || {};
+        const b = req.body || {};
+        const result = await fixPaymentApprovalGapsSlice(token, {
+          days: parseInt(q.days || b.days || '60', 10),
+          maxDetail: parseInt(q.maxDetail || b.maxDetail || '20', 10),
+          offset: parseInt(q.offset || b.offset || '0', 10),
+          dryRun: String(q.dryRun || b.dryRun || '') === '1'
+            || String(q.dryRun || b.dryRun || '').toLowerCase() === 'true'
+        });
+        return res.status(200).json({ ok: true, fix: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
