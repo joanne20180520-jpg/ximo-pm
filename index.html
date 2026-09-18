@@ -4872,7 +4872,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260918v5';
+var APP_BUILD = '20260918v6';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -14566,6 +14566,10 @@ function showPayFixResultDialog(ok, message) {
   el.classList.remove('hidden');
 }
 function fixPaymentApprovalGaps() {
+  if (!isAdminRole()) {
+    showNotice('僅管理員可執行修復對帳');
+    return;
+  }
   if (_payFixRunning) return;
   showPayFixConfirmDialog().then(function(ok) {
     if (!ok) {
