@@ -3776,29 +3776,28 @@ async function deleteXimoExpenseLinkedToAcc(ximoToken, accExpenseId, ximoExpense
   function fpMatch(fields) {
     if (!fp) return false;
     const origin = accFieldText(fields['建立來源']);
-    if (origin && origin !== '會計') return false;
-    const summary = stripAccExpenseSummaryPrefix(accFieldText(fields['支出細項']));
+    // 會計來源，或備註帶 acc:（背景同步殘留）
+    const remark = String(fields['備註'] || fields['說明'] || '');
+    const isAccOrigin = !origin || origin === '會計' || /acc:[A-Za-z0-9_-]+/.test(remark) || /建立來源:會計/.test(remark);
+    if (!isAccOrigin) return false;
+
+    const summary = stripAccExpenseSummaryPrefix(accFieldText(fields['支出細項']) || accFieldText(fields['摘要']));
     const wantSummary = stripAccExpenseSummaryPrefix(fp.summary);
     if (wantSummary && summary !== wantSummary) return false;
-    const amount = expenseAmountNumber(fields);
+
+    const amount = Math.round(expenseAmountNumber(fields));
     const wantAmount = Math.round(Number(fp.amount) || 0);
     if (wantAmount && amount !== wantAmount) return false;
-    const day = accExpenseDayKey(accExpenseDateMs(fields) || 0);
+
+    const day = accExpenseDayKey(accExpenseDateMs(fields) || (typeof fields['日期'] === 'number' ? fields['日期'] : 0));
     let wantDay = '';
     if (fp.date) {
-      const ms = accExpenseDateMs({ '日期': fp.date });
+      const raw = String(fp.date).trim().replace(/\//g, '-');
+      const ms = accExpenseDateMs({ '日期': raw }) || accExpenseDateMs({ '日期': String(fp.date).trim() });
       wantDay = accExpenseDayKey(ms || 0);
     }
-    if (wantDay && day !== wantDay) return false;
-    if (fp.target) {
-      const assignee = personDisplayName(fields['負責人']) || accFieldText(fields['負責人']) || '';
-      const t = String(fp.target || '').trim();
-      if (t && assignee && assignee.indexOf(t.split('_')[0]) < 0 && t.indexOf(assignee.split('_')[0]) < 0) {
-        // 寬鬆：有指定對象但不符就不刪，避免誤刪
-        if (assignee !== t) return false;
-      }
-    }
-    // 至少要有摘要或金額對上，避免空指紋掃光
+    if (wantDay && day && day !== wantDay) return false;
+
     return !!(wantSummary || wantAmount);
   }
 
