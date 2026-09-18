@@ -4872,7 +4872,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260918v6';
+var APP_BUILD = '20260918v7';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -6828,13 +6828,11 @@ function optionalDateInputToTs(str) {
 }
 function resetDateInput(el) {
   if (!el) return;
+  // 不可 cloneNode／replaceChild：Lark 內建 WebView 開啟原生 date picker 時
+  // 換掉節點會讓頁面崩潰重載，看起來像被強制登出。
   el.value = '';
   try { el.valueAsDate = null; } catch (e) {}
-  var parent = el.parentNode;
-  if (!parent) return;
-  var clone = el.cloneNode(true);
-  clone.value = '';
-  parent.replaceChild(clone, el);
+  try { el.defaultValue = ''; } catch (e2) {}
 }
 function onOptionalDateClear(el) {
   if (!el || el.value) return;
@@ -17852,6 +17850,13 @@ function onDesignDrawerBackdropClick(e) {
   if (backdrop && backdrop.classList.contains('ignore-click')) return;
   if (Date.now() - designDrawerOpenedAt < 700) return;
   if (e && e.target && e.target.id !== 'des-drawer-backdrop') return;
+  // 原生 date picker 開著時，部分 WebView 會把點擊算到 backdrop → 關側欄／重載
+  try {
+    var ae = document.activeElement;
+    if (ae && ae.tagName === 'INPUT' && ae.type === 'date' && document.getElementById('pp-edit-des') && document.getElementById('pp-edit-des').contains(ae)) {
+      return;
+    }
+  } catch (err) {}
   closeDesignDrawer();
 }
 
@@ -18101,6 +18106,41 @@ function saveDesignNasPathNow() {
     });
 }
 
+/** 側欄日期欄：只寫該欄，避免整表 autosave／WebView 互動副作用 */
+var DESIGN_DRAWER_DATE_FIELDS = {
+  'ed-outsource-date': '發包時間',
+  'ed-arrive': '到貨時間',
+  'ed-need': '需求交付',
+  'ed-draft': '初稿時間',
+  'ed-final': '定稿時間'
+};
+
+function saveDesignDateFieldNow(inputEl) {
+  if (!inputEl || !editingDesignId || designDrawerHydrating) return Promise.resolve(false);
+  if (inputEl.disabled) return Promise.resolve(false);
+  if (!(isPMRole() || isDesignerLikeRole() || isAdminRole())) return Promise.resolve(false);
+  var fieldName = DESIGN_DRAWER_DATE_FIELDS[inputEl.id];
+  if (!fieldName) return Promise.resolve(false);
+  var role = designFieldWriteRole(fieldName);
+  if (!canEditDesignRole(role === 'skip' ? 'designer' : role)) return Promise.resolve(false);
+  var fields = {};
+  applyOptionalDateField(fields, fieldName, inputEl.value);
+  var id = editingDesignId;
+  return optimisticUpdate('designs', id, fields, {
+    failMsg: '日期儲存失敗',
+    skipSync: true,
+    quiet: true
+  })
+    .then(function() {
+      mergeDesignFieldsIntoLocal(id, fields);
+      syncTables(['designs']).catch(function() {});
+      return true;
+    })
+    .catch(function() {
+      return false;
+    });
+}
+
 function commitInProgressRemarkEdits() {
   editingDesignRemarkItems.forEach(function(it, idx) {
     if (!it || !it._editing) return;
@@ -18121,11 +18161,25 @@ function ensureDesignDrawerAutoSaveBound() {
   var root = document.getElementById('pp-edit-des');
   if (!root) return;
   designDrawerAutoSaveBound = true;
+  // 阻擋原生 date picker 的點擊穿透到 backdrop（部分 Lark WebView 會關側欄／重載）
+  root.addEventListener('mousedown', function(e) {
+    var t = e.target;
+    if (t && t.tagName === 'INPUT' && t.type === 'date') {
+      try { e.stopPropagation(); } catch (err) {}
+    }
+  }, true);
+  root.addEventListener('click', function(e) {
+    var t = e.target;
+    if (t && t.tagName === 'INPUT' && t.type === 'date') {
+      try { e.stopPropagation(); } catch (err) {}
+    }
+  }, true);
   root.addEventListener('input', function(e) {
     var t = e.target;
     if (!t || !t.id) return;
     if (t.id === 'ed-remark-input' || (t.id && t.id.indexOf('ed-remark-edit-') === 0)) return;
     if (t.id === 'ed-price') calcDesignPriceTaxed();
+    if (t.type === 'date' && DESIGN_DRAWER_DATE_FIELDS[t.id]) return;
     if (t.id === 'ed-path') {
       if (!isDesignNasPathChanged()) return;
       designDrawerDirty = true;
@@ -18140,6 +18194,11 @@ function ensureDesignDrawerAutoSaveBound() {
     if (!t || !t.id) return;
     if (t.id === 'ed-remark-input' || (t.id && t.id.indexOf('ed-remark-edit-') === 0)) return;
     if (t.id === 'ed-price') calcDesignPriceTaxed();
+    if (t.type === 'date' && DESIGN_DRAWER_DATE_FIELDS[t.id]) {
+      clearTimeout(saveDesignDateFieldNow._timer);
+      saveDesignDateFieldNow._timer = setTimeout(function() { saveDesignDateFieldNow(t); }, 50);
+      return;
+    }
     if (t.id === 'ed-path') {
       if (!isDesignNasPathChanged()) return;
       saveDesignNasPathNow();
@@ -18153,6 +18212,8 @@ function ensureDesignDrawerAutoSaveBound() {
     if (t.id === 'ed-remark-input' || (t.id && t.id.indexOf('ed-remark-edit-') === 0)) return;
     if (t.classList && t.classList.contains('money-input')) formatMoneyField(t);
     if (t.id === 'ed-price') calcDesignPriceTaxed();
+    // date blur 常發生在原生選單還開著時，此時整表 flush 易觸發 WebView 異常
+    if (t.type === 'date') return;
     if (t.id === 'ed-path') {
       clearTimeout(saveDesignNasPathNow._timer);
       if (!isDesignNasPathChanged()) return;
