@@ -4911,7 +4911,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260918v10';
+var APP_BUILD = '20260921v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -12234,20 +12234,16 @@ function selectDailyLogAuthor(name) {
 }
 
 function buildDailyLogAuthorNames(items) {
-  var names = getJournalStaffNames().filter(function(name) {
-    return isJournalStaffName(name) && !isDesignerMember(name);
-  });
+  var names = getJournalStaffNames().filter(isJournalStaffName);
   if (!names.length) {
     var nameSet = {};
     (items || []).forEach(function(it) {
-      if (it.assignee && isJournalStaffName(it.assignee) && !isDesignerMember(it.assignee)) {
-        nameSet[it.assignee] = 1;
-      }
+      if (it.assignee && isJournalStaffName(it.assignee)) nameSet[it.assignee] = 1;
     });
     names = Object.keys(nameSet);
   }
   var myName = getMyPersonName();
-  if (myName && isJournalStaffName(myName) && !isDesignerMember(myName)
+  if (myName && isJournalStaffName(myName)
       && !names.some(function(n) { return namesMatch(n, myName); })) {
     names.unshift(myName);
   }
@@ -12318,14 +12314,15 @@ function onDailyLogPersonFilterChange() {
 function renderDailyLogPersonFilter(items) {
   var sel = document.getElementById('dl-person-filter');
   if (!sel) return;
-  var people = [];
-  items.forEach(function(it) {
+  // 日報人員：人員資料全員，僅「免日報」不列；任務負責人若未入表仍補上
+  var people = getJournalStaffNames().filter(isJournalStaffName);
+  (items || []).forEach(function(it) {
     var n = (it.assignee || '').trim();
-    if (n && people.indexOf(n) < 0) people.push(n);
+    if (n && isJournalStaffName(n) && people.indexOf(n) < 0) people.push(n);
   });
   people.sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
   if (dailyLogPersonFilter && people.indexOf(dailyLogPersonFilter) < 0) dailyLogPersonFilter = '';
-  var html = '<option value="">全部負責人</option>';
+  var html = '<option value="">全部人員</option>';
   people.forEach(function(name) {
     html += '<option value="' + escAttr(name) + '"' + (dailyLogPersonFilter === name ? ' selected' : '') + '>' + escHtml(name) + '</option>';
   });
@@ -13737,7 +13734,7 @@ function renderJournalDashboard(area) {
     var n = journalPersonName(rec);
     if (n) nameSet[n] = 1;
   });
-  // 應填日報人員：來自「人員資料」（非回報人／負責人）；免日報、設計師不列空卡；PM／管理員要列
+  // 應填日報人員：來自「人員資料」；僅「免日報」不列空卡，其餘角色都要列
   var names = getJournalStaffNames();
   if (!names.length) names = Object.keys(nameSet).filter(isJournalStaffName);
   Object.keys(nameSet).forEach(function(n) {
@@ -16720,10 +16717,10 @@ function isJournalExemptToken(raw) {
 }
 
 function memberSkipsJournal(fields) {
-  // 僅「免日報」標籤或設計師免寫；PM／管理員都要寫日報
+  // 僅「免日報」標籤免寫；設計師／PM／管理員等都要寫日報
   var tokens = collectMemberRoleTokens(fields);
   for (var i = 0; i < tokens.length; i++) {
-    if (isDesignLeadRoleToken(tokens[i]) || isDesignerRoleToken(tokens[i]) || isJournalExemptToken(tokens[i])) return true;
+    if (isJournalExemptToken(tokens[i])) return true;
   }
   return false;
 }
@@ -16772,7 +16769,7 @@ function isDesignerMember(name) {
 
 function isJournalStaffName(name) {
   if (!name || name === '—' || name === '（未指定）') return false;
-  // 直接依「人員資料」判定免日報／設計師；管理員若無「免日報」仍要寫
+  // 直接依「人員資料」判定；僅「免日報」不列，其餘角色都要寫
   for (var i = 0; i < membersData.length; i++) {
     var f = membersData[i].fields || {};
     var hit = false;
@@ -16781,12 +16778,11 @@ function isJournalStaffName(name) {
       if (person.id && membersMap[name] && membersMap[name].id && person.id === membersMap[name].id) hit = true;
     });
     if (!hit) continue;
-    if (memberSkipsJournal(f) || resolveMemberRole(f) === '設計師') return false;
+    if (memberSkipsJournal(f)) return false;
   }
   var m = membersMap[name];
   if (m) {
     if (m.skipJournal) return false;
-    if (isDesignerRoleToken(m.role)) return false;
     if (m.id) {
       var keys = Object.keys(membersMap);
       for (var j = 0; j < keys.length; j++) {
@@ -16798,15 +16794,13 @@ function isJournalStaffName(name) {
   return true;
 }
 
-/** 日誌應填名單：只看人員資料表，不是今日回報人／任務負責人 */
+/** 日誌應填名單：只看人員資料表；僅「免日報」排除 */
 function getJournalStaffNames() {
   var names = [];
   var seen = {};
   membersData.forEach(function(m) {
     var f = m.fields || {};
     if (memberSkipsJournal(f)) return;
-    var role = resolveMemberRole(f);
-    if (role === '設計師') return;
     forEachMemberAccountPerson(f, function(person) {
       if (!person.name || seen[person.name]) return;
       seen[person.name] = 1;
