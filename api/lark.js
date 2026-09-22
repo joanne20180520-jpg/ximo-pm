@@ -2028,7 +2028,10 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
     '會計狀態': ['會計進度', 'Accounting Status'],
     '會計待簽核人': ['會計簽核人'],
     '會計審批編號': ['會計審批實例'],
-    '支出明細': ['關聯支出', '支出紀錄']
+    '支出明細': ['關聯支出', '支出紀錄'],
+    '請款公司': ['公司', '所屬公司', 'Company'],
+    '公司': ['請款公司', '所屬公司', 'Company'],
+    '所屬公司': ['請款公司', '公司', 'Company']
   };
   // yd 工作項目表欄位為「可用成本未稅」；前端仍寫「可用成本」
   // 設計需求：審核／檢核、路徑欄位名稱在不同 Base 可能不一致
@@ -2388,6 +2391,7 @@ function paymentFieldsForApproval(fields) {
   const wiName = String(f['工作項目名稱'] || '').trim()
     || getLinkText(f['所屬工作項目'])
     || '';
+  const company = String(f['請款公司'] || f['公司'] || f['所屬公司'] || '').trim();
   // 關聯欄改成文字再送審批（Lark 審批表單是短答，不是多維表格關聯）
   delete f['所屬標案'];
   delete f['所數標案'];
@@ -2402,6 +2406,11 @@ function paymentFieldsForApproval(fields) {
     f['工作項目名稱'] = wiName;
     f['所屬工作項目'] = wiName;
     f['工作項目'] = wiName;
+  }
+  if (company) {
+    f['請款公司'] = company;
+    f['公司'] = company;
+    f['所屬公司'] = company;
   }
   return f;
 }
@@ -2433,8 +2442,9 @@ function approvalWidgetAliases(name) {
     '付款總金額': ['金額', '總金額'],
     '附件': ['檔案'],
     '申請部門': ['部門'],
-    '公司': ['所屬公司', 'Company'],
-    '所屬公司': ['公司', 'Company'],
+    '請款公司': ['公司', '所屬公司', 'Company'],
+    '公司': ['請款公司', '所屬公司', 'Company'],
+    '所屬公司': ['請款公司', '公司', 'Company'],
     '申請人': ['發起人'],
     '申請日期': ['日期']
   };
@@ -3246,7 +3256,8 @@ function normalizeAccCompany(raw) {
 
 function paymentCompanyValue(fields) {
   return normalizeAccCompany(
-    accFieldText((fields || {})['公司'])
+    accFieldText((fields || {})['請款公司'])
+      || accFieldText((fields || {})['公司'])
       || accFieldText((fields || {})['所屬公司'])
       || accFieldText((fields || {})['Company'])
   );
@@ -6246,7 +6257,8 @@ function buildPaymentFieldsFromApprovalForm(formValues, detail) {
     '付款總金額': amount || 0,
     '廠商名稱': String(fv['廠商名稱'] || fv['廠商'] || '').trim(),
     '備註': String(fv['備註'] || '').trim(),
-    '公司': String(fv['公司'] || fv['所屬公司'] || '').trim(),
+    '公司': String(fv['請款公司'] || fv['公司'] || fv['所屬公司'] || '').trim(),
+    '請款公司': String(fv['請款公司'] || fv['公司'] || fv['所屬公司'] || '').trim(),
     '申請部門': String(fv['申請部門'] || '企劃部').trim() || '企劃部',
     '標案名稱': String(fv['所屬標案'] || fv['標案名稱'] || fv['所屬專案'] || fv['所屬個案'] || '').trim(),
     '工作項目名稱': String(fv['工作項目名稱'] || fv['所屬工作項目'] || fv['工作項目'] || '').trim(),

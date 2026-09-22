@@ -1576,7 +1576,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <div class="pfw">
           <div>
             <div class="fg"><label>申請人</label><input type="text" id="p-applicant" placeholder="Lark 登入自動帶入，或手動填寫"></div>
-            <div class="fg"><label>公司</label><select id="p-company"><option value="">請選擇</option><option value="身土">身土</option><option value="璽墨">璽墨</option></select></div>
+            <div class="fg"><label>請款公司</label><select id="p-company"><option value="">請選擇</option><option value="身土">身土</option><option value="璽墨">璽墨</option></select></div>
             <div class="fg"><label>申請部門</label><input type="text" id="p-dept" value="企劃部"></div>
             <div class="fg"><label>申請日期</label><input type="date" id="p-date"></div>
             <div class="fg"><label>所屬標案</label><select id="p-proj" onchange="onPaymentProjChange()"></select></div>
@@ -4363,7 +4363,7 @@ function prevPay() {
   }
   var companyEl = document.getElementById('p-company');
   if (companyEl && !companyEl.value.trim()) {
-    alert('請選擇公司');
+    alert('請選擇請款公司');
     return;
   }
   if (!document.getElementById('p-total').value.replace(/[^0-9]/g, '')) {
@@ -4490,7 +4490,7 @@ function showNotice(msg) {
 
 function validatePaymentForm() {
   var data = collectPaymentFields();
-  if (!data.company) { alert('請選擇公司'); return null; }
+  if (!data.company) { alert('請選擇請款公司'); return null; }
   if (!data.projId) { alert('請選擇所屬標案'); return null; }
   if (!data.wiId) { alert('請選擇所屬工作項目'); return null; }
   if (!data.total) { alert('請填寫付款總金額'); return null; }
@@ -4911,7 +4911,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260922v1';
+var APP_BUILD = '20260922v2';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -14397,6 +14397,7 @@ function sendAiFollowup() {
 
 function savePaymentRecord(data) {
   var fields = {
+    '請款公司': data.company || '',
     '公司': data.company || '',
     '申請部門': data.dept,
     '申請日期': dateInputToTs(data.date),
