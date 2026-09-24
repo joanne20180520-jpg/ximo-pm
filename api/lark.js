@@ -3377,7 +3377,7 @@ async function ensureAccExpenseSourceFields(accToken) {
   (data.data && data.data.items || []).forEach(function(f) {
     names[f.field_name] = true;
   });
-  const extras = ['來源付款ID', '來源支出ID', '來源標案', '來源工項', '公司', '建立來源'];
+  const extras = ['來源付款ID', '來源支出ID', '來源標案', '來源工項', '公司', '建立來源', '審批編號', '附件說明', '付款狀態'];
   for (let i = 0; i < extras.length; i++) {
     if (names[extras[i]]) continue;
     const created = await fetch(
@@ -3392,6 +3392,34 @@ async function ensureAccExpenseSourceFields(accToken) {
     if (created.code !== 0) throw new Error('新增會計支出欄位失敗: ' + extras[i] + ' ' + (created.msg || created.code));
   }
   _accExpenseFieldsReady = true;
+}
+
+function paymentAttachSummary(fields) {
+  const items = paymentAttachmentItems(fields || {});
+  if (!items.length) return '';
+  return items.map(function(f, i) {
+    return (f.name || ('附件' + (i + 1)));
+  }).join('、');
+}
+
+function paymentStatusForAcc(fields) {
+  const s = String((fields && (fields['狀態'] || fields['審核狀態'])) || '').trim();
+  if (s === '封存') return '封存';
+  if (s === '已核銷' || s === '已審核' || s === '已合銷') return '已核銷';
+  if (s) return s;
+  return '審批中';
+}
+
+function buildAccPaymentMetaFields(fields, paymentId) {
+  const out = {};
+  if (paymentId) out['來源付款ID'] = paymentId;
+  const code = paymentApprovalInstanceCode(fields);
+  if (code) out['審批編號'] = code;
+  const attach = paymentAttachSummary(fields);
+  if (attach) out['附件說明'] = attach;
+  out['付款狀態'] = paymentStatusForAcc(fields);
+  out['建立來源'] = '付款核銷';
+  return out;
 }
 
 function accExpenseDateMs(fields) {
@@ -5163,17 +5191,18 @@ async function syncSettledPaymentToAccPortal(ximoToken, paymentRec) {
   await ensureAccExpenseSourceFields(accToken);
 
   const company = paymentCompanyValue(fields);
+  const metaFields = buildAccPaymentMetaFields(fields, paymentId);
   const existing = await getRecords(accToken, ACC_TABLE_EXPENSES, ACC_APP_TOKEN);
   for (let i = 0; i < existing.length; i++) {
     const ef = existing[i].fields || {};
     if (accFieldText(ef['來源付款ID']) === paymentId) {
-      // 已同步：補公司欄位
-      if (company && normalizeAccCompany(accFieldText(ef['公司'])) !== company) {
-        try {
-          await updateRecord(accToken, ACC_TABLE_EXPENSES, existing[i].record_id, { '公司': company }, ACC_APP_TOKEN, false);
-        } catch (e) {}
-      }
-      return { skipped: true, reason: 'already-synced', recordId: existing[i].record_id, company: company };
+      // 已同步：補公司／審批／附件說明
+      const patch = Object.assign({}, metaFields);
+      if (company) patch['公司'] = company;
+      try {
+        await updateRecord(accToken, ACC_TABLE_EXPENSES, existing[i].record_id, patch, ACC_APP_TOKEN, false);
+      } catch (e) {}
+      return { skipped: true, reason: 'already-synced', recordId: existing[i].record_id, company: company, metaUpdated: true };
     }
   }
 
@@ -5197,16 +5226,14 @@ async function syncSettledPaymentToAccPortal(ximoToken, paymentRec) {
   const summary = payee && reason ? (payee + '｜' + reason) : (payee || reason || '付款申請');
   const amount = paymentAmountNumber(fields);
   const dateMs = accPaymentDateMs(fields);
-  const out = {
+  const out = Object.assign({
     '摘要': summary,
     '金額': amount,
     '對象': payee,
     '日期': dateMs,
-    '來源付款ID': paymentId,
     '來源標案': labels.projectName,
-    '來源工項': labels.workitemName,
-    '建立來源': '付款核銷'
-  };
+    '來源工項': labels.workitemName
+  }, metaFields);
   if (company) out['公司'] = company;
   if (accProject) out['所屬案件'] = [accProject.record_id];
   if (accWorkitem) out['工項'] = [accWorkitem.record_id];
@@ -5244,6 +5271,71 @@ async function syncSettledPaymentToAccPortal(ximoToken, paymentRec) {
     linkedWorkitem: !!(accWorkitem),
     sourceProject: labels.projectName
   };
+}
+
+/**
+ * 把璽墨付款審批（含審批編號、附件說明）補進／更新 ACC 支出列。
+ * - 已有「來源付款ID」列：一律更新審批／附件說明
+ * - 尚未入帳：僅「已核銷」才新建（避免審批中金額灌進匯總）
+ */
+async function syncPaymentsMetaToAccPortal(ximoToken, opts) {
+  opts = opts || {};
+  const dryRun = !!opts.dryRun;
+  const limit = Math.max(0, parseInt(opts.limit, 10) || 0);
+  if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_EXPENSES) {
+    return { skipped: true, reason: 'acc-env-missing' };
+  }
+  const frontCfg = paymentsFrontConfig();
+  const tableId = await resolvePaymentsTableId(ximoToken, frontCfg.appToken, frontCfg.tableId);
+  if (!tableId) return { skipped: true, reason: 'payments-table-missing' };
+  const rows = await getRecords(ximoToken, tableId, frontCfg.appToken);
+  const accToken = await getAccTenantToken();
+  await ensureAccExpenseSourceFields(accToken);
+  const accExpenses = await getRecords(accToken, ACC_TABLE_EXPENSES, ACC_APP_TOKEN);
+  const accByPaymentId = {};
+  for (let i = 0; i < accExpenses.length; i++) {
+    const pid = accFieldText((accExpenses[i].fields || {})['來源付款ID']);
+    if (pid) accByPaymentId[pid] = accExpenses[i];
+  }
+  const out = { total: rows.length, updated: 0, created: 0, skipped: 0, errors: [] };
+  let touched = 0;
+  for (let i = 0; i < rows.length; i++) {
+    if (limit && touched >= limit) break;
+    const rec = rows[i];
+    const paymentId = rec.record_id;
+    if (!paymentId) { out.skipped++; continue; }
+    const fields = rec.fields || {};
+    const status = paymentStatusForAcc(fields);
+    const existing = accByPaymentId[paymentId];
+    if (existing) {
+      if (dryRun) { out.skipped++; touched++; continue; }
+      try {
+        const patch = buildAccPaymentMetaFields(fields, paymentId);
+        const company = paymentCompanyValue(fields);
+        if (company) patch['公司'] = company;
+        await updateRecord(accToken, ACC_TABLE_EXPENSES, existing.record_id, patch, ACC_APP_TOKEN, false);
+        out.updated++;
+        touched++;
+      } catch (err) {
+        out.errors.push({ recordId: paymentId, error: err.message || String(err) });
+      }
+      continue;
+    }
+    if (status !== '已核銷') {
+      out.skipped++;
+      continue;
+    }
+    if (dryRun) { out.skipped++; touched++; continue; }
+    try {
+      const result = await syncSettledPaymentToAccPortal(ximoToken, rec);
+      if (result && result.ok) out.created++;
+      else out.skipped++;
+      touched++;
+    } catch (err) {
+      out.errors.push({ recordId: paymentId, error: err.message || String(err) });
+    }
+  }
+  return out;
 }
 
 /**
@@ -9561,6 +9653,24 @@ export default async function handler(req, res) {
           prune = await pruneAccOrphanExpenses(token, { dryRun: dryRun });
         }
         return res.status(200).json({ ok: true, sync: result, prune: prune });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'sync-payments-to-acc' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const token = await getToken();
+        const q = req.query || {};
+        const b = req.body || {};
+        const dryRun = String(q.dryRun || b.dryRun || '') === '1'
+          || String(q.dryRun || b.dryRun || '').toLowerCase() === 'true';
+        const limit = parseInt(q.limit || b.limit || '0', 10);
+        const result = await syncPaymentsMetaToAccPortal(token, {
+          dryRun: dryRun,
+          limit: isNaN(limit) ? 0 : limit
+        });
+        return res.status(200).json({ ok: true, sync: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
