@@ -1140,8 +1140,21 @@ body.role-admin .pay-list-head-actions{display:flex}
 .pay-fix-card{width:100%;max-width:420px;background:#fff;border:1px solid #eceae6;border-radius:16px;padding:22px 22px 16px;box-shadow:0 16px 48px rgba(0,0,0,.14);animation:payNoticePop .28s cubic-bezier(.22,1,.36,1)}
 .pay-fix-card.is-error .pay-fix-icon{background:#fde8e8;color:#b91c1c}
 .pay-fix-card.is-run .pay-fix-icon{background:#f3f1ed;color:#6b6860}
+.pay-fix-card.is-run .pay-fix-icon.is-ring,
+.pay-fix-card.is-done .pay-fix-icon.is-ring{background:transparent;color:#2d6a4f}
 .pay-fix-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px}
-.pay-fix-icon{width:42px;height:42px;border-radius:12px;background:#e8f5ee;color:#2d6a4f;font-size:18px;line-height:42px;text-align:center;font-weight:700;flex-shrink:0}
+.pay-fix-icon{width:48px;height:48px;border-radius:12px;background:#e8f5ee;color:#2d6a4f;font-size:18px;line-height:48px;text-align:center;font-weight:700;flex-shrink:0;position:relative;display:inline-flex;align-items:center;justify-content:center;overflow:hidden}
+.pay-fix-icon.is-ring{background:transparent;border-radius:50%;line-height:1;font-size:11px;color:#2d6a4f}
+.pay-fix-icon.is-ring .pay-fix-icon-glyph{display:none}
+.pay-fix-ring{display:none;position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.pay-fix-icon.is-ring .pay-fix-ring{display:block}
+.pay-fix-ring-track{fill:none;stroke:#eceae6;stroke-width:3.5}
+.pay-fix-ring-val{fill:none;stroke:#2d6a4f;stroke-width:3.5;stroke-linecap:round;stroke-dasharray:106.76;stroke-dashoffset:106.76;transition:stroke-dashoffset .35s ease}
+.pay-fix-card.is-error .pay-fix-ring-val{stroke:#b91c1c}
+.pay-fix-card.is-done .pay-fix-ring-val{stroke:#2d6a4f}
+.pay-fix-pct{display:none;position:relative;z-index:1;font-size:11px;font-weight:700;color:#2d6a4f;line-height:1;font-variant-numeric:tabular-nums}
+.pay-fix-icon.is-ring .pay-fix-pct{display:block}
+.pay-fix-card.is-error .pay-fix-pct{color:#b91c1c}
 .pay-fix-title{font-size:16px;font-weight:700;color:#1a1916;line-height:1.4;margin:2px 0 0}
 .pay-fix-lead{font-size:13px;color:#6b6860;line-height:1.55;margin:6px 0 0}
 .pay-fix-list{list-style:none;margin:0 0 14px;padding:12px 14px;background:#f7f5f2;border:1px solid #eceae6;border-radius:12px}
@@ -1412,7 +1425,14 @@ button.btn-loading::after{content:'…';margin-left:2px}
 <div id="pay-fix-dialog" class="pay-fix-dialog hidden" onclick="if(event.target===this)cancelPayFixDialog()">
   <div class="pay-fix-card" id="pay-fix-card" role="dialog" aria-modal="true" aria-labelledby="pay-fix-title">
     <div class="pay-fix-head">
-      <div class="pay-fix-icon" id="pay-fix-icon">↻</div>
+      <div class="pay-fix-icon" id="pay-fix-icon" aria-hidden="true">
+        <span class="pay-fix-icon-glyph" id="pay-fix-icon-glyph">↻</span>
+        <svg class="pay-fix-ring" viewBox="0 0 42 42" aria-hidden="true">
+          <circle class="pay-fix-ring-track" cx="21" cy="21" r="17"></circle>
+          <circle class="pay-fix-ring-val" id="pay-fix-ring-val" cx="21" cy="21" r="17"></circle>
+        </svg>
+        <span class="pay-fix-pct" id="pay-fix-pct">0%</span>
+      </div>
       <div>
         <h3 class="pay-fix-title" id="pay-fix-title">修復付款對帳</h3>
         <p class="pay-fix-lead" id="pay-fix-lead">將掃描近 60 日付款審批並自動修復：</p>
@@ -4911,7 +4931,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20260922v2';
+var APP_BUILD = '20261001v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -14712,6 +14732,40 @@ function syncPaymentApprovals(force) {
 
 var _payFixRunning = false;
 var _payFixConfirmResolve = null;
+var PAY_FIX_RING_LEN = 106.76; // 2 * Math.PI * 17
+
+function setPayFixIconMode(mode, glyphText, pct) {
+  var icon = document.getElementById('pay-fix-icon');
+  var glyph = document.getElementById('pay-fix-icon-glyph');
+  var ringVal = document.getElementById('pay-fix-ring-val');
+  var pctEl = document.getElementById('pay-fix-pct');
+  if (!icon) return;
+  var isRing = mode === 'ring';
+  icon.classList.toggle('is-ring', isRing);
+  if (glyph) glyph.textContent = glyphText == null ? '↻' : String(glyphText);
+  if (!isRing) return;
+  var n = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+  if (pctEl) pctEl.textContent = n + '%';
+  if (ringVal) ringVal.style.strokeDashoffset = String(PAY_FIX_RING_LEN * (1 - n / 100));
+}
+
+function setPayFixProgressByCounts(done, total) {
+  var t = Math.max(0, Math.round(Number(total) || 0));
+  var d = Math.max(0, Math.round(Number(done) || 0));
+  if (t > 0) d = Math.min(d, t);
+  var pct = t > 0 ? Math.round((d / t) * 100) : (d > 0 ? 1 : 0);
+  if (pct >= 100 && _payFixRunning) pct = 99; // 完成前先留一點，結果畫面再滿格
+  setPayFixIconMode('ring', '', pct);
+}
+
+function parsePayFixSliceEnd(slice) {
+  var s = String(slice || '').trim();
+  if (!s) return 0;
+  var m = s.match(/(\d+)\s*[-–~～]\s*(\d+)/);
+  if (m) return parseInt(m[2], 10) || 0;
+  var n = parseInt(s.replace(/[^\d]/g, ''), 10);
+  return isNaN(n) ? 0 : n;
+}
 
 function setPayFixStatus(text) {
   var el = document.getElementById('pay-fix-status');
@@ -14763,7 +14817,6 @@ function confirmPayFixDialog() {
 function showPayFixConfirmDialog() {
   return new Promise(function(resolve) {
     var card = document.getElementById('pay-fix-card');
-    var icon = document.getElementById('pay-fix-icon');
     var title = document.getElementById('pay-fix-title');
     var lead = document.getElementById('pay-fix-lead');
     var prog = document.getElementById('pay-fix-progress');
@@ -14774,7 +14827,7 @@ function showPayFixConfirmDialog() {
     }
     _payFixConfirmResolve = resolve;
     card.classList.remove('is-run', 'is-done', 'is-error');
-    if (icon) icon.textContent = '↻';
+    setPayFixIconMode('glyph', '↻', 0);
     if (title) title.textContent = '修復付款對帳';
     if (lead) lead.textContent = '將掃描近 60 日付款審批並自動修復：';
     if (prog) prog.textContent = '準備中…';
@@ -14782,21 +14835,20 @@ function showPayFixConfirmDialog() {
 }
 function showPayFixRunningDialog() {
   var card = document.getElementById('pay-fix-card');
-  var icon = document.getElementById('pay-fix-icon');
   var title = document.getElementById('pay-fix-title');
   var lead = document.getElementById('pay-fix-lead');
   var prog = document.getElementById('pay-fix-progress');
   if (!openPayFixOverlay() || !card) return;
   card.classList.remove('is-done', 'is-error');
   card.classList.add('is-run');
-  if (icon) icon.textContent = '…';
+  setPayFixProgressByCounts(0, 0);
+  setPayFixIconMode('ring', '', 0);
   if (title) title.textContent = '正在修復對帳';
   if (lead) lead.textContent = '請稍候，系統正在掃描並寫回狀態。';
   if (prog) prog.textContent = '開始掃描…';
 }
 function showPayFixResultDialog(ok, message) {
   var card = document.getElementById('pay-fix-card');
-  var icon = document.getElementById('pay-fix-icon');
   var title = document.getElementById('pay-fix-title');
   var lead = document.getElementById('pay-fix-lead');
   var prog = document.getElementById('pay-fix-progress');
@@ -14808,7 +14860,11 @@ function showPayFixResultDialog(ok, message) {
   card.classList.remove('is-run');
   card.classList.toggle('is-error', !ok);
   card.classList.toggle('is-done', !!ok);
-  if (icon) icon.textContent = ok ? '✓' : '!';
+  if (ok) {
+    setPayFixIconMode('ring', '', 100);
+  } else {
+    setPayFixIconMode('glyph', '!', 0);
+  }
   if (title) title.textContent = ok ? '修復完成' : '修復失敗';
   if (lead) lead.textContent = ok ? '付款狀態與後台已更新。' : '請稍後再試，或通知管理員。';
   if (prog) prog.textContent = message || '';
@@ -14859,7 +14915,9 @@ function fixPaymentApprovalGaps() {
         }
         var listed = (fix.summary && fix.summary.approvalListed) || 0;
         var end = (fix.summary && fix.summary.slice) || '';
+        var doneN = parsePayFixSliceEnd(end);
         setPayFixStatus('已處理 ' + end + (listed ? '／共 ' + listed + ' 筆' : ''));
+        if (listed || doneN) setPayFixProgressByCounts(doneN || listed, listed || doneN);
         if (fix.nextOffset != null) {
           offset = fix.nextOffset;
           return step();
