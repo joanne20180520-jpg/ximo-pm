@@ -2659,6 +2659,22 @@ async function writePaymentPendingApprover(tenantToken, recordId, approverName) 
   return true;
 }
 
+async function writePaymentStatus(tenantToken, recordId, status) {
+  if (!recordId || !status) return false;
+  const frontCfg = paymentsFrontConfig();
+  const tableId = await resolvePaymentsTableId(tenantToken, frontCfg.appToken, frontCfg.tableId);
+  if (!tableId) return false;
+  const body = await normalizeWriteFields(tenantToken, tableId, { '狀態': status }, frontCfg.appToken);
+  if (!body || !Object.keys(body).length) return false;
+  await updateRecord(tenantToken, tableId, recordId, body, frontCfg.appToken, false);
+  return true;
+}
+
+function isClosedApprovalStatus(status) {
+  const st = String(status || '').toUpperCase();
+  return st === 'REJECTED' || st === 'CANCELED' || st === 'CANCELLED' || st === 'TERMINATED' || st === 'DELETED';
+}
+
 const ACCOUNTING_NAME_ALIASES = {
   irisa: ['詹佳瑜', 'Irisa'],
   su: ['蘇芳玉', '艾莉'],
@@ -6002,6 +6018,39 @@ async function auditStuckPaymentApprovals(tenantToken) {
   return out;
 }
 
+/** 把 Lark 已拒絕／已取消、但 Base 仍審批中的付款改為封存 */
+async function archiveClosedPaymentApprovals(tenantToken) {
+  const audit = await auditStuckPaymentApprovals(tenantToken);
+  const targets = (audit.stillPending || []).filter(function(row) {
+    return isClosedApprovalStatus(row.approvalStatus);
+  });
+  const out = {
+    pending: audit.pending || 0,
+    closed: targets.length,
+    archived: 0,
+    details: [],
+    errors: audit.errors || []
+  };
+  for (let i = 0; i < targets.length; i++) {
+    const row = targets[i];
+    try {
+      await writePaymentStatus(tenantToken, row.recordId, '封存');
+      out.archived++;
+      out.details.push({
+        recordId: row.recordId,
+        instanceCode: row.instanceCode || '',
+        approvalStatus: row.approvalStatus || '',
+        amount: row.amount,
+        payee: row.payee,
+        reason: row.reason
+      });
+    } catch (e) {
+      out.errors.push({ recordId: row.recordId, error: e.message || String(e) });
+    }
+  }
+  return out;
+}
+
 /**
  * 全量對帳：以 Lark 付款審批為主，檢查是否都有對應 Base 列。
  * - linked: 審批有、Base 有（含審批編號或模糊比對）
@@ -6774,6 +6823,19 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
       if (!paymentApprovalInstanceCode(rec.fields || {})) {
         rec.fields = rec.fields || {};
         rec.fields['審批編號'] = instanceCode;
+      }
+
+      // 拒絕／取消：封存，不要留在審批中給會計看
+      if (pending && isClosedApprovalStatus(st)) {
+        results.approvalMeta[rec.record_id].approvalStatus = st || 'REJECTED';
+        try {
+          await writePaymentStatus(tenantToken, rec.record_id, '封存');
+          rec.fields = Object.assign({}, rec.fields || {}, { '狀態': '封存' });
+          results.archived = (results.archived || 0) + 1;
+        } catch (e) {
+          results.errors.push({ recordId: rec.record_id, error: '封存失敗：' + (e.message || String(e)) });
+        }
+        continue;
       }
 
       if (pending && stageDone) {
@@ -9525,6 +9587,16 @@ export default async function handler(req, res) {
         const token = await getToken();
         const result = await auditStuckPaymentApprovals(token);
         return res.status(200).json({ ok: true, audit: result });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'archive-closed-payment-approvals' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const token = await getToken();
+        const result = await archiveClosedPaymentApprovals(token);
+        return res.status(200).json({ ok: true, archive: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
