@@ -3377,7 +3377,7 @@ async function ensureAccExpenseSourceFields(accToken) {
   (data.data && data.data.items || []).forEach(function(f) {
     names[f.field_name] = true;
   });
-  const extras = ['來源付款ID', '來源支出ID', '來源標案', '來源工項', '公司', '建立來源', '審批編號', '附件說明', '付款狀態'];
+  const extras = ['來源付款ID', '來源支出ID', '來源標案', '來源工項', '公司', '建立來源', '審批編號', '附件說明', '付款狀態', '傳票號碼'];
   for (let i = 0; i < extras.length; i++) {
     if (names[extras[i]]) continue;
     const created = await fetch(
