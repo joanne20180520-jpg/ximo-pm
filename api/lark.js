@@ -2074,6 +2074,11 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
       return;
     }
     if (m.type === 2) {
+      // 允許 null／空字串清空數字欄（例：履約改金額模式時清掉給付比例）
+      if (val === null || val === '') {
+        out[name] = null;
+        return;
+      }
       const n = normalizeArchiveNumberValue(val);
       if (n == null) return;
       const fmt = String((m.property && m.property.formatter) || '');

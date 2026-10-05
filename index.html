@@ -9102,10 +9102,13 @@ function clientMilestoneToFields(ms, projId) {
     '規劃任務': JSON.stringify({ version: 2, groups: uniqueMilestonePlanGroups(groups) }),
     '備註': ms.notes || ''
   };
-  var payMode = getMilestonePayMode(ms, projId);
+  var payMode = (ms.payMode === 'amount' || ms.payMode === 'pct')
+    ? ms.payMode
+    : getMilestonePayMode(ms, projId);
   var payN = milestonePercentNumber(ms.payPct);
   var thresholdN = milestonePercentNumber(ms.invoiceProgressPct);
-  fields['給付比例'] = payMode === 'pct' && payN ? (payN + '%') : '';
+  // 金額模式必須清空給付比例，否則列表／再開編輯仍會顯示舊％
+  fields['給付比例'] = payMode === 'pct' && payN ? (payN + '%') : null;
   if (thresholdN) fields['可請款工項進度％'] = thresholdN + '%';
   var invoiceN = milestoneMoneyNumber(ms.invoiceAmount);
   var actualN = milestoneMoneyNumber(ms.actualAmount);
@@ -9743,9 +9746,11 @@ function renderMilestonesPage() {
       + '</td>'
       + '<td>' + (ms.startDate ? escHtml(ms.startDate.replace(/-/g, '/')) : '—') + '</td>'
       + '<td>' + (ms.dueDate ? escHtml(ms.dueDate.replace(/-/g, '/')) : '—') + '</td>'
-      + '<td>' + (formatMilestonePctLabel(ms.payPct)
-        ? '<span class="ms-tag pay">' + escHtml(formatMilestonePctLabel(ms.payPct)) + '</span>'
-        : (snap.defaultAmount ? '<span class="ms-tag pay">金額</span>' : '—')) + '</td>'
+      + '<td>' + (snap.payMode === 'amount'
+        ? (snap.defaultAmount ? '<span class="ms-tag pay">金額</span>' : '—')
+        : (formatMilestonePctLabel(ms.payPct)
+          ? '<span class="ms-tag pay">' + escHtml(formatMilestonePctLabel(ms.payPct)) + '</span>'
+          : '—')) + '</td>'
       + '<td><div style="font-weight:600;color:' + (snap.progressPct >= (snap.thresholdPct || 0) ? '#167a3a' : '#b42318') + '">'
       + '<div>進度 ' + snap.progressPct + '%</div>'
       + '<div>目標 ' + (snap.thresholdPct || 0) + '%</div>'
@@ -10219,6 +10224,7 @@ function markMilestoneApplying(msId) {
 }
 
 function getMilestonePayMode(ms, projId) {
+  if (ms && (ms.payMode === 'amount' || ms.payMode === 'pct')) return ms.payMode;
   var pct = milestonePercentNumber(ms && ms.payPct);
   var amt = milestoneMoneyNumber(ms && ms.invoiceAmount);
   if (pct <= 0) return amt > 0 ? 'amount' : 'pct';
@@ -10247,8 +10253,14 @@ function onMilestonePayModeChange() {
   var mode = getSelectedMilestonePayMode();
   var pctEl = document.getElementById('ms-pay');
   var amtEl = document.getElementById('ms-pay-amount');
-  if (pctEl) pctEl.style.display = mode === 'pct' ? '' : 'none';
-  if (amtEl) amtEl.style.display = mode === 'amount' ? '' : 'none';
+  if (pctEl) {
+    pctEl.style.display = mode === 'pct' ? '' : 'none';
+    if (mode === 'amount') pctEl.value = '';
+  }
+  if (amtEl) {
+    amtEl.style.display = mode === 'amount' ? '' : 'none';
+    if (mode === 'pct') amtEl.value = '';
+  }
 }
 
 function openMilestoneEditor(msId) {
@@ -10272,11 +10284,13 @@ function openMilestoneEditor(msId) {
     document.getElementById('ms-start').value = ms.startDate || '';
     var payMode = getMilestonePayMode(ms, milestonePageProjId);
     setMilestonePayMode(payMode);
-    document.getElementById('ms-pay').value = ms.payPct || '';
-    normalizeMilestonePctInput(document.getElementById('ms-pay'));
+    document.getElementById('ms-pay').value = payMode === 'pct' ? (ms.payPct || '') : '';
+    if (payMode === 'pct') normalizeMilestonePctInput(document.getElementById('ms-pay'));
     var amtEl = document.getElementById('ms-pay-amount');
     if (amtEl) {
-      amtEl.value = milestoneMoneyNumber(ms.invoiceAmount) ? ntf(milestoneMoneyNumber(ms.invoiceAmount)) : '';
+      amtEl.value = payMode === 'amount' && milestoneMoneyNumber(ms.invoiceAmount)
+        ? ntf(milestoneMoneyNumber(ms.invoiceAmount))
+        : '';
     }
     document.getElementById('ms-threshold').value = ms.invoiceProgressPct || '';
     normalizeMilestonePctInput(document.getElementById('ms-threshold'));
@@ -10342,6 +10356,7 @@ function saveMilestone() {
     status: normalizeMilestoneStatus(oldMs && oldMs.status),
     startDate: document.getElementById('ms-start').value,
     dueDate: document.getElementById('ms-due').value,
+    payMode: payMode,
     payPct: payMode === 'pct' && payPct ? (payPct + '%') : '',
     invoiceAmount: payMode === 'amount' ? invoiceAmount : '',
     invoiceProgressPct: thresholdPct ? (thresholdPct + '%') : '',
