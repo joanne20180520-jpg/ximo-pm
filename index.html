@@ -2860,7 +2860,7 @@ function canDismissPopupOutside(popupId) {
   if (popupId === 'pp-proj' || popupId === 'pp-work' || popupId === 'pp-task' || popupId === 'pp-exp' || popupId === 'pp-des') {
     return false;
   }
-  if (popupId === 'pp-milestone') return !!editingMilestoneId;
+  if (popupId === 'pp-milestone') return false;
   if (popupId === 'pp-des-ver') return !!editingDesignVersionRecId;
   return true;
 }
@@ -9102,13 +9102,21 @@ function clientMilestoneToFields(ms, projId) {
     '規劃任務': JSON.stringify({ version: 2, groups: uniqueMilestonePlanGroups(groups) }),
     '備註': ms.notes || ''
   };
+  var payMode = getMilestonePayMode(ms, projId);
   var payN = milestonePercentNumber(ms.payPct);
   var thresholdN = milestonePercentNumber(ms.invoiceProgressPct);
-  fields['給付比例'] = payN ? (payN + '%') : null;
+  fields['給付比例'] = payMode === 'pct' && payN ? (payN + '%') : '';
   if (thresholdN) fields['可請款工項進度％'] = thresholdN + '%';
   var invoiceN = milestoneMoneyNumber(ms.invoiceAmount);
   var actualN = milestoneMoneyNumber(ms.actualAmount);
-  fields['請款金額'] = invoiceN || null;
+  if (payMode === 'amount') {
+    fields['請款金額'] = invoiceN > 0 ? invoiceN : 0;
+  } else if (payN > 0) {
+    var proj = projectsData.find(function(p) { return p.record_id === projId; });
+    fields['請款金額'] = Math.round(getProjectContractAmount(proj) * payN / 100) || 0;
+  } else {
+    fields['請款金額'] = 0;
+  }
   if (actualN) fields['實收金額'] = actualN;
   if (ms.startDate) fields['開始日期'] = dateInputToTs(ms.startDate);
   else fields['開始日期'] = null;
@@ -9451,9 +9459,10 @@ function calcMilestoneBillingSnapshot(ms, projId) {
   var progressPct = 0;
   if (totalWeight > 0) progressPct = Math.min(100, Math.round(weightedProgress / totalWeight));
   else if (plainCount > 0) progressPct = Math.min(100, Math.round(plainSum / plainCount));
+  var payMode = getMilestonePayMode(ms, projId);
   var payPct = milestonePercentNumber(ms && ms.payPct);
   var manualAmount = milestoneMoneyNumber(ms && ms.invoiceAmount);
-  var defaultAmount = payPct > 0
+  var defaultAmount = payMode === 'pct' && payPct > 0
     ? Math.round(getProjectContractAmount(proj) * payPct / 100)
     : manualAmount;
   var actualAmount = milestoneMoneyNumber(ms && ms.actualAmount);
@@ -9463,7 +9472,7 @@ function calcMilestoneBillingSnapshot(ms, projId) {
     progressPct: progressPct,
     totalWeight: totalWeight,
     canApply: threshold > 0 ? progressPct >= threshold : false,
-    payMode: payPct > 0 ? 'pct' : (manualAmount > 0 ? 'amount' : 'pct'),
+    payMode: payMode,
     defaultAmount: defaultAmount,
     payableAmount: payableAmount
   };
@@ -9478,8 +9487,7 @@ function syncMilestoneComputedStatus(ms, projId) {
   }
   if (ms) {
     ms.status = next;
-    // 有給付％才依合約換算請款金額；金額模式保留手動輸入
-    if (milestonePercentNumber(ms.payPct) > 0) {
+    if (getMilestonePayMode(ms, projId) === 'pct' && milestonePercentNumber(ms.payPct) > 0) {
       ms.invoiceAmount = String(snap.defaultAmount || '');
     }
     if (next === '可申請' && !ms.notifiedAt) ms.notifiedAt = Date.now();
@@ -10210,9 +10218,14 @@ function markMilestoneApplying(msId) {
     });
 }
 
-function getMilestonePayMode(ms) {
-  if (milestonePercentNumber(ms && ms.payPct) > 0) return 'pct';
-  if (milestoneMoneyNumber(ms && ms.invoiceAmount) > 0) return 'amount';
+function getMilestonePayMode(ms, projId) {
+  var pct = milestonePercentNumber(ms && ms.payPct);
+  var amt = milestoneMoneyNumber(ms && ms.invoiceAmount);
+  if (pct <= 0) return amt > 0 ? 'amount' : 'pct';
+  if (amt <= 0) return 'pct';
+  var proj = projId ? projectsData.find(function(p) { return p.record_id === projId; }) : null;
+  var calc = Math.round(getProjectContractAmount(proj) * pct / 100);
+  if (Math.abs(amt - calc) > 1) return 'amount';
   return 'pct';
 }
 
@@ -10257,7 +10270,7 @@ function openMilestoneEditor(msId) {
     setMilestoneStatusSelect(ms.status);
     document.getElementById('ms-due').value = ms.dueDate || '';
     document.getElementById('ms-start').value = ms.startDate || '';
-    var payMode = getMilestonePayMode(ms);
+    var payMode = getMilestonePayMode(ms, milestonePageProjId);
     setMilestonePayMode(payMode);
     document.getElementById('ms-pay').value = ms.payPct || '';
     normalizeMilestonePctInput(document.getElementById('ms-pay'));
@@ -10286,7 +10299,7 @@ function openMilestoneEditor(msId) {
     groups = [emptyMilestonePlanGroup(milestoneDefaultWiName || '')];
   }
   renderMilestonePlanGroups(groups);
-  op('pp-milestone');
+  setTimeout(function() { op('pp-milestone'); }, 0);
 }
 
 function saveMilestone() {
@@ -10300,7 +10313,8 @@ function saveMilestone() {
     payPct = parseWeightPctInput(document.getElementById('ms-pay').value);
   } else {
     var amtN = parseMoney(document.getElementById('ms-pay-amount').value);
-    invoiceAmount = amtN ? String(amtN) : '';
+    if (!amtN) { alert('請填寫請款金額'); return; }
+    invoiceAmount = String(amtN);
   }
   var thresholdPct = parseWeightPctInput(document.getElementById('ms-threshold').value);
   if (!thresholdPct) { alert('請填寫可請款工項進度％'); return; }
