@@ -1080,6 +1080,17 @@ body.role-admin .pay-list-head-actions{display:flex}
 .confirm-ok.del:hover{background:#9b1d14}
 .confirm-ok.edit{background:var(--accent)}
 .confirm-ok.edit:hover{background:#333}
+.confirm-overlay.is-ximo{z-index:4000;padding:24px;background:rgba(42,40,36,.28);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.confirm-overlay.is-ximo .confirm-box{width:min(400px,calc(100vw - 48px));background:#fff;border:1px solid #eceae6;border-radius:16px;box-shadow:0 16px 48px rgba(26,25,22,.14);margin:0}
+.confirm-overlay.is-ximo .confirm-hdr{flex-direction:column;align-items:center;text-align:center;gap:12px;padding:22px 22px 0;border-bottom:none}
+.confirm-overlay.is-ximo .confirm-icon{width:48px;height:48px;border-radius:12px;background:#e8f5ee;color:#2d6a4f;font-size:22px;font-weight:700}
+.confirm-overlay.is-ximo .confirm-hdr h4{font-size:16px;font-weight:700;color:#1a1916}
+.confirm-overlay.is-ximo .confirm-body{padding:8px 28px 18px;font-size:13px;color:#6b6860;line-height:1.65;text-align:center}
+.confirm-overlay.is-ximo .confirm-foot{justify-content:center;gap:8px;padding:0 22px 18px;border-top:none}
+.confirm-overlay.is-ximo .confirm-cancel{padding:9px 18px;border-radius:8px;border:1px solid #e2ddd8;background:#fff;color:#1a1916;font-size:13px;font-weight:600}
+.confirm-overlay.is-ximo .confirm-cancel:hover{background:#f7f5f2}
+.confirm-overlay.is-ximo .confirm-ok{padding:9px 18px;border-radius:8px;background:#2d6a4f;color:#fff;font-size:13px;font-weight:600}
+.confirm-overlay.is-ximo .confirm-ok:hover{background:#245a42}
 
 /* ── 復原提示條 ── */
 .undo-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:#fff;border-radius:var(--r);padding:9px 14px;display:flex;align-items:center;gap:10px;font-size:12px;box-shadow:0 4px 16px rgba(0,0,0,.22);z-index:600;opacity:0;pointer-events:none;transition:opacity .2s;white-space:nowrap}
@@ -1206,6 +1217,7 @@ body.role-designer .design-filter-bar{display:flex}
 .confirm-cancel{transition:background .12s,color .12s,border-color .12s,transform .08s}
 .confirm-ok{transition:background .12s,transform .08s,box-shadow .12s}
 .confirm-cancel:active{background:#fef3c7!important;border-color:#f59e0b!important;color:#92400e!important;transform:scale(0.97)}
+.confirm-overlay.is-ximo .confirm-cancel:active{background:#f7f5f2!important;border-color:#e2ddd8!important;color:#1a1916!important}
 .confirm-ok:active{transform:scale(0.97);filter:brightness(1.08);box-shadow:0 0 0 3px rgba(45,106,79,.25)}
 .tbar-tab:active:not(.active){background:#e8e4dc!important;color:var(--text)!important;transform:scale(0.97)}
 .tbar-tab.active:active{background:var(--c1)!important;transform:scale(0.97)}
@@ -1452,6 +1464,21 @@ button.btn-loading::after{content:'…';margin-left:2px}
       <button type="button" class="bcan pay-fix-cancel" id="pay-fix-cancel" onclick="cancelPayFixDialog()">取消</button>
       <button type="button" class="bpri pay-fix-ok" id="pay-fix-ok" onclick="confirmPayFixDialog()">開始修復</button>
       <button type="button" class="bpri pay-fix-close-done" id="pay-fix-close-done" onclick="hidePayFixDialog()">確定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 確認對話框（掛在 body 上，才會相對整個視窗置中） -->
+<div id="confirm-overlay" class="confirm-overlay" style="display:none">
+  <div class="confirm-box">
+    <div class="confirm-hdr">
+      <div class="confirm-icon" id="confirm-icon">⚠</div>
+      <h4 id="confirm-title">確認操作</h4>
+    </div>
+    <div class="confirm-body" id="confirm-body"></div>
+    <div class="confirm-foot">
+      <button class="confirm-cancel" onclick="confirmCancel()">取消</button>
+      <button class="confirm-ok" id="confirm-ok-btn" onclick="confirmOk()">確認</button>
     </div>
   </div>
 </div>
@@ -2120,20 +2147,6 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="fg"><label>狀態</label><select id="ee-status"><option value="未合銷">待核銷</option><option value="已合銷">已核銷</option></select></div>
 </div><div class="ppf"><button class="bcan bdel-action" onclick="deleteExpenseFromEdit()">刪除</button><button class="bcan" onclick="cl('pp-edit-exp')">取消</button><button class="bpri" onclick="saveEditExpense()">儲存</button></div></div></div>
 
-<!-- 確認對話框 -->
-<div id="confirm-overlay" class="confirm-overlay" style="display:none">
-  <div class="confirm-box">
-    <div class="confirm-hdr">
-      <div class="confirm-icon" id="confirm-icon">⚠</div>
-      <h4 id="confirm-title">確認操作</h4>
-    </div>
-    <div class="confirm-body" id="confirm-body"></div>
-    <div class="confirm-foot">
-      <button class="confirm-cancel" onclick="confirmCancel()">取消</button>
-      <button class="confirm-ok" id="confirm-ok-btn" onclick="confirmOk()">確認</button>
-    </div>
-  </div>
-</div>
 <!-- 復原提示條 -->
 <div class="undo-toast" id="undo-toast">
   <span id="undo-toast-msg">已刪除（5 秒內可復原）</span>
@@ -5329,11 +5342,13 @@ function showConfirm(opts) {
   var okBtn = document.getElementById('confirm-ok-btn');
   var cancelBtn = overlay ? overlay.querySelector('.confirm-cancel') : null;
   if (!overlay) return;
-  icon.className = 'confirm-icon ' + (opts.type || 'del');
-  icon.textContent = opts.type === 'edit' ? '✎' : '🗑';
+  var type = opts.type || 'del';
+  overlay.classList.toggle('is-ximo', type === 'final');
+  icon.className = 'confirm-icon ' + type;
+  icon.textContent = type === 'final' ? '✓' : (type === 'edit' ? '✎' : '🗑');
   titleEl.textContent = opts.title || '確認操作';
   bodyEl.innerHTML = opts.body || '';
-  okBtn.className = 'confirm-ok ' + (opts.type || 'del');
+  okBtn.className = 'confirm-ok ' + type;
   okBtn.textContent = opts.okText || '確認';
   if (cancelBtn) cancelBtn.style.display = opts.hideCancel ? 'none' : '';
   confirmCallback = opts.onOk || null;
@@ -5344,6 +5359,7 @@ function resetConfirmChrome() {
   var overlay = document.getElementById('confirm-overlay');
   if (!overlay) return;
   overlay.style.display = 'none';
+  overlay.classList.remove('is-ximo');
   var cancelBtn = overlay.querySelector('.confirm-cancel');
   if (cancelBtn) cancelBtn.style.display = '';
 }
@@ -16089,7 +16105,7 @@ function finalizeDesign(designId) {
   var name = rec ? getDesignDisplayName(rec.fields || {}) : '';
   var who = name ? '「' + escHtml(name) + '」' : '此設計';
   showConfirm({
-    type: 'edit',
+    type: 'final',
     title: '確認定稿',
     body: '確定要將' + who + '定稿？確認後版本會鎖定，若需改回未定稿請通知管理員。',
     okText: '確認定稿',
