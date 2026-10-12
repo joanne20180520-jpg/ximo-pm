@@ -16099,15 +16099,10 @@ function deleteDesignVersion(versionId, designId, label) {
 
 function finalizeDesign(designId) {
   if (!isPMRole() || !designId) return;
-  var rec = (typeof designsData !== 'undefined' && designsData)
-    ? designsData.find(function(d) { return d.record_id === designId; })
-    : null;
-  var name = rec ? getDesignDisplayName(rec.fields || {}) : '';
-  var who = name ? '「' + escHtml(name) + '」' : '此設計';
   showConfirm({
     type: 'final',
     title: '確認定稿',
-    body: '確定要將' + who + '定稿？確認後版本會鎖定，若需改回未定稿請通知管理員。',
+    body: '定稿後若需改回未定稿請通知管理員。',
     okText: '確認定稿',
     onOk: function() {
       optimisticUpdate('designs', designId, {
