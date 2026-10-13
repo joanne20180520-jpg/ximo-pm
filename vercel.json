@@ -5,12 +5,18 @@
       "memory": 1024
     },
     "api/lark.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "api/upload-file.js": {
       "maxDuration": 60
     }
   },
+  "crons": [
+    {
+      "path": "/api/lark?action=sync-missing-projects-to-acc",
+      "schedule": "*/10 * * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/",

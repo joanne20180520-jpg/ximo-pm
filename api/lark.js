@@ -5084,6 +5084,86 @@ async function syncXimoCatalogToAcc(ximoToken, opts) {
   return result;
 }
 
+async function listMissingXimoProjectIds(ximoToken) {
+  if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_PROJECTS) return [];
+  const accToken = await getAccTenantToken();
+  const [projects, accProjects] = await Promise.all([
+    getRecords(ximoToken, tableIdFor('projects'), appTokenForTable('projects')),
+    getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN)
+  ]);
+  const missing = [];
+  for (let i = 0; i < projects.length; i++) {
+    const project = projects[i];
+    const name = accFieldText((project.fields || {})['標案名稱']);
+    if (!project.record_id || !name) continue;
+    const existing = await findAccProjectRecord(accToken, name, project.record_id, accProjects);
+    if (!existing) missing.push(project.record_id);
+  }
+  return missing;
+}
+
+async function syncMissingXimoProjectsToAcc(ximoToken) {
+  const missing = await listMissingXimoProjectIds(ximoToken);
+  if (!missing.length) return { ok: true, missing: 0 };
+  const sync = await syncXimoCatalogToAcc(ximoToken, {
+    onlyProjectIds: missing,
+    skipPrune: true,
+    skipExpenseRematch: true
+  });
+  return { ok: true, missing: missing.length, sync: sync };
+}
+
+function ximoBitableTokenSet() {
+  const set = {};
+  const operational = getOperationalBitableConfig();
+  const backend = getBackendBitableConfig();
+  if (operational && operational.appToken) set[operational.appToken] = true;
+  if (APP_TOKEN) set[APP_TOKEN] = true;
+  if (backend && backend.appToken) set[backend.appToken] = true;
+  return set;
+}
+
+async function projectIdsFromBitableChange(ximoToken, event) {
+  const tableId = String((event && event.table_id) || '').trim();
+  const projectTable = tableIdFor('projects');
+  const workitemTable = tableIdFor('workitems');
+  const actions = Array.isArray(event && event.action_list) ? event.action_list : [];
+  const recordIds = [];
+  actions.forEach(function(item) {
+    if (!item || !item.record_id) return;
+    if (item.action === 'record_added' || item.action === 'record_edited') recordIds.push(item.record_id);
+  });
+  if (!recordIds.length) return [];
+  if (tableId === projectTable) return recordIds;
+  if (tableId !== workitemTable) return [];
+  const appToken = appTokenForTable('workitems');
+  const projectIds = {};
+  for (let i = 0; i < recordIds.length; i++) {
+    try {
+      const rec = await getRecordById(ximoToken, workitemTable, recordIds[i], appToken);
+      const links = getLinkIds((rec && rec.fields && (rec.fields['所屬標案'] || rec.fields['所數標案'])) || []);
+      links.forEach(function(id) { if (id) projectIds[id] = true; });
+    } catch (err) {}
+  }
+  return Object.keys(projectIds);
+}
+
+async function syncAccFromBitableEvent(body) {
+  const event = (body && body.event) || {};
+  const fileToken = String(event.file_token || '').trim();
+  const known = ximoBitableTokenSet();
+  if (fileToken && !known[fileToken]) return { ignored: true, reason: 'other-base' };
+  const token = await getToken();
+  const projectIds = await projectIdsFromBitableChange(token, event);
+  if (!projectIds.length) return { ignored: true, reason: 'no-project' };
+  const sync = await syncXimoCatalogToAcc(token, {
+    onlyProjectIds: projectIds,
+    skipPrune: true,
+    skipExpenseRematch: true
+  });
+  return { ok: true, projectIds: projectIds, sync: sync };
+}
+
 function accWorkitemAliases(name) {
   const n = String(name || '').replace(/\s+/g, '');
   const aliases = [n];
@@ -9432,6 +9512,17 @@ export default async function handler(req, res) {
   const { table, recordId, action } = req.query;
 
   try {
+    if (req.method === 'POST' && req.body && (req.body.type === 'url_verification' || (req.body.header && req.body.header.event_type))) {
+      if (req.body.type === 'url_verification') {
+        return res.status(200).json({ challenge: req.body.challenge });
+      }
+      if (req.body.header.event_type === 'drive.file.bitable_record_changed_v1') {
+        const sync = await syncAccFromBitableEvent(req.body);
+        return res.status(200).json({ ok: true, sync: sync });
+      }
+      return res.status(200).json({ ok: true, ignored: true });
+    }
+
     if (action === 'appid' && req.method === 'GET') {
       const redirectUri = getRedirectUriForRequest(req);
       return res.status(200).json({
@@ -9696,6 +9787,16 @@ export default async function handler(req, res) {
         const token = await getToken();
         const result = await syncXimoCatalogToAcc(token);
         return res.status(200).json({ ok: true, sync: result });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'sync-missing-projects-to-acc' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const token = await getToken();
+        const result = await syncMissingXimoProjectsToAcc(token);
+        return res.status(200).json(result);
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
