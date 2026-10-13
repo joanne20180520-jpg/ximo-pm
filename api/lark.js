@@ -5102,15 +5102,187 @@ async function listMissingXimoProjectIds(ximoToken) {
   return missing;
 }
 
-async function syncMissingXimoProjectsToAcc(ximoToken) {
+function idSet(list) {
+  const set = {};
+  (list || []).forEach(function(id) {
+    const key = String(id || '').trim();
+    if (key) set[key] = true;
+  });
+  return set;
+}
+
+async function detachAccExpensesFromCatalog(accToken, projectIds, workitemIds) {
+  const out = { expensesUnlinked: 0, errors: [] };
+  const projectDrop = idSet(projectIds);
+  const workitemDrop = idSet(workitemIds);
+  if (!Object.keys(projectDrop).length && !Object.keys(workitemDrop).length) return out;
+  let expenses = [];
+  try {
+    expenses = await getRecords(accToken, ACC_TABLE_EXPENSES, ACC_APP_TOKEN);
+  } catch (err) {
+    out.errors.push({ type: 'expense-list', error: err.message || String(err) });
+    return out;
+  }
+  for (let i = 0; i < expenses.length; i++) {
+    const rec = expenses[i];
+    const f = rec.fields || {};
+    const projects = getLinkIds(f['所屬案件']);
+    const workitems = getLinkIds(f['工項']);
+    const nextProjects = projects.filter(function(id) { return !projectDrop[id]; });
+    const nextWorkitems = workitems.filter(function(id) { return !workitemDrop[id]; });
+    if (nextProjects.length === projects.length && nextWorkitems.length === workitems.length) continue;
+    const patch = {};
+    if (nextProjects.length !== projects.length) patch['所屬案件'] = nextProjects;
+    if (nextWorkitems.length !== workitems.length) patch['工項'] = nextWorkitems;
+    try {
+      await updateRecord(accToken, ACC_TABLE_EXPENSES, rec.record_id, patch, ACC_APP_TOKEN, false);
+      out.expensesUnlinked++;
+    } catch (err) {
+      out.errors.push({ type: 'expense-unlink', id: rec.record_id, error: err.message || String(err) });
+    }
+  }
+  return out;
+}
+
+async function deleteAccCatalogMissingFromXimo(accToken, accProjects, accWorkitems, deadProjectSources, deadWorkitemSources, dryRun) {
+  const projectDrop = {};
+  const projects = [];
+  (accProjects || []).forEach(function(rec) {
+    const source = accFieldText((rec.fields || {})['來源Ximo標案ID']);
+    if (!source || !deadProjectSources[source]) return;
+    projectDrop[rec.record_id] = true;
+    projects.push({
+      id: rec.record_id,
+      name: accFieldText((rec.fields || {})['案名'] || (rec.fields || {})['完整名稱']),
+      sourceId: source
+    });
+  });
+  const workitemIds = [];
+  const workitems = [];
+  (accWorkitems || []).forEach(function(rec) {
+    const f = rec.fields || {};
+    const source = accFieldText(f['來源Ximo工項ID']);
+    const parent = getLinkIds(f['所屬案件'])[0] || '';
+    if (!((source && deadWorkitemSources[source]) || projectDrop[parent])) return;
+    workitemIds.push(rec.record_id);
+    workitems.push({
+      id: rec.record_id,
+      name: accFieldText(f['工作項目']),
+      sourceId: source
+    });
+  });
+  const projectIds = Object.keys(projectDrop);
+  const out = {
+    dryRun: !!dryRun,
+    projectsRemoved: 0,
+    workitemsRemoved: 0,
+    expensesUnlinked: 0,
+    projects: projects,
+    workitems: workitems,
+    errors: []
+  };
+  if (!projectIds.length && !workitemIds.length) return out;
+  if (dryRun) {
+    out.projectsRemoved = projectIds.length;
+    out.workitemsRemoved = workitemIds.length;
+    return out;
+  }
+  const detached = await detachAccExpensesFromCatalog(accToken, projectIds, workitemIds);
+  out.expensesUnlinked = detached.expensesUnlinked;
+  out.errors = out.errors.concat(detached.errors);
+  for (let i = 0; i < workitemIds.length; i++) {
+    try {
+      await deleteRecord(accToken, ACC_TABLE_WORKITEMS, workitemIds[i], ACC_APP_TOKEN, false);
+      out.workitemsRemoved++;
+    } catch (err) {
+      out.errors.push({ type: 'workitem-delete', id: workitemIds[i], error: err.message || String(err) });
+    }
+  }
+  for (let i = 0; i < projectIds.length; i++) {
+    try {
+      await deleteRecord(accToken, ACC_TABLE_PROJECTS, projectIds[i], ACC_APP_TOKEN, false);
+      out.projectsRemoved++;
+    } catch (err) {
+      out.errors.push({ type: 'project-delete', id: projectIds[i], error: err.message || String(err) });
+    }
+  }
+  return out;
+}
+
+async function removeAccCatalogDeletedFromXimo(ximoToken, opts) {
+  opts = opts || {};
+  if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_PROJECTS || !ACC_TABLE_WORKITEMS) {
+    return { skipped: true, reason: 'acc-env-missing', projectsRemoved: 0, workitemsRemoved: 0 };
+  }
+  const [projects, workitems] = await Promise.all([
+    getRecords(ximoToken, tableIdFor('projects'), appTokenForTable('projects')),
+    getRecords(ximoToken, tableIdFor('workitems'), appTokenForTable('workitems'))
+  ]);
+  if (!projects.length) {
+    return { skipped: true, reason: 'empty-ximo-projects', projectsRemoved: 0, workitemsRemoved: 0 };
+  }
+  const liveProjects = {};
+  projects.forEach(function(rec) {
+    if (rec && rec.record_id) liveProjects[rec.record_id] = true;
+  });
+  const liveWorkitems = {};
+  workitems.forEach(function(rec) {
+    if (rec && rec.record_id) liveWorkitems[rec.record_id] = true;
+  });
+  const accToken = await getAccTenantToken();
+  const [accProjects, accWorkitems] = await Promise.all([
+    getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN),
+    getRecords(accToken, ACC_TABLE_WORKITEMS, ACC_APP_TOKEN)
+  ]);
+  const deadProjectSources = {};
+  accProjects.forEach(function(rec) {
+    const source = accFieldText((rec.fields || {})['來源Ximo標案ID']);
+    if (source && !liveProjects[source]) deadProjectSources[source] = true;
+  });
+  const deadWorkitemSources = {};
+  if (workitems.length) {
+    accWorkitems.forEach(function(rec) {
+      const source = accFieldText((rec.fields || {})['來源Ximo工項ID']);
+      if (source && !liveWorkitems[source]) deadWorkitemSources[source] = true;
+    });
+  }
+  return deleteAccCatalogMissingFromXimo(
+    accToken,
+    accProjects,
+    accWorkitems,
+    deadProjectSources,
+    deadWorkitemSources,
+    !!opts.dryRun
+  );
+}
+
+async function removeAccCatalogByDeletedSourceIds(deadProjectSources, deadWorkitemSources) {
+  if (!Object.keys(deadProjectSources).length && !Object.keys(deadWorkitemSources).length) {
+    return { projectsRemoved: 0, workitemsRemoved: 0, projects: [], workitems: [] };
+  }
+  if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_PROJECTS || !ACC_TABLE_WORKITEMS) {
+    return { skipped: true, reason: 'acc-env-missing', projectsRemoved: 0, workitemsRemoved: 0 };
+  }
+  const accToken = await getAccTenantToken();
+  const [accProjects, accWorkitems] = await Promise.all([
+    getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN),
+    getRecords(accToken, ACC_TABLE_WORKITEMS, ACC_APP_TOKEN)
+  ]);
+  return deleteAccCatalogMissingFromXimo(accToken, accProjects, accWorkitems, deadProjectSources, deadWorkitemSources, false);
+}
+
+async function syncMissingXimoProjectsToAcc(ximoToken, opts) {
+  opts = opts || {};
+  const removed = await removeAccCatalogDeletedFromXimo(ximoToken, { dryRun: !!opts.dryRun });
   const missing = await listMissingXimoProjectIds(ximoToken);
-  if (!missing.length) return { ok: true, missing: 0 };
+  if (opts.dryRun) return { ok: true, dryRun: true, missing: missing.length, removed: removed };
+  if (!missing.length) return { ok: true, missing: 0, removed: removed };
   const sync = await syncXimoCatalogToAcc(ximoToken, {
     onlyProjectIds: missing,
     skipPrune: true,
     skipExpenseRematch: true
   });
-  return { ok: true, missing: missing.length, sync: sync };
+  return { ok: true, missing: missing.length, removed: removed, sync: sync };
 }
 
 function ximoBitableTokenSet() {
@@ -5148,20 +5320,61 @@ async function projectIdsFromBitableChange(ximoToken, event) {
   return Object.keys(projectIds);
 }
 
+function deletedSourceIdsFromBitableChange(event) {
+  const tableId = String((event && event.table_id) || '').trim();
+  const actions = Array.isArray(event && event.action_list) ? event.action_list : [];
+  const projects = {};
+  const workitems = {};
+  actions.forEach(function(item) {
+    if (!item || item.action !== 'record_deleted' || !item.record_id) return;
+    if (tableId === tableIdFor('projects')) projects[item.record_id] = true;
+    else if (tableId === tableIdFor('workitems')) workitems[item.record_id] = true;
+  });
+  return { projects: projects, workitems: workitems };
+}
+
+async function confirmXimoRecordsGone(token, tableKey, idMap) {
+  const gone = {};
+  const ids = Object.keys(idMap || {});
+  const tableId = tableIdFor(tableKey);
+  const appToken = appTokenForTable(tableKey);
+  for (let i = 0; i < ids.length; i++) {
+    try {
+      const rec = await getRecordById(token, tableId, ids[i], appToken);
+      if (rec && rec.record_id) continue;
+      gone[ids[i]] = true;
+    } catch (err) {
+      const msg = String((err && err.message) || err);
+      if (/not found|NotFound|1254043|RecordId/i.test(msg)) gone[ids[i]] = true;
+    }
+  }
+  return gone;
+}
+
 async function syncAccFromBitableEvent(body) {
   const event = (body && body.event) || {};
   const fileToken = String(event.file_token || '').trim();
   const known = ximoBitableTokenSet();
   if (fileToken && !known[fileToken]) return { ignored: true, reason: 'other-base' };
   const token = await getToken();
+  const deleted = deletedSourceIdsFromBitableChange(event);
+  const goneProjects = await confirmXimoRecordsGone(token, 'projects', deleted.projects);
+  const goneWorkitems = await confirmXimoRecordsGone(token, 'workitems', deleted.workitems);
+  let removed = null;
+  if (Object.keys(goneProjects).length || Object.keys(goneWorkitems).length) {
+    removed = await removeAccCatalogByDeletedSourceIds(goneProjects, goneWorkitems);
+  }
   const projectIds = await projectIdsFromBitableChange(token, event);
-  if (!projectIds.length) return { ignored: true, reason: 'no-project' };
+  if (!projectIds.length) {
+    if (removed) return { ok: true, removed: removed };
+    return { ignored: true, reason: 'no-project' };
+  }
   const sync = await syncXimoCatalogToAcc(token, {
     onlyProjectIds: projectIds,
     skipPrune: true,
     skipExpenseRematch: true
   });
-  return { ok: true, projectIds: projectIds, sync: sync };
+  return { ok: true, projectIds: projectIds, removed: removed, sync: sync };
 }
 
 function accWorkitemAliases(name) {
@@ -9795,7 +10008,11 @@ export default async function handler(req, res) {
     if (action === 'sync-missing-projects-to-acc' && (req.method === 'GET' || req.method === 'POST')) {
       try {
         const token = await getToken();
-        const result = await syncMissingXimoProjectsToAcc(token);
+        const q = req.query || {};
+        const b = req.body || {};
+        const dryRun = String(q.dryRun || b.dryRun || '') === '1'
+          || String(q.dryRun || b.dryRun || '').toLowerCase() === 'true';
+        const result = await syncMissingXimoProjectsToAcc(token, { dryRun: dryRun });
         return res.status(200).json(result);
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
