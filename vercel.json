@@ -14,7 +14,7 @@
   "crons": [
     {
       "path": "/api/lark?action=sync-missing-projects-to-acc",
-      "schedule": "*/10 * * * *"
+      "schedule": "0 16 * * *"
     }
   ],
   "headers": [
