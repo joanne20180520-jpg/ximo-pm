@@ -4819,6 +4819,18 @@ function parseXimoContractUntaxed(fields) {
   return taxed > 0 ? Math.round(taxed / 1.05) : 0;
 }
 
+function parseXimoAvailableCost(fields, contractUntaxed) {
+  const f = fields || {};
+  const direct = Number(f['可用成本'] != null ? f['可用成本'] : f['可用成本未稅']);
+  if (!isNaN(direct) && direct > 0) return Math.round(direct);
+  return contractUntaxed > 0 ? Math.round(contractUntaxed * 0.5) : 0;
+}
+
+function accMoneyNumber(raw) {
+  const n = Number(raw);
+  return !isNaN(n) && n > 0 ? Math.round(n) : 0;
+}
+
 async function upsertAccProjectFromXimo(accToken, ximoProject, cachedAccProjects) {
   const fields = (ximoProject && ximoProject.fields) || {};
   const ximoId = ximoProject && ximoProject.record_id;
@@ -4843,10 +4855,9 @@ async function upsertAccProjectFromXimo(accToken, ximoProject, cachedAccProjects
     body['合約金額'] = contractTaxed;
     body['含稅金額'] = contractTaxed;
   }
-  if (contractUntaxed > 0) {
-    body['合約未稅'] = contractUntaxed;
-    body['可用成本'] = Math.round(contractUntaxed * 0.5);
-  }
+  if (contractUntaxed > 0) body['合約未稅'] = contractUntaxed;
+  const availableCost = parseXimoAvailableCost(fields, contractUntaxed);
+  if (availableCost > 0) body['可用成本'] = availableCost;
   if (existing && existing.record_id) {
     await updateRecord(accToken, ACC_TABLE_PROJECTS, existing.record_id, body, ACC_APP_TOKEN, false);
     existing.fields = Object.assign({}, existing.fields || {}, body);
@@ -5271,18 +5282,99 @@ async function removeAccCatalogByDeletedSourceIds(deadProjectSources, deadWorkit
   return deleteAccCatalogMissingFromXimo(accToken, accProjects, accWorkitems, deadProjectSources, deadWorkitemSources, false);
 }
 
+function findAccProjectForContractRefresh(ximoProject, accProjects) {
+  const fields = (ximoProject && ximoProject.fields) || {};
+  const ximoId = ximoProject && ximoProject.record_id;
+  const name = accFieldText(fields['標案名稱']);
+  if (ximoId) {
+    for (let i = 0; i < accProjects.length; i++) {
+      const source = accFieldText((accProjects[i].fields || {})['來源Ximo標案ID']);
+      if (source && source === ximoId) return accProjects[i];
+    }
+  }
+  if (!name) return null;
+  const hits = [];
+  for (let i = 0; i < accProjects.length; i++) {
+    const f = accProjects[i].fields || {};
+    const accName = accFieldText(f['案名']) || accFieldText(f['完整名稱']);
+    if (accName && accName === name) hits.push(accProjects[i]);
+  }
+  return hits.length === 1 ? hits[0] : null;
+}
+
+async function refreshAccContractsFromXimo(ximoToken, opts) {
+  opts = opts || {};
+  if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_PROJECTS) {
+    return { skipped: true, reason: 'acc-env-missing', updated: 0 };
+  }
+  const [projects, accToken] = await Promise.all([
+    getRecords(ximoToken, tableIdFor('projects'), appTokenForTable('projects')),
+    getAccTenantToken()
+  ]);
+  const accProjects = await getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN);
+  const out = { dryRun: !!opts.dryRun, updated: 0, unchanged: 0, skipped: 0, changes: [], errors: [] };
+  for (let i = 0; i < projects.length; i++) {
+    const project = projects[i];
+    const fields = project.fields || {};
+    const name = accFieldText(fields['標案名稱']);
+    if (!name) {
+      out.skipped++;
+      continue;
+    }
+    const acc = findAccProjectForContractRefresh(project, accProjects);
+    if (!acc) {
+      out.skipped++;
+      continue;
+    }
+    const taxed = parseXimoContractAmount(fields);
+    const untaxed = parseXimoContractUntaxed(fields);
+    const available = parseXimoAvailableCost(fields, untaxed);
+    const af = acc.fields || {};
+    const body = {};
+    if (taxed > 0 && accMoneyNumber(af['合約金額']) !== taxed) body['合約金額'] = taxed;
+    if (taxed > 0 && accMoneyNumber(af['含稅金額']) !== taxed) body['含稅金額'] = taxed;
+    if (untaxed > 0 && accMoneyNumber(af['合約未稅']) !== untaxed) body['合約未稅'] = untaxed;
+    if (available > 0 && accMoneyNumber(af['可用成本']) !== available) body['可用成本'] = available;
+    if (!Object.keys(body).length) {
+      out.unchanged++;
+      continue;
+    }
+    const change = {
+      name: name,
+      fromUntaxed: accMoneyNumber(af['合約未稅']),
+      toUntaxed: untaxed,
+      fromAvailable: accMoneyNumber(af['可用成本']),
+      toAvailable: available
+    };
+    out.changes.push(change);
+    if (opts.dryRun) {
+      out.updated++;
+      continue;
+    }
+    try {
+      await updateRecord(accToken, ACC_TABLE_PROJECTS, acc.record_id, body, ACC_APP_TOKEN, false);
+      acc.fields = Object.assign({}, af, body);
+      out.updated++;
+    } catch (err) {
+      out.errors.push({ name: name, error: err.message || String(err) });
+    }
+  }
+  return out;
+}
+
 async function syncMissingXimoProjectsToAcc(ximoToken, opts) {
   opts = opts || {};
   const removed = await removeAccCatalogDeletedFromXimo(ximoToken, { dryRun: !!opts.dryRun });
+  const contracts = await refreshAccContractsFromXimo(ximoToken, { dryRun: !!opts.dryRun });
   const missing = await listMissingXimoProjectIds(ximoToken);
-  if (opts.dryRun) return { ok: true, dryRun: true, missing: missing.length, removed: removed };
-  if (!missing.length) return { ok: true, missing: 0, removed: removed };
+  if (opts.dryRun) return { ok: true, dryRun: true, missing: missing.length, removed: removed, contracts: contracts };
+  if (!missing.length) return { ok: true, missing: 0, removed: removed, contracts: contracts };
   const sync = await syncXimoCatalogToAcc(ximoToken, {
     onlyProjectIds: missing,
     skipPrune: true,
     skipExpenseRematch: true
   });
-  return { ok: true, missing: missing.length, removed: removed, sync: sync };
+  return { ok: true, missing: missing.length, removed: removed, contracts: contracts, sync: sync };
 }
 
 function ximoBitableTokenSet() {
