@@ -902,6 +902,7 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .des-sec{font-size:11px;font-weight:700;color:var(--t2);margin:10px 0 6px;padding-top:6px;border-top:1px solid var(--border)}
 .des-sec:first-child{border-top:none;margin-top:0;padding-top:0}
 .fg input:disabled,.fg select:disabled,.fg textarea:disabled{opacity:.65;cursor:not-allowed;background:#f0eeea}
+.fg input.pay-date-locked{pointer-events:none;cursor:not-allowed;background:#f0eeea;color:var(--t2)}
 
 /* payment form */
 .pfw{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px}
@@ -1628,7 +1629,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
             <div class="fg"><label>申請人</label><input type="text" id="p-applicant" placeholder="Lark 登入自動帶入，或手動填寫"></div>
             <div class="fg"><label>請款公司</label><select id="p-company"><option value="">請選擇</option><option value="身土">身土</option><option value="璽墨">璽墨</option></select></div>
             <div class="fg"><label>申請部門</label><input type="text" id="p-dept" value="企劃部"></div>
-            <div class="fg"><label>申請日期</label><input type="date" id="p-date"></div>
+            <div class="fg"><label>申請日期</label><input type="text" id="p-date" class="pay-date-locked" readonly tabindex="-1" autocomplete="off" title="申請日期固定為當天，無法修改"></div>
             <div class="fg"><label>所屬標案</label><select id="p-proj" onchange="onPaymentProjChange()"></select></div>
             <div class="fg"><label>所屬工作項目</label><select id="p-wi"></select></div>
             <div class="fg"><label>支付對象</label><input type="text" id="p-payee" placeholder="OOO"></div>
@@ -4342,7 +4343,7 @@ function postPayPrintToIframe(iframe) {
 function buildPayPrintUrl(opts) {
   opts = opts || {};
   var dept = document.getElementById('p-dept').value.trim();
-  var date = document.getElementById('p-date').value;
+  var date = lockPayApplicationDate();
   var payee = document.getElementById('p-payee').value.trim();
   var vendor = document.getElementById('p-vendor').value.trim();
   var method = document.getElementById('p-method').value;
@@ -6419,11 +6420,30 @@ function initPayFormDefaults() {
     var curDept = deptEl.value.trim();
     if (!curDept || curDept === '璽墨') deptEl.value = '企劃部';
   }
-  var dateEl = document.getElementById('p-date');
-  if (dateEl && !dateEl.value) {
+  lockPayApplicationDate();
+}
+function taipeiTodayYmd() {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date());
+  } catch (e) {
     var d = new Date();
-    dateEl.value = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
+}
+function lockPayApplicationDate() {
+  var dateEl = document.getElementById('p-date');
+  var ymd = taipeiTodayYmd();
+  if (!dateEl) return ymd;
+  dateEl.value = ymd;
+  dateEl.readOnly = true;
+  dateEl.setAttribute('readonly', 'readonly');
+  dateEl.tabIndex = -1;
+  return ymd;
 }
 function applyLoginUserToForms() {
   initPayFormDefaults();
@@ -19582,7 +19602,7 @@ function collectPaymentFields() {
   return {
     company: companyEl ? companyEl.value.trim() : '',
     dept: document.getElementById('p-dept').value.trim(),
-    date: document.getElementById('p-date').value,
+    date: lockPayApplicationDate(),
     payee: document.getElementById('p-payee').value.trim(),
     vendor: document.getElementById('p-vendor').value.trim(),
     method: document.getElementById('p-method').value,

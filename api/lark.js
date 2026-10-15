@@ -2270,17 +2270,36 @@ function paymentAmountNumber(fields) {
   return isNaN(n) ? 0 : n;
 }
 
+function taipeiYmd(date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date || new Date());
+  const pick = function(type) {
+    const hit = parts.find(function(p) { return p.type === type; });
+    return hit ? hit.value : '';
+  };
+  return pick('year') + '-' + pick('month') + '-' + pick('day');
+}
+
+function taipeiMidnightMs(ymd) {
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(String(ymd || '')) ? ymd : taipeiYmd(new Date());
+  return new Date(day + 'T00:00:00+08:00').getTime();
+}
+
 function paymentDateRfc3339(fields) {
   const raw = fields && fields['申請日期'];
-  let d = null;
-  if (typeof raw === 'number') d = new Date(raw);
-  else if (typeof raw === 'string' && raw.trim()) {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(raw.trim())) d = new Date(raw.trim() + 'T00:00:00+08:00');
-    else d = new Date(raw);
+  if (typeof raw === 'string') {
+    const m = raw.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m) return m[1] + 'T00:00:00+08:00';
   }
+  let d = null;
+  if (typeof raw === 'number') d = new Date(raw < 1e12 ? raw * 1000 : raw);
+  else if (typeof raw === 'string' && raw.trim()) d = new Date(raw.trim());
   if (!d || isNaN(d.getTime())) d = new Date();
-  const pad = function(n) { return String(n).padStart(2, '0'); };
-  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T00:00:00+08:00';
+  return taipeiYmd(d) + 'T00:00:00+08:00';
 }
 
 function paymentApplicantOpenId(fields, hint) {
@@ -7282,6 +7301,7 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
   const results = { main: null, accounting: null };
   const errors = [];
   const fields = Object.assign({}, rawFields || {});
+  fields['申請日期'] = taipeiMidnightMs(taipeiYmd(new Date()));
   if (fields['狀態'] === undefined) fields['狀態'] = '審批中';
   const originalAttach = fields['附件'] || fields['檔案'] || fields['上傳附件'];
   await enrichPaymentApplicant(tenantToken, userToken, fields, applicantOpenIdHint);
@@ -8979,11 +8999,11 @@ function buildPaymentPrintPath(fields) {
   }
   set('dept', fields['申請部門']);
   const dateVal = fields['申請日期'];
-  if (dateVal) {
-    const d = new Date(dateVal);
-    if (!isNaN(d.getTime())) {
-      set('date', d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
-    }
+  if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateVal.trim())) {
+    set('date', dateVal.trim().slice(0, 10));
+  } else if (dateVal) {
+    const d = new Date(typeof dateVal === 'number' && dateVal < 1e12 ? dateVal * 1000 : dateVal);
+    if (!isNaN(d.getTime())) set('date', taipeiYmd(d));
   }
   set('payee', fields['支付對象']);
   set('vendor', fields['廠商名稱']);
@@ -10667,6 +10687,7 @@ export default async function handler(req, res) {
       const tableAppToken = appTokenForTable(table);
       const tid = tableIdFor(table);
       const cleanBody = stripAuthFromBody(req.body || {});
+      if (table === 'payments') delete cleanBody['申請日期'];
       if (table === 'milestones') await ensureMilestoneTableFields(tenantToken);
       if (table === 'expenses') await ensureXimoExpenseAccSourceFields(tenantToken);
       const body = await normalizeWriteFields(tenantToken, tid, cleanBody, tableAppToken);
