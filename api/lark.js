@@ -2096,7 +2096,8 @@ async function normalizeWriteFields(token, tableId, fields, appToken) {
         name === '狀態' ||
         name === '發包廠商' ||
         name === '發票抬頭' ||
-        name === '設計狀態'
+        name === '設計狀態' ||
+        name === '支付方式'
       );
       if (options.length && options.indexOf(text) < 0) {
         var soft = '';
@@ -2392,6 +2393,8 @@ function matchApprovalWidgetOption(widget, label) {
       return String(opt.value != null ? opt.value : opt.text || '');
     }
   }
+  const widgetName = String(widgetDisplayName(widget) || '').replace(/\s+/g, '');
+  if (widgetName === '支付方式' || widgetName === '付款方式') return '';
   return String(opts[0].value != null ? opts[0].value : '');
 }
 
