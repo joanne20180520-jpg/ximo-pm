@@ -2505,7 +2505,13 @@ function buildPaymentApprovalForm(widgets, fields, openId) {
     } else if (type === 'radio' || type === 'radioV2') {
       const label = paymentFieldText(approvalFields, names);
       const opt = matchApprovalWidgetOption(w, label);
+      const widgetName = String(widgetDisplayName(w) || '').replace(/\s+/g, '');
       if (opt) item = { id: w.id, type: 'radioV2', value: opt };
+      else if ((widgetName === '支付方式' || widgetName === '付款方式') && label) {
+        const note = '支付方式：' + label;
+        const cur = String(approvalFields['備註'] || '').trim();
+        if (cur.indexOf(note) < 0) approvalFields['備註'] = cur ? (cur + '\n' + note) : note;
+      }
     } else if (type === 'date') {
       item = { id: w.id, type: 'date', value: paymentDateRfc3339(approvalFields) };
     } else if (type === 'contact') {
