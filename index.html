@@ -4956,7 +4956,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261001v1';
+var APP_BUILD = '20261019v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -15017,24 +15017,49 @@ function fixPaymentApprovalGaps() {
     var totals = { repaired: 0, imported: 0, finalized: 0, foundStuck: 0, foundOrphan: 0, errors: [] };
     var offset = 0;
     var pass = 0;
+    var listedTotal = 0;
+    var carry = null;
+
+    function readFixResponse(r) {
+      return r.text().then(function(text) {
+        var body = null;
+        try { body = text ? JSON.parse(text) : null; } catch (e) { body = null; }
+        if (body && typeof body === 'object') return body;
+        var snippet = String(text || '').replace(/\s+/g, ' ').trim();
+        if (r.status === 504 || /An error occurred|timed out|FUNCTION_INVOCATION/i.test(snippet)) {
+          throw new Error('這一段修復逾時。已完成的不會重做，請再按一次修復對帳繼續。');
+        }
+        throw new Error(snippet ? snippet.slice(0, 80) : ('修復失敗（HTTP ' + r.status + '）'));
+      });
+    }
 
     function postFix(body) {
       return fetch(apiUrl('action=fix-payment-approval-gaps'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body || {})
-      }).then(function(r) { return r.json(); });
+      }).then(readFixResponse);
     }
 
     function step() {
       pass += 1;
-      setPayFixStatus('掃描修復中（第 ' + pass + ' 段）…');
-      return postFix({ days: 60, maxDetail: 20, offset: offset }).then(function(res) {
+      if (pass > 160) throw new Error('修復分段過多，已完成的會保留。請再按一次繼續。');
+      setPayFixStatus(carry ? ('接續修復（第 ' + pass + ' 段）…') : ('掃描修復中（第 ' + pass + ' 段）…'));
+      var body = { days: 60, maxDetail: 8, offset: offset, expectCarry: 1, approvalListed: listedTotal };
+      if (carry) {
+        body.pendingStuck = carry.stuck;
+        body.pendingOrphans = carry.orphans;
+        body.resumeOffset = carry.resumeOffset;
+        body.offset = carry.offset;
+      }
+      return postFix(body).then(function(res) {
         if (!res || !res.ok) throw new Error((res && res.error) || '修復失敗');
         var fix = res.fix || {};
-        var found = fix.found || {};
-        totals.foundStuck += found.stuckStatus || 0;
-        totals.foundOrphan += found.orphanApprovals || 0;
+        if (!fix.continued) {
+          var found = fix.found || {};
+          totals.foundStuck += found.stuckStatus || 0;
+          totals.foundOrphan += found.orphanApprovals || 0;
+        }
         if (fix.repair) {
           totals.repaired += fix.repair.repaired || 0;
           (fix.repair.errors || []).forEach(function(e) { totals.errors.push(e); });
@@ -15044,11 +15069,25 @@ function fixPaymentApprovalGaps() {
           totals.finalized += fix.import.finalized || 0;
           (fix.import.errors || []).forEach(function(e) { totals.errors.push(e); });
         }
-        var listed = (fix.summary && fix.summary.approvalListed) || 0;
+        var listed = (fix.summary && fix.summary.approvalListed) || listedTotal;
+        if (listed) listedTotal = listed;
         var end = (fix.summary && fix.summary.slice) || '';
         var doneN = parsePayFixSliceEnd(end);
-        setPayFixStatus('已處理 ' + end + (listed ? '／共 ' + listed + ' 筆' : ''));
+        var pendS = fix.pendingStuck || [];
+        var pendO = fix.pendingOrphans || [];
+        var deferNote = (pendS.length || pendO.length) ? '，尚有待修' : '';
+        setPayFixStatus('已處理 ' + (end || offset) + (listed ? '／共 ' + listed + ' 筆' : '') + deferNote);
         if (listed || doneN) setPayFixProgressByCounts(doneN || listed, listed || doneN);
+        if (pendS.length || pendO.length) {
+          carry = {
+            stuck: pendS,
+            orphans: pendO,
+            resumeOffset: fix.resumeOffset == null ? null : fix.resumeOffset,
+            offset: carry ? carry.offset : offset
+          };
+          return step();
+        }
+        carry = null;
         if (fix.nextOffset != null) {
           offset = fix.nextOffset;
           return step();
@@ -15059,7 +15098,7 @@ function fixPaymentApprovalGaps() {
 
     return step().then(function() {
       _lastPaymentApprovalSyncAt = 0;
-      return syncTables(['payments', 'expenses']).then(function() {
+      return syncTables(['payments', 'expenses']).catch(function() { return null; }).then(function() {
         return syncPaymentApprovals(true).catch(function() { return null; });
       }).then(function() {
         renderPaymentsList();

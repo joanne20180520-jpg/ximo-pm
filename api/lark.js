@@ -7038,65 +7038,148 @@ async function importOrphanPaymentApprovals(tenantToken, opts) {
   return out;
 }
 
+function emptyPaymentRepairResult() {
+  return { requested: 0, repaired: 0, details: [], errors: [], skipped: [] };
+}
+
+function emptyPaymentImportResult() {
+  return { requested: 0, imported: 0, finalized: 0, details: [], errors: [], skipped: [] };
+}
+
+function normalizePendingStuck(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  raw.forEach(function(s) {
+    const recordId = String((s && (s.recordId || s.record_id)) || '').trim();
+    const instanceCode = String((s && (s.instanceCode || s.instance_code)) || '').trim();
+    if (!recordId) return;
+    out.push({ recordId: recordId, instanceCode: instanceCode });
+  });
+  return out.slice(0, 40);
+}
+
+function normalizePendingOrphans(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  raw.forEach(function(o) {
+    const code = typeof o === 'string'
+      ? o.trim()
+      : String((o && o.instanceCode) || '').trim();
+    if (code) out.push(code);
+  });
+  return out.slice(0, 40);
+}
+
+function parseResumeOffset(v) {
+  if (v == null || v === '' || v === 'null') return null;
+  const n = parseInt(v, 10);
+  return isNaN(n) ? null : Math.max(0, n);
+}
+
 /**
  * 前台一鍵修復：掃一段 coverage，並立刻修 stuck、匯入 orphan（含核銷／支出／ACC）。
- * 用 offset 分段呼叫，避免 timeout。
+ * 每次最多核銷 1 筆、補建 1 筆，其餘放進 pending 由前台接續，避免單次打滿 300 秒被平台砍掉。
  */
 async function fixPaymentApprovalGapsSlice(tenantToken, opts) {
   opts = opts || {};
   const days = Math.max(7, Math.min(180, parseInt(opts.days, 10) || 60));
-  const maxDetail = Math.max(8, Math.min(30, parseInt(opts.maxDetail, 10) || 20));
+  const maxDetail = Math.max(4, Math.min(12, parseInt(opts.maxDetail, 10) || 8));
   const offset = Math.max(0, parseInt(opts.offset, 10) || 0);
   const dryRun = !!opts.dryRun;
-  const coverage = await auditPaymentApprovalCoverage(tenantToken, {
-    days: days,
-    maxDetail: maxDetail,
-    offset: offset
-  });
-  const orphans = (coverage.orphanApprovals || []).filter(function(o) { return o && o.approved; });
-  const stuckRows = coverage.stuckStatus || [];
+  const expectCarry = opts.expectCarry === true
+    || opts.expectCarry === 1
+    || String(opts.expectCarry || '') === '1';
+  const startedAt = Date.now();
+  const BUDGET_MS = 45000;
+  const overBudget = function() { return (Date.now() - startedAt) > BUDGET_MS; };
+
+  const incomingStuck = normalizePendingStuck(opts.pendingStuck);
+  const incomingOrphans = normalizePendingOrphans(opts.pendingOrphans);
+  const hasCarry = incomingStuck.length > 0 || incomingOrphans.length > 0;
+
+  let coverage = null;
+  let stuckRows = incomingStuck.slice();
+  let orphanCodes = incomingOrphans.slice();
+  let resumeOffset = parseResumeOffset(opts.resumeOffset);
+
+  if (!hasCarry) {
+    coverage = await auditPaymentApprovalCoverage(tenantToken, {
+      days: days,
+      maxDetail: maxDetail,
+      offset: offset
+    });
+    const orphans = (coverage.orphanApprovals || []).filter(function(o) { return o && o.approved; });
+    stuckRows = normalizePendingStuck(coverage.stuckStatus || []);
+    orphanCodes = normalizePendingOrphans(orphans);
+    resumeOffset = coverage.summary && coverage.summary.nextOffset != null
+      ? coverage.summary.nextOffset
+      : null;
+  }
+
   const out = {
     dryRun: dryRun,
     days: days,
     offset: offset,
     maxDetail: maxDetail,
-    summary: coverage.summary || null,
-    found: {
-      orphanApprovals: orphans.length,
+    continued: hasCarry,
+    summary: coverage ? (coverage.summary || null) : {
+      approvalListed: parseInt(opts.approvalListed, 10) || 0,
+      slice: String(offset),
+      nextOffset: resumeOffset
+    },
+    found: coverage ? {
+      orphanApprovals: orphanCodes.length,
       stuckStatus: stuckRows.length,
       linked: (coverage.linked || []).length,
       pendingInLark: (coverage.pendingInLark || []).length
+    } : {
+      orphanApprovals: 0,
+      stuckStatus: 0,
+      linked: 0,
+      pendingInLark: 0
     },
     repair: null,
     import: null,
-    nextOffset: coverage.summary && coverage.summary.nextOffset != null
-      ? coverage.summary.nextOffset
-      : null
+    pendingStuck: [],
+    pendingOrphans: [],
+    resumeOffset: resumeOffset,
+    nextOffset: resumeOffset
   };
 
   if (dryRun) {
     out.stuckPreview = stuckRows.slice(0, 20);
-    out.orphanPreview = orphans.slice(0, 20);
+    out.orphanPreview = orphanCodes.slice(0, 20).map(function(code) { return { instanceCode: code }; });
     return out;
   }
 
-  if (stuckRows.length) {
-    out.repair = await repairStuckPaymentRecordsDirect(
-      tenantToken,
-      stuckRows.map(function(s) {
-        return { recordId: s.recordId, instanceCode: s.instanceCode };
-      })
-    );
+  const stuckNow = [];
+  const orphanNow = [];
+  if (stuckRows.length && !overBudget()) stuckNow.push(stuckRows.shift());
+  if (orphanCodes.length && !overBudget()) orphanNow.push(orphanCodes.shift());
+
+  if (stuckNow.length) {
+    out.repair = await repairStuckPaymentRecordsDirect(tenantToken, stuckNow);
   } else {
-    out.repair = { requested: 0, repaired: 0, details: [], errors: [], skipped: [] };
+    out.repair = emptyPaymentRepairResult();
   }
 
-  if (orphans.length) {
-    out.import = await importOrphanPaymentApprovals(tenantToken, {
-      instanceCodes: orphans.map(function(o) { return o.instanceCode; })
-    });
+  if (orphanNow.length && !overBudget()) {
+    out.import = await importOrphanPaymentApprovals(tenantToken, { instanceCodes: orphanNow });
   } else {
-    out.import = { requested: 0, imported: 0, finalized: 0, details: [], errors: [], skipped: [] };
+    if (orphanNow.length) orphanCodes = orphanNow.concat(orphanCodes);
+    out.import = emptyPaymentImportResult();
+  }
+
+  const deferred = stuckRows.length + orphanCodes.length;
+  out.pendingStuck = stuckRows;
+  out.pendingOrphans = orphanCodes;
+  out.deferred = deferred;
+  if (deferred && expectCarry) {
+    out.nextOffset = offset;
+  } else {
+    out.pendingStuck = [];
+    out.pendingOrphans = [];
+    out.nextOffset = resumeOffset;
   }
   return out;
 }
