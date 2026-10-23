@@ -9605,26 +9605,57 @@ function getMemberRole(fields) {
   return 'PM';
 }
 
+function memberRoleRank(rec) {
+  const role = getMemberRole((rec && rec.fields) || {});
+  if (isAdminRoleToken(role)) return 0;
+  if (role === '會計') return 1;
+  if (role === '設計主管') return 2;
+  if (role === '設計師') return 3;
+  return 4;
+}
+
 function findMemberForUser(members, user) {
   const openId = String(user.openId || '').trim();
   const unionId = String(user.unionId || '').trim();
   const userId = String(user.userId || '').trim();
   const userNames = [user.name, user.enName].map(function(s) { return String(s || '').trim(); }).filter(Boolean);
-  for (let i = 0; i < members.length; i++) {
-    const f = members[i].fields || {};
+  const idHits = [];
+  const exactNameHits = [];
+  const looseHits = [];
+  function best(list) {
+    if (!list.length) return null;
+    let pick = list[0];
+    for (let i = 1; i < list.length; i++) {
+      if (memberRoleRank(list[i]) < memberRoleRank(pick)) pick = list[i];
+    }
+    return pick;
+  }
+  (members || []).forEach(function(rec) {
+    const f = rec.fields || {};
     const personIds = listMemberPersonIds(f);
-    if (openId && personIds.some(function(id) { return id === openId; })) return members[i];
-    if (unionId && personIds.some(function(id) { return id === unionId; })) return members[i];
-    const mUserId = fieldTextValue(f['user_id'] || f['User ID'] || f['userid']);
-    if (userId && mUserId && userId === mUserId) return members[i];
+    const idHit = (openId && personIds.indexOf(openId) >= 0)
+      || (unionId && personIds.indexOf(unionId) >= 0)
+      || (userId && fieldTextValue(f['user_id'] || f['User ID'] || f['userid']) === userId);
+    if (idHit) {
+      idHits.push(rec);
+      return;
+    }
     const mNames = listMemberPersonNames(f);
+    let exact = false;
+    let loose = false;
     for (let u = 0; u < userNames.length; u++) {
       for (let n = 0; n < mNames.length; n++) {
-        if (namesMatch(mNames[n], userNames[u])) return members[i];
+        const mn = String(mNames[n] || '').trim();
+        if (!mn) continue;
+        if (mn === userNames[u]) exact = true;
+        else if (namesMatch(mn, userNames[u])) loose = true;
       }
     }
-  }
-  return null;
+    if (exact) exactNameHits.push(rec);
+    else if (loose) looseHits.push(rec);
+  });
+  // 同一人可能有多筆人員列。open_id／完全同名時以管理員為準，避免先對到 PM 列就被拒絕審核。
+  return best(idHits) || best(exactNameHits) || looseHits[0] || null;
 }
 
 async function resolveTriggeredByOpenId(larkToken, userAccessToken, hintOpenId) {
@@ -10234,8 +10265,16 @@ export default async function handler(req, res) {
       try {
         const gate = await requireSignedInMember(req);
         if (!gate.ok) return res.status(gate.status).json({ ok: false, error: gate.error });
-        const canReview = isAdminRoleToken(gate.auth.role);
-        if (!canReview) {
+        let reviewRole = gate.auth.role;
+        if (!isAdminRoleToken(reviewRole) && gate.auth.user) {
+          try {
+            const freshToken = await getToken();
+            const freshMembers = await getMembersRecords(freshToken, { bypassCache: true });
+            const freshRec = findMemberForUser(freshMembers, gate.auth.user);
+            if (freshRec) reviewRole = getMemberRole(freshRec.fields || {});
+          } catch (e) {}
+        }
+        if (!isAdminRoleToken(reviewRole)) {
           return res.status(403).json({ ok: false, error: '只有管理員可以審核刪除' });
         }
         const b = req.body || {};

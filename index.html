@@ -4968,7 +4968,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261024v1';
+var APP_BUILD = '20261024v2';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -5916,27 +5916,58 @@ function resolveRoleFromMembersForLoginUser() {
   var unionId = String(user.unionId || '').trim();
   var userId = String(user.userId || '').trim();
   var userNames = [user.name, user.enName].map(function(s) { return String(s || '').trim(); }).filter(Boolean);
-  // 只依「人員資料」表判定角色，避免任務／工項上的同 openId 別名把管理員降成 PM
+  var idHits = [];
+  var exactNameHits = [];
+  var looseHits = [];
+  function roleRank(fields) {
+    var role = resolveMemberRole(fields);
+    if (role === '管理員' || role === '管理员') return 0;
+    if (role === '會計' || role === '会计') return 1;
+    if (role === '設計主管') return 2;
+    if (role === '設計師') return 3;
+    return 4;
+  }
+  function bestRole(list) {
+    if (!list.length) return '';
+    var pick = list[0];
+    for (var i = 1; i < list.length; i++) {
+      if (roleRank(list[i]) < roleRank(pick)) pick = list[i];
+    }
+    return resolveMemberRole(pick);
+  }
+  // 同一人可能有多筆人員列。open_id／完全同名時以管理員為準，避免先對到 PM 列。
   for (var i = 0; i < membersData.length; i++) {
     var f = membersData[i].fields || {};
     var personIds = memberFieldPersonIds(f);
     var mNames = memberFieldPersonNames(f);
-    var matched = false;
-    if (openId && personIds.indexOf(openId) >= 0) matched = true;
-    else if (unionId && personIds.indexOf(unionId) >= 0) matched = true;
-    else {
+    var idHit = (openId && personIds.indexOf(openId) >= 0)
+      || (unionId && personIds.indexOf(unionId) >= 0);
+    if (!idHit && userId) {
       var mUserId = fieldTextValue(f['user_id'] || f['User ID'] || f['userid']);
-      if (userId && mUserId && userId === mUserId) matched = true;
-      else {
-        for (var u = 0; u < userNames.length && !matched; u++) {
-          for (var n = 0; n < mNames.length; n++) {
-            if (namesMatch(mNames[n], userNames[u])) matched = true;
-          }
-        }
+      if (mUserId && userId === mUserId) idHit = true;
+    }
+    if (idHit) {
+      idHits.push(f);
+      continue;
+    }
+    var exact = false;
+    var loose = false;
+    for (var u = 0; u < userNames.length; u++) {
+      for (var n = 0; n < mNames.length; n++) {
+        var mn = String(mNames[n] || '').trim();
+        if (!mn) continue;
+        if (mn === userNames[u]) exact = true;
+        else if (namesMatch(mn, userNames[u])) loose = true;
       }
     }
-    if (matched) return resolveMemberRole(f);
+    if (exact) exactNameHits.push(f);
+    else if (loose) looseHits.push(f);
   }
+  var fromId = bestRole(idHits);
+  if (fromId) return fromId;
+  var fromExact = bestRole(exactNameHits);
+  if (fromExact) return fromExact;
+  if (looseHits.length) return resolveMemberRole(looseHits[0]);
   return '';
 }
 
@@ -19383,9 +19414,12 @@ function syncDesignDeleteChrome() {
 }
 
 function postDesignDeleteAction(action, body) {
+  var headers = { 'Content-Type': 'application/json' };
+  var tok = getUserAccessToken();
+  if (tok) headers['X-User-Access-Token'] = tok;
   return fetch(apiUrl('action=' + action), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: headers,
     body: JSON.stringify(withUserToken(body || {}))
   }).then(function(r) {
     return r.text().then(function(text) {
