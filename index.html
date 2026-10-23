@@ -4968,7 +4968,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261023v1';
+var APP_BUILD = '20261024v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -8645,6 +8645,7 @@ function renderTeamPanel() {
   var buckets = buildTodoTaskItems(effectiveScope);
   var groupByAssignee = effectiveScope === 'all';
   var html = '';
+  if (isAdminRole()) html += renderDesignDeleteQueue();
   html += renderTodoSection('已逾期', 'overdue', buckets.overdue, '無逾期任務', groupByAssignee);
   html += renderTodoSection('今日到期', 'today', buckets.today, '今日無到期任務', groupByAssignee);
   html += renderTodoSection('三天內到期', 'soon', buckets.soon, '三天內無到期任務', groupByAssignee);
@@ -19255,7 +19256,7 @@ function designDeleteStatus(fields) {
 }
 
 function designDeleteBadgeHtml(status) {
-  if (status === '待審核') return '<span class="des-del-badge">待主管刪除</span>';
+  if (status === '待審核') return '<span class="des-del-badge">待管理員刪除</span>';
   if (status === '已駁回') return '<span class="des-del-badge is-reject">刪除未通過</span>';
   return '';
 }
@@ -19271,7 +19272,7 @@ function designDeleteRequesterIsMe(fields) {
 }
 
 function canReviewDesignDelete() {
-  return isAdminRole() || isDesignLeadRole();
+  return isAdminRole();
 }
 
 function canRequestDesignDelete() {
@@ -19318,7 +19319,7 @@ function renderDesignDeleteQueue() {
     if (card.by) html += '申請人：' + escHtml(card.by);
     if (card.when) html += (card.by ? ' · ' : '') + escHtml(card.when);
     if (card.reason) html += '\n原因：' + escHtml(card.reason);
-    if (card.status === '已駁回') html += '\n主管已駁回，這張單會保留。' + (card.reject ? ('\n說明：' + escHtml(card.reject)) : '');
+    if (card.status === '已駁回') html += '\n管理員已駁回，這張單會保留。' + (card.reject ? ('\n說明：' + escHtml(card.reject)) : '');
     html += '</div>';
     if (card.status === '待審核' && card.reviewer) {
       html += '<div class="des-del-card-acts">';
@@ -19368,7 +19369,7 @@ function syncDesignDeleteChrome() {
   }
   banner.hidden = false;
   banner.classList.toggle('is-reject', st === '已駁回');
-  var body = '<strong>' + (st === '待審核' ? '這張設計任務已申請刪除，等主管審核。' : '主管已駁回刪除，這張單會保留。') + '</strong>';
+  var body = '<strong>' + (st === '待審核' ? '這張設計任務已申請刪除，等管理員審核。' : '管理員已駁回刪除，這張單會保留。') + '</strong>';
   if (by) body += '<div>申請人：' + escHtml(by) + '</div>';
   if (reason) body += '<div>原因：' + escHtml(reason) + '</div>';
   if (st === '已駁回' && reject) body += '<div>駁回說明：' + escHtml(reject) + '</div>';
@@ -19403,7 +19404,7 @@ function requestDesignDelete(id, name) {
   showConfirm({
     type: 'del',
     title: '申請刪除設計任務',
-    body: '刪除需要設計主管核准。請說明原因。<br><span class="confirm-name">「' + escHtml(name || '設計任務') + '」</span>'
+    body: '刪除需要管理員核准。請說明原因。<br><span class="confirm-name">「' + escHtml(name || '設計任務') + '」</span>'
       + '<textarea id="des-del-reason" rows="3" style="width:100%;margin-top:8px;box-sizing:border-box" placeholder="例如：重複開單、標案取消"></textarea>',
     okText: '送出申請',
     onOk: function() {
@@ -19417,10 +19418,10 @@ function requestDesignDelete(id, name) {
       postDesignDeleteAction('request-design-delete', { designId: id, reason: reason }).then(function(res) {
         if (res.fields) mergeDesignFieldsIntoLocal(id, res.fields);
         commitLocalTable('designs');
-        var dmFailed = res.notify && res.notify.targeted && !res.notify.sent;
+        var dmFailed = !res.notify || !res.notify.sent;
         showUndoToast(dmFailed
-          ? '已送出刪除申請。主管在設計任務單看得到；Lark 訊息這次沒送出。'
-          : '已送出刪除申請，設計主管會收到通知。');
+          ? '已送出刪除申請。管理員在待辦提醒看得到；Lark 訊息這次沒送出。'
+          : '已送出刪除申請，管理員會收到 Lark 通知。');
       }).catch(function(err) {
         alert('申請失敗：' + (err.message || '請稍後再試'));
       });

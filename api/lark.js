@@ -10220,15 +10220,10 @@ export default async function handler(req, res) {
           + '\n申請人：' + applicant
           + '\n原因：' + reason
           + '\n時間：' + when
-          + '\n請到設計任務單審核。核准後才會刪除，駁回則保留。';
-        let targets = await listOpenIdsForMemberRole(token, '設計主管');
-        let audience = '設計主管';
-        if (!targets.length) {
-          targets = await listOpenIdsForMemberRole(token, '管理員');
-          audience = '管理員';
-        }
+          + '\n請到待辦提醒或設計任務單審核。核准後才會刪除，駁回則保留。';
+        const targets = await listOpenIdsForMemberRole(token, '管理員');
         const notify = await notifyOpenIds(token, targets, text);
-        notify.audience = audience;
+        notify.audience = '管理員';
         return res.status(200).json({ ok: true, fields: fields, notify: notify });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
@@ -10239,9 +10234,9 @@ export default async function handler(req, res) {
       try {
         const gate = await requireSignedInMember(req);
         if (!gate.ok) return res.status(gate.status).json({ ok: false, error: gate.error });
-        const canReview = gate.auth.role === '設計主管' || isAdminRoleToken(gate.auth.role);
+        const canReview = isAdminRoleToken(gate.auth.role);
         if (!canReview) {
-          return res.status(403).json({ ok: false, error: '只有設計主管或管理員可以審核刪除' });
+          return res.status(403).json({ ok: false, error: '只有管理員可以審核刪除' });
         }
         const b = req.body || {};
         const designId = String(b.designId || '').trim();
@@ -10266,7 +10261,7 @@ export default async function handler(req, res) {
         if (decision === 'approve') {
           await deleteRecord(token, tableId, designId, appToken, false);
           if (applicantOpenId) {
-            await notifyOpenIds(token, [applicantOpenId], '設計任務已刪除\n----------------\n任務：' + title + '\n主管已核准刪除。');
+            await notifyOpenIds(token, [applicantOpenId], '設計任務已刪除\n----------------\n任務：' + title + '\n管理員已核准刪除。');
           }
           return res.status(200).json({ ok: true, deleted: true });
         }
@@ -10277,7 +10272,7 @@ export default async function handler(req, res) {
         await updateRecord(token, tableId, designId, fields, appToken, false);
         if (applicantOpenId) {
           const rejectText = '設計任務刪除未通過\n----------------\n任務：' + title
-            + '\n主管已駁回，這張單會保留。'
+            + '\n管理員已駁回，這張單會保留。'
             + (note ? ('\n說明：' + note) : '');
           await notifyOpenIds(token, [applicantOpenId], rejectText);
         }
