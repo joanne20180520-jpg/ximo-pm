@@ -9682,6 +9682,96 @@ async function requireAdminUser(req, deniedMessage) {
   return { ok: true, auth: auth };
 }
 
+const DESIGN_DELETE_FIELD_NAMES = ['刪除申請狀態', '刪除原因', '刪除申請人', '刪除申請人OpenId', '刪除申請時間', '刪除駁回說明'];
+let _designDeleteFieldsReady = false;
+
+async function ensureDesignDeleteFields(token) {
+  if (_designDeleteFieldsReady) return;
+  const tableId = tableIdFor('designs');
+  const appToken = appTokenForTable('designs');
+  if (!tableId || !appToken) throw new Error('找不到設計任務資料表');
+  const existing = await listBitableFields(token, appToken, tableId);
+  const names = {};
+  (existing || []).forEach(function(f) {
+    if (f && f.field_name) names[f.field_name] = true;
+  });
+  for (let i = 0; i < DESIGN_DELETE_FIELD_NAMES.length; i++) {
+    const name = DESIGN_DELETE_FIELD_NAMES[i];
+    if (names[name]) continue;
+    const created = await fetch(
+      BASE_URL + '/bitable/v1/apps/' + encodeURIComponent(appToken)
+        + '/tables/' + encodeURIComponent(tableId) + '/fields',
+      {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field_name: name, type: 1 })
+      }
+    ).then(function(r) { return r.json(); });
+    if (created.code !== 0 && !/exist|duplicate|已存在|1254014/i.test(String(created.msg || ''))) {
+      throw new Error('無法新增欄位「' + name + '」：' + (created.msg || created.code));
+    }
+  }
+  _designDeleteFieldsReady = true;
+}
+
+async function listOpenIdsForMemberRole(token, roleName) {
+  const members = await getMembersRecords(token);
+  const ids = [];
+  (members || []).forEach(function(rec) {
+    if (getMemberRole(rec.fields || {}) !== roleName) return;
+    listMemberPersonIds(rec.fields || {}).forEach(function(id) {
+      if (isValidPersonOpenId(id) && ids.indexOf(id) < 0) ids.push(id);
+    });
+  });
+  return ids;
+}
+
+function formatTaipeiStamp(date) {
+  try {
+    return new Intl.DateTimeFormat('zh-TW', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(date).replace(/\u200e/g, '');
+  } catch (e) {
+    return new Date(date).toISOString();
+  }
+}
+
+async function notifyOpenIds(token, openIds, text) {
+  const ids = openIds || [];
+  const results = [];
+  for (let i = 0; i < ids.length; i++) {
+    try {
+      results.push(await sendImTextToOpenId(token, ids[i], text));
+    } catch (err) {
+      results.push({ ok: false, error: err.message || String(err) });
+    }
+  }
+  const sent = results.filter(function(r) { return r && r.ok; }).length;
+  const failed = results.filter(function(r) { return r && !r.ok && !r.skipped; });
+  return {
+    sent: sent,
+    targeted: ids.length,
+    error: failed.length ? (failed[0].error || '訊息未送出') : ''
+  };
+}
+
+async function requireSignedInMember(req) {
+  const auth = await checkMemberAuthorization(extractUserAccessToken(req));
+  if (!auth.authorized) {
+    return { ok: false, status: auth.needLogin ? 401 : 403, error: auth.needLogin ? '請先登入' : '沒有權限' };
+  }
+  if (!auth.role) {
+    return { ok: false, status: 403, error: '目前無法確認你的角色，請稍後再試' };
+  }
+  return { ok: true, auth: auth };
+}
+
 function isProjectStructureTable(table) {
   return table === 'projects' || table === 'workitems';
 }
@@ -10093,6 +10183,108 @@ export default async function handler(req, res) {
       const records = tableId ? await getRecords(token, tableId, cfg.appToken) : [];
       const merged = mergePaymentApprovalMeta(records, sync.approvalMeta || {});
       return res.status(200).json({ ok: true, sync: sync, payments: { records: merged } });
+    }
+
+    if (action === 'request-design-delete' && req.method === 'POST') {
+      try {
+        const gate = await requireSignedInMember(req);
+        if (!gate.ok) return res.status(gate.status).json({ ok: false, error: gate.error });
+        if (gate.auth.role !== 'PM') {
+          return res.status(403).json({ ok: false, error: '只有一般 PM 可以申請刪除設計任務' });
+        }
+        const b = req.body || {};
+        const designId = String(b.designId || '').trim();
+        const reason = String(b.reason || '').trim().slice(0, 500);
+        if (!designId) return res.status(400).json({ ok: false, error: '找不到設計任務' });
+        if (!reason) return res.status(400).json({ ok: false, error: '請填寫刪除原因' });
+        const token = await getToken();
+        await ensureDesignDeleteFields(token);
+        const tableId = tableIdFor('designs');
+        const appToken = appTokenForTable('designs');
+        const rec = await getRecordById(token, tableId, designId, appToken);
+        if (!rec) return res.status(404).json({ ok: false, error: '找不到這筆設計任務' });
+        const applicant = String(gate.auth.memberName || (gate.auth.user && gate.auth.user.name) || '').trim() || 'PM';
+        const openId = String((gate.auth.user && gate.auth.user.openId) || '').trim();
+        const when = formatTaipeiStamp(new Date());
+        const fields = {
+          '刪除申請狀態': '待審核',
+          '刪除原因': reason,
+          '刪除申請人': applicant,
+          '刪除申請人OpenId': openId,
+          '刪除申請時間': when,
+          '刪除駁回說明': ''
+        };
+        await updateRecord(token, tableId, designId, fields, appToken, false);
+        const title = String((rec.fields && (rec.fields['主類別'] || rec.fields['設計項目名稱'])) || '設計任務').trim();
+        const text = '設計任務刪除申請\n----------------\n任務：' + title
+          + '\n申請人：' + applicant
+          + '\n原因：' + reason
+          + '\n時間：' + when
+          + '\n請到設計任務單審核。核准後才會刪除，駁回則保留。';
+        let targets = await listOpenIdsForMemberRole(token, '設計主管');
+        let audience = '設計主管';
+        if (!targets.length) {
+          targets = await listOpenIdsForMemberRole(token, '管理員');
+          audience = '管理員';
+        }
+        const notify = await notifyOpenIds(token, targets, text);
+        notify.audience = audience;
+        return res.status(200).json({ ok: true, fields: fields, notify: notify });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'review-design-delete' && req.method === 'POST') {
+      try {
+        const gate = await requireSignedInMember(req);
+        if (!gate.ok) return res.status(gate.status).json({ ok: false, error: gate.error });
+        const canReview = gate.auth.role === '設計主管' || isAdminRoleToken(gate.auth.role);
+        if (!canReview) {
+          return res.status(403).json({ ok: false, error: '只有設計主管或管理員可以審核刪除' });
+        }
+        const b = req.body || {};
+        const designId = String(b.designId || '').trim();
+        const decision = String(b.decision || '').trim();
+        const note = String(b.note || '').trim().slice(0, 500);
+        if (!designId) return res.status(400).json({ ok: false, error: '找不到設計任務' });
+        if (decision !== 'approve' && decision !== 'reject') {
+          return res.status(400).json({ ok: false, error: '請選擇核准或駁回' });
+        }
+        const token = await getToken();
+        await ensureDesignDeleteFields(token);
+        const tableId = tableIdFor('designs');
+        const appToken = appTokenForTable('designs');
+        const rec = await getRecordById(token, tableId, designId, appToken);
+        if (!rec) return res.status(404).json({ ok: false, error: '找不到這筆設計任務' });
+        const status = String((rec.fields && rec.fields['刪除申請狀態']) || '').trim();
+        if (status !== '待審核') {
+          return res.status(400).json({ ok: false, error: '這筆設計任務目前沒有待審核的刪除申請' });
+        }
+        const title = String((rec.fields && (rec.fields['主類別'] || rec.fields['設計項目名稱'])) || '設計任務').trim();
+        const applicantOpenId = String((rec.fields && rec.fields['刪除申請人OpenId']) || '').trim();
+        if (decision === 'approve') {
+          await deleteRecord(token, tableId, designId, appToken, false);
+          if (applicantOpenId) {
+            await notifyOpenIds(token, [applicantOpenId], '設計任務已刪除\n----------------\n任務：' + title + '\n主管已核准刪除。');
+          }
+          return res.status(200).json({ ok: true, deleted: true });
+        }
+        const fields = {
+          '刪除申請狀態': '已駁回',
+          '刪除駁回說明': note
+        };
+        await updateRecord(token, tableId, designId, fields, appToken, false);
+        if (applicantOpenId) {
+          const rejectText = '設計任務刪除未通過\n----------------\n任務：' + title
+            + '\n主管已駁回，這張單會保留。'
+            + (note ? ('\n說明：' + note) : '');
+          await notifyOpenIds(token, [applicantOpenId], rejectText);
+        }
+        return res.status(200).json({ ok: true, deleted: false, fields: fields });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
     }
 
     if (action === 'audit-stuck-payment-approvals' && (req.method === 'GET' || req.method === 'POST')) {
@@ -10833,6 +11025,10 @@ export default async function handler(req, res) {
       if (isProjectStructureTable(table)) {
         const structGate = await requireAdminUser(req, table === 'projects' ? '僅管理員可刪除標案' : '僅管理員可刪除工作項目');
         if (!structGate.ok) return res.status(structGate.status).json({ error: structGate.error });
+      }
+      if (table === 'designs') {
+        const designGate = await requireAdminUser(req, '設計任務要先由 PM 申請，主管核准後才會刪除');
+        if (!designGate.ok) return res.status(designGate.status).json({ error: designGate.error });
       }
       const tableAppToken = appTokenForTable(table);
       if (table === 'tasks') {

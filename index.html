@@ -1205,6 +1205,17 @@ body.role-designer #lp,body.role-designer #rp,body.role-designer #tl,body.role-d
 body.role-accountant .lp-task-card,
 body.role-accountant #rp,
 body.role-accountant #tr{display:none!important}
+.des-del-queue{margin-bottom:10px;padding:10px 12px;background:#fff7ed;border:1px solid #fdba74;border-radius:var(--r)}
+.des-del-queue h4{margin:0 0 8px;font-size:13px}
+.des-del-card{background:#fff;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;margin-top:6px}
+.des-del-card-title{font-size:13px;font-weight:600}
+.des-del-card-meta{font-size:12px;color:var(--t2);margin-top:3px;line-height:1.45;white-space:pre-wrap}
+.des-del-card-acts{display:flex;gap:6px;margin-top:8px}
+.des-del-badge{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:700;background:#ffedd5;color:#9a3412;vertical-align:middle}
+.des-del-badge.is-reject{background:#f3f4f6;color:#4b5563}
+.des-del-banner{margin:0 0 10px;padding:10px 12px;border-radius:8px;background:#fff7ed;border:1px solid #fdba74;font-size:12px;line-height:1.5}
+.des-del-banner.is-reject{background:#f8fafc;border-color:#e5e7eb}
+.des-del-banner .des-del-card-acts{margin-top:8px}
 .design-filter-bar{display:none;align-items:center;gap:10px;padding:8px 12px;margin-bottom:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);position:sticky;top:0;z-index:20;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 body.role-designer .design-filter-bar{display:flex}
 .design-filter-label{font-size:12px;font-weight:600;color:var(--t2);flex-shrink:0;white-space:nowrap}
@@ -1960,6 +1971,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     </div>
   </div>
   <div class="des-drawer-body" id="pp-edit-des">
+    <div id="ed-del-banner" class="des-del-banner" hidden></div>
     <div class="des-acc" data-acc="basic" data-owner="pm">
       <button type="button" class="des-acc-head" onclick="toggleDesignAcc(this,event)"><span class="des-acc-chev">▶</span><span class="des-acc-title">指派與進度</span><span class="des-acc-owner">PM／設計主管</span><span class="des-acc-lock" hidden>唯讀</span></button>
       <div class="des-acc-body">
@@ -4956,7 +4968,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261019v1';
+var APP_BUILD = '20261023v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -16748,6 +16760,7 @@ function renderDesigns() {
       status: getDesignProgressStatus(f),
       progressStatus: f['進度狀態'] || '',
       progressNum: f['進度數值'],
+      deleteStatus: designDeleteStatus(f),
       designStatus: f['設計狀態'] || '未開始',
       nextStep: getDesignNextStepInfo(f, rec.record_id),
       finalized: isDesignFinalized(f),
@@ -16774,6 +16787,7 @@ function renderDesigns() {
       + '<td class="des-cell-name" style="font-weight:500;white-space:nowrap" onclick="toggleDesignExpand(\'' + d.id + '\',event)" title="展開版本紀錄">'
       + '<button type="button" class="des-toggle" title="展開版本">' + (expanded ? '▼' : '▶') + '</button> '
       + '<span class="des-name-text">' + escHtml(d.name) + '</span>'
+      + designDeleteBadgeHtml(d.deleteStatus)
       + '</td>'
       + '<td' + (canBasicEdit ? cellClick + ' title="編輯負責PM／設計師／進度"' : '') + '>' + renderDesignPersonCell(d.pm) + '</td>'
       + '<td' + (canBasicEdit ? cellClick + ' title="編輯負責PM／設計師／進度"' : '') + '>' + renderDesignPersonCell(d.designer) + '</td>';
@@ -16849,7 +16863,9 @@ function renderDesigns() {
   var designEmpty = selectedProjectIds.size
     ? '所選標案尚無設計任務'
     : (isPMRole() ? '請從左側選擇要顯示的標案' : '請先在上方篩選要顯示的標案');
-  area.innerHTML = html || '<div style="padding:20px;color:var(--t3);text-align:center">' + designEmpty + '</div>';
+  var queue = renderDesignDeleteQueue();
+  area.innerHTML = queue + (html || '<div style="padding:20px;color:var(--t3);text-align:center">' + designEmpty + '</div>');
+  syncDesignDeleteChrome();
 }
 
 function collectMemberRoleTokens(fields) {
@@ -18133,8 +18149,7 @@ function applyDesignFormPermissions(rootSel) {
   if (!saveBtn) saveBtn = root.querySelector('.ppf .bpri');
   // 設計主管可指派設計師並儲存；側欄／基本編輯給 PM／設計主管／設計師／管理員
   if (saveBtn) saveBtn.style.display = (isAdminRole() || isPMRole() || isDesignerLikeRole()) ? '' : 'none';
-  var delBtn = document.getElementById('ed-del-btn');
-  if (delBtn) delBtn.style.display = isAdminRole() ? '' : 'none';
+  if (rootSel === '#pp-edit-des') syncDesignDeleteChrome();
 }
 
 function openEditDesignBasic(desId, ev) {
@@ -19235,9 +19250,249 @@ function deleteExpenseFromEdit() {
   deleteExpense(editingExpenseId, name);
 }
 
+function designDeleteStatus(fields) {
+  return String((fields && fields['刪除申請狀態']) || '').trim();
+}
+
+function designDeleteBadgeHtml(status) {
+  if (status === '待審核') return '<span class="des-del-badge">待主管刪除</span>';
+  if (status === '已駁回') return '<span class="des-del-badge is-reject">刪除未通過</span>';
+  return '';
+}
+
+function designDeleteRequesterIsMe(fields) {
+  var f = fields || {};
+  var oid = String(f['刪除申請人OpenId'] || '').trim();
+  var u = getCurrentLoginUser();
+  if (oid && u && u.openId && oid === u.openId) return true;
+  var name = String(f['刪除申請人'] || '').trim();
+  var mine = getLoginDisplayName();
+  return !!(name && mine && (name === mine || name.indexOf(mine) >= 0 || mine.indexOf(name) >= 0));
+}
+
+function canReviewDesignDelete() {
+  return isAdminRole() || isDesignLeadRole();
+}
+
+function canRequestDesignDelete() {
+  return isPMRole() && !isAdminRole() && !isDesignerLikeRole();
+}
+
+function designDeletePlain(value) {
+  if (typeof fieldTextValue === 'function') return fieldTextValue(value);
+  return String(value || '').trim();
+}
+
+function renderDesignDeleteQueue() {
+  var cards = [];
+  (designsData || []).forEach(function(rec) {
+    var f = rec.fields || {};
+    var st = designDeleteStatus(f);
+    if (st !== '待審核' && st !== '已駁回') return;
+    var mine = designDeleteRequesterIsMe(f);
+    var reviewer = canReviewDesignDelete();
+    if (st === '待審核' && !reviewer && !mine) return;
+    if (st === '已駁回' && !mine) return;
+    cards.push({
+      id: rec.record_id,
+      name: getDesignDisplayName(f) || '設計任務',
+      status: st,
+      reason: designDeletePlain(f['刪除原因']),
+      by: designDeletePlain(f['刪除申請人']),
+      when: designDeletePlain(f['刪除申請時間']),
+      reject: designDeletePlain(f['刪除駁回說明']),
+      mine: mine,
+      reviewer: reviewer
+    });
+  });
+  if (!cards.length) return '';
+  cards.sort(function(a, b) {
+    if (a.status !== b.status) return a.status === '待審核' ? -1 : 1;
+    return a.name.localeCompare(b.name, 'zh-Hant');
+  });
+  var html = '<div class="des-del-queue"><h4>設計任務刪除審核</h4>';
+  cards.forEach(function(card) {
+    html += '<div class="des-del-card">';
+    html += '<div class="des-del-card-title">' + escHtml(card.name) + designDeleteBadgeHtml(card.status) + '</div>';
+    html += '<div class="des-del-card-meta">';
+    if (card.by) html += '申請人：' + escHtml(card.by);
+    if (card.when) html += (card.by ? ' · ' : '') + escHtml(card.when);
+    if (card.reason) html += '\n原因：' + escHtml(card.reason);
+    if (card.status === '已駁回') html += '\n主管已駁回，這張單會保留。' + (card.reject ? ('\n說明：' + escHtml(card.reject)) : '');
+    html += '</div>';
+    if (card.status === '待審核' && card.reviewer) {
+      html += '<div class="des-del-card-acts">';
+      html += '<button type="button" class="bpri bsm" data-des-del-act="approve" data-des-id="' + escAttr(card.id) + '">核准刪除</button>';
+      html += '<button type="button" class="bcan bsm" data-des-del-act="reject" data-des-id="' + escAttr(card.id) + '">駁回</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function syncDesignDeleteChrome() {
+  var delBtn = document.getElementById('ed-del-btn');
+  var banner = document.getElementById('ed-del-banner');
+  var rec = editingDesignId ? (designsData || []).find(function(r) { return r.record_id === editingDesignId; }) : null;
+  var f = (rec && rec.fields) || {};
+  var st = designDeleteStatus(f);
+  var reason = designDeletePlain(f['刪除原因']);
+  var by = designDeletePlain(f['刪除申請人']);
+  var reject = designDeletePlain(f['刪除駁回說明']);
+  if (delBtn) {
+    delBtn.disabled = false;
+    delBtn.style.display = 'none';
+    if (isAdminRole()) {
+      delBtn.style.display = '';
+      delBtn.textContent = '刪除此任務';
+    } else if (canRequestDesignDelete()) {
+      delBtn.style.display = '';
+      if (st === '待審核') {
+        delBtn.textContent = '刪除審核中';
+        delBtn.disabled = true;
+      } else if (st === '已駁回') {
+        delBtn.textContent = '再次申請刪除';
+      } else {
+        delBtn.textContent = '申請刪除';
+      }
+    }
+  }
+  if (!banner) return;
+  if (!rec || (st !== '待審核' && st !== '已駁回')) {
+    banner.hidden = true;
+    banner.innerHTML = '';
+    banner.classList.remove('is-reject');
+    return;
+  }
+  banner.hidden = false;
+  banner.classList.toggle('is-reject', st === '已駁回');
+  var body = '<strong>' + (st === '待審核' ? '這張設計任務已申請刪除，等主管審核。' : '主管已駁回刪除，這張單會保留。') + '</strong>';
+  if (by) body += '<div>申請人：' + escHtml(by) + '</div>';
+  if (reason) body += '<div>原因：' + escHtml(reason) + '</div>';
+  if (st === '已駁回' && reject) body += '<div>駁回說明：' + escHtml(reject) + '</div>';
+  if (st === '待審核' && canReviewDesignDelete() && editingDesignId) {
+    body += '<div class="des-del-card-acts">';
+    body += '<button type="button" class="bpri bsm" data-des-del-act="approve" data-des-id="' + escAttr(editingDesignId) + '">核准刪除</button>';
+    body += '<button type="button" class="bcan bsm" data-des-del-act="reject" data-des-id="' + escAttr(editingDesignId) + '">駁回</button>';
+    body += '</div>';
+  }
+  banner.innerHTML = body;
+}
+
+function postDesignDeleteAction(action, body) {
+  return fetch(apiUrl('action=' + action), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(withUserToken(body || {}))
+  }).then(function(r) {
+    return r.text().then(function(text) {
+      var data = null;
+      try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+      if (!data || data.ok === false) {
+        throw new Error((data && data.error) || '操作失敗');
+      }
+      return data;
+    });
+  });
+}
+
+function requestDesignDelete(id, name) {
+  if (!canRequestDesignDelete() || !id) return;
+  showConfirm({
+    type: 'del',
+    title: '申請刪除設計任務',
+    body: '刪除需要設計主管核准。請說明原因。<br><span class="confirm-name">「' + escHtml(name || '設計任務') + '」</span>'
+      + '<textarea id="des-del-reason" rows="3" style="width:100%;margin-top:8px;box-sizing:border-box" placeholder="例如：重複開單、標案取消"></textarea>',
+    okText: '送出申請',
+    onOk: function() {
+      var reasonEl = document.getElementById('des-del-reason');
+      var reason = reasonEl ? String(reasonEl.value || '').trim() : '';
+      if (!reason) {
+        alert('請填寫刪除原因');
+        requestDesignDelete(id, name);
+        return;
+      }
+      postDesignDeleteAction('request-design-delete', { designId: id, reason: reason }).then(function(res) {
+        if (res.fields) mergeDesignFieldsIntoLocal(id, res.fields);
+        commitLocalTable('designs');
+        var dmFailed = res.notify && res.notify.targeted && !res.notify.sent;
+        showUndoToast(dmFailed
+          ? '已送出刪除申請。主管在設計任務單看得到；Lark 訊息這次沒送出。'
+          : '已送出刪除申請，設計主管會收到通知。');
+      }).catch(function(err) {
+        alert('申請失敗：' + (err.message || '請稍後再試'));
+      });
+    }
+  });
+}
+
+function reviewDesignDelete(id, decision) {
+  if (!canReviewDesignDelete() || !id) return;
+  var rec = (designsData || []).find(function(r) { return r.record_id === id; });
+  var name = getDesignDisplayName(rec && rec.fields) || '設計任務';
+  if (decision === 'approve') {
+    showConfirm({
+      type: 'del',
+      title: '核准刪除',
+      body: '核准後會刪除這張設計任務，無法從這裡復原。<br><span class="confirm-name">「' + escHtml(name) + '」</span>',
+      okText: '核准並刪除',
+      onOk: function() { submitDesignDeleteReview(id, 'approve', ''); }
+    });
+    return;
+  }
+  showConfirm({
+    type: 'edit',
+    title: '駁回刪除',
+    body: '駁回後這張設計任務會保留。<br><span class="confirm-name">「' + escHtml(name) + '」</span>'
+      + '<textarea id="des-del-reject-note" rows="3" style="width:100%;margin-top:8px;box-sizing:border-box" placeholder="駁回說明（可空白）"></textarea>',
+    okText: '駁回',
+    onOk: function() {
+      var noteEl = document.getElementById('des-del-reject-note');
+      var note = noteEl ? String(noteEl.value || '').trim() : '';
+      submitDesignDeleteReview(id, 'reject', note);
+    }
+  });
+}
+
+function submitDesignDeleteReview(id, decision, note) {
+  postDesignDeleteAction('review-design-delete', {
+    designId: id,
+    decision: decision,
+    note: note || ''
+  }).then(function(res) {
+    if (res.deleted) {
+      setTableArray('designs', (designsData || []).filter(function(r) { return r.record_id !== id; }));
+      if (editingDesignId === id) {
+        editingDesignId = null;
+        closeDesignDrawer();
+      }
+      commitLocalTable('designs');
+      showUndoToast('已核准並刪除設計任務');
+      return;
+    }
+    if (res.fields) mergeDesignFieldsIntoLocal(id, res.fields);
+    commitLocalTable('designs');
+    showUndoToast('已駁回，設計任務保留');
+  }).catch(function(err) {
+    alert('審核失敗：' + (err.message || '請稍後再試'));
+  });
+}
+
+if (!window.__desDelReviewBound) {
+  window.__desDelReviewBound = true;
+  document.addEventListener('click', function(e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-des-del-act]') : null;
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    reviewDesignDelete(btn.getAttribute('data-des-id') || '', btn.getAttribute('data-des-del-act') || '');
+  });
+}
+
 function deleteDesign(id, name) {
   if (!isAdminRole()) return;
-  var rec = designsData.find(function(r) { return r.record_id === id; });
   showConfirm({
     type: 'del',
     title: '刪除設計任務單',
@@ -19256,10 +19511,16 @@ function deleteDesign(id, name) {
 }
 
 function deleteDesignFromEdit() {
-  if (!isAdminRole() || !editingDesignId) return;
+  if (!editingDesignId) return;
   var rec = designsData.find(function(r) { return r.record_id === editingDesignId; });
   var name = getDesignDisplayName(rec && rec.fields) || '設計任務';
-  deleteDesign(editingDesignId, name);
+  if (isAdminRole()) {
+    deleteDesign(editingDesignId, name);
+    return;
+  }
+  if (!canRequestDesignDelete()) return;
+  if (designDeleteStatus(rec && rec.fields) === '待審核') return;
+  requestDesignDelete(editingDesignId, name);
 }
 
 function getDesignLeadMemberEntries() {
