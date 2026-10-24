@@ -9835,6 +9835,22 @@ async function ensureDesignDeleteLogTable(token) {
   return tableId;
 }
 
+async function resolveDesignDeleteLogTableId(token) {
+  if (_designDeleteLogTableId) return _designDeleteLogTableId;
+  const appToken = appTokenForTable('designs');
+  if (!appToken) throw new Error('找不到 Base');
+  const tables = await listBitableTables(token, appToken);
+  const found = (tables || []).find(function(t) {
+    return t && (t.name === DESIGN_DELETE_LOG_TABLE_NAME || t.table_name === DESIGN_DELETE_LOG_TABLE_NAME);
+  });
+  const tableId = found && (found.table_id || found.tableId);
+  if (tableId) {
+    _designDeleteLogTableId = tableId;
+    return tableId;
+  }
+  return ensureDesignDeleteLogTable(token);
+}
+
 async function saveDesignDeleteLog(token, payload, onlyCreate) {
   const appToken = appTokenForTable('designs');
   const tableId = await ensureDesignDeleteLogTable(token);
@@ -10707,10 +10723,15 @@ export default async function handler(req, res) {
           return res.status(403).json({ ok: false, error: '只有管理員可以查看刪除紀錄' });
         }
         const token = await getToken();
-        await backfillDesignDeleteLogs(token);
         const appToken = appTokenForTable('designs');
-        const tableId = await ensureDesignDeleteLogTable(token);
-        const rows = await getRecords(token, tableId, appToken);
+        const tableId = await resolveDesignDeleteLogTableId(token);
+        let rows = await getRecords(token, tableId, appToken);
+        if (rows && rows.length) {
+          _designDeleteLogBackfilled = true;
+        } else if (!_designDeleteLogBackfilled) {
+          await backfillDesignDeleteLogs(token);
+          rows = await getRecords(token, tableId, appToken);
+        }
         return res.status(200).json({
           ok: true,
           records: (rows || []).map(designDeleteLogRow)
