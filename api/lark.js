@@ -9713,7 +9713,7 @@ async function requireAdminUser(req, deniedMessage) {
   return { ok: true, auth: auth };
 }
 
-const DESIGN_DELETE_FIELD_NAMES = ['刪除申請狀態', '刪除原因', '刪除申請人', '刪除申請人OpenId', '刪除申請時間', '刪除駁回說明'];
+const DESIGN_DELETE_FIELD_NAMES = ['刪除申請狀態', '刪除原因', '刪除申請人', '刪除申請人OpenId', '刪除申請時間', '刪除駁回說明', '刪除紀錄ID'];
 let _designDeleteFieldsReady = false;
 
 async function ensureDesignDeleteFields(token) {
@@ -9743,6 +9743,196 @@ async function ensureDesignDeleteFields(token) {
     }
   }
   _designDeleteFieldsReady = true;
+}
+
+const DESIGN_DELETE_LOG_TABLE_NAME = '設計刪除紀錄';
+const DESIGN_DELETE_LOG_FIELDS = ['任務名稱', '設計任務ID', '申請人', '申請人OpenId', '年', '月', '日', '申請時間', '原因', '結果', '已看過', '駁回說明', '處理時間'];
+let _designDeleteLogTableId = '';
+let _designDeleteLogBackfilled = false;
+
+function taipeiDateParts(date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  function pick(type) {
+    const hit = parts.find(function(p) { return p.type === type; });
+    return hit ? hit.value : '';
+  }
+  return { year: pick('year'), month: pick('month'), day: pick('day') };
+}
+
+function taipeiPartsFromStamp(stamp) {
+  const m = String(stamp || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  if (!m) return taipeiDateParts(new Date());
+  return {
+    year: m[1],
+    month: ('0' + m[2]).slice(-2),
+    day: ('0' + m[3]).slice(-2)
+  };
+}
+
+async function ensureDesignDeleteLogTable(token) {
+  if (_designDeleteLogTableId) return _designDeleteLogTableId;
+  const appToken = appTokenForTable('designs');
+  if (!appToken) throw new Error('找不到 Base');
+  const tables = await listBitableTables(token, appToken);
+  const found = (tables || []).find(function(t) {
+    return t && (t.name === DESIGN_DELETE_LOG_TABLE_NAME || t.table_name === DESIGN_DELETE_LOG_TABLE_NAME);
+  });
+  let tableId = found && (found.table_id || found.tableId);
+  if (!tableId) {
+    const url = BASE_URL + '/bitable/v1/apps/' + encodeURIComponent(appToken) + '/tables';
+    const headers = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
+    let created = await fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({
+        table: {
+          name: DESIGN_DELETE_LOG_TABLE_NAME,
+          default_view_name: '全部紀錄',
+          fields: [{ field_name: '任務名稱', type: 1 }]
+        }
+      })
+    }).then(function(r) { return r.json(); });
+    if (created.code !== 0) {
+      created = await fetch(url, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ table: { name: DESIGN_DELETE_LOG_TABLE_NAME } })
+      }).then(function(r) { return r.json(); });
+    }
+    if (created.code !== 0) {
+      throw new Error('無法建立設計刪除紀錄表：' + (created.msg || created.code));
+    }
+    tableId = created.data && (created.data.table_id || created.data.tableId);
+    if (!tableId) throw new Error('無法建立設計刪除紀錄表');
+  }
+  const existing = await listBitableFields(token, appToken, tableId);
+  const names = {};
+  (existing || []).forEach(function(f) {
+    if (f && f.field_name) names[f.field_name] = true;
+  });
+  for (let i = 0; i < DESIGN_DELETE_LOG_FIELDS.length; i++) {
+    const name = DESIGN_DELETE_LOG_FIELDS[i];
+    if (names[name]) continue;
+    const created = await fetch(
+      BASE_URL + '/bitable/v1/apps/' + encodeURIComponent(appToken)
+        + '/tables/' + encodeURIComponent(tableId) + '/fields',
+      {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field_name: name, type: 1 })
+      }
+    ).then(function(r) { return r.json(); });
+    if (created.code !== 0 && !/exist|duplicate|已存在|1254014/i.test(String(created.msg || ''))) {
+      throw new Error('無法新增欄位「' + name + '」：' + (created.msg || created.code));
+    }
+  }
+  _designDeleteLogTableId = tableId;
+  return tableId;
+}
+
+async function saveDesignDeleteLog(token, payload, onlyCreate) {
+  const appToken = appTokenForTable('designs');
+  const tableId = await ensureDesignDeleteLogTable(token);
+  const parts = taipeiPartsFromStamp(payload.when);
+  const fields = {
+    '任務名稱': payload.taskName || '設計任務',
+    '設計任務ID': payload.designId || '',
+    '申請人': payload.applicant || '',
+    '申請人OpenId': payload.openId || '',
+    '年': parts.year,
+    '月': parts.month,
+    '日': parts.day,
+    '申請時間': payload.when || '',
+    '原因': payload.reason || '',
+    '結果': payload.result || '待審核',
+    '已看過': payload.seen || '否',
+    '駁回說明': payload.rejectNote || '',
+    '處理時間': payload.handledAt || ''
+  };
+  let logId = String(payload.logId || '').trim();
+  if (!logId && payload.designId) {
+    const rows = await getRecords(token, tableId, appToken);
+    const hit = (rows || []).find(function(r) {
+      return fieldTextValue((r.fields || {})['設計任務ID']) === payload.designId;
+    });
+    if (hit) logId = hit.record_id;
+  }
+  if (logId) {
+    if (!onlyCreate) await updateRecord(token, tableId, logId, fields, appToken, false);
+    return logId;
+  }
+  const created = await createRecord(token, tableId, fields, appToken, false);
+  const createdRec = created && created.data && created.data.record;
+  return (createdRec && (createdRec.record_id || createdRec.id)) || '';
+}
+
+function designDeleteLogFromDesign(rec) {
+  const f = (rec && rec.fields) || {};
+  const st = fieldTextValue(f['刪除申請狀態']);
+  let result = '';
+  let seen = '否';
+  if (st === '待審核') result = '待審核';
+  else if (st === '已駁回') result = '已駁回';
+  else if (st === '已讀') {
+    result = '已駁回';
+    seen = '是';
+  } else return null;
+  return {
+    designId: rec.record_id,
+    logId: fieldTextValue(f['刪除紀錄ID']),
+    taskName: fieldTextValue(f['主類別']) || fieldTextValue(f['設計項目名稱']) || '設計任務',
+    applicant: fieldTextValue(f['刪除申請人']),
+    openId: fieldTextValue(f['刪除申請人OpenId']),
+    when: fieldTextValue(f['刪除申請時間']),
+    reason: fieldTextValue(f['刪除原因']),
+    result: result,
+    seen: seen,
+    rejectNote: fieldTextValue(f['刪除駁回說明']),
+    handledAt: ''
+  };
+}
+
+async function backfillDesignDeleteLogs(token) {
+  if (_designDeleteLogBackfilled) return;
+  await ensureDesignDeleteFields(token);
+  const appToken = appTokenForTable('designs');
+  const designTable = tableIdFor('designs');
+  const designs = await getRecords(token, designTable, appToken);
+  for (let i = 0; i < (designs || []).length; i++) {
+    const payload = designDeleteLogFromDesign(designs[i]);
+    if (!payload) continue;
+    const logId = await saveDesignDeleteLog(token, payload, true);
+    if (logId && payload.logId !== logId) {
+      try {
+        await updateRecord(token, designTable, payload.designId, { '刪除紀錄ID': logId }, appToken, false);
+      } catch (e) {}
+    }
+  }
+  _designDeleteLogBackfilled = true;
+}
+
+function designDeleteLogRow(rec) {
+  const f = (rec && rec.fields) || {};
+  return {
+    id: rec.record_id,
+    taskName: fieldTextValue(f['任務名稱']),
+    designId: fieldTextValue(f['設計任務ID']),
+    applicant: fieldTextValue(f['申請人']),
+    year: fieldTextValue(f['年']),
+    month: fieldTextValue(f['月']),
+    day: fieldTextValue(f['日']),
+    when: fieldTextValue(f['申請時間']),
+    reason: fieldTextValue(f['原因']),
+    result: fieldTextValue(f['結果']),
+    seen: fieldTextValue(f['已看過']),
+    rejectNote: fieldTextValue(f['駁回說明']),
+    handledAt: fieldTextValue(f['處理時間'])
+  };
 }
 
 async function listOpenIdsForMemberRole(token, roleName) {
@@ -10247,6 +10437,27 @@ export default async function handler(req, res) {
         };
         await updateRecord(token, tableId, designId, fields, appToken, false);
         const title = String((rec.fields && (rec.fields['主類別'] || rec.fields['設計項目名稱'])) || '設計任務').trim();
+        try {
+          const logId = await saveDesignDeleteLog(token, {
+            designId: designId,
+            logId: fieldTextValue((rec.fields || {})['刪除紀錄ID']),
+            taskName: title,
+            applicant: applicant,
+            openId: openId,
+            when: when,
+            reason: reason,
+            result: '待審核',
+            seen: '否',
+            rejectNote: '',
+            handledAt: ''
+          }, false);
+          if (logId) {
+            fields['刪除紀錄ID'] = logId;
+            await updateRecord(token, tableId, designId, { '刪除紀錄ID': logId }, appToken, false);
+          }
+        } catch (logErr) {
+          console.error('design delete log', logErr);
+        }
         const text = '設計任務刪除申請\n----------------\n任務：' + title
           + '\n申請人：' + applicant
           + '\n原因：' + reason
@@ -10297,6 +10508,20 @@ export default async function handler(req, res) {
         }
         const title = String((rec.fields && (rec.fields['主類別'] || rec.fields['設計項目名稱'])) || '設計任務').trim();
         const applicantOpenId = String((rec.fields && rec.fields['刪除申請人OpenId']) || '').trim();
+        const logPayload = {
+          designId: designId,
+          logId: fieldTextValue((rec.fields || {})['刪除紀錄ID']),
+          taskName: title,
+          applicant: fieldTextValue((rec.fields || {})['刪除申請人']),
+          openId: applicantOpenId,
+          when: fieldTextValue((rec.fields || {})['刪除申請時間']),
+          reason: fieldTextValue((rec.fields || {})['刪除原因']),
+          result: decision === 'approve' ? '已核准刪除' : '已駁回',
+          seen: '否',
+          rejectNote: decision === 'reject' ? note : '',
+          handledAt: formatTaipeiStamp(new Date())
+        };
+        await saveDesignDeleteLog(token, logPayload, false);
         if (decision === 'approve') {
           await deleteRecord(token, tableId, designId, appToken, false);
           if (applicantOpenId) {
@@ -10351,7 +10576,54 @@ export default async function handler(req, res) {
         if (!mine) return res.status(403).json({ ok: false, error: '只有申請人可以標成已看過' });
         const fields = { '刪除申請狀態': '已讀' };
         await updateRecord(token, tableId, designId, fields, appToken, false);
+        try {
+          await saveDesignDeleteLog(token, {
+            designId: designId,
+            logId: fieldTextValue(fieldsNow['刪除紀錄ID']),
+            taskName: fieldTextValue(fieldsNow['主類別']) || fieldTextValue(fieldsNow['設計項目名稱']) || '設計任務',
+            applicant: fieldTextValue(fieldsNow['刪除申請人']),
+            openId: applicantOpenId,
+            when: fieldTextValue(fieldsNow['刪除申請時間']),
+            reason: fieldTextValue(fieldsNow['刪除原因']),
+            result: '已駁回',
+            seen: '是',
+            rejectNote: fieldTextValue(fieldsNow['刪除駁回說明']),
+            handledAt: formatTaipeiStamp(new Date())
+          }, false);
+        } catch (logErr) {
+          console.error('design delete log', logErr);
+        }
         return res.status(200).json({ ok: true, fields: fields });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    if (action === 'list-design-delete-logs' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const gate = await requireSignedInMember(req);
+        if (!gate.ok) return res.status(gate.status).json({ ok: false, error: gate.error });
+        let listRole = gate.auth.role;
+        if (!isAdminRoleToken(listRole) && gate.auth.user) {
+          try {
+            const freshToken = await getToken();
+            const freshMembers = await getMembersRecords(freshToken, { bypassCache: true });
+            const freshRec = findMemberForUser(freshMembers, gate.auth.user);
+            if (freshRec) listRole = getMemberRole(freshRec.fields || {});
+          } catch (e) {}
+        }
+        if (!isAdminRoleToken(listRole)) {
+          return res.status(403).json({ ok: false, error: '只有管理員可以查看刪除紀錄' });
+        }
+        const token = await getToken();
+        await backfillDesignDeleteLogs(token);
+        const appToken = appTokenForTable('designs');
+        const tableId = await ensureDesignDeleteLogTable(token);
+        const rows = await getRecords(token, tableId, appToken);
+        return res.status(200).json({
+          ok: true,
+          records: (rows || []).map(designDeleteLogRow)
+        });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }

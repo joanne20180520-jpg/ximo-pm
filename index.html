@@ -1209,6 +1209,13 @@ body.role-accountant #tr{display:none!important}
 .des-del-queue.is-result,.des-del-queue.is-history{background:#f8fafc;border-color:#e5e7eb}
 .des-del-queue h4{margin:0 0 8px;font-size:13px}
 .des-del-history-toggle{border:0;background:transparent;padding:0;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:inherit}
+.ddel-page{padding:16px 18px}
+.ddel-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.ddel-toolbar h3{margin:0 8px 0 0;font-size:15px}
+.ddel-toolbar select{font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:#fff}
+.ddel-person{margin-top:16px}
+.ddel-person h4{margin:0 0 8px;font-size:13px}
+.ddel-empty{padding:20px;color:var(--t3);text-align:center;font-size:12px}
 .des-del-card{background:#fff;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;margin-top:6px}
 .des-del-card-title{font-size:13px;font-weight:600}
 .des-del-card-meta{font-size:12px;color:var(--t2);margin-top:3px;line-height:1.45;white-space:pre-wrap}
@@ -1507,6 +1514,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <button class="tbar-tab" onclick="sw(this,'pg-e')">支出明細</button>
     <button class="tbar-tab" onclick="sw(this,'pg-p')">付款申請</button>
     <button class="tbar-tab" onclick="sw(this,'pg-d')">設計任務單</button>
+    <button class="tbar-tab" onclick="sw(this,'pg-ddel')">刪除紀錄</button>
     <button class="tbar-tab" onclick="sw(this,'pg-journal')">日誌</button>
     <button class="tbar-tab" onclick="sw(this,'pg-ai')">AI分析</button>
   </nav>
@@ -1714,6 +1722,20 @@ button.btn-loading::after{content:'…';margin-left:2px}
         <div id="design-proj-picker-mount" class="design-proj-picker-mount"></div>
       </div>
       <div id="design-area"><div style="padding:20px;color:var(--t3);font-size:12px;text-align:center">載入中...</div></div>
+    </div>
+
+    <!-- 刪除紀錄（僅管理員） -->
+    <div id="pg-ddel" class="page">
+      <div class="ddel-page">
+        <div class="ddel-toolbar">
+          <h3>設計刪除紀錄</h3>
+          <select id="ddel-person" onchange="renderDesignDeleteLogPage()"></select>
+          <select id="ddel-year" onchange="renderDesignDeleteLogPage()"></select>
+          <select id="ddel-month" onchange="renderDesignDeleteLogPage()"></select>
+          <select id="ddel-day" onchange="renderDesignDeleteLogPage()"></select>
+        </div>
+        <div id="ddel-area"><div class="ddel-empty">載入中...</div></div>
+      </div>
     </div>
 
     <!-- 日誌 -->
@@ -2511,6 +2533,7 @@ function sw(btn,id){
     if (!deferredDataReady && !isDesignerLikeRole()) loadDeferredTables({ silent: true });
     renderDesigns();
   }
+  if(id==='pg-ddel') loadAndRenderDesignDeleteLogs();
   if(id==='pg-p') {
     applyLoginUserToForms();
     fillPaymentProjectSelects();
@@ -2561,6 +2584,8 @@ var DEEP_LINK_PAGES = {
   designs: 'pg-d',
   '設計任務單': 'pg-d',
   '設計': 'pg-d',
+  '刪除紀錄': 'pg-ddel',
+  '設計刪除紀錄': 'pg-ddel',
   // 日誌
   journal: 'pg-journal',
   '日誌': 'pg-journal',
@@ -4970,7 +4995,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261024v4';
+var APP_BUILD = '20261024v5';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -5492,8 +5517,8 @@ var loginRefreshPromise = null;
 var currentUserRole = 'PM';
 var ROLE_PAGES = {
   PM: ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal'],
-  '管理員': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
-  '管理员': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal', 'pg-ai'],
+  '管理員': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-ddel', 'pg-journal', 'pg-ai'],
+  '管理员': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-ddel', 'pg-journal', 'pg-ai'],
   '設計師': ['pg-d'],
   '設計主管': ['pg-d'],
   '會計': ['pg-b', 'pg-e'],
@@ -16897,7 +16922,7 @@ function renderDesigns() {
   var designEmpty = selectedProjectIds.size
     ? '所選標案尚無設計任務'
     : (isPMRole() ? '請從左側選擇要顯示的標案' : '請先在上方篩選要顯示的標案');
-  var queue = (canReviewDesignDelete() ? renderDesignDeleteQueue('review') + renderDesignDeleteHistory() : '') + renderDesignDeleteQueue('result');
+  var queue = (canReviewDesignDelete() ? renderDesignDeleteQueue('review') : '') + renderDesignDeleteQueue('result');
   area.innerHTML = queue + (html || '<div style="padding:20px;color:var(--t3);text-align:center">' + designEmpty + '</div>');
   syncDesignDeleteChrome();
 }
@@ -19381,53 +19406,134 @@ function renderDesignDeleteQueue(place) {
   return html;
 }
 
-var designDeleteHistoryOpen = false;
-function toggleDesignDeleteHistory() {
-  designDeleteHistoryOpen = !designDeleteHistoryOpen;
-  renderDesigns();
+var designDeleteLogRows = [];
+
+function fillDesignDeleteLogSelect(el, options, current) {
+  if (!el) return '';
+  var html = '';
+  options.forEach(function(opt) {
+    html += '<option value="' + escAttr(opt.value) + '">' + escHtml(opt.label) + '</option>';
+  });
+  el.innerHTML = html;
+  var ok = options.some(function(opt) { return opt.value === current; });
+  el.value = ok ? current : '';
+  return el.value;
 }
 
-function renderDesignDeleteHistory() {
-  if (!canReviewDesignDelete()) return '';
-  var cards = [];
-  (designsData || []).forEach(function(rec) {
-    var f = rec.fields || {};
-    var st = designDeleteStatus(f);
-    if (st !== '已駁回' && st !== '已讀') return;
-    cards.push({
-      id: rec.record_id,
-      name: getDesignDisplayName(f) || '設計任務',
-      status: st,
-      reason: designDeletePlain(f['刪除原因']),
-      by: designDeletePlain(f['刪除申請人']),
-      when: designDeletePlain(f['刪除申請時間']),
-      reject: designDeletePlain(f['刪除駁回說明'])
-    });
-  });
-  if (!cards.length) return '';
-  cards.sort(function(a, b) {
-    return String(b.when || '').localeCompare(String(a.when || ''));
-  });
-  var html = '<div class="des-del-queue is-history">';
-  html += '<button type="button" class="des-del-history-toggle" onclick="toggleDesignDeleteHistory()">'
-    + (designDeleteHistoryOpen ? '▼' : '▶') + ' 刪除紀錄（' + cards.length + '）</button>';
-  if (!designDeleteHistoryOpen) {
-    html += '</div>';
-    return html;
+function loadAndRenderDesignDeleteLogs() {
+  var area = document.getElementById('ddel-area');
+  if (!isAdminRole()) {
+    if (area) area.innerHTML = '<div class="ddel-empty">只有管理員可以查看刪除紀錄</div>';
+    return;
   }
-  cards.forEach(function(card) {
-    var outcome = card.status === '已讀' ? '已駁回，申請人已看過' : '已駁回，申請人尚未看過';
-    html += '<div class="des-del-card">';
-    html += '<div class="des-del-card-title">' + escHtml(card.name) + '<span class="des-del-badge is-reject">' + escHtml(outcome) + '</span></div>';
-    html += '<div class="des-del-card-meta">';
-    if (card.by) html += '申請人：' + escHtml(card.by);
-    if (card.when) html += (card.by ? ' · ' : '') + escHtml(card.when);
-    if (card.reason) html += '\n原因：' + escHtml(card.reason);
-    if (card.reject) html += '\n駁回說明：' + escHtml(card.reject);
-    html += '</div></div>';
+  if (area) area.innerHTML = '<div class="ddel-empty">載入中...</div>';
+  var headers = {};
+  var tok = getUserAccessToken();
+  if (tok) headers['X-User-Access-Token'] = tok;
+  fetch(apiUrl('action=list-design-delete-logs'), { headers: headers }).then(function(r) {
+    return r.text().then(function(text) {
+      var data = null;
+      try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
+      if (!data || data.ok === false) throw new Error((data && data.error) || '載入失敗');
+      return data;
+    });
+  }).then(function(res) {
+    designDeleteLogRows = res.records || [];
+    renderDesignDeleteLogPage();
+  }).catch(function(err) {
+    if (area) area.innerHTML = '<div class="ddel-empty">' + escHtml(err.message || '載入失敗') + '</div>';
   });
-  html += '</div>';
-  return html;
+}
+
+function renderDesignDeleteLogPage() {
+  var area = document.getElementById('ddel-area');
+  if (!area) return;
+  var rows = designDeleteLogRows || [];
+  var personEl = document.getElementById('ddel-person');
+  var yearEl = document.getElementById('ddel-year');
+  var monthEl = document.getElementById('ddel-month');
+  var dayEl = document.getElementById('ddel-day');
+  var person = personEl ? personEl.value : '';
+  var year = yearEl ? yearEl.value : '';
+  var month = monthEl ? monthEl.value : '';
+  var day = dayEl ? dayEl.value : '';
+  var people = [];
+  var years = [];
+  rows.forEach(function(row) {
+    var who = row.applicant || '未填申請人';
+    if (people.indexOf(who) < 0) people.push(who);
+    if (row.year && years.indexOf(row.year) < 0) years.push(row.year);
+  });
+  people.sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
+  years.sort(function(a, b) { return b.localeCompare(a); });
+  person = fillDesignDeleteLogSelect(personEl, [{ value: '', label: '全部申請人' }].concat(people.map(function(name) {
+    return { value: name, label: name };
+  })), person);
+  year = fillDesignDeleteLogSelect(yearEl, [{ value: '', label: '全部年份' }].concat(years.map(function(y) {
+    return { value: y, label: y + '年' };
+  })), year);
+  var months = [];
+  rows.forEach(function(row) {
+    if (year && row.year !== year) return;
+    if (row.month && months.indexOf(row.month) < 0) months.push(row.month);
+  });
+  months.sort();
+  month = fillDesignDeleteLogSelect(monthEl, [{ value: '', label: '全部月份' }].concat(months.map(function(m) {
+    return { value: m, label: String(Number(m)) + '月' };
+  })), month);
+  var days = [];
+  rows.forEach(function(row) {
+    if (year && row.year !== year) return;
+    if (month && row.month !== month) return;
+    if (row.day && days.indexOf(row.day) < 0) days.push(row.day);
+  });
+  days.sort();
+  day = fillDesignDeleteLogSelect(dayEl, [{ value: '', label: '全部日期' }].concat(days.map(function(d) {
+    return { value: d, label: String(Number(d)) + '日' };
+  })), day);
+  var filtered = rows.filter(function(row) {
+    var who = row.applicant || '未填申請人';
+    if (person && who !== person) return false;
+    if (year && row.year !== year) return false;
+    if (month && row.month !== month) return false;
+    if (day && row.day !== day) return false;
+    return true;
+  });
+  if (!filtered.length) {
+    area.innerHTML = '<div class="ddel-empty">' + (rows.length ? '這個條件沒有刪除紀錄' : '尚無刪除申請紀錄') + '</div>';
+    return;
+  }
+  var groups = {};
+  var order = [];
+  filtered.forEach(function(row) {
+    var who = row.applicant || '未填申請人';
+    if (!groups[who]) {
+      groups[who] = [];
+      order.push(who);
+    }
+    groups[who].push(row);
+  });
+  order.sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
+  var html = '';
+  order.forEach(function(who) {
+    var list = groups[who].slice().sort(function(a, b) {
+      return ((b.year || '') + (b.month || '') + (b.day || '') + (b.when || '')).localeCompare((a.year || '') + (a.month || '') + (a.day || '') + (a.when || ''));
+    });
+    html += '<div class="ddel-person"><h4>' + escHtml(who) + '（' + list.length + '）</h4>';
+    html += '<div style="overflow-x:auto"><table class="dt"><thead><tr><th>日期</th><th>任務</th><th>結果</th><th>原因</th><th>駁回說明</th><th>申請人已看過</th></tr></thead><tbody>';
+    list.forEach(function(row) {
+      var dateText = (row.year && row.month && row.day) ? (row.year + '/' + row.month + '/' + row.day) : (row.when || '—');
+      if (row.when && dateText !== row.when) dateText += ' ' + String(row.when).replace(/^\d{4}\D+\d{1,2}\D+\d{1,2}\s*/, '');
+      html += '<tr><td style="white-space:nowrap">' + escHtml(dateText) + '</td>';
+      html += '<td>' + escHtml(row.taskName || '設計任務') + '</td>';
+      html += '<td>' + escHtml(row.result || '—') + '</td>';
+      html += '<td>' + escHtml(row.reason || '—') + '</td>';
+      html += '<td>' + escHtml(row.rejectNote || '—') + '</td>';
+      html += '<td>' + escHtml(row.seen === '是' ? '已看過' : '尚未') + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+  });
+  area.innerHTML = html;
 }
 
 function syncDesignDeleteChrome() {
