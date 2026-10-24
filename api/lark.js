@@ -10321,6 +10321,42 @@ export default async function handler(req, res) {
       }
     }
 
+    if (action === 'ack-design-delete' && req.method === 'POST') {
+      try {
+        const gate = await requireSignedInMember(req);
+        if (!gate.ok) return res.status(gate.status).json({ ok: false, error: gate.error });
+        const designId = String((req.body || {}).designId || '').trim();
+        if (!designId) return res.status(400).json({ ok: false, error: '找不到設計任務' });
+        const token = await getToken();
+        const tableId = tableIdFor('designs');
+        const appToken = appTokenForTable('designs');
+        const rec = await getRecordById(token, tableId, designId, appToken);
+        if (!rec) return res.status(404).json({ ok: false, error: '找不到這筆設計任務' });
+        const fieldsNow = rec.fields || {};
+        const status = String(fieldsNow['刪除申請狀態'] || '').trim();
+        if (status !== '已駁回') {
+          return res.status(400).json({ ok: false, error: '這筆刪除結果已經不在頁面上' });
+        }
+        const applicantOpenId = String(fieldsNow['刪除申請人OpenId'] || '').trim();
+        const user = gate.auth.user || {};
+        const myOpenId = String(user.openId || '').trim();
+        let mine = !!(applicantOpenId && myOpenId && applicantOpenId === myOpenId);
+        if (!mine) {
+          const applicantName = String(fieldsNow['刪除申請人'] || '').trim();
+          const names = [gate.auth.memberName, user.name, user.enName]
+            .map(function(s) { return String(s || '').trim(); })
+            .filter(Boolean);
+          mine = names.some(function(n) { return namesMatch(applicantName, n); });
+        }
+        if (!mine) return res.status(403).json({ ok: false, error: '只有申請人可以標成已看過' });
+        const fields = { '刪除申請狀態': '已讀' };
+        await updateRecord(token, tableId, designId, fields, appToken, false);
+        return res.status(200).json({ ok: true, fields: fields });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
     if (action === 'audit-stuck-payment-approvals' && (req.method === 'GET' || req.method === 'POST')) {
       try {
         const token = await getToken();
