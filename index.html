@@ -1206,8 +1206,9 @@ body.role-accountant .lp-task-card,
 body.role-accountant #rp,
 body.role-accountant #tr{display:none!important}
 .des-del-queue{margin-bottom:10px;padding:10px 12px;background:#fff7ed;border:1px solid #fdba74;border-radius:var(--r)}
-.des-del-queue.is-result{background:#f8fafc;border-color:#e5e7eb}
+.des-del-queue.is-result,.des-del-queue.is-history{background:#f8fafc;border-color:#e5e7eb}
 .des-del-queue h4{margin:0 0 8px;font-size:13px}
+.des-del-history-toggle{border:0;background:transparent;padding:0;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:inherit}
 .des-del-card{background:#fff;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;margin-top:6px}
 .des-del-card-title{font-size:13px;font-weight:600}
 .des-del-card-meta{font-size:12px;color:var(--t2);margin-top:3px;line-height:1.45;white-space:pre-wrap}
@@ -4969,7 +4970,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261024v3';
+var APP_BUILD = '20261024v4';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -16896,7 +16897,7 @@ function renderDesigns() {
   var designEmpty = selectedProjectIds.size
     ? '所選標案尚無設計任務'
     : (isPMRole() ? '請從左側選擇要顯示的標案' : '請先在上方篩選要顯示的標案');
-  var queue = (canReviewDesignDelete() ? renderDesignDeleteQueue('review') : '') + renderDesignDeleteQueue('result');
+  var queue = (canReviewDesignDelete() ? renderDesignDeleteQueue('review') + renderDesignDeleteHistory() : '') + renderDesignDeleteQueue('result');
   area.innerHTML = queue + (html || '<div style="padding:20px;color:var(--t3);text-align:center">' + designEmpty + '</div>');
   syncDesignDeleteChrome();
 }
@@ -19375,6 +19376,55 @@ function renderDesignDeleteQueue(place) {
       html += '</div>';
     }
     html += '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+var designDeleteHistoryOpen = false;
+function toggleDesignDeleteHistory() {
+  designDeleteHistoryOpen = !designDeleteHistoryOpen;
+  renderDesigns();
+}
+
+function renderDesignDeleteHistory() {
+  if (!canReviewDesignDelete()) return '';
+  var cards = [];
+  (designsData || []).forEach(function(rec) {
+    var f = rec.fields || {};
+    var st = designDeleteStatus(f);
+    if (st !== '已駁回' && st !== '已讀') return;
+    cards.push({
+      id: rec.record_id,
+      name: getDesignDisplayName(f) || '設計任務',
+      status: st,
+      reason: designDeletePlain(f['刪除原因']),
+      by: designDeletePlain(f['刪除申請人']),
+      when: designDeletePlain(f['刪除申請時間']),
+      reject: designDeletePlain(f['刪除駁回說明'])
+    });
+  });
+  if (!cards.length) return '';
+  cards.sort(function(a, b) {
+    return String(b.when || '').localeCompare(String(a.when || ''));
+  });
+  var html = '<div class="des-del-queue is-history">';
+  html += '<button type="button" class="des-del-history-toggle" onclick="toggleDesignDeleteHistory()">'
+    + (designDeleteHistoryOpen ? '▼' : '▶') + ' 刪除紀錄（' + cards.length + '）</button>';
+  if (!designDeleteHistoryOpen) {
+    html += '</div>';
+    return html;
+  }
+  cards.forEach(function(card) {
+    var outcome = card.status === '已讀' ? '已駁回，申請人已看過' : '已駁回，申請人尚未看過';
+    html += '<div class="des-del-card">';
+    html += '<div class="des-del-card-title">' + escHtml(card.name) + '<span class="des-del-badge is-reject">' + escHtml(outcome) + '</span></div>';
+    html += '<div class="des-del-card-meta">';
+    if (card.by) html += '申請人：' + escHtml(card.by);
+    if (card.when) html += (card.by ? ' · ' : '') + escHtml(card.when);
+    if (card.reason) html += '\n原因：' + escHtml(card.reason);
+    if (card.reject) html += '\n駁回說明：' + escHtml(card.reject);
+    html += '</div></div>';
   });
   html += '</div>';
   return html;
