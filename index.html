@@ -4999,7 +4999,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261024v8';
+var APP_BUILD = '20261024v9';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -19353,6 +19353,18 @@ function designDeletePlain(value) {
 }
 
 var designApprovedNotices = [];
+var designDeleteAcked = { ids: {}, logs: {} };
+
+function rememberDesignDeleteAck(id, logId) {
+  if (id) designDeleteAcked.ids[id] = true;
+  if (logId) designDeleteAcked.logs[logId] = true;
+}
+
+function designDeleteWasAcked(id, logId) {
+  if (id && designDeleteAcked.ids[id]) return true;
+  if (logId && designDeleteAcked.logs[logId]) return true;
+  return false;
+}
 
 function designApprovedPending(designId) {
   if (!designId) return false;
@@ -19368,6 +19380,7 @@ function renderDesignDeleteQueue(place) {
   (designsData || []).forEach(function(rec) {
     var f = rec.fields || {};
     var st = designDeleteStatus(f);
+    if (designDeleteWasAcked(rec.record_id, designDeletePlain(f['刪除紀錄ID']))) return;
     if (st !== '待審核' && st !== '已駁回' && st !== '已核准') return;
     var mine = designDeleteRequesterIsMe(f);
     var reviewer = canReviewDesignDelete();
@@ -19393,6 +19406,7 @@ function renderDesignDeleteQueue(place) {
   if (!reviewPlace) {
     (designApprovedNotices || []).forEach(function(row) {
       if (!row || row.seen === '是' || row.result !== '已核准刪除') return;
+      if (designDeleteWasAcked(row.designId, row.id)) return;
       var existing = null;
       cards.forEach(function(card) {
         if (row.designId && card.id === row.designId) existing = card;
@@ -19717,14 +19731,28 @@ function syncDesignDeleteChrome() {
   banner.innerHTML = body;
 }
 
+function getUserAccessTokenForWrite() {
+  var tok = getUserAccessToken();
+  if (tok) return tok;
+  var u = getCurrentLoginUser();
+  if (!u || isSessionExpired(u) || !u.accessToken) return '';
+  var exp = Number(u.tokenExpiresAt || 0);
+  if (exp && Date.now() >= exp) return '';
+  return u.accessToken;
+}
+
 function postDesignDeleteAction(action, body) {
   var headers = { 'Content-Type': 'application/json' };
-  var tok = getUserAccessToken();
+  var tok = getUserAccessTokenForWrite();
   if (tok) headers['X-User-Access-Token'] = tok;
+  var payload = Object.assign({}, body || {});
+  if (tok) payload.userAccessToken = tok;
+  var u = getCurrentLoginUser();
+  if (u && u.openId) payload.triggeredByOpenId = u.openId;
   return fetch(apiUrl('action=' + action), {
     method: 'POST',
     headers: headers,
-    body: JSON.stringify(withUserToken(body || {}))
+    body: JSON.stringify(payload)
   }).then(function(r) {
     return r.text().then(function(text) {
       var data = null;
@@ -19815,10 +19843,13 @@ function refreshApprovedDeleteNotices() {
   }).then(function(r) { return r.json(); }).then(function(res) {
     window.__approvedDeleteNoticeFlight = false;
     if (!res || res.ok === false) return;
-    var next = JSON.stringify(res.records || []);
+    var kept = (res.records || []).filter(function(row) {
+      return row && !designDeleteWasAcked(row.designId, row.id) && row.seen !== '是';
+    });
+    var next = JSON.stringify(kept);
     if (next === window.__approvedDeleteNoticeKey) return;
     window.__approvedDeleteNoticeKey = next;
-    designApprovedNotices = res.records || [];
+    designApprovedNotices = kept;
     renderDesigns();
   }).catch(function() {
     window.__approvedDeleteNoticeFlight = false;
@@ -19831,44 +19862,40 @@ function ackDesignDelete(id, logId) {
   if (window.__desDelAckBusy && window.__desDelAckBusy[busyKey]) return;
   window.__desDelAckBusy = window.__desDelAckBusy || {};
   window.__desDelAckBusy[busyKey] = true;
+  rememberDesignDeleteAck(id, logId);
   var prev = id ? snapshotDesignFields(id) : null;
-  var prevNotices = designApprovedNotices.slice();
   var st = prev ? designDeleteStatus(prev) : '';
   var approved = st === '已核准' || (!prev && !!logId);
-  showDesignDeleteSent('已看過', '這張提醒已收起。');
-  setTimeout(function() {
-    if (approved && id) {
-      setTableArray('designs', (designsData || []).filter(function(r) { return r.record_id !== id; }));
-      if (editingDesignId === id) {
-        editingDesignId = null;
-        closeDesignDrawer();
-      }
-    } else if (id) {
-      mergeDesignFieldsIntoLocal(id, { '刪除申請狀態': '已讀' });
+  if (approved && id) {
+    setTableArray('designs', (designsData || []).filter(function(r) { return r.record_id !== id; }));
+    if (editingDesignId === id) {
+      editingDesignId = null;
+      closeDesignDrawer();
     }
-    designApprovedNotices = (designApprovedNotices || []).filter(function(row) {
-      if (logId && row.id === logId) return false;
-      if (id && row.designId === id) return false;
-      return true;
-    });
-    window.__approvedDeleteNoticeKey = JSON.stringify(designApprovedNotices);
-    commitLocalTable('designs');
-    postDesignDeleteAction('ack-design-delete', { designId: id || '', logId: logId || '' }).then(function(res) {
-      if (res && res.deleted) return;
-      if (res && res.fields && id) mergeDesignFieldsIntoLocal(id, res.fields);
-      commitLocalTable('designs');
-    }).catch(function(err) {
-      var msg = (err && err.message) || '';
-      if (msg.indexOf('不在頁面上') >= 0 || msg.indexOf('找不到') >= 0) return;
-      if (id && prev) restoreDesignFields(id, prev);
-      designApprovedNotices = prevNotices;
-      window.__approvedDeleteNoticeKey = JSON.stringify(designApprovedNotices);
-      commitLocalTable('designs');
-      alert('無法標成已看過：' + (msg || '請稍後再試'));
-    }).then(function() {
-      window.__desDelAckBusy[busyKey] = false;
-    });
-  }, 0);
+  } else if (id) {
+    mergeDesignFieldsIntoLocal(id, { '刪除申請狀態': '已讀' });
+  }
+  designApprovedNotices = (designApprovedNotices || []).filter(function(row) {
+    return row && !designDeleteWasAcked(row.designId, row.id);
+  });
+  window.__approvedDeleteNoticeKey = JSON.stringify(designApprovedNotices);
+  commitLocalTable('designs');
+  var send = function() {
+    return postDesignDeleteAction('ack-design-delete', { designId: id || '', logId: logId || '' });
+  };
+  refreshLoginTokenIfNeeded().then(send).catch(function() { return send(); }).then(function(res) {
+    if (res && res.fields && id && !approved) mergeDesignFieldsIntoLocal(id, res.fields);
+  }).catch(function(err) {
+    var msg = (err && err.message) || '';
+    if (msg.indexOf('不在頁面上') >= 0 || msg.indexOf('找不到') >= 0 || msg.indexOf('請先登入') >= 0) return;
+    delete designDeleteAcked.ids[id];
+    if (logId) delete designDeleteAcked.logs[logId];
+    if (id && prev) restoreDesignFields(id, prev);
+    else commitLocalTable('designs');
+    alert('無法標成已看過：' + (msg || '請稍後再試'));
+  }).then(function() {
+    window.__desDelAckBusy[busyKey] = false;
+  });
 }
 
 function reviewDesignDelete(id, decision) {
