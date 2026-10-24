@@ -5006,7 +5006,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261024v11';
+var APP_BUILD = '20261024v12';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -19382,6 +19382,7 @@ function designApprovedPending(designId) {
 
 function renderDesignDeleteQueue(place) {
   var reviewPlace = place === 'review';
+  if (!reviewPlace && canReviewDesignDelete()) return '';
   var cards = [];
   var seenDesignIds = {};
   (designsData || []).forEach(function(rec) {
@@ -19462,7 +19463,7 @@ function renderDesignDeleteQueue(place) {
       html += '<button type="button" class="bcan bsm" data-des-del-act="reject" data-des-id="' + escAttr(card.id) + '">駁回</button>';
       html += '</div>';
     }
-    if ((card.status === '已駁回' || card.status === '已核准') && card.mine) {
+    if ((card.status === '已駁回' || card.status === '已核准') && card.mine && !card.reviewer) {
       html += '<div class="des-del-card-acts">';
       html += '<button type="button" class="bcan bsm" data-des-del-act="ack" data-des-id="' + escAttr(card.id) + '" data-des-log="' + escAttr(card.logId || '') + '">已看過</button>';
       html += '</div>';
@@ -19756,7 +19757,7 @@ function syncDesignDeleteChrome() {
     body += '<button type="button" class="bcan bsm" data-des-del-act="reject" data-des-id="' + escAttr(editingDesignId) + '">駁回</button>';
     body += '</div>';
   }
-  if ((st === '已駁回' || st === '已核准') && designDeleteRequesterIsMe(f) && editingDesignId) {
+  if ((st === '已駁回' || st === '已核准') && designDeleteRequesterIsMe(f) && !isAdminRole() && editingDesignId) {
     body += '<div class="des-del-card-acts">';
     body += '<button type="button" class="bcan bsm" data-des-del-act="ack" data-des-id="' + escAttr(editingDesignId) + '" data-des-log="' + escAttr(designDeletePlain(f['刪除紀錄ID'])) + '">已看過</button>';
     body += '</div>';
@@ -19891,6 +19892,7 @@ function refreshApprovedDeleteNotices() {
 }
 
 function ackDesignDelete(id, logId) {
+  if (isAdminRole()) return;
   var busyKey = (id || '') + ':' + (logId || '');
   if (!id && !logId) return;
   if (window.__desDelAckBusy && window.__desDelAckBusy[busyKey]) return;

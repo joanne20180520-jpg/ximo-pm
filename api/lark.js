@@ -10656,6 +10656,9 @@ export default async function handler(req, res) {
       try {
         const gate = await requireSignedInMember(req);
         if (!gate.ok) return res.status(gate.status).json({ ok: false, error: gate.error });
+        if (isAdminRoleToken(gate.auth.role)) {
+          return res.status(403).json({ ok: false, error: '已看過只能由申請的 PM 確認' });
+        }
         const designId = String((req.body || {}).designId || '').trim();
         const logIdHint = String((req.body || {}).logId || '').trim();
         if (!designId && !logIdHint) return res.status(400).json({ ok: false, error: '找不到設計任務' });
