@@ -9855,7 +9855,7 @@ async function saveDesignDeleteLog(token, payload, onlyCreate) {
     '處理時間': payload.handledAt || ''
   };
   let logId = String(payload.logId || '').trim();
-  if (!logId && payload.designId) {
+  if (!logId && payload.designId && !payload.skipLookup) {
     const rows = await getRecords(token, tableId, appToken);
     const hit = (rows || []).find(function(r) {
       return fieldTextValue((r.fields || {})['設計任務ID']) === payload.designId;
@@ -9902,12 +9902,30 @@ async function backfillDesignDeleteLogs(token) {
   await ensureDesignDeleteFields(token);
   const appToken = appTokenForTable('designs');
   const designTable = tableIdFor('designs');
+  const logTable = await ensureDesignDeleteLogTable(token);
   const designs = await getRecords(token, designTable, appToken);
+  const logs = await getRecords(token, logTable, appToken);
+  const byDesign = {};
+  (logs || []).forEach(function(row) {
+    const id = fieldTextValue((row.fields || {})['設計任務ID']);
+    if (id && !byDesign[id]) byDesign[id] = row.record_id;
+  });
   for (let i = 0; i < (designs || []).length; i++) {
     const payload = designDeleteLogFromDesign(designs[i]);
     if (!payload) continue;
-    const logId = await saveDesignDeleteLog(token, payload, true);
-    if (logId && payload.logId !== logId) {
+    const knownId = payload.logId || byDesign[payload.designId] || '';
+    if (knownId) {
+      if (payload.logId !== knownId) {
+        try {
+          await updateRecord(token, designTable, payload.designId, { '刪除紀錄ID': knownId }, appToken, false);
+        } catch (e) {}
+      }
+      continue;
+    }
+    payload.skipLookup = true;
+    const logId = await saveDesignDeleteLog(token, payload, false);
+    if (logId) {
+      byDesign[payload.designId] = logId;
       try {
         await updateRecord(token, designTable, payload.designId, { '刪除紀錄ID': logId }, appToken, false);
       } catch (e) {}

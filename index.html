@@ -1514,9 +1514,9 @@ button.btn-loading::after{content:'…';margin-left:2px}
     <button class="tbar-tab" onclick="sw(this,'pg-e')">支出明細</button>
     <button class="tbar-tab" onclick="sw(this,'pg-p')">付款申請</button>
     <button class="tbar-tab" onclick="sw(this,'pg-d')">設計任務單</button>
-    <button class="tbar-tab" onclick="sw(this,'pg-ddel')">刪除紀錄</button>
     <button class="tbar-tab" onclick="sw(this,'pg-journal')">日誌</button>
     <button class="tbar-tab" onclick="sw(this,'pg-ai')">AI分析</button>
+    <button class="tbar-tab" onclick="sw(this,'pg-ddel')">刪除紀錄</button>
   </nav>
   <div id="m-proj-picker-mount" aria-label="選擇標案"></div>
   <div class="topbar-actions">
@@ -2533,7 +2533,10 @@ function sw(btn,id){
     if (!deferredDataReady && !isDesignerLikeRole()) loadDeferredTables({ silent: true });
     renderDesigns();
   }
-  if(id==='pg-ddel') loadAndRenderDesignDeleteLogs();
+  if(id==='pg-ddel') {
+    var ddelReady = deferredDataReady ? Promise.resolve() : loadDeferredTables({ silent: true });
+    Promise.resolve(ddelReady).then(function() { loadAndRenderDesignDeleteLogs(); }).catch(function() { loadAndRenderDesignDeleteLogs(); });
+  }
   if(id==='pg-p') {
     applyLoginUserToForms();
     fillPaymentProjectSelects();
@@ -4995,7 +4998,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261024v5';
+var APP_BUILD = '20261024v6';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -19407,6 +19410,59 @@ function renderDesignDeleteQueue(place) {
 }
 
 var designDeleteLogRows = [];
+var designDeleteLogRendering = false;
+
+function designDeleteLogDateParts(stamp) {
+  var m = String(stamp || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  if (!m) return { year: '', month: '', day: '' };
+  return { year: m[1], month: ('0' + m[2]).slice(-2), day: ('0' + m[3]).slice(-2) };
+}
+
+function localDesignDeleteLogRows() {
+  var rows = [];
+  (designsData || []).forEach(function(rec) {
+    var f = rec.fields || {};
+    var st = designDeleteStatus(f);
+    var result = '';
+    var seen = '否';
+    if (st === '待審核') result = '待審核';
+    else if (st === '已駁回') result = '已駁回';
+    else if (st === '已讀') {
+      result = '已駁回';
+      seen = '是';
+    } else return;
+    var when = designDeletePlain(f['刪除申請時間']);
+    var parts = designDeleteLogDateParts(when);
+    rows.push({
+      id: 'local-' + rec.record_id,
+      taskName: getDesignDisplayName(f) || '設計任務',
+      designId: rec.record_id,
+      applicant: designDeletePlain(f['刪除申請人']),
+      year: parts.year,
+      month: parts.month,
+      day: parts.day,
+      when: when,
+      reason: designDeletePlain(f['刪除原因']),
+      result: result,
+      seen: seen,
+      rejectNote: designDeletePlain(f['刪除駁回說明'])
+    });
+  });
+  return rows;
+}
+
+function mergeDesignDeleteLogRows(serverRows) {
+  var map = {};
+  localDesignDeleteLogRows().forEach(function(row) {
+    map[row.designId || row.id] = row;
+  });
+  (serverRows || []).forEach(function(row) {
+    map[row.designId || row.id] = row;
+  });
+  var out = [];
+  Object.keys(map).forEach(function(key) { out.push(map[key]); });
+  return out;
+}
 
 function fillDesignDeleteLogSelect(el, options, current) {
   if (!el) return '';
@@ -19414,9 +19470,12 @@ function fillDesignDeleteLogSelect(el, options, current) {
   options.forEach(function(opt) {
     html += '<option value="' + escAttr(opt.value) + '">' + escHtml(opt.label) + '</option>';
   });
+  var prev = el.onchange;
+  el.onchange = null;
   el.innerHTML = html;
   var ok = options.some(function(opt) { return opt.value === current; });
   el.value = ok ? current : '';
+  el.onchange = prev;
   return el.value;
 }
 
@@ -19426,11 +19485,20 @@ function loadAndRenderDesignDeleteLogs() {
     if (area) area.innerHTML = '<div class="ddel-empty">只有管理員可以查看刪除紀錄</div>';
     return;
   }
-  if (area) area.innerHTML = '<div class="ddel-empty">載入中...</div>';
-  var headers = {};
+  designDeleteLogRows = localDesignDeleteLogRows();
+  if (designDeleteLogRows.length) renderDesignDeleteLogPage();
+  else if (area) area.innerHTML = '<div class="ddel-empty">載入中...</div>';
+  var headers = { 'Content-Type': 'application/json' };
   var tok = getUserAccessToken();
   if (tok) headers['X-User-Access-Token'] = tok;
-  fetch(apiUrl('action=list-design-delete-logs'), { headers: headers }).then(function(r) {
+  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timer = ctrl ? setTimeout(function() { try { ctrl.abort(); } catch (e) {} }, 25000) : null;
+  fetch(apiUrl('action=list-design-delete-logs'), {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify(withUserToken({})),
+    signal: ctrl ? ctrl.signal : undefined
+  }).then(function(r) {
     return r.text().then(function(text) {
       var data = null;
       try { data = text ? JSON.parse(text) : null; } catch (e) { data = null; }
@@ -19438,14 +19506,21 @@ function loadAndRenderDesignDeleteLogs() {
       return data;
     });
   }).then(function(res) {
-    designDeleteLogRows = res.records || [];
+    designDeleteLogRows = mergeDesignDeleteLogRows(res.records || []);
     renderDesignDeleteLogPage();
   }).catch(function(err) {
-    if (area) area.innerHTML = '<div class="ddel-empty">' + escHtml(err.message || '載入失敗') + '</div>';
+    if (designDeleteLogRows.length) return;
+    var msg = (err && err.name === 'AbortError') ? '載入逾時，請再打開一次' : ((err && err.message) || '載入失敗');
+    if (area) area.innerHTML = '<div class="ddel-empty">' + escHtml(msg) + '</div>';
+  }).then(function() {
+    if (timer) clearTimeout(timer);
   });
 }
 
 function renderDesignDeleteLogPage() {
+  if (designDeleteLogRendering) return;
+  designDeleteLogRendering = true;
+  try {
   var area = document.getElementById('ddel-area');
   if (!area) return;
   var rows = designDeleteLogRows || [];
@@ -19534,6 +19609,9 @@ function renderDesignDeleteLogPage() {
     html += '</tbody></table></div></div>';
   });
   area.innerHTML = html;
+  } finally {
+    designDeleteLogRendering = false;
+  }
 }
 
 function syncDesignDeleteChrome() {
