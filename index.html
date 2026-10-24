@@ -4998,7 +4998,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261024v6';
+var APP_BUILD = '20261024v7';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -19689,6 +19689,30 @@ function postDesignDeleteAction(action, body) {
   });
 }
 
+function snapshotDesignFields(id) {
+  var rec = (designsData || []).find(function(r) { return r.record_id === id; });
+  if (!rec) return null;
+  try { return JSON.parse(JSON.stringify(rec.fields || {})); } catch (e) { return Object.assign({}, rec.fields || {}); }
+}
+
+function restoreDesignFields(id, fields) {
+  var rec = (designsData || []).find(function(r) { return r.record_id === id; });
+  if (!rec || !fields) return;
+  rec.fields = fields;
+  commitLocalTable('designs');
+}
+
+function showDesignDeleteSent(title, body) {
+  showConfirm({
+    type: 'final',
+    title: title || '已申請送出',
+    body: body || '已送出。',
+    okText: '確定',
+    hideCancel: true,
+    onOk: function() {}
+  });
+}
+
 function requestDesignDelete(id, name) {
   if (!canRequestDesignDelete() || !id) return;
   showConfirm({
@@ -19705,28 +19729,57 @@ function requestDesignDelete(id, name) {
         requestDesignDelete(id, name);
         return;
       }
-      postDesignDeleteAction('request-design-delete', { designId: id, reason: reason }).then(function(res) {
-        if (res.fields) mergeDesignFieldsIntoLocal(id, res.fields);
+      var prev = snapshotDesignFields(id);
+      var u = getCurrentLoginUser() || {};
+      showDesignDeleteSent('已申請送出', '刪除申請已送出，等管理員審核。');
+      setTimeout(function() {
+        mergeDesignFieldsIntoLocal(id, {
+          '刪除申請狀態': '待審核',
+          '刪除原因': reason,
+          '刪除申請人': (u.name || getLoginDisplayName() || '').trim(),
+          '刪除申請人OpenId': u.openId || '',
+          '刪除申請時間': '',
+          '刪除駁回說明': ''
+        });
         commitLocalTable('designs');
-        var dmFailed = !res.notify || !res.notify.sent;
-        showUndoToast(dmFailed
-          ? '已送出刪除申請。管理員在待辦提醒看得到；Lark 訊息這次沒送出。'
-          : '已送出刪除申請，管理員會收到 Lark 通知。');
-      }).catch(function(err) {
-        alert('申請失敗：' + (err.message || '請稍後再試'));
-      });
+        postDesignDeleteAction('request-design-delete', { designId: id, reason: reason }).then(function(res) {
+          if (res.fields) mergeDesignFieldsIntoLocal(id, res.fields);
+          commitLocalTable('designs');
+        }).catch(function(err) {
+          restoreDesignFields(id, prev);
+          alert('申請失敗：' + (err.message || '請稍後再試'));
+        });
+      }, 0);
     }
   });
 }
 
 function ackDesignDelete(id) {
   if (!id) return;
-  postDesignDeleteAction('ack-design-delete', { designId: id }).then(function(res) {
-    if (res.fields) mergeDesignFieldsIntoLocal(id, res.fields);
+  if (window.__desDelAckBusy && window.__desDelAckBusy[id]) return;
+  window.__desDelAckBusy = window.__desDelAckBusy || {};
+  window.__desDelAckBusy[id] = true;
+  var prev = snapshotDesignFields(id);
+  showDesignDeleteSent('已看過', '這張提醒已收起。');
+  setTimeout(function() {
+    mergeDesignFieldsIntoLocal(id, { '刪除申請狀態': '已讀' });
     commitLocalTable('designs');
-  }).catch(function(err) {
-    alert('無法標成已看過：' + (err.message || '請稍後再試'));
-  });
+    postDesignDeleteAction('ack-design-delete', { designId: id }).then(function(res) {
+      if (res.fields) mergeDesignFieldsIntoLocal(id, res.fields);
+      commitLocalTable('designs');
+    }).catch(function(err) {
+      var msg = (err && err.message) || '';
+      if (msg.indexOf('不在頁面上') >= 0) {
+        mergeDesignFieldsIntoLocal(id, { '刪除申請狀態': '已讀' });
+        commitLocalTable('designs');
+        return;
+      }
+      restoreDesignFields(id, prev);
+      alert('無法標成已看過：' + (msg || '請稍後再試'));
+    }).then(function() {
+      window.__desDelAckBusy[id] = false;
+    });
+  }, 0);
 }
 
 function reviewDesignDelete(id, decision) {
@@ -19758,27 +19811,49 @@ function reviewDesignDelete(id, decision) {
 }
 
 function submitDesignDeleteReview(id, decision, note) {
-  postDesignDeleteAction('review-design-delete', {
-    designId: id,
-    decision: decision,
-    note: note || ''
-  }).then(function(res) {
-    if (res.deleted) {
+  var rec = (designsData || []).find(function(r) { return r.record_id === id; });
+  var snapshot = null;
+  try { snapshot = rec ? JSON.parse(JSON.stringify(rec)) : null; } catch (e) { snapshot = rec; }
+  var prevFields = snapshotDesignFields(id);
+  if (decision === 'approve') {
+    showDesignDeleteSent('已申請送出', '已核准刪除，這張設計任務會移除。');
+  } else {
+    showDesignDeleteSent('已申請送出', '已駁回，這張設計任務會保留。');
+  }
+  setTimeout(function() {
+    if (decision === 'approve') {
       setTableArray('designs', (designsData || []).filter(function(r) { return r.record_id !== id; }));
       if (editingDesignId === id) {
         editingDesignId = null;
         closeDesignDrawer();
       }
-      commitLocalTable('designs');
-      showUndoToast('已核准並刪除設計任務');
-      return;
+    } else {
+      mergeDesignFieldsIntoLocal(id, {
+        '刪除申請狀態': '已駁回',
+        '刪除駁回說明': note || ''
+      });
     }
-    if (res.fields) mergeDesignFieldsIntoLocal(id, res.fields);
     commitLocalTable('designs');
-    showUndoToast('已駁回，設計任務保留');
-  }).catch(function(err) {
-    alert('審核失敗：' + (err.message || '請稍後再試'));
-  });
+    postDesignDeleteAction('review-design-delete', {
+      designId: id,
+      decision: decision,
+      note: note || ''
+    }).then(function(res) {
+      if (res.deleted) return;
+      if (res.fields) mergeDesignFieldsIntoLocal(id, res.fields);
+      commitLocalTable('designs');
+    }).catch(function(err) {
+      if (decision === 'approve' && snapshot) {
+        var arr = (designsData || []).slice();
+        arr.push(snapshot);
+        setTableArray('designs', arr);
+        commitLocalTable('designs');
+      } else {
+        restoreDesignFields(id, prevFields);
+      }
+      alert('審核失敗：' + (err.message || '請稍後再試'));
+    });
+  }, 0);
 }
 
 if (!window.__desDelReviewBound) {

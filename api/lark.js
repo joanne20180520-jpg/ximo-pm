@@ -10577,6 +10577,9 @@ export default async function handler(req, res) {
         if (!rec) return res.status(404).json({ ok: false, error: '找不到這筆設計任務' });
         const fieldsNow = rec.fields || {};
         const status = String(fieldsNow['刪除申請狀態'] || '').trim();
+        if (status === '已讀') {
+          return res.status(200).json({ ok: true, fields: { '刪除申請狀態': '已讀' } });
+        }
         if (status !== '已駁回') {
           return res.status(400).json({ ok: false, error: '這筆刪除結果已經不在頁面上' });
         }
