@@ -5006,7 +5006,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261024v10';
+var APP_BUILD = '20261024v11';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -19856,6 +19856,7 @@ function requestDesignDelete(id, name) {
           commitLocalTable('designs');
         }).catch(function(err) {
           restoreDesignFields(id, prev);
+          resetConfirmChrome();
           alert('申請失敗：' + (err.message || '請稍後再試'));
         });
       }, 0);

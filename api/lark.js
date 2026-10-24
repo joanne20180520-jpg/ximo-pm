@@ -9614,22 +9614,14 @@ function memberRoleRank(rec) {
   return 4;
 }
 
-function findMemberForUser(members, user) {
-  const openId = String(user.openId || '').trim();
-  const unionId = String(user.unionId || '').trim();
-  const userId = String(user.userId || '').trim();
-  const userNames = [user.name, user.enName].map(function(s) { return String(s || '').trim(); }).filter(Boolean);
+function classifyMemberHits(members, user) {
+  const openId = String((user && user.openId) || '').trim();
+  const unionId = String((user && user.unionId) || '').trim();
+  const userId = String((user && user.userId) || '').trim();
+  const userNames = [user && user.name, user && user.enName].map(function(s) { return String(s || '').trim(); }).filter(Boolean);
   const idHits = [];
   const exactNameHits = [];
   const looseHits = [];
-  function best(list) {
-    if (!list.length) return null;
-    let pick = list[0];
-    for (let i = 1; i < list.length; i++) {
-      if (memberRoleRank(list[i]) < memberRoleRank(pick)) pick = list[i];
-    }
-    return pick;
-  }
   (members || []).forEach(function(rec) {
     const f = rec.fields || {};
     const personIds = listMemberPersonIds(f);
@@ -9654,8 +9646,40 @@ function findMemberForUser(members, user) {
     if (exact) exactNameHits.push(rec);
     else if (loose) looseHits.push(rec);
   });
+  return { idHits: idHits, exactNameHits: exactNameHits, looseHits: looseHits };
+}
+
+function bestMemberByPrivilege(list) {
+  if (!list || !list.length) return null;
+  let pick = list[0];
+  for (let i = 1; i < list.length; i++) {
+    if (memberRoleRank(list[i]) < memberRoleRank(pick)) pick = list[i];
+  }
+  return pick;
+}
+
+function findMemberForUser(members, user) {
+  const grouped = classifyMemberHits(members, user);
   // 同一人可能有多筆人員列。open_id／完全同名時以管理員為準，避免先對到 PM 列就被拒絕審核。
-  return best(idHits) || best(exactNameHits) || looseHits[0] || null;
+  return bestMemberByPrivilege(grouped.idHits) || bestMemberByPrivilege(grouped.exactNameHits) || grouped.looseHits[0] || null;
+}
+
+function findPMMemberForUser(members, user) {
+  const grouped = classifyMemberHits(members, user);
+  function pmRow(list) {
+    for (let i = 0; i < (list || []).length; i++) {
+      if (getMemberRole((list[i] && list[i].fields) || {}) === 'PM') return list[i];
+    }
+    return null;
+  }
+  // 申請刪除要認 PM 那一列。同一人另有管理員列時，不能因此被擋下。
+  const fromId = pmRow(grouped.idHits);
+  if (fromId) return fromId;
+  const fromExact = pmRow(grouped.exactNameHits);
+  if (fromExact) return fromExact;
+  const loose = grouped.looseHits[0];
+  if (loose && getMemberRole(loose.fields || {}) === 'PM') return loose;
+  return null;
 }
 
 async function resolveTriggeredByOpenId(larkToken, userAccessToken, hintOpenId) {
@@ -10481,7 +10505,17 @@ export default async function handler(req, res) {
       try {
         const gate = await requireSignedInMember(req);
         if (!gate.ok) return res.status(gate.status).json({ ok: false, error: gate.error });
-        if (gate.auth.role !== 'PM') {
+        let requestRole = gate.auth.role;
+        let pmRec = null;
+        if (requestRole !== 'PM' && gate.auth.user) {
+          try {
+            const freshToken = await getToken();
+            const freshMembers = await getMembersRecords(freshToken, { bypassCache: true });
+            pmRec = findPMMemberForUser(freshMembers, gate.auth.user);
+            if (pmRec) requestRole = 'PM';
+          } catch (e) {}
+        }
+        if (requestRole !== 'PM') {
           return res.status(403).json({ ok: false, error: '只有一般 PM 可以申請刪除設計任務' });
         }
         const b = req.body || {};
@@ -10495,7 +10529,7 @@ export default async function handler(req, res) {
         const appToken = appTokenForTable('designs');
         const rec = await getRecordById(token, tableId, designId, appToken);
         if (!rec) return res.status(404).json({ ok: false, error: '找不到這筆設計任務' });
-        const applicant = String(gate.auth.memberName || (gate.auth.user && gate.auth.user.name) || '').trim() || 'PM';
+        const applicant = String((pmRec && getMemberName(pmRec.fields || {})) || gate.auth.memberName || (gate.auth.user && gate.auth.user.name) || '').trim() || 'PM';
         const openId = String((gate.auth.user && gate.auth.user.openId) || '').trim();
         const when = formatTaipeiStamp(new Date());
         const fields = {
