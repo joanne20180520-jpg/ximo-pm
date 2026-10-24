@@ -10030,13 +10030,40 @@ function designDeleteLogRow(rec) {
   };
 }
 
+function memberAccountOpenIds(fields) {
+  const ids = [];
+  const names = [];
+  ['帳號', '成員', 'Account', 'Member'].forEach(function(key) {
+    collectPersonFromValue((fields || {})[key], ids, names);
+  });
+  const extra = fieldTextValue((fields || {})['open_id'] || (fields || {})['Open ID'] || (fields || {})['OpenId']);
+  if (extra) ids.push(String(extra).trim());
+  const out = [];
+  ids.forEach(function(id) {
+    const s = String(id || '').trim();
+    if (isValidPersonOpenId(s) && out.indexOf(s) < 0) out.push(s);
+  });
+  return out;
+}
+
+function rowMatchesNotifyRole(fields, roleName) {
+  if (roleName !== '管理員') return getMemberRole(fields) === roleName;
+  const tokens = collectMemberRoleTokens(fields);
+  return tokens.some(function(token) {
+    const r = String(token || '').trim();
+    if (!r || r.length > 16) return false;
+    return isAdminRoleToken(r);
+  });
+}
+
 async function listOpenIdsForMemberRole(token, roleName) {
   const members = await getMembersRecords(token);
   const ids = [];
   (members || []).forEach(function(rec) {
-    if (getMemberRole(rec.fields || {}) !== roleName) return;
-    listMemberPersonIds(rec.fields || {}).forEach(function(id) {
-      if (isValidPersonOpenId(id) && ids.indexOf(id) < 0) ids.push(id);
+    const fields = rec.fields || {};
+    if (!rowMatchesNotifyRole(fields, roleName)) return;
+    memberAccountOpenIds(fields).forEach(function(id) {
+      if (ids.indexOf(id) < 0) ids.push(id);
     });
   });
   return ids;
@@ -10569,6 +10596,7 @@ export default async function handler(req, res) {
           + '\n時間：' + when
           + '\n請到待辦提醒或設計任務單審核。核准後才會刪除，駁回則保留。';
         const targets = await listOpenIdsForMemberRole(token, '管理員');
+        if (openId && isValidPersonOpenId(openId) && targets.indexOf(openId) < 0) targets.push(openId);
         const notify = await notifyOpenIds(token, targets, text);
         notify.audience = '管理員';
         return res.status(200).json({ ok: true, fields: fields, notify: notify });
