@@ -10170,13 +10170,13 @@ function formatDueYmdSlash(dueTs) {
 }
 
 /**
- * 收集「目前仍未完成、且逾期超過 minOverdueDays 天」的任務。
- * 預設 minOverdueDays=2 → 逾期超過 1 天（第 2 天起）。
+ * 收集逾期通知資料：
+ * - newItems：昨天到期、今天起算逾期 1 天、仍未完成（【新逾期】主體）
+ * - totalOverdue：目前所有未完成逾期筆數（文末總覽）
  */
 async function collectOverdueTasksBeyond(tenantToken, opts) {
   opts = opts || {};
-  const minOverdueDays = Math.max(1, parseInt(opts.minOverdueDays != null ? opts.minOverdueDays : 2, 10) || 2);
-  const limit = Math.max(1, parseInt(opts.limit != null ? opts.limit : 40, 10) || 40);
+  const newLimit = Math.max(1, parseInt(opts.limit != null ? opts.limit : 80, 10) || 80);
   const cfg = getOperationalBitableConfig();
   const [tasks, workitems, projects] = await Promise.all([
     getRecords(tenantToken, tableIdFor('tasks'), appTokenForTable('tasks') || cfg.appToken),
@@ -10208,7 +10208,8 @@ async function collectOverdueTasksBeyond(tenantToken, opts) {
       archived: archived
     };
   });
-  const rows = [];
+  const allOverdue = [];
+  const newlyOverdue = [];
   (tasks || []).forEach(function(rec) {
     const f = (rec && rec.fields) || {};
     if (isTaskFieldsCompleted(f)) return;
@@ -10216,11 +10217,10 @@ async function collectOverdueTasksBeyond(tenantToken, opts) {
     const diff = dueDayDiffTaipei(dueTs);
     if (diff == null || diff >= 0) return;
     const overdueDays = Math.abs(diff);
-    if (overdueDays < minOverdueDays) return;
     const wiIds = getLinkIds(f['所屬工作項目']);
     const wi = wiIds[0] ? wiMap[wiIds[0]] : null;
     if (wi && wi.archived) return;
-    rows.push({
+    const row = {
       id: rec.record_id,
       name: String(f['任務名稱'] || '未命名').trim() || '未命名',
       assignee: personDisplayName(f['負責人']) || getLinkText(f['負責人']) || '未指定',
@@ -10229,37 +10229,86 @@ async function collectOverdueTasksBeyond(tenantToken, opts) {
       dueLabel: formatDueYmdSlash(dueTs),
       overdueDays: overdueDays,
       status: String(f['進度狀態'] || '').trim() || '未開始'
+    };
+    allOverdue.push(row);
+    // 昨天到期 → 今天逾期剛好 1 天
+    if (overdueDays === 1) newlyOverdue.push(row);
+  });
+  function sortRows(rows) {
+    return rows.slice().sort(function(a, b) {
+      const ac = String(a.assignee || '').localeCompare(String(b.assignee || ''), 'zh-Hant');
+      if (ac) return ac;
+      const pc = String(a.project || '').localeCompare(String(b.project || ''), 'zh-Hant');
+      if (pc) return pc;
+      if ((a.dueTs || 0) !== (b.dueTs || 0)) return (a.dueTs || 0) - (b.dueTs || 0);
+      return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant');
     });
-  });
-  rows.sort(function(a, b) {
-    if (b.overdueDays !== a.overdueDays) return b.overdueDays - a.overdueDays;
-    return String(a.assignee).localeCompare(String(b.assignee), 'zh-Hant');
-  });
+  }
+  const newSorted = sortRows(newlyOverdue);
   return {
-    minOverdueDays: minOverdueDays,
-    total: rows.length,
-    items: rows.slice(0, limit),
-    truncated: rows.length > limit
+    today: getTaipeiYmd(new Date()),
+    totalOverdue: allOverdue.length,
+    newOverdue: newlyOverdue.length,
+    newItems: newSorted.slice(0, newLimit),
+    newTruncated: newlyOverdue.length > newLimit,
+    // 相容舊欄位
+    total: allOverdue.length,
+    items: newSorted.slice(0, newLimit),
+    truncated: newlyOverdue.length > newLimit
   };
 }
 
 function buildOverdueAdminNotifyText(scan) {
-  const items = (scan && scan.items) || [];
-  const total = (scan && scan.total) || 0;
-  const minDays = (scan && scan.minOverdueDays) || 2;
-  const today = getTaipeiYmd(new Date());
-  if (!total) {
-    return '【逾期任務】' + today + '\n目前沒有「逾期超過 ' + (minDays - 1) + ' 天」的未完成任務。';
+  const today = (scan && scan.today) || getTaipeiYmd(new Date());
+  const newItems = (scan && (scan.newItems || scan.items)) || [];
+  const newCount = scan && scan.newOverdue != null ? scan.newOverdue : newItems.length;
+  const totalOverdue = scan && scan.totalOverdue != null ? scan.totalOverdue : ((scan && scan.total) || 0);
+
+  let text = '【新逾期】' + today + '\n昨天有 ' + newCount + ' 筆任務到期未完成';
+
+  if (newCount > 0) {
+    const byAsg = {};
+    const asgOrder = [];
+    newItems.forEach(function(it) {
+      const a = it.assignee || '未指定';
+      if (!byAsg[a]) {
+        byAsg[a] = [];
+        asgOrder.push(a);
+      }
+      byAsg[a].push(it);
+    });
+    asgOrder.sort(function(a, b) {
+      if (byAsg[b].length !== byAsg[a].length) return byAsg[b].length - byAsg[a].length;
+      return a.localeCompare(b, 'zh-Hant');
+    });
+    asgOrder.forEach(function(asg) {
+      const list = byAsg[asg];
+      text += '\n\n' + asg + '（' + list.length + ' 筆）';
+      const byProj = {};
+      const pOrder = [];
+      list.forEach(function(it) {
+        const p = it.project || '其他';
+        if (!byProj[p]) {
+          byProj[p] = [];
+          pOrder.push(p);
+        }
+        byProj[p].push(it);
+      });
+      pOrder.forEach(function(proj) {
+        text += '\n' + proj;
+        byProj[proj].forEach(function(it) {
+          text += '\n・' + (it.name || '未命名')
+            + '｜到期 ' + (it.dueLabel || '—')
+            + '｜' + (it.status || '未開始');
+        });
+      });
+    });
+    if (scan && scan.newTruncated) {
+      text += '\n…另有 ' + (newCount - newItems.length) + ' 筆新逾期未列出';
+    }
   }
-  let text = '【逾期超過' + (minDays - 1) + '天】' + today + '\n共 ' + total + ' 筆未完成任務需關注\n----------------';
-  items.forEach(function(it) {
-    text += '\n・' + (it.assignee || '未指定')
-      + '｜' + (it.name || '未命名')
-      + '｜到期 ' + (it.dueLabel || '—')
-      + '｜已逾期 ' + it.overdueDays + ' 天';
-  });
-  if (scan.truncated) text += '\n…另有 ' + (total - items.length) + ' 筆未列出';
-  text += '\n----------------\n請到璽墨「待辦提醒 → 全部／已逾期」查看。';
+
+  text += '\n\n────────────\n目前尚未處理的逾期任務：' + totalOverdue + ' 筆\n完整清單請至璽墨專案的任務頁面';
   return text;
 }
 
@@ -10274,6 +10323,7 @@ async function notifyAdminsOverdueTasks(tenantToken, opts) {
     text = '【試發｜僅「' + audienceRole + '」】\n' + text;
   }
   const targets = await listOpenIdsForMemberRole(tenantToken, audienceRole);
+  const hasSomething = (scan.totalOverdue > 0) || (scan.newOverdue > 0);
   if (dryRun) {
     return {
       ok: true,
@@ -10286,7 +10336,7 @@ async function notifyAdminsOverdueTasks(tenantToken, opts) {
       notify: { sent: 0, targeted: targets.length, audience: audienceRole }
     };
   }
-  if (!scan.total) {
+  if (!hasSomething) {
     return {
       ok: true,
       dryRun: false,
