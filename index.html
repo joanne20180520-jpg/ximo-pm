@@ -5252,7 +5252,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261104v7';
+var APP_BUILD = '20261104v8';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -9373,7 +9373,7 @@ function renderTmTimelineCell(row, span) {
 function renderTmTaskRow(row, span, showProjSub) {
   var sub = row.wiName || '';
   if (showProjSub && row.projName) sub = row.projName + (sub ? (' · ' + sub) : '');
-  var html = '<div class="tm-row" onclick="openTaskDetail(\'' + row.id + '\')">';
+  var html = '<div class="tm-row" role="button" tabindex="0" data-task-id="' + escAttr(row.id) + '">';
   html += '<div><div class="tm-task-name">' + escHtml(row.name) + '</div>';
   if (sub) html += '<div class="tm-task-sub">' + escHtml(sub) + '</div>';
   html += '</div>';
@@ -9385,6 +9385,30 @@ function renderTmTaskRow(row, span, showProjSub) {
     + escHtml(tmKindBadgeText(row)) + '</span></div>';
   html += '</div>';
   return html;
+}
+
+function bindTmBoardClicks() {
+  var wrap = document.getElementById('tm-table-wrap');
+  if (!wrap || wrap._tmClickBound) return;
+  wrap._tmClickBound = true;
+  wrap.addEventListener('click', function(e) {
+    var row = e.target && e.target.closest && e.target.closest('.tm-row[data-task-id]');
+    if (!row || !wrap.contains(row)) return;
+    var id = row.getAttribute('data-task-id');
+    if (!id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openTaskDetail(id);
+  });
+  wrap.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var row = e.target && e.target.closest && e.target.closest('.tm-row[data-task-id]');
+    if (!row || !wrap.contains(row)) return;
+    var id = row.getAttribute('data-task-id');
+    if (!id) return;
+    e.preventDefault();
+    openTaskDetail(id);
+  });
 }
 
 function renderTmColHeader(span, rows) {
@@ -9524,6 +9548,7 @@ function renderTmBoardByAssignee(rows, span) {
 function renderTaskManagePage() {
   var wrap = document.getElementById('tm-table-wrap');
   if (!wrap) return;
+  bindTmBoardClicks();
   document.querySelectorAll('#tm-scope .tm-scope-btn').forEach(function(btn) {
     btn.classList.toggle('active', btn.getAttribute('data-scope') === tmScope);
   });
@@ -12565,7 +12590,10 @@ function openDailyLogFromTask() {
 
 function openTaskDetail(taskId) {
   var ctx = getTaskContext(taskId);
-  if (!ctx) return;
+  if (!ctx) {
+    if (typeof showNotice === 'function') showNotice('找不到此任務，請重新整理後再試');
+    return;
+  }
   currentTaskId = taskId;
   taskReportOriginalStatus = ctx.f['進度狀態'] || '未開始';
   taskReportCategory = 'doing';
