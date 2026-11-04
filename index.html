@@ -601,8 +601,15 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .gfh span{font-size:12px;font-weight:600;color:var(--t3)}
 .grl{height:44px;padding:5px 10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;justify-content:center}
 .grl:last-child{border-bottom:none}
-.grn{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.grl.grl-done{cursor:pointer;user-select:none}
+.grl.grl-done:hover{background:#f3f1ed}
+.grl.grl-done-collapsed{opacity:.78}
+.grn{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:5px;min-width:0}
+.grn-text{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .grm{font-size:12px;color:var(--t3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gwi-arr{flex-shrink:0;font-size:9px;color:var(--t3);transition:transform .15s;width:10px}
+.gwi-arr.open{transform:rotate(90deg)}
+.gwi-done-tag{flex-shrink:0;font-size:10px;font-weight:700;color:#1a7a45;background:#e8f6ee;border:1px solid #cfe8d8;border-radius:999px;padding:1px 6px;letter-spacing:.02em}
 .gsw{flex:1;overflow-x:auto;overflow-y:hidden;min-width:0;overscroll-behavior-x:contain;touch-action:pan-x;-webkit-overflow-scrolling:touch}
 .gsw-head{flex:1;overflow:hidden;min-width:0;background:var(--sf2)}
 .gf{touch-action:pan-y}
@@ -614,6 +621,9 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .gdc.tdc{background:rgba(45,106,79,.08);color:var(--report);font-weight:700}
 .gtr{height:44px;border-bottom:1px solid var(--border);position:relative}
 .gtr:last-child{border-bottom:none}
+.gtr.gtr-done-collapsed{display:flex;align-items:center;padding:0 10px;cursor:pointer;background:repeating-linear-gradient(-12deg,#faf9f7 0 8px,#f3f1ed 8px 16px)}
+.gtr.gtr-done-collapsed:hover{background:#eef6f1}
+.gtr-done-pill{font-size:11px;font-weight:700;color:#1a7a45;background:#e8f6ee;border:1px solid #cfe8d8;border-radius:999px;padding:3px 10px;pointer-events:none}
 .gbar{position:absolute;height:28px;top:50%;transform:translateY(-50%);border-radius:6px;display:flex;align-items:center;padding:0 8px;font-size:13px;color:rgba(255,255,255,.98);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;cursor:pointer;min-width:4px;box-shadow:0 1px 3px rgba(0,0,0,.1);pointer-events:auto;z-index:1}
 .gbar.gbar-mine{z-index:3;border:2.5px solid #111!important;box-sizing:border-box;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.28)}
 .gbar.gbar-mine.overdue{background:var(--danger)!important;border-color:#111!important}
@@ -4820,6 +4830,37 @@ function syncGanttHeadScroll(key) {
   if (sw2 && sh) sh.scrollLeft = sw2.scrollLeft;
 }
 
+/** 已完成工項：預設收合；展開狀態以 wiId 記在 session */
+var ganttExpandedWi = {};
+
+function isGanttWiExpanded(row) {
+  if (!row || !row.done) return true;
+  return !!ganttExpandedWi[row.wiId];
+}
+
+function toggleGanttWiRow(key, wiId, ev) {
+  if (ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+  }
+  if (!wiId) return;
+  ganttExpandedWi[wiId] = !ganttExpandedWi[wiId];
+  var proj = PDATA[key];
+  if (!proj) return;
+  var swPrev = document.getElementById('gsw-' + key);
+  var savedLeft = swPrev ? swPrev.scrollLeft : 0;
+  var r = getRange(), vs = r.s, ve = r.e;
+  var total = dif(vs, ve) + 1;
+  if (total <= 0) return;
+  paintGantt(key, proj, vs, ve, total, CW);
+  var sw2 = document.getElementById('gsw-' + key);
+  if (sw2) {
+    sw2.scrollLeft = savedLeft;
+    syncGanttHeadScroll(key);
+  }
+  applyGanttFit(key, proj, vs, ve, total);
+}
+
 function applyGanttFit(key, proj, vs, ve, total) {
   requestAnimationFrame(function() {
     var gb = document.getElementById('gb-' + key);
@@ -4933,8 +4974,21 @@ function paintGantt(key,proj,vs,ve,total,cw){
   // fixed left labels (body only; header lives in sticky date head)
   var fixBody='';
   proj.rows.forEach(function(row){
-    var rowH = Math.max(48, row.bars.length * GANTT_BAR_STEP + 14);
-    fixBody+='<div class="grl" style="height:'+rowH+'px"><div class="grn">'+escHtml(row.n)+'</div><div class="grm" title="日期 · 進度／權重（—＝尚未分配權重）">'+escHtml(row.m)+'</div></div>';
+    var expanded = isGanttWiExpanded(row);
+    var rowH = expanded ? Math.max(48, Math.max(1, row.bars.length) * GANTT_BAR_STEP + 14) : 36;
+    var doneCls = row.done ? (' grl-done' + (expanded ? '' : ' grl-done-collapsed')) : '';
+    var toggleAttr = row.done && row.wiId
+      ? (' onclick="toggleGanttWiRow(\'' + key + '\',\'' + row.wiId + '\',event)"')
+      : '';
+    var nameHtml = '';
+    if (row.done) {
+      nameHtml += '<span class="gwi-arr' + (expanded ? ' open' : '') + '">▶</span>';
+    }
+    nameHtml += '<span class="grn-text">' + escHtml(row.n) + '</span>';
+    if (row.done) nameHtml += '<span class="gwi-done-tag">已完成</span>';
+    fixBody+='<div class="grl'+doneCls+'" style="height:'+rowH+'px"'+toggleAttr+'>'
+      +'<div class="grn">'+nameHtml+'</div>'
+      +'<div class="grm" title="日期 · 進度／權重（—＝尚未分配權重）">'+escHtml(row.m)+'</div></div>';
   });
 
   // sticky date header (months + days)
@@ -4944,7 +4998,14 @@ function paintGantt(key,proj,vs,ve,total,cw){
   // timeline body rows
   var tmH='';
   proj.rows.forEach(function(row){
-    var rowH = Math.max(48, row.bars.length * GANTT_BAR_STEP + 14);
+    var expanded = isGanttWiExpanded(row);
+    var rowH = expanded ? Math.max(48, Math.max(1, row.bars.length) * GANTT_BAR_STEP + 14) : 36;
+    if (row.done && !expanded) {
+      tmH+='<div class="gtr gtr-done-collapsed" style="width:'+tw+'px;height:'+rowH+'px"'
+        +(row.wiId ? (' onclick="toggleGanttWiRow(\''+key+'\',\''+row.wiId+'\',event)"') : '')
+        +'><span class="gtr-done-pill">已完成 · 點擊展開</span></div>';
+      return;
+    }
     var bH=tlHTML;
     var rowBars = row.bars.slice().sort(function(a, b) {
       var ad = a.done ? 1 : 0;
@@ -5052,8 +5113,7 @@ function showGanttTip(barEl, clientX, clientY) {
   if (name) html += '<div class="gantt-tip-name">' + escHtml(name) + '</div>';
   if (start || end) {
     var range = start && end ? (start + ' — ' + end) : (end || start);
-    html += '<div class="gantt-tip-meta">預計期間 ' + escHtml(range)
-      + (end ? ('　·　預計結束日 ' + escHtml(end)) : '') + '</div>';
+    html += '<div class="gantt-tip-meta">預計期間 ' + escHtml(range) + '</div>';
   } else {
     html += '<div class="gantt-tip-meta">尚未確認時間</div>';
   }
@@ -5152,7 +5212,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261104v5';
+var APP_BUILD = '20261104v6';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -9297,6 +9357,8 @@ function renderGanttFromData() {
       var wiStart = contractStart;
       var wiEnd = parseTs(wf['截止日']) || contractEnd;
       var weightStr = formatWeightProgress(wf, wiId);
+      var wiPct = getWiProgressNum(wf, wiId);
+      var wiDone = wiPct != null && wiPct >= 100;
       var metaStr = '';
       if (wiStart && wiEnd) metaStr = fmt(wiStart.getTime()) + '–' + fmt(wiEnd.getTime());
       else if (wiEnd) metaStr = fmt(wiEnd.getTime());
@@ -9356,7 +9418,7 @@ function renderGanttFromData() {
         });
       });
 
-      rows.push({ n: wiName, m: metaStr, bars: bars });
+      rows.push({ n: wiName, m: metaStr, bars: bars, done: wiDone, wiId: wiId, pct: wiPct });
     });
 
     if (!rows.length) return;
