@@ -247,6 +247,42 @@ body.role-admin #pl-projects .si{cursor:pointer}
 #pg-ai.page.active{display:flex;flex-direction:column;min-height:0;height:100%}
 #pg-s.page.active{display:flex;flex-direction:column;min-height:0;height:100%}
 #pg-s .gctl{flex-shrink:0}
+#pg-tm.page.active{display:flex;flex-direction:column;min-height:0;height:100%}
+.tm-page{display:flex;flex-direction:column;min-height:0;height:100%;padding:12px 14px 16px;box-sizing:border-box}
+.tm-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-bottom:10px;flex-shrink:0}
+.tm-toolbar h3{font-size:15px;font-weight:700;margin:0;margin-right:4px}
+.tm-scope{display:flex;gap:2px;padding:2px;border:1px solid var(--border);border-radius:20px;background:var(--sf2)}
+.tm-scope-btn{padding:5px 12px;border:none;border-radius:18px;background:transparent;font-size:12px;font-weight:600;color:var(--t2);cursor:pointer;font-family:inherit}
+.tm-scope-btn.active{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.tm-filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.tm-filter-btn{padding:5px 11px;border:1px solid var(--border);border-radius:999px;background:#fff;font-size:12px;font-weight:600;color:var(--t2);cursor:pointer;font-family:inherit;line-height:1.2}
+.tm-filter-btn:hover{border-color:var(--accent);color:var(--accent)}
+.tm-filter-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.tm-filter-btn.tm-overdue.active{background:#c0392b;border-color:#c0392b}
+.tm-filter-btn .tm-count{margin-left:4px;opacity:.85;font-weight:700}
+.tm-selects{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.tm-selects select{padding:5px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;background:#fff;color:var(--text);max-width:180px}
+.tm-hint{font-size:11px;color:var(--t3);margin:0 0 8px;flex-shrink:0}
+.tm-table-wrap{flex:1;min-height:0;overflow:auto;border:1px solid var(--border);border-radius:12px;background:#fff}
+.tm-table{width:100%;border-collapse:collapse;font-size:12px}
+.tm-table th{position:sticky;top:0;z-index:1;text-align:left;padding:9px 10px;background:#f7f5f2;border-bottom:1px solid var(--border);color:var(--t2);font-weight:700;white-space:nowrap}
+.tm-table td{padding:9px 10px;border-bottom:1px solid #f0eeea;vertical-align:top;line-height:1.4;color:var(--text)}
+.tm-table tr{cursor:pointer}
+.tm-table tbody tr:hover td{background:#faf9f7}
+.tm-table tr.tm-row-overdue td{background:#fff8f7}
+.tm-table tr.tm-row-overdue:hover td{background:#fff1f0}
+.tm-task-name{font-weight:700}
+.tm-task-sub{font-size:11px;color:var(--t3);margin-top:2px}
+.tm-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.tm-pill-overdue{background:#fde8e8;color:#c0392b}
+.tm-pill-soon{background:#fff6e0;color:#b45309}
+.tm-pill-doing{background:#eef4fc;color:var(--c2)}
+.tm-pill-pending{background:var(--sf2);color:var(--t2)}
+.tm-pill-done{background:#e8f5ee;color:#1f4d38}
+.tm-pill-paused{background:#f3f1ed;color:#6b6860}
+.tm-empty{padding:28px;text-align:center;color:var(--t3);font-size:13px}
+.todo-more-link{display:block;margin:6px 0 2px;padding:8px 10px;border:1px dashed #f0c4c0;border-radius:8px;background:#fff8f7;color:#7f1d1d;font-size:11px;font-weight:700;text-align:center;cursor:pointer}
+.todo-more-link:hover{background:#fff1f0}
 #gantt-area{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 
 /* E区 - 右側待辦提醒 */
@@ -1526,6 +1562,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="logo">璽墨</div>
   <nav class="topnav">
     <button class="tbar-tab active" onclick="sw(this,'pg-s')">時程管理</button>
+    <button class="tbar-tab" onclick="sw(this,'pg-tm')">任務管理</button>
     <button class="tbar-tab" onclick="sw(this,'pg-ms')">履約</button>
     <button class="tbar-tab" onclick="sw(this,'pg-b')">費用管理</button>
     <button class="tbar-tab" onclick="sw(this,'pg-e')">支出明細</button>
@@ -1633,6 +1670,35 @@ button.btn-loading::after{content:'…';margin-left:2px}
       </div>
       <div id="gantt-area">
         <div style="padding:20px;color:var(--t3);font-size:12px;text-align:center">載入中...</div>
+      </div>
+    </div>
+
+    <!-- 任務管理（逾期／快到期／進行中篩選） -->
+    <div id="pg-tm" class="page">
+      <div class="tm-page">
+        <div class="tm-toolbar">
+          <h3>任務管理</h3>
+          <div class="tm-scope" id="tm-scope">
+            <button type="button" class="tm-scope-btn active" data-scope="mine" onclick="setTmScope('mine')">我的</button>
+            <button type="button" class="tm-scope-btn" data-scope="all" onclick="setTmScope('all')">全部</button>
+          </div>
+          <div class="tm-filters" id="tm-filters">
+            <button type="button" class="tm-filter-btn tm-overdue active" data-filter="overdue" onclick="setTmFilter('overdue', this)">逾期<span class="tm-count" id="tm-count-overdue">0</span></button>
+            <button type="button" class="tm-filter-btn" data-filter="soon" onclick="setTmFilter('soon', this)">快到期<span class="tm-count" id="tm-count-soon">0</span></button>
+            <button type="button" class="tm-filter-btn" data-filter="doing" onclick="setTmFilter('doing', this)">進行中<span class="tm-count" id="tm-count-doing">0</span></button>
+            <button type="button" class="tm-filter-btn" data-filter="pending" onclick="setTmFilter('pending', this)">未開始<span class="tm-count" id="tm-count-pending">0</span></button>
+            <button type="button" class="tm-filter-btn" data-filter="done" onclick="setTmFilter('done', this)">已完成<span class="tm-count" id="tm-count-done">0</span></button>
+            <button type="button" class="tm-filter-btn" data-filter="all" onclick="setTmFilter('all', this)">全部<span class="tm-count" id="tm-count-all">0</span></button>
+          </div>
+          <div class="tm-selects">
+            <select id="tm-proj" onchange="onTmProjChange()" title="篩選標案"><option value="">全部標案</option></select>
+            <select id="tm-assignee" onchange="onTmAssigneeChange()" title="篩選負責人"><option value="">全部負責人</option></select>
+          </div>
+        </div>
+        <p class="tm-hint" id="tm-hint">顯示逾期任務：預計到期日＋已逾期天數。點列可開啟任務詳情。</p>
+        <div class="tm-table-wrap" id="tm-table-wrap">
+          <div class="tm-empty">載入中...</div>
+        </div>
       </div>
     </div>
 
@@ -2530,6 +2596,7 @@ function sw(btn,id){
   if (pageEl) pageEl.classList.add('active');
   closeMobileSheet();
   if(id==='pg-s') renderGanttFromData();
+  if(id==='pg-tm') renderTaskManagePage();
   if(id==='pg-ms') renderMilestonesPage();
   if(id==='pg-journal') {
     journalViewMode = 'day';
@@ -2586,7 +2653,9 @@ var DEEP_LINK_PAGES = {
   gantt: 'pg-s',
   task: 'pg-s',
   tasks: 'pg-s',
-  '任務': 'pg-s',
+  '任務': 'pg-tm',
+  '任務管理': 'pg-tm',
+  taskmanage: 'pg-tm',
   '時程管理': 'pg-s',
   '時程': 'pg-s',
   // 履約里程碑
@@ -5024,7 +5093,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261104v2';
+var APP_BUILD = '20261104v3';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -5160,6 +5229,9 @@ function refreshViewsForTables(keys) {
   }
   if ((s.tasks || s.workitems || s.projects || s.milestones) && document.getElementById('pg-ms') && document.getElementById('pg-ms').classList.contains('active')) {
     renderMilestonesPage();
+  }
+  if ((s.tasks || s.workitems || s.projects) && document.getElementById('pg-tm') && document.getElementById('pg-tm').classList.contains('active')) {
+    renderTaskManagePage();
   }
   if (s.payments || s.projects || s.workitems) renderPaymentsList();
   if (s.payments || s.expenses || s.projects) renderAccountingPage();
@@ -5545,9 +5617,9 @@ var TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000;
 var loginRefreshPromise = null;
 var currentUserRole = 'PM';
 var ROLE_PAGES = {
-  PM: ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal'],
-  '管理員': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-ddel', 'pg-journal', 'pg-ai'],
-  '管理员': ['pg-s', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-ddel', 'pg-journal', 'pg-ai'],
+  PM: ['pg-s', 'pg-tm', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-journal'],
+  '管理員': ['pg-s', 'pg-tm', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-ddel', 'pg-journal', 'pg-ai'],
+  '管理员': ['pg-s', 'pg-tm', 'pg-ms', 'pg-b', 'pg-e', 'pg-p', 'pg-d', 'pg-ddel', 'pg-journal', 'pg-ai'],
   '設計師': ['pg-d'],
   '設計主管': ['pg-d'],
   '會計': ['pg-b', 'pg-e'],
@@ -8701,13 +8773,16 @@ function renderTodoOverdueDueBits(task) {
   return html;
 }
 
-function renderTodoOverdueTable(items, showAssignee) {
+function renderTodoOverdueTable(items, showAssignee, opts) {
+  opts = opts || {};
   if (!items.length) return '<div class="todo-empty">無逾期任務</div>';
+  var limit = opts.limit != null ? opts.limit : 12;
+  var shown = limit > 0 ? items.slice(0, limit) : items;
   var html = '<table class="todo-overdue-table"><thead><tr>';
   html += '<th>任務</th>';
   if (showAssignee) html += '<th>負責人</th>';
   html += '<th>預計到期</th><th>已逾期</th></tr></thead><tbody>';
-  items.forEach(function(task) {
+  shown.forEach(function(task) {
     html += '<tr onclick="openTaskDetail(\'' + task.id + '\')">';
     html += '<td><div style="font-weight:700">' + escHtml(task.name) + '</div>';
     html += '<div style="font-size:10px;color:var(--t3);margin-top:2px">' + escHtml(task.projName || '') + '</div></td>';
@@ -8717,6 +8792,10 @@ function renderTodoOverdueTable(items, showAssignee) {
     html += '</tr>';
   });
   html += '</tbody></table>';
+  if (limit > 0 && items.length > limit) {
+    html += '<div class="todo-more-link" onclick="openTaskManagePage(\'overdue\')">還有 '
+      + (items.length - limit) + ' 筆 → 到任務管理看全部</div>';
+  }
   return html;
 }
 
@@ -8729,7 +8808,7 @@ function renderTodoSection(title, dotClass, items, emptyText, groupByAssignee, o
   if (!items.length) {
     html += '<div class="todo-empty">' + emptyText + '</div>';
   } else if (isOverdue && (opts.asTable || groupByAssignee)) {
-    html += renderTodoOverdueTable(items, !!groupByAssignee);
+    html += renderTodoOverdueTable(items, !!groupByAssignee, { limit: opts.limit != null ? opts.limit : 12 });
   } else if (groupByAssignee) {
     var byAssignee = {};
     items.forEach(function(task) {
@@ -8811,12 +8890,256 @@ function renderTeamPanel() {
   var html = '';
   if (isAdminRole()) html += renderDesignDeleteQueue('review');
   html += renderTodoSection('已逾期', 'overdue', buckets.overdue, '無逾期任務', groupByAssignee, {
-    asTable: groupByAssignee || buckets.overdue.length >= 4
+    asTable: true,
+    limit: 12
   });
   html += renderTodoSection('今日到期', 'today', buckets.today, '今日無到期任務', groupByAssignee);
   html += renderTodoSection('三天內到期', 'soon', buckets.soon, '三天內無到期任務', groupByAssignee);
   area.innerHTML = html;
   updateTodoOverdueChrome(mineBuckets.overdue.length);
+}
+
+// ── 任務管理頁（逾期／快到期／進行中）──
+var tmScope = 'mine';
+var tmFilter = 'overdue';
+var tmProjFilter = '';
+var tmAssigneeFilter = '';
+
+function openTaskManagePage(filter) {
+  if (filter) tmFilter = filter;
+  if (!isPageAllowed('pg-tm')) {
+    showNotice('目前角色無法開啟任務管理');
+    return;
+  }
+  var tab = document.querySelector('.tbar-tab[onclick*="pg-tm"]');
+  if (tab) sw(tab, 'pg-tm');
+  else {
+    document.querySelectorAll('.page').forEach(function(p) { p.classList.remove('active'); });
+    var page = document.getElementById('pg-tm');
+    if (page) page.classList.add('active');
+    renderTaskManagePage();
+  }
+}
+
+function setTmScope(scope) {
+  tmScope = scope === 'all' ? 'all' : 'mine';
+  document.querySelectorAll('#tm-scope .tm-scope-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-scope') === tmScope);
+  });
+  renderTaskManagePage();
+}
+
+function setTmFilter(filter, btn) {
+  tmFilter = filter || 'overdue';
+  document.querySelectorAll('#tm-filters .tm-filter-btn').forEach(function(el) {
+    el.classList.toggle('active', el.getAttribute('data-filter') === tmFilter);
+  });
+  if (btn) btn.classList.add('active');
+  renderTaskManagePage();
+}
+
+function onTmProjChange() {
+  var sel = document.getElementById('tm-proj');
+  tmProjFilter = sel ? (sel.value || '') : '';
+  renderTaskManagePage();
+}
+
+function onTmAssigneeChange() {
+  var sel = document.getElementById('tm-assignee');
+  tmAssigneeFilter = sel ? (sel.value || '') : '';
+  renderTaskManagePage();
+}
+
+function getTmEffectiveScope() {
+  if (tmScope === 'all') return 'all';
+  if (getCurrentLoginUser()) return 'mine';
+  return 'all';
+}
+
+function collectTaskManageRows(scope) {
+  var wiMap = {};
+  workitemsData.forEach(function(wi) {
+    wiMap[wi.record_id] = {
+      name: wi.fields['工作項目名稱'] || '',
+      project: getProjectNameFromWi(wi)
+    };
+  });
+  var rows = [];
+  tasksData.forEach(function(rec) {
+    var f = rec.fields || {};
+    if (scope === 'mine' && !isTaskAssignedToMe(f['負責人'])) return;
+    var progress = parseProgressVal(f['進度狀態'], f['進度數值']);
+    var status = f['進度狀態'] || '未開始';
+    var dueTs = f['預計完成日'];
+    var diff = dueTs ? getDueDayDiff(dueTs) : null;
+    var overdueDays = (diff != null && diff < 0) ? Math.abs(diff) : 0;
+    var kind = 'pending';
+    if (progress >= 100 || status === '已完成' || status === '完成') kind = 'done';
+    else if (status === '暫停') kind = 'paused';
+    else if (overdueDays > 0) kind = 'overdue';
+    else if (diff != null && diff >= 0 && diff <= 3) kind = 'soon';
+    else if (progress > 0 || /進行中/.test(String(status))) kind = 'doing';
+    else kind = 'pending';
+
+    var wiIds = getLinkIds(f['所屬工作項目']);
+    var wi = wiIds[0] ? wiMap[wiIds[0]] : null;
+    var projName = wi ? (wi.project || '其他') : '其他';
+    rows.push({
+      id: rec.record_id,
+      name: f['任務名稱'] || '未命名',
+      desc: f['任務說明'] || '',
+      projName: projName,
+      wiName: wi ? (wi.name || '') : '',
+      assignee: personName(f['負責人']) || '未指定',
+      dueTs: dueTs || 0,
+      dueDateLabel: dueTs ? formatTodoDueDate(dueTs) : '—',
+      overdueDays: overdueDays,
+      remainDays: diff,
+      progress: progress,
+      status: status,
+      kind: kind
+    });
+  });
+  rows.sort(function(a, b) {
+    var order = { overdue: 0, soon: 1, doing: 2, pending: 3, paused: 4, done: 5 };
+    var oa = order[a.kind] != null ? order[a.kind] : 9;
+    var ob = order[b.kind] != null ? order[b.kind] : 9;
+    if (oa !== ob) return oa - ob;
+    if (a.kind === 'overdue' && b.overdueDays !== a.overdueDays) return b.overdueDays - a.overdueDays;
+    if ((a.dueTs || 0) !== (b.dueTs || 0)) return (a.dueTs || 0) - (b.dueTs || 0);
+    return String(a.name).localeCompare(String(b.name), 'zh-Hant');
+  });
+  return rows;
+}
+
+function tmKindLabel(row) {
+  if (row.kind === 'overdue') return '逾期 ' + row.overdueDays + ' 天';
+  if (row.kind === 'soon') {
+    if (row.remainDays === 0) return '今日到期';
+    return row.remainDays + ' 天後到期';
+  }
+  if (row.kind === 'doing') return row.progress > 0 ? ('進行中 ' + row.progress + '%') : '進行中';
+  if (row.kind === 'done') return '已完成';
+  if (row.kind === 'paused') return '暫停';
+  return '未開始';
+}
+
+function tmKindPillClass(kind) {
+  if (kind === 'overdue') return 'tm-pill-overdue';
+  if (kind === 'soon') return 'tm-pill-soon';
+  if (kind === 'doing') return 'tm-pill-doing';
+  if (kind === 'done') return 'tm-pill-done';
+  if (kind === 'paused') return 'tm-pill-paused';
+  return 'tm-pill-pending';
+}
+
+function tmHintForFilter(filter) {
+  if (filter === 'overdue') return '逾期：未完成且已過預計到期日。顯示預計到期日與已逾期天數。';
+  if (filter === 'soon') return '快到期：今日到期或三天內到期（尚未逾期）。';
+  if (filter === 'doing') return '進行中：進度進行中，且尚未逾期、也不在三天內到期。';
+  if (filter === 'pending') return '未開始：尚無進度、也非逾期／快到期。';
+  if (filter === 'done') return '已完成任務。';
+  return '全部任務。可再依標案／負責人縮小範圍。';
+}
+
+function fillTmFilterOptions(rows) {
+  var projSel = document.getElementById('tm-proj');
+  var asgSel = document.getElementById('tm-assignee');
+  if (projSel) {
+    var projs = [];
+    var seenP = {};
+    rows.forEach(function(r) {
+      var n = (r.projName || '').trim();
+      if (!n || seenP[n]) return;
+      seenP[n] = 1;
+      projs.push(n);
+    });
+    projs.sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
+    var prevP = tmProjFilter;
+    var html = '<option value="">全部標案</option>';
+    projs.forEach(function(n) {
+      html += '<option value="' + escAttr(n) + '"' + (prevP === n ? ' selected' : '') + '>' + escHtml(n) + '</option>';
+    });
+    projSel.innerHTML = html;
+    if (prevP && !seenP[prevP]) tmProjFilter = '';
+  }
+  if (asgSel) {
+    var people = [];
+    var seenA = {};
+    rows.forEach(function(r) {
+      var n = (r.assignee || '').trim();
+      if (!n || seenA[n]) return;
+      seenA[n] = 1;
+      people.push(n);
+    });
+    people.sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); });
+    var prevA = tmAssigneeFilter;
+    var htmlA = '<option value="">全部負責人</option>';
+    people.forEach(function(n) {
+      htmlA += '<option value="' + escAttr(n) + '"' + (prevA === n ? ' selected' : '') + '>' + escHtml(n) + '</option>';
+    });
+    asgSel.innerHTML = htmlA;
+    if (prevA && !seenA[prevA]) tmAssigneeFilter = '';
+  }
+}
+
+function renderTaskManagePage() {
+  var wrap = document.getElementById('tm-table-wrap');
+  if (!wrap) return;
+  document.querySelectorAll('#tm-scope .tm-scope-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-scope') === tmScope);
+  });
+  document.querySelectorAll('#tm-filters .tm-filter-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-filter') === tmFilter);
+  });
+  var scope = getTmEffectiveScope();
+  var allRows = collectTaskManageRows(scope);
+  fillTmFilterOptions(allRows);
+
+  var counts = { overdue: 0, soon: 0, doing: 0, pending: 0, done: 0, all: allRows.length, paused: 0 };
+  allRows.forEach(function(r) {
+    if (counts[r.kind] != null) counts[r.kind] += 1;
+  });
+  ['overdue', 'soon', 'doing', 'pending', 'done', 'all'].forEach(function(k) {
+    var el = document.getElementById('tm-count-' + k);
+    if (el) el.textContent = String(counts[k] || 0);
+  });
+
+  var rows = allRows.filter(function(r) {
+    if (tmFilter && tmFilter !== 'all' && r.kind !== tmFilter) return false;
+    if (tmProjFilter && r.projName !== tmProjFilter) return false;
+    if (tmAssigneeFilter && r.assignee !== tmAssigneeFilter) return false;
+    return true;
+  });
+
+  var hint = document.getElementById('tm-hint');
+  if (hint) hint.textContent = tmHintForFilter(tmFilter) + '（目前 ' + rows.length + ' 筆）';
+
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="tm-empty">沒有符合條件的任務</div>';
+    return;
+  }
+
+  var html = '<table class="tm-table"><thead><tr>';
+  html += '<th>任務</th><th>標案</th><th>負責人</th><th>預計到期</th><th>狀態</th></tr></thead><tbody>';
+  rows.forEach(function(r) {
+    html += '<tr class="' + (r.kind === 'overdue' ? 'tm-row-overdue' : '') + '" onclick="openTaskDetail(\'' + r.id + '\')">';
+    html += '<td><div class="tm-task-name">' + escHtml(r.name) + '</div>';
+    if (r.wiName) html += '<div class="tm-task-sub">' + escHtml(r.wiName) + '</div>';
+    html += '</td>';
+    html += '<td>' + escHtml(r.projName || '—') + '</td>';
+    html += '<td>' + escHtml(r.assignee || '未指定') + '</td>';
+    html += '<td>' + escHtml(r.dueDateLabel || '—');
+    if (r.kind === 'overdue') html += '<div class="tm-task-sub" style="color:#c0392b;font-weight:700">已逾期 ' + r.overdueDays + ' 天</div>';
+    else if (r.kind === 'soon' && r.remainDays != null) {
+      html += '<div class="tm-task-sub">' + (r.remainDays === 0 ? '今日到期' : (r.remainDays + ' 天後')) + '</div>';
+    }
+    html += '</td>';
+    html += '<td><span class="tm-pill ' + tmKindPillClass(r.kind) + '">' + escHtml(tmKindLabel(r)) + '</span></td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
 }
 
 // ── 更新篩選標籤 ──
