@@ -10047,13 +10047,22 @@ function memberAccountOpenIds(fields) {
 }
 
 function rowMatchesNotifyRole(fields, roleName) {
-  if (roleName !== '管理員') return getMemberRole(fields) === roleName;
+  const want = String(roleName || '').trim();
+  if (!want) return false;
   const tokens = collectMemberRoleTokens(fields);
-  return tokens.some(function(token) {
+  if (want === '管理員') {
+    return tokens.some(function(token) {
+      const r = String(token || '').trim();
+      if (!r || r.length > 16) return false;
+      return isAdminRoleToken(r);
+    });
+  }
+  // 標籤直接比對（例如「系統測試」），不經主角色優先序（管理員會蓋掉標籤）
+  if (tokens.some(function(token) {
     const r = String(token || '').trim();
-    if (!r || r.length > 16) return false;
-    return isAdminRoleToken(r);
-  });
+    return r === want || r.indexOf(want) >= 0;
+  })) return true;
+  return getMemberRole(fields) === want;
 }
 
 async function listOpenIdsForMemberRole(token, roleName) {
@@ -10257,24 +10266,58 @@ function buildOverdueAdminNotifyText(scan) {
 async function notifyAdminsOverdueTasks(tenantToken, opts) {
   opts = opts || {};
   const dryRun = !!opts.dryRun;
+  const audienceRole = String(opts.audienceRole || '管理員').trim() || '管理員';
+  const testLabel = !!opts.testLabel;
   const scan = await collectOverdueTasksBeyond(tenantToken, opts);
-  const text = buildOverdueAdminNotifyText(scan);
-  if (dryRun || !scan.total) {
+  let text = buildOverdueAdminNotifyText(scan);
+  if (testLabel) {
+    text = '【試發｜僅「' + audienceRole + '」】\n' + text;
+  }
+  const targets = await listOpenIdsForMemberRole(tenantToken, audienceRole);
+  if (dryRun) {
     return {
       ok: true,
-      dryRun: dryRun,
-      skippedNotify: !scan.total,
+      dryRun: true,
+      skippedNotify: true,
+      audience: audienceRole,
+      targets: targets.length,
       scan: scan,
       preview: text,
-      notify: { sent: 0, targeted: 0 }
+      notify: { sent: 0, targeted: targets.length, audience: audienceRole }
     };
   }
-  const targets = await listOpenIdsForMemberRole(tenantToken, '管理員');
+  if (!scan.total) {
+    return {
+      ok: true,
+      dryRun: false,
+      skippedNotify: true,
+      audience: audienceRole,
+      targets: targets.length,
+      scan: scan,
+      preview: text,
+      notify: { sent: 0, targeted: targets.length, audience: audienceRole }
+    };
+  }
+  if (!targets.length) {
+    return {
+      ok: false,
+      dryRun: false,
+      skippedNotify: true,
+      audience: audienceRole,
+      targets: 0,
+      scan: scan,
+      preview: text,
+      notify: { sent: 0, targeted: 0, audience: audienceRole },
+      error: '找不到角色／標籤「' + audienceRole + '」的可通知人員'
+    };
+  }
   const notify = await notifyOpenIds(tenantToken, targets, text);
-  notify.audience = '管理員';
+  notify.audience = audienceRole;
   return {
     ok: !notify.error,
     dryRun: false,
+    audience: audienceRole,
+    targets: targets.length,
     scan: scan,
     preview: text,
     notify: notify,
@@ -11087,7 +11130,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // 每日：逾期超過 1 天的未完成任務 → 彙總通知管理員（也可手動 dryRun=1 預覽）
+    // 每日：逾期超過 1 天的未完成任務 → 彙總通知管理員（也可手動 dryRun=1 預覽；role=系統測試 可試發）
     if (action === 'notify-overdue-tasks' && (req.method === 'GET' || req.method === 'POST')) {
       try {
         const token = await getToken();
@@ -11097,10 +11140,16 @@ export default async function handler(req, res) {
           || String(q.dryRun || b.dryRun || '').toLowerCase() === 'true';
         const minOverdueDays = parseInt(q.minOverdueDays || b.minOverdueDays || '2', 10);
         const limit = parseInt(q.limit || b.limit || '40', 10);
+        const audienceRole = String(q.role || b.role || '管理員').trim() || '管理員';
+        const testLabel = audienceRole !== '管理員'
+          || String(q.test || b.test || '') === '1'
+          || String(q.test || b.test || '').toLowerCase() === 'true';
         const result = await notifyAdminsOverdueTasks(token, {
           dryRun: dryRun,
           minOverdueDays: isNaN(minOverdueDays) ? 2 : minOverdueDays,
-          limit: isNaN(limit) ? 40 : limit
+          limit: isNaN(limit) ? 40 : limit,
+          audienceRole: audienceRole,
+          testLabel: testLabel
         });
         return res.status(result.ok ? 200 : 500).json(result);
       } catch (err) {
