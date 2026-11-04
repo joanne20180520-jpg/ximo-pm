@@ -248,39 +248,71 @@ body.role-admin #pl-projects .si{cursor:pointer}
 #pg-s.page.active{display:flex;flex-direction:column;min-height:0;height:100%}
 #pg-s .gctl{flex-shrink:0}
 #pg-tm.page.active{display:flex;flex-direction:column;min-height:0;height:100%}
-.tm-page{display:flex;flex-direction:column;min-height:0;height:100%;padding:12px 14px 16px;box-sizing:border-box}
-.tm-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-bottom:10px;flex-shrink:0}
-.tm-toolbar h3{font-size:15px;font-weight:700;margin:0;margin-right:4px}
-.tm-scope{display:flex;gap:2px;padding:2px;border:1px solid var(--border);border-radius:20px;background:var(--sf2)}
-.tm-scope-btn{padding:5px 12px;border:none;border-radius:18px;background:transparent;font-size:12px;font-weight:600;color:var(--t2);cursor:pointer;font-family:inherit}
-.tm-scope-btn.active{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.tm-filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.tm-filter-btn{padding:5px 11px;border:1px solid var(--border);border-radius:999px;background:#fff;font-size:12px;font-weight:600;color:var(--t2);cursor:pointer;font-family:inherit;line-height:1.2}
-.tm-filter-btn:hover{border-color:var(--accent);color:var(--accent)}
-.tm-filter-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
-.tm-filter-btn.tm-overdue.active{background:#c0392b;border-color:#c0392b}
-.tm-filter-btn .tm-count{margin-left:4px;opacity:.85;font-weight:700}
-.tm-selects{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
-.tm-selects select{padding:5px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;background:#fff;color:var(--text);max-width:180px}
-.tm-hint{font-size:11px;color:var(--t3);margin:0 0 8px;flex-shrink:0}
-.tm-table-wrap{flex:1;min-height:0;overflow:auto;border:1px solid var(--border);border-radius:12px;background:#fff}
-.tm-table{width:100%;border-collapse:collapse;font-size:12px}
-.tm-table th{position:sticky;top:0;z-index:1;text-align:left;padding:9px 10px;background:#f7f5f2;border-bottom:1px solid var(--border);color:var(--t2);font-weight:700;white-space:nowrap}
-.tm-table td{padding:9px 10px;border-bottom:1px solid #f0eeea;vertical-align:top;line-height:1.4;color:var(--text)}
-.tm-table tr{cursor:pointer}
-.tm-table tbody tr:hover td{background:#faf9f7}
-.tm-table tr.tm-row-overdue td{background:#fff8f7}
-.tm-table tr.tm-row-overdue:hover td{background:#fff1f0}
-.tm-task-name{font-weight:700}
-.tm-task-sub{font-size:11px;color:var(--t3);margin-top:2px}
-.tm-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
-.tm-pill-overdue{background:#fde8e8;color:#c0392b}
-.tm-pill-soon{background:#fff6e0;color:#b45309}
-.tm-pill-doing{background:#eef4fc;color:var(--c2)}
-.tm-pill-pending{background:var(--sf2);color:var(--t2)}
-.tm-pill-done{background:#e8f5ee;color:#1f4d38}
-.tm-pill-paused{background:#f3f1ed;color:#6b6860}
-.tm-empty{padding:28px;text-align:center;color:var(--t3);font-size:13px}
+.tm-page{display:flex;flex-direction:column;min-height:0;height:100%;padding:16px 18px 18px;box-sizing:border-box;gap:14px;background:#F3F1EE}
+.tm-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;flex-shrink:0}
+.tm-toolbar h3{font-size:22px;font-weight:700;margin:0;margin-right:4px;color:#1B1A18}
+.tm-scope{display:flex;gap:2px;padding:4px;border-radius:999px;background:#fff}
+.tm-scope-btn{padding:8px 16px;border:none;border-radius:999px;background:transparent;font-size:14px;font-weight:600;color:#57534E;cursor:pointer;font-family:inherit}
+.tm-scope-btn.active{background:#1B1A18;color:#fff}
+.tm-status-wrap{position:relative}
+.tm-status-btn{border:0;cursor:pointer;font-size:14px;font-weight:700;padding:9px 16px;border-radius:999px;background:#1B1A18;color:#fff;font-family:inherit}
+.tm-status-btn.tm-status-overdue{background:#B42318}
+.tm-status-btn .tm-status-caret{font-size:12px;margin-left:8px}
+.tm-status-menu{display:none;position:absolute;top:48px;left:0;z-index:20;min-width:190px;background:#fff;border:1px solid #E7E3DD;border-radius:12px;padding:6px;box-shadow:0 8px 24px rgba(27,26,24,.12);flex-direction:column;gap:2px}
+.tm-status-menu.open{display:flex}
+.tm-status-item{display:flex;justify-content:space-between;align-items:center;gap:24px;border:0;cursor:pointer;text-align:left;font-size:14px;font-weight:700;padding:10px 12px;border-radius:8px;color:#1B1A18;background:#fff;font-family:inherit}
+.tm-status-item:hover,.tm-status-item.active{background:#F1EEE9}
+.tm-status-item span:last-child{color:#6A655E;font-weight:600}
+.tm-summary{display:none;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;flex-shrink:0}
+.tm-summary.show{display:grid}
+.tm-sum-card{background:#fff;border-radius:16px;padding:16px 18px;border:1px solid #E7E3DD}
+.tm-sum-label{font-size:12px;color:#6A655E;font-weight:600}
+.tm-sum-num{font-size:30px;font-weight:800;margin-top:2px;color:#1B1A18;line-height:1.15}
+.tm-sum-num.danger{color:#B42318}
+.tm-sum-num span{font-size:14px;font-weight:600;color:#6A655E;margin-left:4px}
+.tm-sum-sub{font-size:12px;color:#6A655E;margin-top:2px}
+.tm-dist-bar{display:flex;height:12px;border-radius:6px;overflow:hidden;margin-top:12px;background:#F1EEE9}
+.tm-dist-bar>div{height:12px}
+.tm-dist-legend{font-size:11px;color:#57534E;margin-top:8px;line-height:1.4}
+.tm-controls{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;flex-shrink:0}
+.tm-group-mode{display:flex;background:#fff;border-radius:10px;padding:4px;gap:2px}
+.tm-group-btn{border:0;background:transparent;color:#57534E;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer;font-family:inherit}
+.tm-group-btn.active{background:#1B1A18;color:#fff}
+.tm-selects{display:flex;flex-wrap:wrap;gap:8px}
+.tm-selects select{padding:9px 12px;border:1px solid #D8D3CC;border-radius:10px;font-size:13px;font-family:inherit;background:#fff;color:#1B1A18;max-width:220px;cursor:pointer}
+.tm-board{flex:1;min-height:0;overflow:auto;border:1px solid #E7E3DD;border-radius:16px;background:#fff}
+.tm-proj-hdr,.tm-proj-hdr-collapsed{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;padding:16px 20px;border-bottom:1px solid #E7E3DD;cursor:pointer;user-select:none}
+.tm-proj-hdr-collapsed{background:#FAF8F5}
+.tm-proj-hdr-collapsed:hover,.tm-proj-hdr:hover{background:#F7F4F0}
+.tm-chev{font-size:13px;color:#6A655E;width:14px;flex-shrink:0}
+.tm-proj-meta{flex:1 1 280px;min-width:0}
+.tm-proj-kicker{font-size:11px;color:#6A655E;font-weight:600}
+.tm-proj-name{font-size:16px;font-weight:700;color:#1B1A18;line-height:1.35}
+.tm-proj-pct{font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px;background:#F1EEE9;color:#3A3733;flex-shrink:0}
+.tm-proj-hint{font-size:12px;color:#6A655E;flex-shrink:0}
+.tm-assignee-hdr{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding:12px 20px;background:#FAF8F5;border-bottom:1px solid #EFEBE5}
+.tm-avatar{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#1F3A5F;color:#fff;font-size:13px;font-weight:700;flex-shrink:0}
+.tm-assignee-name{font-size:15px;font-weight:700;color:#1B1A18}
+.tm-assignee-count{font-size:13px;color:#6A655E}
+.tm-colhdr{display:grid;grid-template-columns:minmax(0,1.1fr) 110px minmax(0,1.4fr) 104px;gap:16px;padding:10px 20px;font-size:12px;font-weight:700;color:#6A655E;border-bottom:1px solid #EFEBE5;background:#fff;position:sticky;top:0;z-index:1}
+.tm-colhdr-tl{display:flex;justify-content:space-between}
+.tm-row{display:grid;grid-template-columns:minmax(0,1.1fr) 110px minmax(0,1.4fr) 104px;gap:16px;align-items:center;padding:12px 20px;border-bottom:1px solid #F3F0EB;cursor:pointer}
+.tm-row:hover{background:#FAF8F5}
+.tm-task-name{font-size:14px;font-weight:700;color:#1B1A18}
+.tm-task-sub{font-size:12px;color:#6A655E;margin-top:2px}
+.tm-due-main{font-size:14px;font-weight:600;color:#1B1A18}
+.tm-due-sub{font-size:11px;color:#6A655E;margin-top:1px}
+.tm-tl{position:relative;height:22px}
+.tm-tl-track{position:absolute;left:0;right:0;top:10px;height:2px;background:#EFEBE5}
+.tm-tl-bar{position:absolute;top:7px;height:8px;border-radius:4px;right:0}
+.tm-tl-dot{position:absolute;top:5px;width:12px;height:12px;border-radius:50%;box-sizing:border-box;border:2px solid #fff;margin-left:-6px}
+.tm-tl-today{position:absolute;right:0;top:5px;width:12px;height:12px;border-radius:50%;background:#1B1A18;box-sizing:border-box;border:2px solid #fff}
+.tm-days-badge{display:inline-block;font-size:14px;font-weight:800;padding:6px 12px;border-radius:999px;white-space:nowrap}
+.tm-empty{padding:36px 20px;text-align:center;color:#6A655E;font-size:14px}
+@media(max-width:860px){
+  .tm-colhdr,.tm-row{grid-template-columns:minmax(0,1fr) 88px;gap:10px}
+  .tm-colhdr>div:nth-child(3),.tm-colhdr>div:nth-child(4),.tm-row>div:nth-child(3),.tm-row>div:nth-child(4){display:none}
+}
 .todo-more-link{display:block;margin:6px 0 2px;padding:8px 10px;border:1px dashed #f0c4c0;border-radius:8px;background:#fff8f7;color:#7f1d1d;font-size:11px;font-weight:700;text-align:center;cursor:pointer}
 .todo-more-link:hover{background:#fff1f0}
 #gantt-area{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y}
@@ -1687,7 +1719,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
       </div>
     </div>
 
-    <!-- 任務管理（逾期／快到期／進行中篩選） -->
+    <!-- 任務管理（時間軸＋摘要卡） -->
     <div id="pg-tm" class="page">
       <div class="tm-page">
         <div class="tm-toolbar">
@@ -1696,21 +1728,29 @@ button.btn-loading::after{content:'…';margin-left:2px}
             <button type="button" class="tm-scope-btn active" data-scope="mine" onclick="setTmScope('mine')">我的</button>
             <button type="button" class="tm-scope-btn" data-scope="all" onclick="setTmScope('all')">全部</button>
           </div>
-          <div class="tm-filters" id="tm-filters">
-            <button type="button" class="tm-filter-btn tm-overdue active" data-filter="overdue" onclick="setTmFilter('overdue', this)">逾期<span class="tm-count" id="tm-count-overdue">0</span></button>
-            <button type="button" class="tm-filter-btn" data-filter="soon" onclick="setTmFilter('soon', this)">快到期<span class="tm-count" id="tm-count-soon">0</span></button>
-            <button type="button" class="tm-filter-btn" data-filter="doing" onclick="setTmFilter('doing', this)">進行中<span class="tm-count" id="tm-count-doing">0</span></button>
-            <button type="button" class="tm-filter-btn" data-filter="pending" onclick="setTmFilter('pending', this)">未開始<span class="tm-count" id="tm-count-pending">0</span></button>
-            <button type="button" class="tm-filter-btn" data-filter="done" onclick="setTmFilter('done', this)">已完成<span class="tm-count" id="tm-count-done">0</span></button>
-            <button type="button" class="tm-filter-btn" data-filter="all" onclick="setTmFilter('all', this)">全部<span class="tm-count" id="tm-count-all">0</span></button>
+          <div class="tm-status-wrap">
+            <button type="button" class="tm-status-btn tm-status-overdue" id="tm-status-btn" onclick="toggleTmStatusMenu(event)">逾期 0<span class="tm-status-caret">▾</span></button>
+            <div class="tm-status-menu" id="tm-status-menu" role="menu"></div>
+          </div>
+        </div>
+        <div class="tm-summary" id="tm-summary"></div>
+        <div class="tm-controls">
+          <div class="tm-group-mode" id="tm-group-mode">
+            <button type="button" class="tm-group-btn active" data-mode="proj-assignee" onclick="setTmGroupMode('proj-assignee')">標案 › 負責人</button>
+            <button type="button" class="tm-group-btn" data-mode="assignee-proj" onclick="setTmGroupMode('assignee-proj')">負責人 › 標案</button>
           </div>
           <div class="tm-selects">
             <select id="tm-proj" onchange="onTmProjChange()" title="篩選標案"><option value="">全部標案</option></select>
             <select id="tm-assignee" onchange="onTmAssigneeChange()" title="篩選負責人"><option value="">全部負責人</option></select>
+            <select id="tm-sort" onchange="onTmSortChange()" title="排序">
+              <option value="overdue-desc">逾期天數：由多到少</option>
+              <option value="overdue-asc">逾期天數：由少到多</option>
+              <option value="due-asc">預計到期：由早到晚</option>
+              <option value="due-desc">預計到期：由晚到早</option>
+            </select>
           </div>
         </div>
-        <p class="tm-hint" id="tm-hint">顯示逾期任務：預計到期日＋已逾期天數。點列可開啟任務詳情。</p>
-        <div class="tm-table-wrap" id="tm-table-wrap">
+        <div class="tm-board" id="tm-table-wrap">
           <div class="tm-empty">載入中...</div>
         </div>
       </div>
@@ -5212,7 +5252,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261104v6';
+var APP_BUILD = '20261104v7';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -8998,11 +9038,20 @@ function renderTeamPanel() {
   updateTodoOverdueChrome(mineBuckets.overdue.length);
 }
 
-// ── 任務管理頁（逾期／快到期／進行中）──
+// ── 任務管理頁（時間軸＋摘要卡）──
 var tmScope = 'mine';
 var tmFilter = 'overdue';
 var tmProjFilter = '';
 var tmAssigneeFilter = '';
+var tmGroupMode = 'proj-assignee';
+var tmSort = 'overdue-desc';
+var tmExpandedGroups = {};
+var tmStatusMenuBound = false;
+
+var TM_STATUS_LABELS = {
+  overdue: '逾期', soon: '快到期', doing: '進行中',
+  pending: '未開始', done: '已完成', all: '全部'
+};
 
 function openTaskManagePage(filter) {
   if (filter) tmFilter = filter;
@@ -9028,13 +9077,40 @@ function setTmScope(scope) {
   renderTaskManagePage();
 }
 
-function setTmFilter(filter, btn) {
+function setTmFilter(filter) {
   tmFilter = filter || 'overdue';
-  document.querySelectorAll('#tm-filters .tm-filter-btn').forEach(function(el) {
-    el.classList.toggle('active', el.getAttribute('data-filter') === tmFilter);
-  });
-  if (btn) btn.classList.add('active');
+  closeTmStatusMenu();
   renderTaskManagePage();
+}
+
+function setTmGroupMode(mode) {
+  tmGroupMode = mode === 'assignee-proj' ? 'assignee-proj' : 'proj-assignee';
+  document.querySelectorAll('#tm-group-mode .tm-group-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-mode') === tmGroupMode);
+  });
+  renderTaskManagePage();
+}
+
+function toggleTmStatusMenu(ev) {
+  if (ev) ev.stopPropagation();
+  var menu = document.getElementById('tm-status-menu');
+  if (!menu) return;
+  menu.classList.toggle('open');
+  bindTmStatusMenuOutside();
+}
+
+function closeTmStatusMenu() {
+  var menu = document.getElementById('tm-status-menu');
+  if (menu) menu.classList.remove('open');
+}
+
+function bindTmStatusMenuOutside() {
+  if (tmStatusMenuBound) return;
+  tmStatusMenuBound = true;
+  document.addEventListener('click', function(e) {
+    var wrap = e.target && e.target.closest && e.target.closest('.tm-status-wrap');
+    if (!wrap) closeTmStatusMenu();
+  });
 }
 
 function onTmProjChange() {
@@ -9046,6 +9122,12 @@ function onTmProjChange() {
 function onTmAssigneeChange() {
   var sel = document.getElementById('tm-assignee');
   tmAssigneeFilter = sel ? (sel.value || '') : '';
+  renderTaskManagePage();
+}
+
+function onTmSortChange() {
+  var sel = document.getElementById('tm-sort');
+  tmSort = sel ? (sel.value || 'overdue-desc') : 'overdue-desc';
   renderTaskManagePage();
 }
 
@@ -9083,6 +9165,7 @@ function collectTaskManageRows(scope) {
     var wiIds = getLinkIds(f['所屬工作項目']);
     var wi = wiIds[0] ? wiMap[wiIds[0]] : null;
     var projName = wi ? (wi.project || '其他') : '其他';
+    var dueDate = parseTs(dueTs);
     rows.push({
       id: rec.record_id,
       name: f['任務名稱'] || '未命名',
@@ -9092,6 +9175,7 @@ function collectTaskManageRows(scope) {
       assignee: personName(f['負責人']) || '未指定',
       dueTs: dueTs || 0,
       dueDateLabel: dueTs ? formatTodoDueDate(dueTs) : '—',
+      weekday: dueDate ? ('週' + weekdayLabel(dueDate)) : '',
       overdueDays: overdueDays,
       remainDays: diff,
       progress: progress,
@@ -9099,51 +9183,76 @@ function collectTaskManageRows(scope) {
       kind: kind
     });
   });
-  rows.sort(function(a, b) {
-    var order = { overdue: 0, soon: 1, doing: 2, pending: 3, paused: 4, done: 5 };
-    var oa = order[a.kind] != null ? order[a.kind] : 9;
-    var ob = order[b.kind] != null ? order[b.kind] : 9;
-    if (oa !== ob) return oa - ob;
-    if (a.kind === 'overdue' && b.overdueDays !== a.overdueDays) return b.overdueDays - a.overdueDays;
-    if ((a.dueTs || 0) !== (b.dueTs || 0)) return (a.dueTs || 0) - (b.dueTs || 0);
-    return String(a.name).localeCompare(String(b.name), 'zh-Hant');
-  });
   return rows;
 }
 
-function tmKindLabel(row) {
-  if (row.kind === 'overdue') return '逾期 ' + row.overdueDays + ' 天';
-  if (row.kind === 'soon') {
-    if (row.remainDays === 0) return '今日到期';
-    return row.remainDays + ' 天後到期';
+function sortTmRows(rows) {
+  var list = rows.slice();
+  list.sort(function(a, b) {
+    if (tmSort === 'overdue-asc') {
+      if ((a.overdueDays || 0) !== (b.overdueDays || 0)) return (a.overdueDays || 0) - (b.overdueDays || 0);
+    } else if (tmSort === 'due-asc') {
+      if ((a.dueTs || 0) !== (b.dueTs || 0)) return (a.dueTs || 0) - (b.dueTs || 0);
+    } else if (tmSort === 'due-desc') {
+      if ((a.dueTs || 0) !== (b.dueTs || 0)) return (b.dueTs || 0) - (a.dueTs || 0);
+    } else {
+      // overdue-desc default
+      if ((a.overdueDays || 0) !== (b.overdueDays || 0)) return (b.overdueDays || 0) - (a.overdueDays || 0);
+    }
+    if ((a.dueTs || 0) !== (b.dueTs || 0)) return (a.dueTs || 0) - (b.dueTs || 0);
+    return String(a.name).localeCompare(String(b.name), 'zh-Hant');
+  });
+  return list;
+}
+
+function tmOverdueTone(days) {
+  if (days >= 45) return { bg: '#F8D0CA', fg: '#8A1A0F', bar: '#B42318' };
+  if (days >= 30) return { bg: '#FCE6E3', fg: '#B42318', bar: '#D9534A' };
+  if (days >= 15) return { bg: '#FFEBD2', fg: '#8F4500', bar: '#E58F26' };
+  return { bg: '#FFF4CC', fg: '#745500', bar: '#D4A400' };
+}
+
+function tmKindBadgeStyle(row) {
+  if (row.kind === 'overdue') {
+    var t = tmOverdueTone(row.overdueDays || 0);
+    return 'background:' + t.bg + ';color:' + t.fg;
   }
-  if (row.kind === 'doing') return row.progress > 0 ? ('進行中 ' + row.progress + '%') : '進行中';
-  if (row.kind === 'done') return '已完成';
+  if (row.kind === 'soon') return 'background:#FFF4CC;color:#745500';
+  if (row.kind === 'doing') return 'background:#E8EEF8;color:#1F3A5F';
+  if (row.kind === 'done') return 'background:#E8F6EE;color:#1A7A45';
+  if (row.kind === 'paused') return 'background:#F1EEE9;color:#6A655E';
+  return 'background:#F1EEE9;color:#57534E';
+}
+
+function tmKindBadgeText(row) {
+  if (row.kind === 'overdue') return (row.overdueDays || 0) + ' 天';
+  if (row.kind === 'soon') {
+    if (row.remainDays === 0) return '今日';
+    return (row.remainDays || 0) + ' 天後';
+  }
+  if (row.kind === 'doing') return (row.progress > 0 ? row.progress + '%' : '進行中');
+  if (row.kind === 'done') return '完成';
   if (row.kind === 'paused') return '暫停';
   return '未開始';
 }
 
-function tmKindPillClass(kind) {
-  if (kind === 'overdue') return 'tm-pill-overdue';
-  if (kind === 'soon') return 'tm-pill-soon';
-  if (kind === 'doing') return 'tm-pill-doing';
-  if (kind === 'done') return 'tm-pill-done';
-  if (kind === 'paused') return 'tm-pill-paused';
-  return 'tm-pill-pending';
+function tmAvatarChar(name) {
+  var s = String(name || '').trim();
+  if (!s) return '?';
+  var m = s.match(/[\u4e00-\u9fff]/);
+  if (m) return m[0];
+  return s.charAt(0).toUpperCase();
 }
 
-function tmHintForFilter(filter) {
-  if (filter === 'overdue') return '逾期：未完成且已過預計到期日。顯示預計到期日與已逾期天數。';
-  if (filter === 'soon') return '快到期：今日到期或三天內到期（尚未逾期）。';
-  if (filter === 'doing') return '進行中：進度進行中，且尚未逾期、也不在三天內到期。';
-  if (filter === 'pending') return '未開始：尚無進度、也非逾期／快到期。';
-  if (filter === 'done') return '已完成任務。';
-  return '全部任務。可再依標案／負責人縮小範圍。';
+function getProjectProgressByName(name) {
+  var rec = projectsData.find(function(p) { return (p.fields['標案名稱'] || '') === name; });
+  return rec ? getProjectProgressPct(rec) : null;
 }
 
 function fillTmFilterOptions(rows) {
   var projSel = document.getElementById('tm-proj');
   var asgSel = document.getElementById('tm-assignee');
+  var sortSel = document.getElementById('tm-sort');
   if (projSel) {
     var projs = [];
     var seenP = {};
@@ -9180,6 +9289,236 @@ function fillTmFilterOptions(rows) {
     asgSel.innerHTML = htmlA;
     if (prevA && !seenA[prevA]) tmAssigneeFilter = '';
   }
+  if (sortSel) sortSel.value = tmSort;
+}
+
+function updateTmStatusControls(counts) {
+  var btn = document.getElementById('tm-status-btn');
+  var menu = document.getElementById('tm-status-menu');
+  var label = TM_STATUS_LABELS[tmFilter] || '逾期';
+  var curCount = counts[tmFilter] != null ? counts[tmFilter] : 0;
+  if (btn) {
+    btn.innerHTML = escHtml(label) + ' ' + curCount + '<span class="tm-status-caret">▾</span>';
+    btn.classList.toggle('tm-status-overdue', tmFilter === 'overdue');
+  }
+  if (!menu) return;
+  var keys = ['overdue', 'soon', 'doing', 'pending', 'done', 'all'];
+  var html = '';
+  keys.forEach(function(k) {
+    html += '<button type="button" class="tm-status-item' + (k === tmFilter ? ' active' : '') + '" onclick="setTmFilter(\'' + k + '\')">'
+      + '<span>' + escHtml(TM_STATUS_LABELS[k]) + '</span>'
+      + '<span>' + (counts[k] || 0) + '</span></button>';
+  });
+  menu.innerHTML = html;
+}
+
+function renderTmSummary(rows) {
+  var box = document.getElementById('tm-summary');
+  if (!box) return;
+  if (tmFilter !== 'overdue' || !rows.length) {
+    box.classList.remove('show');
+    box.innerHTML = '';
+    return;
+  }
+  var n = rows.length;
+  var max = rows.reduce(function(a, b) { return (b.overdueDays || 0) > (a.overdueDays || 0) ? b : a; }, rows[0]);
+  var avg = Math.round(rows.reduce(function(s, r) { return s + (r.overdueDays || 0); }, 0) / n);
+  var nDeep = rows.filter(function(r) { return (r.overdueDays || 0) >= 45; }).length;
+  var nRed = rows.filter(function(r) { return (r.overdueDays || 0) >= 30 && (r.overdueDays || 0) < 45; }).length;
+  var nOrange = rows.filter(function(r) { return (r.overdueDays || 0) >= 15 && (r.overdueDays || 0) < 30; }).length;
+  var pct = function(k) { return n ? ((k / n) * 100) : 0; };
+  var scopeLabel = tmProjFilter ? '此標案逾期任務' : (tmScope === 'mine' ? '我的逾期任務' : '逾期任務');
+  box.classList.add('show');
+  box.innerHTML =
+    '<div class="tm-sum-card"><div class="tm-sum-label">' + escHtml(scopeLabel) + '</div>'
+      + '<div class="tm-sum-num danger">' + n + '<span>筆</span></div></div>'
+    + '<div class="tm-sum-card"><div class="tm-sum-label">最久逾期</div>'
+      + '<div class="tm-sum-num">' + (max.overdueDays || 0) + '<span>天</span></div>'
+      + '<div class="tm-sum-sub">到期日 ' + escHtml(max.dueDateLabel || '—') + '</div></div>'
+    + '<div class="tm-sum-card"><div class="tm-sum-label">平均逾期</div>'
+      + '<div class="tm-sum-num">' + avg + '<span>天</span></div></div>'
+    + '<div class="tm-sum-card"><div class="tm-sum-label">逾期天數分布</div>'
+      + '<div class="tm-dist-bar">'
+      + '<div style="width:' + pct(nDeep) + '%;background:#B42318"></div>'
+      + '<div style="width:' + pct(nRed) + '%;background:#D9534A"></div>'
+      + '<div style="width:' + pct(nOrange) + '%;background:#E58F26"></div>'
+      + '</div>'
+      + '<div class="tm-dist-legend">45 天以上 ' + nDeep + '・30–44 天 ' + nRed + '・15–29 天 ' + nOrange + '</div></div>';
+}
+
+function tmTimelineSpan(rows) {
+  var maxDays = 0;
+  rows.forEach(function(r) {
+    if ((r.overdueDays || 0) > maxDays) maxDays = r.overdueDays;
+  });
+  return Math.max(30, maxDays || 30);
+}
+
+function renderTmTimelineCell(row, span) {
+  if (row.kind !== 'overdue' || !row.overdueDays) {
+    return '<div class="tm-tl"><div class="tm-tl-track"></div><div class="tm-tl-today"></div></div>';
+  }
+  var tone = tmOverdueTone(row.overdueDays);
+  var left = Math.round((span - row.overdueDays) / span * 1000) / 10;
+  if (left < 0) left = 0;
+  if (left > 96) left = 96;
+  return '<div class="tm-tl">'
+    + '<div class="tm-tl-track"></div>'
+    + '<div class="tm-tl-bar" style="left:' + left + '%;background:' + tone.bar + '"></div>'
+    + '<div class="tm-tl-dot" style="left:' + left + '%;background:' + tone.bar + '"></div>'
+    + '<div class="tm-tl-today"></div>'
+    + '</div>';
+}
+
+function renderTmTaskRow(row, span, showProjSub) {
+  var sub = row.wiName || '';
+  if (showProjSub && row.projName) sub = row.projName + (sub ? (' · ' + sub) : '');
+  var html = '<div class="tm-row" onclick="openTaskDetail(\'' + row.id + '\')">';
+  html += '<div><div class="tm-task-name">' + escHtml(row.name) + '</div>';
+  if (sub) html += '<div class="tm-task-sub">' + escHtml(sub) + '</div>';
+  html += '</div>';
+  html += '<div><div class="tm-due-main">' + escHtml(row.dueDateLabel || '—') + '</div>';
+  if (row.weekday) html += '<div class="tm-due-sub">' + escHtml(row.weekday) + '</div>';
+  html += '</div>';
+  html += renderTmTimelineCell(row, span);
+  html += '<div><span class="tm-days-badge" style="' + tmKindBadgeStyle(row) + '">'
+    + escHtml(tmKindBadgeText(row)) + '</span></div>';
+  html += '</div>';
+  return html;
+}
+
+function renderTmColHeader(span, rows) {
+  var oldest = null;
+  rows.forEach(function(r) {
+    if (r.kind !== 'overdue' || !r.dueTs) return;
+    if (!oldest || r.dueTs < oldest.dueTs) oldest = r;
+  });
+  var leftLabel = oldest ? (oldest.dueDateLabel || '') : '';
+  var todayLabel = '今天 ' + ((TODAY.getMonth() + 1) + '/' + TODAY.getDate());
+  return '<div class="tm-colhdr"><div>任務</div><div>預計到期日</div>'
+    + '<div class="tm-colhdr-tl"><span>' + escHtml(leftLabel) + '</span><span>' + escHtml(todayLabel) + '</span></div>'
+    + '<div>' + (tmFilter === 'overdue' ? '已逾期' : '狀態') + '</div></div>';
+}
+
+function isTmGroupOpen(key, index) {
+  if (Object.prototype.hasOwnProperty.call(tmExpandedGroups, key)) return !!tmExpandedGroups[key];
+  return index === 0;
+}
+
+function toggleTmGroupFlip(key, currentlyOpen) {
+  tmExpandedGroups[key] = !currentlyOpen;
+  renderTaskManagePage();
+}
+
+function tmGroupToggleAttr(key, currentlyOpen) {
+  return 'onclick=\'toggleTmGroupFlip(' + JSON.stringify(String(key)) + ',' + (currentlyOpen ? 'true' : 'false') + ')\'';
+}
+
+function renderTmBoardByProject(rows, span) {
+  var byProj = {};
+  var order = [];
+  rows.forEach(function(r) {
+    var p = r.projName || '其他';
+    if (!byProj[p]) { byProj[p] = []; order.push(p); }
+    byProj[p].push(r);
+  });
+  order.sort(function(a, b) {
+    return byProj[b].length - byProj[a].length || a.localeCompare(b, 'zh-Hant');
+  });
+  var html = '';
+  order.forEach(function(projName, idx) {
+    var list = byProj[projName];
+    var key = 'p:' + projName;
+    var open = isTmGroupOpen(key, idx);
+    var pct = getProjectProgressByName(projName);
+    if (!open) {
+      html += '<div class="tm-proj-hdr-collapsed" ' + tmGroupToggleAttr(key, false) + '>'
+        + '<span class="tm-chev">▸</span>'
+        + '<div class="tm-proj-meta"><div class="tm-proj-name">' + escHtml(projName) + '</div></div>'
+        + '<span class="tm-proj-hint">點擊展開 ' + list.length + ' 筆</span></div>';
+      return;
+    }
+    html += '<div class="tm-proj-hdr" ' + tmGroupToggleAttr(key, true) + '>'
+      + '<span class="tm-chev">▾</span>'
+      + '<div class="tm-proj-meta"><div class="tm-proj-kicker">標案</div>'
+      + '<div class="tm-proj-name">' + escHtml(projName) + '</div></div>'
+      + (pct != null ? ('<span class="tm-proj-pct">進度 ' + pct + '%</span>') : '')
+      + '</div>';
+    var byAsg = {};
+    var asgOrder = [];
+    list.forEach(function(r) {
+      var a = r.assignee || '未指定';
+      if (!byAsg[a]) { byAsg[a] = []; asgOrder.push(a); }
+      byAsg[a].push(r);
+    });
+    asgOrder.sort(function(a, b) {
+      return byAsg[b].length - byAsg[a].length || a.localeCompare(b, 'zh-Hant');
+    });
+    asgOrder.forEach(function(asg) {
+      var items = sortTmRows(byAsg[asg]);
+      html += '<div class="tm-assignee-hdr">'
+        + '<span class="tm-avatar">' + escHtml(tmAvatarChar(asg)) + '</span>'
+        + '<span class="tm-assignee-name">' + escHtml(asg) + '</span>'
+        + '<span class="tm-assignee-count">' + (TM_STATUS_LABELS[tmFilter] || '') + ' ' + items.length + ' 筆</span></div>';
+      html += renderTmColHeader(span, items);
+      items.forEach(function(r) { html += renderTmTaskRow(r, span, false); });
+    });
+  });
+  return html;
+}
+
+function renderTmBoardByAssignee(rows, span) {
+  var byAsg = {};
+  var order = [];
+  rows.forEach(function(r) {
+    var a = r.assignee || '未指定';
+    if (!byAsg[a]) { byAsg[a] = []; order.push(a); }
+    byAsg[a].push(r);
+  });
+  order.sort(function(a, b) {
+    return byAsg[b].length - byAsg[a].length || a.localeCompare(b, 'zh-Hant');
+  });
+  var html = '';
+  order.forEach(function(asg, idx) {
+    var list = byAsg[asg];
+    var key = 'a:' + asg;
+    var open = isTmGroupOpen(key, idx);
+    if (!open) {
+      html += '<div class="tm-proj-hdr-collapsed" ' + tmGroupToggleAttr(key, false) + '>'
+        + '<span class="tm-chev">▸</span>'
+        + '<span class="tm-avatar">' + escHtml(tmAvatarChar(asg)) + '</span>'
+        + '<div class="tm-proj-meta"><div class="tm-proj-name">' + escHtml(asg) + '</div></div>'
+        + '<span class="tm-proj-hint">點擊展開 ' + list.length + ' 筆</span></div>';
+      return;
+    }
+    html += '<div class="tm-assignee-hdr" style="cursor:pointer" ' + tmGroupToggleAttr(key, true) + '>'
+      + '<span class="tm-chev">▾</span>'
+      + '<span class="tm-avatar">' + escHtml(tmAvatarChar(asg)) + '</span>'
+      + '<span class="tm-assignee-name">' + escHtml(asg) + '</span>'
+      + '<span class="tm-assignee-count">' + (TM_STATUS_LABELS[tmFilter] || '') + ' ' + list.length + ' 筆</span></div>';
+    var byProj = {};
+    var pOrder = [];
+    list.forEach(function(r) {
+      var p = r.projName || '其他';
+      if (!byProj[p]) { byProj[p] = []; pOrder.push(p); }
+      byProj[p].push(r);
+    });
+    pOrder.sort(function(a, b) {
+      return byProj[b].length - byProj[a].length || a.localeCompare(b, 'zh-Hant');
+    });
+    pOrder.forEach(function(projName) {
+      var items = sortTmRows(byProj[projName]);
+      var pct = getProjectProgressByName(projName);
+      html += '<div class="tm-proj-hdr" style="padding:12px 20px">'
+        + '<div class="tm-proj-meta"><div class="tm-proj-kicker">標案</div>'
+        + '<div class="tm-proj-name" style="font-size:15px">' + escHtml(projName) + '</div></div>'
+        + (pct != null ? ('<span class="tm-proj-pct">進度 ' + pct + '%</span>') : '')
+        + '</div>';
+      html += renderTmColHeader(span, items);
+      items.forEach(function(r) { html += renderTmTaskRow(r, span, false); });
+    });
+  });
+  return html;
 }
 
 function renderTaskManagePage() {
@@ -9188,9 +9527,10 @@ function renderTaskManagePage() {
   document.querySelectorAll('#tm-scope .tm-scope-btn').forEach(function(btn) {
     btn.classList.toggle('active', btn.getAttribute('data-scope') === tmScope);
   });
-  document.querySelectorAll('#tm-filters .tm-filter-btn').forEach(function(btn) {
-    btn.classList.toggle('active', btn.getAttribute('data-filter') === tmFilter);
+  document.querySelectorAll('#tm-group-mode .tm-group-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-mode') === tmGroupMode);
   });
+
   var scope = getTmEffectiveScope();
   var allRows = collectTaskManageRows(scope);
   fillTmFilterOptions(allRows);
@@ -9199,10 +9539,7 @@ function renderTaskManagePage() {
   allRows.forEach(function(r) {
     if (counts[r.kind] != null) counts[r.kind] += 1;
   });
-  ['overdue', 'soon', 'doing', 'pending', 'done', 'all'].forEach(function(k) {
-    var el = document.getElementById('tm-count-' + k);
-    if (el) el.textContent = String(counts[k] || 0);
-  });
+  updateTmStatusControls(counts);
 
   var rows = allRows.filter(function(r) {
     if (tmFilter && tmFilter !== 'all' && r.kind !== tmFilter) return false;
@@ -9210,35 +9547,18 @@ function renderTaskManagePage() {
     if (tmAssigneeFilter && r.assignee !== tmAssigneeFilter) return false;
     return true;
   });
-
-  var hint = document.getElementById('tm-hint');
-  if (hint) hint.textContent = tmHintForFilter(tmFilter) + '（目前 ' + rows.length + ' 筆）';
+  rows = sortTmRows(rows);
+  renderTmSummary(rows);
 
   if (!rows.length) {
     wrap.innerHTML = '<div class="tm-empty">沒有符合條件的任務</div>';
     return;
   }
 
-  var html = '<table class="tm-table"><thead><tr>';
-  html += '<th>任務</th><th>標案</th><th>負責人</th><th>預計到期</th><th>狀態</th></tr></thead><tbody>';
-  rows.forEach(function(r) {
-    html += '<tr class="' + (r.kind === 'overdue' ? 'tm-row-overdue' : '') + '" onclick="openTaskDetail(\'' + r.id + '\')">';
-    html += '<td><div class="tm-task-name">' + escHtml(r.name) + '</div>';
-    if (r.wiName) html += '<div class="tm-task-sub">' + escHtml(r.wiName) + '</div>';
-    html += '</td>';
-    html += '<td>' + escHtml(r.projName || '—') + '</td>';
-    html += '<td>' + escHtml(r.assignee || '未指定') + '</td>';
-    html += '<td>' + escHtml(r.dueDateLabel || '—');
-    if (r.kind === 'overdue') html += '<div class="tm-task-sub" style="color:#c0392b;font-weight:700">已逾期 ' + r.overdueDays + ' 天</div>';
-    else if (r.kind === 'soon' && r.remainDays != null) {
-      html += '<div class="tm-task-sub">' + (r.remainDays === 0 ? '今日到期' : (r.remainDays + ' 天後')) + '</div>';
-    }
-    html += '</td>';
-    html += '<td><span class="tm-pill ' + tmKindPillClass(r.kind) + '">' + escHtml(tmKindLabel(r)) + '</span></td>';
-    html += '</tr>';
-  });
-  html += '</tbody></table>';
-  wrap.innerHTML = html;
+  var span = tmTimelineSpan(rows);
+  wrap.innerHTML = tmGroupMode === 'assignee-proj'
+    ? renderTmBoardByAssignee(rows, span)
+    : renderTmBoardByProject(rows, span);
 }
 
 // ── 更新篩選標籤 ──
