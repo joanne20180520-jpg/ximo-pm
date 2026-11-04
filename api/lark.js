@@ -10174,12 +10174,29 @@ async function collectOverdueTasksBeyond(tenantToken, opts) {
     getRecords(tenantToken, tableIdFor('workitems'), appTokenForTable('workitems') || cfg.appToken).catch(function() { return []; }),
     getRecords(tenantToken, tableIdFor('projects'), appTokenForTable('projects') || cfg.appToken).catch(function() { return []; })
   ]);
+  const archivedProjIds = {};
+  const archivedProjNames = {};
+  (projects || []).forEach(function(p) {
+    if (!p || !p.record_id) return;
+    const pf = p.fields || {};
+    const st = String(pf['狀態'] || '').trim();
+    const archived = st === '封存' || st === '已封存' || !!String(pf['封存摘要'] || '').trim();
+    if (!archived) return;
+    archivedProjIds[p.record_id] = 1;
+    const pname = String(pf['標案名稱'] || '').trim();
+    if (pname) archivedProjNames[pname] = 1;
+  });
   const wiMap = {};
   (workitems || []).forEach(function(wi) {
     if (!wi || !wi.record_id) return;
+    const wf = wi.fields || {};
+    const projName = getProjectNameFromWiFields(wf, projects || []);
+    const projIds = getLinkIds(wf['所屬標案']);
+    const archived = !!(projIds[0] && archivedProjIds[projIds[0]]) || !!(projName && archivedProjNames[projName]);
     wiMap[wi.record_id] = {
-      name: (wi.fields && wi.fields['工作項目名稱']) || '',
-      project: getProjectNameFromWiFields(wi.fields || {}, projects || [])
+      name: wf['工作項目名稱'] || '',
+      project: projName,
+      archived: archived
     };
   });
   const rows = [];
@@ -10193,6 +10210,7 @@ async function collectOverdueTasksBeyond(tenantToken, opts) {
     if (overdueDays < minOverdueDays) return;
     const wiIds = getLinkIds(f['所屬工作項目']);
     const wi = wiIds[0] ? wiMap[wiIds[0]] : null;
+    if (wi && wi.archived) return;
     rows.push({
       id: rec.record_id,
       name: String(f['任務名稱'] || '未命名').trim() || '未命名',
