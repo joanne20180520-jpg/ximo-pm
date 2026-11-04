@@ -5152,7 +5152,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261104v4';
+var APP_BUILD = '20261104v5';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -8832,74 +8832,57 @@ function renderTodoOverdueDueBits(task) {
   return html;
 }
 
-function renderTodoOverdueTable(items, showAssignee, opts) {
-  opts = opts || {};
-  if (!items.length) return '<div class="todo-empty">無逾期任務</div>';
-  var limit = opts.limit != null ? opts.limit : 12;
-  var shown = limit > 0 ? items.slice(0, limit) : items;
-  var html = '<table class="todo-overdue-table"><thead><tr>';
-  html += '<th>任務</th>';
-  if (showAssignee) html += '<th>負責人</th>';
-  html += '<th>預計到期</th><th>已逾期</th></tr></thead><tbody>';
-  shown.forEach(function(task) {
-    html += '<tr onclick="openTaskDetail(\'' + task.id + '\')">';
-    html += '<td><div style="font-weight:700">' + escHtml(task.name) + '</div>';
-    html += '<div style="font-size:10px;color:var(--t3);margin-top:2px">' + escHtml(task.projName || '') + '</div></td>';
-    if (showAssignee) html += '<td>' + escHtml(task.assignee || '未指定') + '</td>';
-    html += '<td>' + escHtml(task.dueDateLabel || formatTodoDueDate(task.dueTs) || '—') + '</td>';
-    html += '<td class="od-days">' + (task.overdueDays || 0) + ' 天</td>';
-    html += '</tr>';
+function renderTodoAssigneeGroups(items, isOverdue) {
+  var byAssignee = {};
+  items.forEach(function(task) {
+    var name = task.assignee || '未指定';
+    if (!byAssignee[name]) byAssignee[name] = [];
+    byAssignee[name].push(task);
   });
-  html += '</tbody></table>';
-  if (limit > 0 && items.length > limit) {
-    html += '<div class="todo-more-link" onclick="openTaskManagePage(\'overdue\')">還有 '
-      + (items.length - limit) + ' 筆 → 到任務管理看全部</div>';
-  }
+  var html = '';
+  Object.keys(byAssignee).sort(function(a, b) {
+    if (byAssignee[b].length !== byAssignee[a].length) return byAssignee[b].length - byAssignee[a].length;
+    return a.localeCompare(b, 'zh-Hant');
+  }).forEach(function(name) {
+    var groupItems = byAssignee[name];
+    html += '<div class="todo-assignee-group">';
+    html += '<div class="todo-assignee-hdr" onclick="toggleTodoAssigneeGroup(this)">';
+    html += '<span class="arr">▶</span><span>' + escHtml(name) + '</span>';
+    html += '<span class="todo-assignee-count">' + groupItems.length
+      + (isOverdue ? ' 筆逾期' : ' 項') + '</span></div>';
+    html += '<div class="todo-assignee-body">';
+    groupItems.forEach(function(task) {
+      html += '<div class="todo-card' + (isOverdue ? ' todo-card-overdue' : '') + '" onclick="openTaskDetail(\'' + task.id + '\')">';
+      html += '<div class="todo-card-title">' + escHtml(task.name) + '</div>';
+      html += '<div class="todo-card-meta">' + escHtml(task.projName)
+        + (isOverdue ? '' : (' · ' + escHtml(task.dueLabel))) + '</div>';
+      if (isOverdue) html += renderTodoOverdueDueBits(task);
+      html += '</div>';
+    });
+    html += '</div></div>';
+  });
   return html;
 }
 
-function renderTodoSection(title, dotClass, items, emptyText, groupByAssignee, opts) {
-  opts = opts || {};
+function renderTodoSection(title, dotClass, items, emptyText, groupByAssignee) {
   var isOverdue = dotClass === 'overdue';
   var html = '<div class="todo-section' + (isOverdue ? ' todo-overdue-sticky' : '') + '">';
   html += '<div class="todo-sec-hdr"><span class="todo-dot ' + dotClass + '"></span>' + title
     + '<span class="todo-sec-count">' + items.length + '</span></div>';
   if (!items.length) {
     html += '<div class="todo-empty">' + emptyText + '</div>';
-  } else if (isOverdue && (opts.asTable || groupByAssignee)) {
-    html += renderTodoOverdueTable(items, !!groupByAssignee, { limit: opts.limit != null ? opts.limit : 12 });
-  } else if (groupByAssignee) {
-    var byAssignee = {};
-    items.forEach(function(task) {
-      var name = task.assignee || '未指定';
-      if (!byAssignee[name]) byAssignee[name] = [];
-      byAssignee[name].push(task);
-    });
-    Object.keys(byAssignee).sort(function(a, b) {
-      if (byAssignee[b].length !== byAssignee[a].length) return byAssignee[b].length - byAssignee[a].length;
-      return a.localeCompare(b, 'zh-Hant');
-    }).forEach(function(name) {
-      var groupItems = byAssignee[name];
-      html += '<div class="todo-assignee-group">';
-      html += '<div class="todo-assignee-hdr" onclick="toggleTodoAssigneeGroup(this)">';
-      html += '<span class="arr">▶</span><span>' + escHtml(name) + '</span>';
-      html += '<span class="todo-assignee-count">' + groupItems.length + ' 項</span></div>';
-      html += '<div class="todo-assignee-body">';
-      groupItems.forEach(function(task) {
-        html += '<div class="todo-card" onclick="openTaskDetail(\'' + task.id + '\')">';
-        html += '<div class="todo-card-title">' + escHtml(task.name) + '</div>';
-        html += '<div class="todo-card-meta">' + escHtml(task.projName) + ' · ' + escHtml(task.dueLabel) + '</div>';
-        html += '</div>';
-      });
-      html += '</div></div>';
-    });
+  } else if (groupByAssignee || isOverdue) {
+    // 逾期一律先顯示「名字 + 筆數」，點開才看明細（避免側欄過長）
+    html += renderTodoAssigneeGroups(items, isOverdue);
+    if (isOverdue) {
+      html += '<div class="todo-more-link" onclick="openTaskManagePage(\'overdue\')">到任務管理看全部逾期</div>';
+    }
   } else {
     items.forEach(function(task) {
-      html += '<div class="todo-card' + (isOverdue ? ' todo-card-overdue' : '') + '" onclick="openTaskDetail(\'' + task.id + '\')">';
+      html += '<div class="todo-card" onclick="openTaskDetail(\'' + task.id + '\')">';
       html += '<div class="todo-card-title">' + escHtml(task.name) + '</div>';
-      html += '<div class="todo-card-meta">' + escHtml(task.projName) + (groupByAssignee ? '' : (' · ' + escHtml(task.assignee))) + '</div>';
-      if (isOverdue) html += renderTodoOverdueDueBits(task);
-      else html += '<div class="todo-card-meta" style="margin-top:4px">' + escHtml(task.dueLabel) + '</div>';
+      html += '<div class="todo-card-meta">' + escHtml(task.projName) + ' · ' + escHtml(task.assignee) + '</div>';
+      html += '<div class="todo-card-meta" style="margin-top:4px">' + escHtml(task.dueLabel) + '</div>';
       html += '</div>';
     });
   }
@@ -8948,10 +8931,7 @@ function renderTeamPanel() {
   var groupByAssignee = effectiveScope === 'all';
   var html = '';
   if (isAdminRole()) html += renderDesignDeleteQueue('review');
-  html += renderTodoSection('已逾期', 'overdue', buckets.overdue, '無逾期任務', groupByAssignee, {
-    asTable: true,
-    limit: 12
-  });
+  html += renderTodoSection('已逾期', 'overdue', buckets.overdue, '無逾期任務', true);
   html += renderTodoSection('今日到期', 'today', buckets.today, '今日無到期任務', groupByAssignee);
   html += renderTodoSection('三天內到期', 'soon', buckets.soon, '三天內無到期任務', groupByAssignee);
   area.innerHTML = html;
