@@ -15,6 +15,10 @@
     {
       "path": "/api/lark?action=sync-missing-projects-to-acc",
       "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/lark?action=notify-overdue-tasks",
+      "schedule": "0 1 * * *"
     }
   ],
   "headers": [

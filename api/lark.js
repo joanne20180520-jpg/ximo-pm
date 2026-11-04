@@ -10129,6 +10129,141 @@ function isTaskFieldsCompleted(fields) {
   return !!(m && parseInt(m[1], 10) >= 100);
 }
 
+function getTaipeiYmd(date) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Taipei',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(date || new Date());
+  } catch (e) {
+    return new Date(date || Date.now()).toISOString().slice(0, 10);
+  }
+}
+
+/** 到期日相對台北今天的天數差：負＝已逾期 */
+function dueDayDiffTaipei(dueTs) {
+  if (dueTs == null || dueTs === '') return null;
+  const due = new Date(typeof dueTs === 'number' ? dueTs : dueTs);
+  if (isNaN(due.getTime())) return null;
+  const dueDay = Date.parse(getTaipeiYmd(due) + 'T00:00:00Z');
+  const todayDay = Date.parse(getTaipeiYmd(new Date()) + 'T00:00:00Z');
+  if (isNaN(dueDay) || isNaN(todayDay)) return null;
+  return Math.round((dueDay - todayDay) / 86400000);
+}
+
+function formatDueYmdSlash(dueTs) {
+  const ymd = getTaipeiYmd(new Date(typeof dueTs === 'number' ? dueTs : dueTs));
+  const p = String(ymd || '').split('-');
+  if (p.length !== 3) return ymd || '';
+  return p[0] + '/' + p[1] + '/' + p[2];
+}
+
+/**
+ * 收集「目前仍未完成、且逾期超過 minOverdueDays 天」的任務。
+ * 預設 minOverdueDays=2 → 逾期超過 1 天（第 2 天起）。
+ */
+async function collectOverdueTasksBeyond(tenantToken, opts) {
+  opts = opts || {};
+  const minOverdueDays = Math.max(1, parseInt(opts.minOverdueDays != null ? opts.minOverdueDays : 2, 10) || 2);
+  const limit = Math.max(1, parseInt(opts.limit != null ? opts.limit : 40, 10) || 40);
+  const cfg = getOperationalBitableConfig();
+  const [tasks, workitems, projects] = await Promise.all([
+    getRecords(tenantToken, tableIdFor('tasks'), appTokenForTable('tasks') || cfg.appToken),
+    getRecords(tenantToken, tableIdFor('workitems'), appTokenForTable('workitems') || cfg.appToken).catch(function() { return []; }),
+    getRecords(tenantToken, tableIdFor('projects'), appTokenForTable('projects') || cfg.appToken).catch(function() { return []; })
+  ]);
+  const wiMap = {};
+  (workitems || []).forEach(function(wi) {
+    if (!wi || !wi.record_id) return;
+    wiMap[wi.record_id] = {
+      name: (wi.fields && wi.fields['工作項目名稱']) || '',
+      project: getProjectNameFromWiFields(wi.fields || {}, projects || [])
+    };
+  });
+  const rows = [];
+  (tasks || []).forEach(function(rec) {
+    const f = (rec && rec.fields) || {};
+    if (isTaskFieldsCompleted(f)) return;
+    const dueTs = f['預計完成日'];
+    const diff = dueDayDiffTaipei(dueTs);
+    if (diff == null || diff >= 0) return;
+    const overdueDays = Math.abs(diff);
+    if (overdueDays < minOverdueDays) return;
+    const wiIds = getLinkIds(f['所屬工作項目']);
+    const wi = wiIds[0] ? wiMap[wiIds[0]] : null;
+    rows.push({
+      id: rec.record_id,
+      name: String(f['任務名稱'] || '未命名').trim() || '未命名',
+      assignee: personDisplayName(f['負責人']) || getLinkText(f['負責人']) || '未指定',
+      project: (wi && wi.project) || '其他',
+      dueTs: dueTs,
+      dueLabel: formatDueYmdSlash(dueTs),
+      overdueDays: overdueDays,
+      status: String(f['進度狀態'] || '').trim() || '未開始'
+    });
+  });
+  rows.sort(function(a, b) {
+    if (b.overdueDays !== a.overdueDays) return b.overdueDays - a.overdueDays;
+    return String(a.assignee).localeCompare(String(b.assignee), 'zh-Hant');
+  });
+  return {
+    minOverdueDays: minOverdueDays,
+    total: rows.length,
+    items: rows.slice(0, limit),
+    truncated: rows.length > limit
+  };
+}
+
+function buildOverdueAdminNotifyText(scan) {
+  const items = (scan && scan.items) || [];
+  const total = (scan && scan.total) || 0;
+  const minDays = (scan && scan.minOverdueDays) || 2;
+  const today = getTaipeiYmd(new Date());
+  if (!total) {
+    return '【逾期任務】' + today + '\n目前沒有「逾期超過 ' + (minDays - 1) + ' 天」的未完成任務。';
+  }
+  let text = '【逾期超過' + (minDays - 1) + '天】' + today + '\n共 ' + total + ' 筆未完成任務需關注\n----------------';
+  items.forEach(function(it) {
+    text += '\n・' + (it.assignee || '未指定')
+      + '｜' + (it.name || '未命名')
+      + '｜到期 ' + (it.dueLabel || '—')
+      + '｜已逾期 ' + it.overdueDays + ' 天';
+  });
+  if (scan.truncated) text += '\n…另有 ' + (total - items.length) + ' 筆未列出';
+  text += '\n----------------\n請到璽墨「待辦提醒 → 全部／已逾期」查看。';
+  return text;
+}
+
+async function notifyAdminsOverdueTasks(tenantToken, opts) {
+  opts = opts || {};
+  const dryRun = !!opts.dryRun;
+  const scan = await collectOverdueTasksBeyond(tenantToken, opts);
+  const text = buildOverdueAdminNotifyText(scan);
+  if (dryRun || !scan.total) {
+    return {
+      ok: true,
+      dryRun: dryRun,
+      skippedNotify: !scan.total,
+      scan: scan,
+      preview: text,
+      notify: { sent: 0, targeted: 0 }
+    };
+  }
+  const targets = await listOpenIdsForMemberRole(tenantToken, '管理員');
+  const notify = await notifyOpenIds(tenantToken, targets, text);
+  notify.audience = '管理員';
+  return {
+    ok: !notify.error,
+    dryRun: false,
+    scan: scan,
+    preview: text,
+    notify: notify,
+    error: notify.error || ''
+  };
+}
+
 async function getUserInfoFromToken(userAccessToken) {
   const infoRes = await fetch(BASE_URL + '/authen/v1/user_info', {
     headers: { 'Authorization': 'Bearer ' + userAccessToken }
@@ -10929,6 +11064,27 @@ export default async function handler(req, res) {
           || String(q.dryRun || b.dryRun || '').toLowerCase() === 'true';
         const result = await syncMissingXimoProjectsToAcc(token, { dryRun: dryRun });
         return res.status(200).json(result);
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    // 每日：逾期超過 1 天的未完成任務 → 彙總通知管理員（也可手動 dryRun=1 預覽）
+    if (action === 'notify-overdue-tasks' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const token = await getToken();
+        const q = req.query || {};
+        const b = req.body || {};
+        const dryRun = String(q.dryRun || b.dryRun || '') === '1'
+          || String(q.dryRun || b.dryRun || '').toLowerCase() === 'true';
+        const minOverdueDays = parseInt(q.minOverdueDays || b.minOverdueDays || '2', 10);
+        const limit = parseInt(q.limit || b.limit || '40', 10);
+        const result = await notifyAdminsOverdueTasks(token, {
+          dryRun: dryRun,
+          minOverdueDays: isNaN(minOverdueDays) ? 2 : minOverdueDays,
+          limit: isNaN(limit) ? 40 : limit
+        });
+        return res.status(result.ok ? 200 : 500).json(result);
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }

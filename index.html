@@ -251,12 +251,15 @@ body.role-admin #pl-projects .si{cursor:pointer}
 
 /* E区 - 右側待辦提醒 */
 .eh{height:auto;min-height:var(--th);padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.eh h3{font-size:13px;font-weight:700}
+.eh h3{font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:6px}
 .eh-sub{font-size:10px;color:var(--t3);line-height:1.4}
+.todo-title-badge{display:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#c0392b;color:#fff;font-size:10px;font-weight:700;line-height:18px;text-align:center}
+.todo-title-badge.show{display:inline-block}
 .todo-scope-toggle{display:flex;gap:2px;padding:2px;border:1px solid var(--border);border-radius:20px;background:var(--sf2);flex-shrink:0}
 .todo-scope-btn{padding:4px 11px;border:none;border-radius:18px;background:transparent;font-size:11px;font-weight:600;color:var(--t2);cursor:pointer;line-height:1.2;transition:background .15s,color .15s}
 .todo-scope-btn.active{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .todo-section{margin-bottom:14px}
+.todo-section.todo-overdue-sticky{position:sticky;top:0;z-index:2;background:var(--sf);padding-bottom:4px;margin-bottom:10px}
 .todo-sec-hdr{display:flex;align-items:center;gap:6px;padding:4px 2px 8px;font-size:12px;font-weight:700;color:var(--text)}
 .todo-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .todo-dot.overdue{background:#c0392b}
@@ -264,10 +267,23 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .todo-dot.soon{background:#1a4a7a}
 .todo-sec-count{font-size:11px;color:var(--t3);font-weight:600;margin-left:2px}
 .todo-card{padding:10px 11px;border-radius:10px;background:#fff;border:1px solid var(--border);margin-bottom:6px;cursor:pointer;transition:border-color .12s,box-shadow .12s}
+.todo-card.todo-card-overdue{border-color:#f0c4c0;background:#fff8f7}
 .todo-card:hover{border-color:var(--t3);box-shadow:0 1px 4px rgba(0,0,0,.06)}
 .todo-card-title{font-size:13px;font-weight:700;color:var(--text);line-height:1.35}
 .todo-card-meta{font-size:10px;color:var(--t3);margin-top:4px;line-height:1.4}
+.todo-card-due{display:flex;flex-wrap:wrap;gap:4px 8px;margin-top:6px;align-items:center}
+.todo-due-date{font-size:10px;color:var(--t2);font-weight:600}
+.todo-due-over{font-size:10px;font-weight:700;color:#c0392b;background:#fde8e8;padding:2px 7px;border-radius:999px}
 .todo-empty{font-size:11px;color:var(--t3);padding:2px 0 4px}
+.todo-overdue-banner{display:none;margin:8px 10px 0;padding:8px 10px;border-radius:var(--rs);background:#fde8e8;border:1px solid #f5c2c2;color:#7f1d1d;font-size:11px;line-height:1.5;font-weight:600}
+.todo-overdue-banner.show{display:block}
+.todo-overdue-table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:6px;background:#fff;border:1px solid #f0c4c0;border-radius:8px;overflow:hidden}
+.todo-overdue-table th{text-align:left;padding:7px 8px;background:#fff1f0;color:#7f1d1d;font-weight:700;border-bottom:1px solid #f0c4c0;white-space:nowrap}
+.todo-overdue-table td{padding:7px 8px;border-bottom:1px solid #f5e6e4;vertical-align:top;color:var(--text);line-height:1.35}
+.todo-overdue-table tr:last-child td{border-bottom:none}
+.todo-overdue-table tr{cursor:pointer}
+.todo-overdue-table tr:hover td{background:#fff8f7}
+.todo-overdue-table .od-days{color:#c0392b;font-weight:700;white-space:nowrap}
 .todo-user-label{font-size:10px;color:var(--t3);margin-top:2px;line-height:1.4}
 .todo-user-label.ok{color:var(--t2)}
 .todo-login-warn{color:var(--warn)}
@@ -1789,7 +1805,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
   <div class="m-sheet-closebar"><strong>待辦提醒</strong><button type="button" onclick="closeMobileSheet()">關閉</button></div>
   <div class="eh">
     <div>
-      <h3>待辦提醒</h3>
+      <h3>待辦提醒<span class="todo-title-badge" id="todo-overdue-badge" data-count="0">0</span></h3>
       <div class="todo-user-label" id="todo-user-label"></div>
     </div>
     <div class="todo-scope-toggle" id="todo-scope-toggle">
@@ -1798,6 +1814,7 @@ button.btn-loading::after{content:'…';margin-left:2px}
     </div>
   </div>
   <div class="login-error-banner" id="login-error-banner"></div>
+  <div class="todo-overdue-banner" id="todo-overdue-banner"></div>
   <div class="tl2" id="team-task-list">
     <div style="padding:12px;color:var(--t3);font-size:11px">載入中...</div>
   </div>
@@ -5007,7 +5024,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261025v2';
+var APP_BUILD = '20261104v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -6435,12 +6452,23 @@ function getDueDayDiff(val) {
   due.setHours(0, 0, 0, 0);
   return Math.ceil((due - TODAY) / 86400000);
 }
+function formatTodoDueDate(val) {
+  var d = parseTs(val);
+  if (!d) return '';
+  return (d.getMonth() + 1) + '/' + d.getDate();
+}
 function formatTodoDueLabel(val) {
   var diff = getDueDayDiff(val);
   if (diff === null) return '';
-  if (diff < 0) return '逾期 ' + Math.abs(diff) + ' 天';
-  if (diff === 0) return '今日到期';
-  return diff + ' 天後';
+  var dateStr = formatTodoDueDate(val);
+  if (diff < 0) return '到期 ' + dateStr + ' · 已逾期 ' + Math.abs(diff) + ' 天';
+  if (diff === 0) return '今日到期（' + dateStr + '）';
+  return dateStr + ' · ' + diff + ' 天後';
+}
+function getOverdueDays(val) {
+  var diff = getDueDayDiff(val);
+  if (diff === null || diff >= 0) return 0;
+  return Math.abs(diff);
 }
 function getMyPersonName() {
   var u = getCurrentLoginUser();
@@ -8637,12 +8665,15 @@ function buildTodoTaskItems(scope) {
     var wiIds = getLinkIds(f['所屬工作項目']);
     var wi = wiIds[0] ? wiMap[wiIds[0]] : null;
     var projName = wi ? (wi.project || '其他') : '其他';
+    var overdueDays = diff < 0 ? Math.abs(diff) : 0;
     var item = {
       id: rec.record_id,
       name: f['任務名稱'] || '未命名',
       projName: projName,
       assignee: assignee,
       dueTs: dueTs,
+      dueDateLabel: formatTodoDueDate(dueTs),
+      overdueDays: overdueDays,
       dueLabel: formatTodoDueLabel(dueTs)
     };
 
@@ -8651,18 +8682,54 @@ function buildTodoTaskItems(scope) {
     else buckets.soon.push(item);
   });
 
-  buckets.overdue.sort(function(a, b) { return (a.dueTs || 0) - (b.dueTs || 0); });
+  buckets.overdue.sort(function(a, b) {
+    if ((b.overdueDays || 0) !== (a.overdueDays || 0)) return (b.overdueDays || 0) - (a.overdueDays || 0);
+    return (a.dueTs || 0) - (b.dueTs || 0);
+  });
   buckets.today.sort(function(a, b) { return (a.dueTs || 0) - (b.dueTs || 0); });
   buckets.soon.sort(function(a, b) { return (a.dueTs || 0) - (b.dueTs || 0); });
   return buckets;
 }
 
-function renderTodoSection(title, dotClass, items, emptyText, groupByAssignee) {
-  var html = '<div class="todo-section">';
+function renderTodoOverdueDueBits(task) {
+  var html = '<div class="todo-card-due">';
+  html += '<span class="todo-due-date">預計到期 ' + escHtml(task.dueDateLabel || formatTodoDueDate(task.dueTs) || '—') + '</span>';
+  if (task.overdueDays > 0) {
+    html += '<span class="todo-due-over">已逾期 ' + task.overdueDays + ' 天</span>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderTodoOverdueTable(items, showAssignee) {
+  if (!items.length) return '<div class="todo-empty">無逾期任務</div>';
+  var html = '<table class="todo-overdue-table"><thead><tr>';
+  html += '<th>任務</th>';
+  if (showAssignee) html += '<th>負責人</th>';
+  html += '<th>預計到期</th><th>已逾期</th></tr></thead><tbody>';
+  items.forEach(function(task) {
+    html += '<tr onclick="openTaskDetail(\'' + task.id + '\')">';
+    html += '<td><div style="font-weight:700">' + escHtml(task.name) + '</div>';
+    html += '<div style="font-size:10px;color:var(--t3);margin-top:2px">' + escHtml(task.projName || '') + '</div></td>';
+    if (showAssignee) html += '<td>' + escHtml(task.assignee || '未指定') + '</td>';
+    html += '<td>' + escHtml(task.dueDateLabel || formatTodoDueDate(task.dueTs) || '—') + '</td>';
+    html += '<td class="od-days">' + (task.overdueDays || 0) + ' 天</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+function renderTodoSection(title, dotClass, items, emptyText, groupByAssignee, opts) {
+  opts = opts || {};
+  var isOverdue = dotClass === 'overdue';
+  var html = '<div class="todo-section' + (isOverdue ? ' todo-overdue-sticky' : '') + '">';
   html += '<div class="todo-sec-hdr"><span class="todo-dot ' + dotClass + '"></span>' + title
     + '<span class="todo-sec-count">' + items.length + '</span></div>';
   if (!items.length) {
     html += '<div class="todo-empty">' + emptyText + '</div>';
+  } else if (isOverdue && (opts.asTable || groupByAssignee)) {
+    html += renderTodoOverdueTable(items, !!groupByAssignee);
   } else if (groupByAssignee) {
     var byAssignee = {};
     items.forEach(function(task) {
@@ -8690,14 +8757,40 @@ function renderTodoSection(title, dotClass, items, emptyText, groupByAssignee) {
     });
   } else {
     items.forEach(function(task) {
-      html += '<div class="todo-card" onclick="openTaskDetail(\'' + task.id + '\')">';
+      html += '<div class="todo-card' + (isOverdue ? ' todo-card-overdue' : '') + '" onclick="openTaskDetail(\'' + task.id + '\')">';
       html += '<div class="todo-card-title">' + escHtml(task.name) + '</div>';
-      html += '<div class="todo-card-meta">' + escHtml(task.projName) + ' · ' + escHtml(task.assignee) + ' · ' + escHtml(task.dueLabel) + '</div>';
+      html += '<div class="todo-card-meta">' + escHtml(task.projName) + (groupByAssignee ? '' : (' · ' + escHtml(task.assignee))) + '</div>';
+      if (isOverdue) html += renderTodoOverdueDueBits(task);
+      else html += '<div class="todo-card-meta" style="margin-top:4px">' + escHtml(task.dueLabel) + '</div>';
       html += '</div>';
     });
   }
   html += '</div>';
   return html;
+}
+
+function updateTodoOverdueChrome(mineOverdueCount) {
+  var n = Math.max(0, Math.round(Number(mineOverdueCount) || 0));
+  var badge = document.getElementById('todo-overdue-badge');
+  if (badge) {
+    badge.textContent = String(n);
+    badge.setAttribute('data-count', String(n));
+    badge.classList.toggle('show', n > 0);
+  }
+  var banner = document.getElementById('todo-overdue-banner');
+  if (banner) {
+    if (n > 0) {
+      banner.textContent = '你有 ' + n + ' 筆逾期任務（完成或改預計到期日前不會消失）';
+      banner.classList.add('show');
+    } else {
+      banner.textContent = '';
+      banner.classList.remove('show');
+    }
+  }
+  var navBtn = document.getElementById('m-nav-todos');
+  if (navBtn) {
+    navBtn.textContent = n > 0 ? ('待辦提醒(' + n + ')') : '待辦提醒';
+  }
 }
 
 function toggleTodoAssigneeGroup(hdr) {
@@ -8713,13 +8806,17 @@ function renderTeamPanel() {
 
   var effectiveScope = getEffectiveTodoScope();
   var buckets = buildTodoTaskItems(effectiveScope);
+  var mineBuckets = effectiveScope === 'mine' ? buckets : buildTodoTaskItems('mine');
   var groupByAssignee = effectiveScope === 'all';
   var html = '';
   if (isAdminRole()) html += renderDesignDeleteQueue('review');
-  html += renderTodoSection('已逾期', 'overdue', buckets.overdue, '無逾期任務', groupByAssignee);
+  html += renderTodoSection('已逾期', 'overdue', buckets.overdue, '無逾期任務', groupByAssignee, {
+    asTable: groupByAssignee || buckets.overdue.length >= 4
+  });
   html += renderTodoSection('今日到期', 'today', buckets.today, '今日無到期任務', groupByAssignee);
   html += renderTodoSection('三天內到期', 'soon', buckets.soon, '三天內無到期任務', groupByAssignee);
   area.innerHTML = html;
+  updateTodoOverdueChrome(mineBuckets.overdue.length);
 }
 
 // ── 更新篩選標籤 ──
