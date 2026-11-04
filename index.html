@@ -586,27 +586,30 @@ body.role-admin #pl-projects .si{cursor:pointer}
 
 /* Gantt */
 .gc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:14px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04)}
-.gtb{padding:8px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+.gantt-sticky-block{position:sticky;top:0;z-index:12;background:var(--surface);box-shadow:0 1px 0 var(--border)}
+.gtb{padding:8px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);background:var(--surface)}
 .gtb h3{font-size:15px;font-weight:600;flex:0 1 auto}
 .g-contract{font-size:13px;color:var(--t3);font-weight:500;white-space:nowrap}
 .gtb-actions{margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0}
 .gtb-ctrl-label{font-size:12px;color:var(--t3);font-weight:600;white-space:nowrap}
 .gtb-status{padding:4px 8px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;background:#fff;font-weight:600;color:var(--text);max-width:88px}
 .gtb .pb{margin-left:0;flex-shrink:0}
+.gantt-date-head{display:flex;overflow:hidden;border-bottom:1px solid var(--border);background:var(--sf2)}
 .gb{display:flex;overflow:hidden;border-bottom:1px solid var(--border)}
 .gf{width:210px;flex-shrink:0;border-right:2px solid var(--border);background:var(--surface)}
-.gfh{height:56px;background:var(--sf2);border-bottom:1px solid var(--border);display:flex;align-items:flex-end;padding:0 10px 6px}
+.gfh{height:56px;background:var(--sf2);border-bottom:none;display:flex;align-items:flex-end;padding:0 10px 6px}
 .gfh span{font-size:12px;font-weight:600;color:var(--t3)}
 .grl{height:44px;padding:5px 10px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;justify-content:center}
 .grl:last-child{border-bottom:none}
 .grn{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .grm{font-size:12px;color:var(--t3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .gsw{flex:1;overflow-x:auto;overflow-y:hidden;min-width:0;overscroll-behavior-x:contain;touch-action:pan-x;-webkit-overflow-scrolling:touch}
+.gsw-head{flex:1;overflow:hidden;min-width:0;background:var(--sf2)}
 .gf{touch-action:pan-y}
 .gtc{display:inline-block}
 .gmr{display:flex;height:28px;border-bottom:1px solid var(--border);background:var(--sf2)}
 .gmc{display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--t2);border-right:1px solid var(--border);flex-shrink:0}
-.gdr{display:flex;height:28px;border-bottom:1px solid var(--border);background:var(--sf2);position:relative}
+.gdr{display:flex;height:28px;border-bottom:none;background:var(--sf2);position:relative}
 .gdc{display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--t3);border-right:1px solid rgba(226,221,216,0.4);flex-shrink:0}
 .gdc.tdc{background:rgba(45,106,79,.08);color:var(--report);font-weight:700}
 .gtr{height:44px;border-bottom:1px solid var(--border);position:relative}
@@ -624,10 +627,11 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .gbar.gbar-done:hover{z-index:2}
 .gantt-tip{display:none;position:fixed;z-index:9000;max-width:min(320px,70vw);padding:8px 10px;border-radius:8px;background:#1a1916;color:#fff;font-size:14px;line-height:1.45;box-shadow:0 8px 24px rgba(0,0,0,.28);pointer-events:none;white-space:pre-wrap;word-break:break-word}
 .gantt-tip-name{font-weight:700;margin:0}
+.gantt-tip-meta{margin-top:4px;font-weight:600;color:#ffe566;font-size:12px;line-height:1.4}
 .gantt-tip-desc{margin-top:4px;font-weight:400;color:rgba(255,255,255,.88);font-size:13px;line-height:1.4}
 .tline{position:absolute;top:0;bottom:0;width:2px;background:var(--report);z-index:5;pointer-events:none}
 .tlineh{position:absolute;top:0;width:2px;height:56px;background:var(--report);z-index:5;pointer-events:none}
-.gb.week-fit .gsw{overflow-x:hidden}
+.gb.week-fit .gsw,.gantt-date-head.week-fit .gsw-head{overflow-x:hidden}
 .gsb{padding:5px 14px 8px;display:flex;align-items:center;gap:7px;border-top:1px solid var(--border)}
 .gb.week-fit .gsb{display:none}
 .gsb button{width:22px;height:22px;border:1px solid var(--border);border-radius:var(--rs);background:var(--sf2);cursor:pointer;font-size:11px;color:var(--t2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -4810,13 +4814,21 @@ function getRange(){
   }
 }
 
+function syncGanttHeadScroll(key) {
+  var sw2 = document.getElementById('gsw-' + key);
+  var sh = document.getElementById('gsh-' + key);
+  if (sw2 && sh) sh.scrollLeft = sw2.scrollLeft;
+}
+
 function applyGanttFit(key, proj, vs, ve, total) {
   requestAnimationFrame(function() {
     var gb = document.getElementById('gb-' + key);
+    var gdh = document.getElementById('gdh-' + key);
     var sw2 = document.getElementById('gsw-' + key);
     if (!gb || !sw2) return;
     if (vMode === 'week') {
       gb.classList.add('week-fit');
+      if (gdh) gdh.classList.add('week-fit');
       var avail = sw2.clientWidth;
       if (avail < total * 48) return;
       var stretchCW = Math.max(56, Math.floor(avail / total));
@@ -4824,8 +4836,22 @@ function applyGanttFit(key, proj, vs, ve, total) {
       return;
     }
     gb.classList.remove('week-fit');
-    if (sw2.scrollWidth <= sw2.clientWidth + 2) gb.classList.add('week-fit');
+    if (gdh) gdh.classList.remove('week-fit');
+    if (sw2.scrollWidth <= sw2.clientWidth + 2) {
+      gb.classList.add('week-fit');
+      if (gdh) gdh.classList.add('week-fit');
+    }
   });
+}
+
+function formatGanttBarDate(val) {
+  if (!val) return '';
+  var d = parseTs(val);
+  if (!d) {
+    d = new Date(val);
+    if (isNaN(d.getTime())) return '';
+  }
+  return (d.getMonth() + 1) + '/' + d.getDate();
 }
 
 function buildG(key){
@@ -4904,16 +4930,19 @@ function paintGantt(key,proj,vs,ve,total,cw){
   var GANTT_BAR_H = 28;
   var GANTT_BAR_STEP = 30;
 
-  // fixed left
-  var fixH='<div class="gfh"><span>工作項目</span></div>';
+  // fixed left labels (body only; header lives in sticky date head)
+  var fixBody='';
   proj.rows.forEach(function(row){
     var rowH = Math.max(48, row.bars.length * GANTT_BAR_STEP + 14);
-    fixH+='<div class="grl" style="height:'+rowH+'px"><div class="grn">'+escHtml(row.n)+'</div><div class="grm" title="日期 · 進度／權重（—＝尚未分配權重）">'+escHtml(row.m)+'</div></div>';
+    fixBody+='<div class="grl" style="height:'+rowH+'px"><div class="grn">'+escHtml(row.n)+'</div><div class="grm" title="日期 · 進度／權重（—＝尚未分配權重）">'+escHtml(row.m)+'</div></div>';
   });
 
-  // timeline
-  var tmH='<div class="gmr" style="width:'+tw+'px;position:relative">'+mHTML+tlHdr+'</div>';
-  tmH+='<div class="gdr" style="width:'+tw+'px;position:relative">'+dHTML+'</div>';
+  // sticky date header (months + days)
+  var headH='<div class="gmr" style="width:'+tw+'px;position:relative">'+mHTML+tlHdr+'</div>';
+  headH+='<div class="gdr" style="width:'+tw+'px;position:relative">'+dHTML+'</div>';
+
+  // timeline body rows
+  var tmH='';
   proj.rows.forEach(function(row){
     var rowH = Math.max(48, row.bars.length * GANTT_BAR_STEP + 14);
     var bH=tlHTML;
@@ -4940,26 +4969,36 @@ function paintGantt(key,proj,vs,ve,total,cw){
       var barLabel = bar.design ? ('設計·' + bar.l) : bar.l;
       var tipName = barLabel || '';
       var tipDesc = (!bar.design && bar.desc) ? String(bar.desc) : '';
+      var tipStart = formatGanttBarDate(bar.s);
+      var tipEnd = formatGanttBarDate(bar.e);
       var labelHtml = bar.done
         ? ('<span class="gbar-done-icon">✓</span><span style="text-decoration:line-through">' + escHtml(barLabel) + '</span>')
         : escHtml(barLabel);
       bH+='<div class="gbar'+overdueClass+paint.extraClass+'" style="left:'+ax+'px;width:'+aw+'px;top:'+top+'px;transform:none;height:'+GANTT_BAR_H+'px;'+paint.bgStyle+borderStyle+'"'+clickAttr
         +' data-tip-name="'+escAttr(tipName)+'"'
         +(tipDesc ? (' data-tip-desc="'+escAttr(tipDesc)+'"') : '')
+        +(tipStart ? (' data-tip-start="'+escAttr(tipStart)+'"') : '')
+        +(tipEnd ? (' data-tip-end="'+escAttr(tipEnd)+'"') : '')
         +'>'+labelHtml+'</div>';
     });
     tmH+='<div class="gtr" style="width:'+tw+'px;height:'+rowH+'px">'+bH+'</div>';
   });
 
   var gb=document.getElementById('gb-'+key);
+  var gdh=document.getElementById('gdh-'+key);
   if(!gb) return;
   var gtcW=vMode==='week'?'width:100%;min-width:'+tw+'px':'width:'+tw+'px';
-  gb.innerHTML='<div class="gf">'+fixH+'</div><div class="gsw" id="gsw-'+key+'"><div class="gtc" style="'+gtcW+'">'+tmH+'</div></div>';
+  if (gdh) {
+    gdh.innerHTML='<div class="gf"><div class="gfh"><span>工作項目</span></div></div>'
+      +'<div class="gsw-head" id="gsh-'+key+'"><div class="gtc" style="'+gtcW+'">'+headH+'</div></div>';
+  }
+  gb.innerHTML='<div class="gf">'+fixBody+'</div><div class="gsw" id="gsw-'+key+'"><div class="gtc" style="'+gtcW+'">'+tmH+'</div></div>';
 
   var sw2=document.getElementById('gsw-'+key);
   if(!sw2) return;
   var rng=document.getElementById('rng-'+key);
   sw2.onscroll=function(){
+    syncGanttHeadScroll(key);
     if(!rng) return;
     var max=sw2.scrollWidth-sw2.clientWidth;
     if(max>0) rng.value=(sw2.scrollLeft/max)*100;
@@ -4969,6 +5008,7 @@ function paintGantt(key,proj,vs,ve,total,cw){
     var lead=vMode==='quarter'?Math.floor(sw2.clientWidth*0.25):200;
     sw2.scrollLeft=Math.min(maxScroll,Math.max(0,tx-lead));
   }
+  syncGanttHeadScroll(key);
   bindGanttTipEvents();
 }
 
@@ -5004,10 +5044,19 @@ function showGanttTip(barEl, clientX, clientY) {
   if (!barEl) return;
   var name = barEl.getAttribute('data-tip-name') || '';
   var desc = barEl.getAttribute('data-tip-desc') || '';
-  if (!name && !desc) { hideGanttTip(); return; }
+  var start = barEl.getAttribute('data-tip-start') || '';
+  var end = barEl.getAttribute('data-tip-end') || '';
+  if (!name && !desc && !start && !end) { hideGanttTip(); return; }
   var tip = ensureGanttTipEl();
   var html = '';
   if (name) html += '<div class="gantt-tip-name">' + escHtml(name) + '</div>';
+  if (start || end) {
+    var range = start && end ? (start + ' — ' + end) : (end || start);
+    html += '<div class="gantt-tip-meta">預計期間 ' + escHtml(range)
+      + (end ? ('　·　預計結束日 ' + escHtml(end)) : '') + '</div>';
+  } else {
+    html += '<div class="gantt-tip-meta">尚未確認時間</div>';
+  }
   if (desc) html += '<div class="gantt-tip-desc">' + escHtml(desc) + '</div>';
   tip.innerHTML = html;
   positionGanttTip(tip, clientX, clientY);
@@ -5077,8 +5126,18 @@ function goToday(){
     el.scrollLeft=Math.min(maxScroll,Math.max(0,tx2-lead));
   });
 }
-function scG(k,d){var el=document.getElementById('gsw-'+k);if(el)el.scrollLeft+=d;}
-function scR(k,v){var el=document.getElementById('gsw-'+k);if(el){var max=el.scrollWidth-el.clientWidth;el.scrollLeft=(v/100)*max;}}
+function scG(k,d){
+  var el=document.getElementById('gsw-'+k);
+  if(el){ el.scrollLeft+=d; syncGanttHeadScroll(k); }
+}
+function scR(k,v){
+  var el=document.getElementById('gsw-'+k);
+  if(el){
+    var max=el.scrollWidth-el.clientWidth;
+    el.scrollLeft=(v/100)*max;
+    syncGanttHeadScroll(k);
+  }
+}
 
 // ── 取得含某字的欄位值 ──
 function getField(fields, keyword) {
@@ -5093,7 +5152,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261104v3';
+var APP_BUILD = '20261104v4';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
@@ -9339,11 +9398,13 @@ function renderGanttFromData() {
         +'<button type="button" class="bsm" onclick="openTaskForProject(\''+rec.record_id+'\')">＋ 任務</button>'
         +'<button type="button" class="bsm" onclick="openDesignForProject(\''+rec.record_id+'\')">＋ 設計</button>'
       : '<span class="gtb-status-readonly">'+escHtml(projStatus)+'</span>';
-    card.innerHTML = '<div class="gtb"><div class="pdot" style="background:'+color+'"></div><h3>'+escHtml(name)+'</h3>'
+    card.innerHTML = '<div class="gantt-sticky-block">'
+      +'<div class="gtb"><div class="pdot" style="background:'+color+'"></div><h3>'+escHtml(name)+'</h3>'
       +(contractLabel?'<span class="g-contract">'+contractLabel+'</span>':'')
       +'<div class="gtb-actions">'
       +pmActions
       +'<span class="pb" style="background:rgba(0,0,0,0.07);color:'+color+'">'+progress+'%</span></div></div>'
+      +'<div class="gantt-date-head" id="gdh-'+cardId+'"></div></div>'
       +'<div class="gb" id="gb-'+cardId+'"></div>'
       +'<div class="gsb"><button onclick="scG(\''+cardId+'\',-200)">◀</button>'
       +'<input type="range" min="0" max="100" value="30" id="rng-'+cardId+'" oninput="scR(\''+cardId+'\',this.value)">'
