@@ -5528,6 +5528,105 @@ function accWorkitemAliases(name) {
   return aliases.filter(Boolean);
 }
 
+/**
+ * 依 Ximo 支出「所屬標案」重掛 ACC 支出到正確案件。
+ * 用於 114／115 併案拆開後，把已同步支出從錯誤案件改掛到正確年度。
+ */
+async function relinkAccExpensesByXimoProjectIds(ximoToken, opts) {
+  opts = opts || {};
+  const projectIds = (opts.projectIds || []).map(function(id) { return String(id || '').trim(); }).filter(Boolean);
+  const createMissing = opts.createMissing !== false;
+  const out = {
+    projectIds: projectIds,
+    ximoMatched: 0,
+    relinked: 0,
+    created: 0,
+    unchanged: 0,
+    missingAccProject: [],
+    errors: []
+  };
+  if (!projectIds.length) return out;
+  if (!ACC_APP_SECRET || !ACC_APP_TOKEN || !ACC_TABLE_EXPENSES) {
+    return Object.assign(out, { skipped: true, reason: 'acc-env-missing' });
+  }
+
+  const want = {};
+  projectIds.forEach(function(id) { want[id] = true; });
+  const accToken = await getAccTenantToken();
+  await ensureAccExpenseSourceFields(accToken);
+  try { await ensureAccCatalogFields(accToken); } catch (e) {}
+
+  const [ximoExpenses, accProjects, accExpenses, accWorkitems] = await Promise.all([
+    loadExpenseRecords(ximoToken),
+    getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN),
+    getRecords(accToken, ACC_TABLE_EXPENSES, ACC_APP_TOKEN),
+    getRecords(accToken, ACC_TABLE_WORKITEMS, ACC_APP_TOKEN).catch(function() { return []; })
+  ]);
+
+  const accProjectByXimoId = {};
+  accProjects.forEach(function(p) {
+    const xid = accFieldText((p.fields || {})['來源Ximo標案ID']);
+    if (xid) accProjectByXimoId[xid] = p;
+  });
+  const accExpenseByXimoExpenseId = {};
+  accExpenses.forEach(function(e) {
+    const xid = accFieldText((e.fields || {})['來源支出ID']);
+    if (xid) accExpenseByXimoExpenseId[xid] = e;
+  });
+  const accWorkitemByXimoId = {};
+  (accWorkitems || []).forEach(function(w) {
+    const xid = accFieldText((w.fields || {})['來源Ximo工項ID']);
+    if (xid) accWorkitemByXimoId[xid] = w;
+  });
+
+  for (let i = 0; i < projectIds.length; i++) {
+    if (!accProjectByXimoId[projectIds[i]]) out.missingAccProject.push(projectIds[i]);
+  }
+
+  for (let i = 0; i < ximoExpenses.length; i++) {
+    const rec = ximoExpenses[i];
+    const fields = rec.fields || {};
+    const ximoExpenseId = rec.record_id;
+    const ximoProjectId = getLinkIds(fields['所屬標案'] || fields['所數標案'])[0] || '';
+    if (!ximoExpenseId || !want[ximoProjectId]) continue;
+    out.ximoMatched++;
+    const accProject = accProjectByXimoId[ximoProjectId];
+    if (!accProject) continue;
+    const ximoWorkitemId = getLinkIds(fields['所屬工作項目'])[0] || '';
+    const accWorkitem = ximoWorkitemId ? accWorkitemByXimoId[ximoWorkitemId] : null;
+    const hit = accExpenseByXimoExpenseId[ximoExpenseId];
+    if (hit) {
+      const currentPid = getLinkIds((hit.fields || {})['所屬案件'])[0] || '';
+      const currentWid = getLinkIds((hit.fields || {})['工項'])[0] || '';
+      const nextPid = accProject.record_id;
+      const nextWid = accWorkitem ? accWorkitem.record_id : currentWid;
+      if (currentPid === nextPid && (!accWorkitem || currentWid === nextWid)) {
+        out.unchanged++;
+        continue;
+      }
+      try {
+        const body = { '所屬案件': [nextPid] };
+        if (accWorkitem) body['工項'] = [nextWid];
+        await updateRecord(accToken, ACC_TABLE_EXPENSES, hit.record_id, body, ACC_APP_TOKEN, false);
+        out.relinked++;
+      } catch (err) {
+        out.errors.push({ expenseId: ximoExpenseId, error: err.message || String(err) });
+      }
+      continue;
+    }
+    if (!createMissing) continue;
+    try {
+      const up = await upsertAccExpenseFromXimoRecord(ximoToken, rec, {});
+      if (up && up.ok && up.created) out.created++;
+      else if (up && up.ok) out.relinked++;
+      else out.errors.push({ expenseId: ximoExpenseId, error: (up && up.error) || 'upsert-failed' });
+    } catch (err) {
+      out.errors.push({ expenseId: ximoExpenseId, error: err.message || String(err) });
+    }
+  }
+  return out;
+}
+
 async function rematchAccExpensesFromSourceLabels(accToken) {
   const token = accToken || await getAccTenantToken();
   await ensureAccExpenseSourceFields(token);
@@ -11302,6 +11401,32 @@ export default async function handler(req, res) {
         const accToken = await getAccTenantToken();
         const result = await rematchAccExpensesFromSourceLabels(accToken);
         return res.status(200).json({ ok: true, rematch: result });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    // 依 Ximo 標案 ID 重掛 ACC 支出「所屬案件」（用於年度併案拆開後補支出）
+    if (action === 'relink-acc-expenses-by-ximo-project' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const token = await getToken();
+        const q = req.query || {};
+        const b = req.body || {};
+        let projectIds = Array.isArray(b.projectIds) ? b.projectIds : [];
+        if (!projectIds.length && (q.projectId || b.projectId)) {
+          projectIds = String(q.projectId || b.projectId).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+        }
+        if (!projectIds.length) {
+          // 預設：高雄農村社區莊園 114／115
+          projectIds = ['recvuStg4ZNAs0', 'recvnVh30a56ZH'];
+        }
+        const createMissing = String(q.createMissing || b.createMissing || '1') !== '0'
+          && String(q.createMissing || b.createMissing || '').toLowerCase() !== 'false';
+        const result = await relinkAccExpensesByXimoProjectIds(token, {
+          projectIds: projectIds,
+          createMissing: createMissing
+        });
+        return res.status(200).json({ ok: true, relink: result });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
