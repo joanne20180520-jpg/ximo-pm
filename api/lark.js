@@ -3370,14 +3370,23 @@ async function getAccTenantToken() {
 }
 
 function accNormName(s) {
+  // 保留年度（114／115），避免同年計畫被誤判為同一案
   return String(s || '')
     .replace(/\s+/g, '')
-    .replace(/115年度?/g, '')
     .replace(/計畫預算表/g, '')
     .replace(/計畫$/g, '');
 }
 
+function accProjectYearToken(s) {
+  const m = String(s || '').match(/(\d{2,3})\s*年度?/);
+  return m ? m[1] : '';
+}
+
 function accNamesMatch(a, b) {
+  const ya = accProjectYearToken(a);
+  const yb = accProjectYearToken(b);
+  // 名稱都帶年度且不同 → 一定不是同一案（例如 114／115 高雄農村社區莊園）
+  if (ya && yb && ya !== yb) return false;
   const x = accNormName(a);
   const y = accNormName(b);
   if (!x || !y) return false;
@@ -4799,6 +4808,9 @@ async function findAccProjectRecord(accToken, projectName, ximoProjectId, cached
   if (!projectName) return null;
   for (let i = 0; i < rows.length; i++) {
     const f = rows[i].fields || {};
+    // 已綁定其他 Ximo 標案 ID 的列，不可再靠案名併案
+    const existingSource = accFieldText(f['來源Ximo標案ID']);
+    if (existingSource && ximoProjectId && existingSource !== ximoProjectId) continue;
     if (accNamesMatch(projectName, f['案名']) || accNamesMatch(projectName, f['完整名稱'])) {
       return rows[i];
     }
@@ -11161,6 +11173,81 @@ export default async function handler(req, res) {
         const token = await getToken();
         const result = await syncXimoCatalogToAcc(token);
         return res.status(200).json({ ok: true, sync: result });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    // 修正標案合約金額並強制同步 ACC（依來源 Ximo ID，不靠模糊案名）
+    if (action === 'repair-project-contracts' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const token = await getToken();
+        const q = req.query || {};
+        const b = req.body || {};
+        let items = Array.isArray(b.records) ? b.records : null;
+        if (!items || !items.length) {
+          // 預設：修正高雄農村社區莊園 114／115 併案與金額
+          items = [
+            {
+              recordId: 'recvuStg4ZNAs0',
+              合約金額: 8340000,
+              合約未稅金額: Math.round(8340000 / 1.05)
+            },
+            {
+              recordId: 'recvnVh30a56ZH',
+              合約金額: 5470000,
+              合約未稅金額: Math.round(5470000 / 1.05)
+            }
+          ];
+        }
+        const onlyIds = [];
+        const details = [];
+        const errors = [];
+        const tableId = tableIdFor('projects');
+        const appToken = appTokenForTable('projects');
+        for (let i = 0; i < items.length; i++) {
+          const it = items[i] || {};
+          const recordId = String(it.recordId || it.id || '').trim();
+          if (!recordId) continue;
+          try {
+            const fields = {};
+            if (it['合約金額'] != null || it.contractTaxed != null) {
+              fields['合約金額'] = Number(it['合約金額'] != null ? it['合約金額'] : it.contractTaxed);
+            }
+            if (it['合約未稅金額'] != null || it.contractUntaxed != null) {
+              fields['合約未稅金額'] = Number(
+                it['合約未稅金額'] != null ? it['合約未稅金額'] : it.contractUntaxed
+              );
+            }
+            if (it['含稅金額'] != null) fields['含稅金額'] = Number(it['含稅金額']);
+            if (!Object.keys(fields).length) {
+              errors.push({ recordId: recordId, error: 'no-fields' });
+              continue;
+            }
+            const body = await normalizeWriteFields(token, tableId, fields, appToken);
+            await updateRecord(token, tableId, recordId, body && Object.keys(body).length ? body : fields, appToken, false);
+            onlyIds.push(recordId);
+            details.push({ recordId: recordId, fields: fields });
+          } catch (err) {
+            errors.push({ recordId: recordId, error: err.message || String(err) });
+          }
+        }
+        let sync = null;
+        if (onlyIds.length) {
+          sync = await syncXimoCatalogToAcc(token, {
+            onlyProjectIds: onlyIds,
+            skipPrune: true,
+            skipExpenseRematch: true
+          });
+        }
+        return res.status(200).json({
+          ok: errors.length === 0,
+          updated: details.length,
+          details: details,
+          errors: errors,
+          sync: sync,
+          note: q.note || b.note || ''
+        });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
