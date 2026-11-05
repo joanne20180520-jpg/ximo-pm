@@ -3773,12 +3773,15 @@ async function upsertAccExpenseFromXimoRecord(ximoToken, expenseRec, opts) {
 
   const accProjects = await getRecords(accToken, ACC_TABLE_PROJECTS, ACC_APP_TOKEN).catch(function() { return []; });
   const accWorkitems = await getRecords(accToken, ACC_TABLE_WORKITEMS, ACC_APP_TOKEN).catch(function() { return []; });
-  let accProject = await findAccProjectRecord(accToken, labels.projectName, '', accProjects);
+  // 優先以來源 Ximo 標案／工項 ID 對上 ACC，避免案名模糊比對掛錯年度
+  const ximoProjectId = getLinkIds(fields['所屬標案'] || fields['所數標案'])[0] || '';
+  const ximoWorkitemId = getLinkIds(fields['所屬工作項目'])[0] || '';
+  let accProject = await findAccProjectRecord(accToken, labels.projectName, ximoProjectId, accProjects);
   let accWorkitem = await findAccWorkitemRecord(
     accToken,
     accProject ? accProject.record_id : '',
     labels.workitemName,
-    '',
+    ximoWorkitemId,
     accWorkitems
   );
 
