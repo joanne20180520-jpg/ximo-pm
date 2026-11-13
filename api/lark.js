@@ -11592,6 +11592,36 @@ export default async function handler(req, res) {
       });
     }
 
+    // ACC portal 讀表備援：當 ACC 自身 Lark token 失效時，改由璽墨端（ACC_LARK_*）代讀
+    if (action === 'acc-portal-bitable' && req.method === 'GET') {
+      try {
+        const tableKey = String((req.query && req.query.table) || '').trim().toLowerCase();
+        const tableMap = {
+          projects: ACC_TABLE_PROJECTS,
+          workitems: ACC_TABLE_WORKITEMS,
+          expenses: ACC_TABLE_EXPENSES
+        };
+        const tableId = tableMap[tableKey] || '';
+        if (!tableId) {
+          return res.status(400).json({ ok: false, error: 'table 須為 projects|workitems|expenses' });
+        }
+        if (!ACC_APP_SECRET || !ACC_APP_TOKEN) {
+          return res.status(500).json({ ok: false, error: 'ACC env missing' });
+        }
+        const accToken = await getAccTenantToken();
+        const records = await getRecords(accToken, tableId, ACC_APP_TOKEN);
+        return res.status(200).json({
+          ok: true,
+          table: tableKey,
+          records: (records || []).map(function(rec) {
+            return { record_id: rec.record_id, fields: rec.fields || {} };
+          })
+        });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
     if (action === 'ping' && req.method === 'GET') {
       let lark = null;
       let tokenOk = false;
