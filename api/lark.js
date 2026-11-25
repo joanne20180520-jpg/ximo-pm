@@ -11262,9 +11262,47 @@ export default async function handler(req, res) {
           maxDetail: parseInt(q.maxDetail || b.maxDetail || '20', 10),
           offset: parseInt(q.offset || b.offset || '0', 10),
           dryRun: String(q.dryRun || b.dryRun || '') === '1'
-            || String(q.dryRun || b.dryRun || '').toLowerCase() === 'true'
+            || String(q.dryRun || b.dryRun || '').toLowerCase() === 'true',
+          // 前台分段修復會帶這些欄位；漏傳會把待修清單清掉，看起來像「沒反應」
+          expectCarry: b.expectCarry === true || b.expectCarry === 1 || String(b.expectCarry || q.expectCarry || '') === '1',
+          pendingStuck: Array.isArray(b.pendingStuck) ? b.pendingStuck : undefined,
+          pendingOrphans: Array.isArray(b.pendingOrphans) ? b.pendingOrphans : undefined,
+          resumeOffset: b.resumeOffset != null ? b.resumeOffset : q.resumeOffset,
+          approvalListed: b.approvalListed != null ? b.approvalListed : q.approvalListed
         });
         return res.status(200).json({ ok: true, fix: result });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || String(err) });
+      }
+    }
+
+    // 管理員：把指定付款列改為「封存」（ACC／PM 列表會隱藏；用於清重複送審殘留）
+    if (action === 'archive-payment-records' && (req.method === 'GET' || req.method === 'POST')) {
+      try {
+        const token = await getToken();
+        const q = req.query || {};
+        const b = req.body || {};
+        let ids = Array.isArray(b.recordIds) ? b.recordIds : [];
+        if (!ids.length && (q.recordIds || b.recordId || q.recordId)) {
+          ids = String(q.recordIds || b.recordId || q.recordId || '')
+            .split(',')
+            .map(function(s) { return String(s || '').trim(); })
+            .filter(Boolean);
+        }
+        ids = Array.from(new Set(ids));
+        if (!ids.length) return res.status(400).json({ ok: false, error: '需要 recordIds' });
+        const out = { requested: ids.length, archived: 0, details: [], errors: [] };
+        for (let i = 0; i < ids.length; i++) {
+          const rid = ids[i];
+          try {
+            await writePaymentStatus(token, rid, '封存');
+            out.archived++;
+            out.details.push({ recordId: rid, status: '封存' });
+          } catch (e) {
+            out.errors.push({ recordId: rid, error: e.message || String(e) });
+          }
+        }
+        return res.status(200).json({ ok: true, archive: out });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message || String(err) });
       }
