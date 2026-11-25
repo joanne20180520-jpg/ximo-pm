@@ -4745,11 +4745,11 @@ function findLocalDuplicatePendingPayment(data) {
     var sameAmt = Math.abs((parseFloat(String(f['付款總金額'] || f['金額'] || '0').replace(/[^0-9.]/g, '')) || 0) - amount) < 0.01;
     var samePayee = normalizePayDedupeText(f['支付對象'] || f['收款人']) === payee;
     var sameApplicant = normalizePayDedupeText(
-      (typeof personDisplayName === 'function' ? personDisplayName(f['申請人']) : '')
+      personName(f['申請人'])
       || (f['申請人'] && f['申請人'][0] && (f['申請人'][0].name || f['申請人'][0].id))
       || f['申請人']
       || ''
-    ) === applicant || !applicant;
+    ) === applicant;
     var recProj = '';
     try {
       var links = f['所屬標案'] || f['所數標案'] || [];
