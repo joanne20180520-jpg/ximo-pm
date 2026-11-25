@@ -7503,10 +7503,77 @@ async function syncPendingPaymentApprovalsInner(tenantToken) {
   return results;
 }
 
+function normalizePaymentDedupeText(raw) {
+  return String(raw || '')
+    .replace(/\u3000/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function paymentApplicantDedupeKey(fields, openIdHint) {
+  const openId = paymentApplicantOpenId(fields, openIdHint);
+  if (openId) return 'oid:' + openId;
+  const name = normalizePaymentDedupeText(
+    personDisplayName(fields && fields['申請人']) || fieldTextValue(fields && fields['申請人']) || ''
+  );
+  return name ? ('name:' + name) : '';
+}
+
+function paymentDedupeFingerprint(fields, openIdHint) {
+  const f = fields || {};
+  const applicantKey = paymentApplicantDedupeKey(f, openIdHint);
+  const reason = normalizePaymentDedupeText(f['事由'] || f['付款事由'] || '');
+  const amount = paymentAmountNumber(f);
+  if (!applicantKey || !reason || !(amount > 0)) return '';
+  const dateObj = parsePaymentTs(f['申請日期']) || new Date();
+  const dateMs = typeof f['申請日期'] === 'number'
+    ? (f['申請日期'] < 1e11 ? f['申請日期'] * 1000 : f['申請日期'])
+    : taipeiMidnightMs(taipeiYmd(dateObj));
+  const projIds = getLinkIds(f['所屬標案'] || f['所數標案'] || f['所屬專案']).slice().sort();
+  return [
+    applicantKey,
+    reason,
+    String(Math.round(amount * 100) / 100),
+    normalizePaymentDedupeText(f['支付對象'] || f['收款人'] || ''),
+    String(dateMs || ''),
+    projIds.join(',')
+  ].join('|');
+}
+
+/** 同申請人＋事由＋金額＋對象＋日期＋標案，且仍在審批中 → 視為重複送出 */
+async function findDuplicatePendingPayment(tenantToken, fields, openIdHint, paymentTableId, appToken) {
+  if (!paymentTableId) return null;
+  const targetFp = paymentDedupeFingerprint(fields, openIdHint);
+  if (!targetFp) return null;
+  let records = [];
+  try {
+    records = await getRecords(tenantToken, paymentTableId, appToken);
+  } catch (e) {
+    return null;
+  }
+  for (let i = 0; i < records.length; i++) {
+    const rec = records[i] || {};
+    const f = rec.fields || {};
+    if (!isPaymentPendingStatus(paymentRecordStatus(f))) continue;
+    if (paymentDedupeFingerprint(f, '') !== targetFp) continue;
+    return {
+      recordId: rec.record_id || rec.id || '',
+      instanceCode: paymentApprovalInstanceCode(f),
+      reason: fieldTextValue(f['事由'] || f['付款事由']) || '',
+      amount: paymentAmountNumber(f)
+    };
+  }
+  return null;
+}
+
 async function createPaymentInBothBases(tenantToken, userToken, rawFields, applicantOpenIdHint) {
   const results = { main: null, accounting: null };
   const errors = [];
   const fields = Object.assign({}, rawFields || {});
+  const allowDuplicate = !!(fields.allowDuplicate || fields._allowDuplicate);
+  delete fields.allowDuplicate;
+  delete fields._allowDuplicate;
   fields['申請日期'] = taipeiMidnightMs(taipeiYmd(new Date()));
   if (fields['狀態'] === undefined) fields['狀態'] = '審批中';
   const originalAttach = fields['附件'] || fields['檔案'] || fields['上傳附件'];
@@ -7524,6 +7591,26 @@ async function createPaymentInBothBases(tenantToken, userToken, rawFields, appli
     );
     if (!mainTableId) throw new Error('找不到前台付款資料表');
     paymentTableId = mainTableId;
+    if (!allowDuplicate) {
+      const dup = await findDuplicatePendingPayment(
+        tenantToken,
+        fields,
+        applicantOpenIdHint,
+        mainTableId,
+        frontCfg.appToken
+      );
+      if (dup && dup.recordId) {
+        const err = new Error(
+          '已有相同付款申請在審批中（金額 NT$'
+          + Math.round(dup.amount || 0).toLocaleString('en-US')
+          + '），請勿重複送出。若需修改請先處理原單。'
+        );
+        err.code = 'duplicate-pending-payment';
+        err.duplicateOf = dup.recordId;
+        err.instanceCode = dup.instanceCode || '';
+        throw err;
+      }
+    }
     try {
       await ensurePaymentApprovalFields(tenantToken, frontCfg.appToken, mainTableId);
     } catch (e) {}
@@ -12000,16 +12087,29 @@ export default async function handler(req, res) {
       const applicantHint = extractApplicantOpenIdHint(req.body);
       const cleanBody = stripAuthFromBody(req.body || {});
       if (table === 'payments') {
-        const result = await createPaymentInBothBases(tenantToken, userAccessToken, cleanBody, applicantHint);
         try {
-          if (result.approval && result.approval.ok) {
-            result.notify = await maybeSendPaymentNotify(result.enrichedFields || cleanBody);
+          const result = await createPaymentInBothBases(tenantToken, userAccessToken, cleanBody, applicantHint);
+          try {
+            if (result.approval && result.approval.ok) {
+              result.notify = await maybeSendPaymentNotify(result.enrichedFields || cleanBody);
+            }
+          } catch (notifyErr) {
+            result.notify = { ok: false, error: notifyErr.message || String(notifyErr) };
           }
-        } catch (notifyErr) {
-          result.notify = { ok: false, error: notifyErr.message || String(notifyErr) };
+          delete result.enrichedFields;
+          return res.status(200).json(result);
+        } catch (payErr) {
+          if (payErr && payErr.code === 'duplicate-pending-payment') {
+            return res.status(409).json({
+              ok: false,
+              error: payErr.message || '已有相同付款申請在審批中',
+              code: 'duplicate-pending-payment',
+              duplicateOf: payErr.duplicateOf || '',
+              instanceCode: payErr.instanceCode || ''
+            });
+          }
+          throw payErr;
         }
-        delete result.enrichedFields;
-        return res.status(200).json(result);
       }
       const tableAppToken = appTokenForTable(table);
       const tid = tableIdFor(table);

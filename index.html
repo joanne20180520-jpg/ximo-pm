@@ -4724,6 +4724,45 @@ function showNotice(msg) {
   el.classList.remove('hidden');
 }
 
+function normalizePayDedupeText(raw) {
+  return String(raw || '').replace(/\u3000/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function findLocalDuplicatePendingPayment(data) {
+  if (!data || !Array.isArray(paymentsData) || !paymentsData.length) return null;
+  var reason = normalizePayDedupeText(data.reason);
+  var amount = parseFloat(String(data.total || '').replace(/[^0-9.]/g, '')) || 0;
+  var payee = normalizePayDedupeText(data.payee);
+  var applicant = normalizePayDedupeText(data.applicant || getLoginDisplayName());
+  var projId = String(data.projId || '').trim();
+  if (!reason || !(amount > 0) || !applicant) return null;
+  for (var i = 0; i < paymentsData.length; i++) {
+    var rec = paymentsData[i] || {};
+    var f = rec.fields || {};
+    var st = String(f['狀態'] || f['審核狀態'] || '').trim();
+    if (st && st !== '審批中' && st !== '未審核' && st !== '待審核') continue;
+    var sameReason = normalizePayDedupeText(f['事由'] || f['付款事由']) === reason;
+    var sameAmt = Math.abs((parseFloat(String(f['付款總金額'] || f['金額'] || '0').replace(/[^0-9.]/g, '')) || 0) - amount) < 0.01;
+    var samePayee = normalizePayDedupeText(f['支付對象'] || f['收款人']) === payee;
+    var sameApplicant = normalizePayDedupeText(
+      (typeof personDisplayName === 'function' ? personDisplayName(f['申請人']) : '')
+      || (f['申請人'] && f['申請人'][0] && (f['申請人'][0].name || f['申請人'][0].id))
+      || f['申請人']
+      || ''
+    ) === applicant || !applicant;
+    var recProj = '';
+    try {
+      var links = f['所屬標案'] || f['所數標案'] || [];
+      if (Array.isArray(links) && links[0]) recProj = String(links[0].record_id || links[0].id || links[0] || '').trim();
+    } catch (e) {}
+    var sameProj = !projId || !recProj || projId === recProj;
+    if (sameReason && sameAmt && samePayee && sameApplicant && sameProj) {
+      return rec;
+    }
+  }
+  return null;
+}
+
 function validatePaymentForm() {
   var data = collectPaymentFields();
   if (!data.company) { alert('請選擇請款公司'); return null; }
@@ -4732,6 +4771,11 @@ function validatePaymentForm() {
   if (!data.total) { alert('請填寫付款總金額'); return null; }
   if (!data.payee) { alert('請填寫支付對象'); return null; }
   if (!data.applicant) data.applicant = '未指定';
+  var dup = findLocalDuplicatePendingPayment(data);
+  if (dup) {
+    alert('已有相同付款申請在審批中，請勿重複送出。若需修改請先處理原單。');
+    return null;
+  }
   return data;
 }
 
@@ -5252,7 +5296,7 @@ var PROJECT_COLORS = [
 ];
 
 // ── 從 API 讀取資料 ──
-var APP_BUILD = '20261104v8';
+var APP_BUILD = '20261125v1';
 var DATA_CACHE_KEY = 'ximo-bootstrap-cache-v7';
 var AUTH_CACHE_KEY = 'ximo-auth-cache-v1';
 var DATA_CACHE_MAX_AGE = 5 * 60 * 1000;
