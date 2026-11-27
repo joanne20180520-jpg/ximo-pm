@@ -559,6 +559,15 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .dl-proj-group{border:1px solid var(--border);border-radius:var(--rs);margin-bottom:10px;overflow:hidden}
 .dl-proj-group:last-child{margin-bottom:0}
 .dl-proj-hdr{padding:8px 12px;font-size:14px;font-weight:700;color:#fff}
+.dl-wi-hd{display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;border:none;border-bottom:1px solid var(--border);background:#fff;cursor:pointer;text-align:left;font-family:inherit;color:var(--text)}
+.dl-wi-hd:hover{background:var(--sf2)}
+.dl-wi-arr{flex:0 0 12px;font-size:11px;color:var(--t3);transition:transform .15s}
+.dl-wi.open .dl-wi-arr{transform:rotate(90deg)}
+.dl-wi-name{flex:1;min-width:0;font-size:14px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dl-wi-count{flex:0 0 auto;font-size:12px;color:var(--t3)}
+.dl-wi-tasks{display:none;background:#fbf8f3}
+.dl-wi.open .dl-wi-tasks{display:block}
+.dl-wi-tasks .dl-row{background:transparent}
 .dl-row{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:12px 14px;border-bottom:1px solid var(--border)}
 .dl-row:last-child{border-bottom:none}
 .dl-row:hover{background:var(--sf2)}
@@ -593,6 +602,7 @@ body.role-admin #pl-projects .si{cursor:pointer}
 .dl-tomorrow-text{display:inline-flex;align-items:center;line-height:1;font-size:13px;flex:0 0 auto;white-space:nowrap}
 .dl-tomorrow-wrap.checked{border-color:#e8a020;background:#fff6e8;color:#b45309}
 .dl-tomorrow-wrap.is-disabled{opacity:.45;cursor:not-allowed}
+.dl-tomorrow-wrap.is-hidden{display:none !important}
 .dl-block-box{margin-bottom:10px}
 .dl-block-box textarea{width:100%;padding:8px 10px;border:1px solid #e8a0a0;border-radius:var(--rs);font-size:13px;background:#fff8f8;font-family:inherit}
 .jblk{font-size:10px;padding:1px 7px;border-radius:8px;background:var(--j-stuck);color:#fff;font-weight:700;flex-shrink:0}
@@ -6582,6 +6592,7 @@ var journalViewMode = 'day'; // 'day' | 'block'
 var dailyLogDate = new Date(); dailyLogDate.setHours(0,0,0,0);
 var dailyLogProjFilter = '';
 var dailyLogPersonFilter = '';
+var dailyLogOpenWi = {};
 var PROGRESS_OPTIONS = ['未開始','進行中10%','進行中20%','進行中30%','進行中40%','進行中50%','進行中60%','進行中70%','進行中80%','進行中90%','已完成','暫停'];
 var DESIGN_STATUS_OPTIONS = ['未開始', '進行中', '已完成'];
 var DESIGN_VENDOR_OPTIONS = ['健豪', '可樂谷', '丞奕', '東方包裝', '旭利紙器', '文心影印', '承辦發印', '高雄松林影印', '自行列印'];
@@ -13093,7 +13104,7 @@ function formatDailyReportSummary(groups, designGroups) {
 
 function buildDailyTomorrowCheckbox(checked, cat) {
   var enabled = cat === 'doing';
-  var cls = 'dl-tomorrow-wrap' + (checked ? ' checked' : '') + (enabled ? '' : ' is-disabled');
+  var cls = 'dl-tomorrow-wrap' + (checked ? ' checked' : '') + (enabled ? '' : ' is-hidden');
   return '<label class="' + cls + '" onclick="event.stopPropagation()">'
     + '<span class="dl-tomorrow-box"><input type="checkbox" class="dl-tomorrow"' + (checked ? ' checked' : '') + (enabled ? '' : ' disabled')
     + ' onchange="onDailyLogTomorrowChange(this)"></span>'
@@ -13300,11 +13311,26 @@ function syncDailyLogTomorrowControl(row, cat) {
   if (!tomorrowCb || !tomorrowWrap) return;
   var enabled = cat === 'doing';
   tomorrowCb.disabled = !enabled;
-  tomorrowWrap.classList.toggle('is-disabled', !enabled);
+  tomorrowWrap.classList.toggle('is-hidden', !enabled);
+  tomorrowWrap.classList.remove('is-disabled');
   if (!enabled) {
     tomorrowCb.checked = false;
     tomorrowWrap.classList.remove('checked');
   }
+}
+
+function syncDailyLogNoteVisibility(row, cat) {
+  var note = row && row.querySelector('.dl-note');
+  if (!note) return;
+  note.style.display = (cat === 'doing' || cat === 'done' || cat === 'block') ? '' : 'none';
+}
+
+function toggleDailyLogWi(btn) {
+  var wi = btn && btn.closest('.dl-wi');
+  if (!wi) return;
+  wi.classList.toggle('open');
+  var key = wi.getAttribute('data-wi-key') || '';
+  dailyLogOpenWi[key] = wi.classList.contains('open');
 }
 
 function onDailyLogTomorrowChange(cb) {
@@ -13327,9 +13353,8 @@ function onDailyLogCatChange(sel) {
   sel.classList.toggle('dl-cat-block', sel.value === 'block');
   var row = sel.closest('.dl-row');
   if (row) {
-    var blockInput = row.querySelector('.dl-block-reason');
-    if (blockInput) blockInput.style.display = sel.value === 'block' ? 'block' : 'none';
     row.classList.toggle('dl-row-unlisted', !sel.value);
+    syncDailyLogNoteVisibility(row, sel.value || '');
     syncDailyLogTomorrowControl(row, sel.value || '');
     updateDailyLogRowProgressCell(row, sel.value || '');
     var kind = row.dataset.kind || 'task';
@@ -13582,7 +13607,23 @@ function renderDailyLogTasks(preselectId) {
   projs.forEach(function(proj) {
     var color = projColorByName(proj);
     html += '<div class="dl-proj-group"><div class="dl-proj-hdr" style="background:' + color + '">' + escHtml(proj) + '</div>';
+    var byWi = {};
     byProj[proj].forEach(function(it) {
+      var wiName = (it.wiName || '').trim() || '未分工作項目';
+      if (!byWi[wiName]) byWi[wiName] = [];
+      byWi[wiName].push(it);
+    });
+    Object.keys(byWi).sort(function(a, b) { return a.localeCompare(b, 'zh-Hant'); }).forEach(function(wiName) {
+      var list = byWi[wiName];
+      var wiKey = proj + '\n' + wiName;
+      var hasPreselect = !!(preselectId && list.some(function(it) { return it.id === preselectId; }));
+      if (hasPreselect) dailyLogOpenWi[wiKey] = true;
+      var open = !!dailyLogOpenWi[wiKey];
+      html += '<div class="dl-wi' + (open ? ' open' : '') + '" data-wi-key="' + escAttr(wiKey) + '">';
+      html += '<button type="button" class="dl-wi-hd" onclick="toggleDailyLogWi(this)">';
+      html += '<span class="dl-wi-arr">▸</span><span class="dl-wi-name">' + escHtml(wiName) + '</span>';
+      html += '<span class="dl-wi-count">' + list.length + ' 個任務</span></button><div class="dl-wi-tasks">';
+      list.forEach(function(it) {
       var isDesign = it.kind === 'design';
       var extra = isDesign ? (dailyLogDesignExtras[it.id] || {}) : (dailyLogTaskExtras[it.id] || {});
       var cat = resolveDailyLogItemCategory(it, isDesign ? designCatMap : catMap, extra);
@@ -13592,16 +13633,15 @@ function renderDailyLogTasks(preselectId) {
       var noteVal = extra._noteTouched ? String(extra.note || '') : (extra.note || savedNote);
       var blockVal = extra.blockReason !== undefined ? extra.blockReason
         : (isDesign ? (designReasons[it.id] || '') : getBlockReasonForTaskFromJournals(dayTs, author, it.id));
+      if (cat === 'block' && !String(noteVal || '').trim() && blockVal) noteVal = blockVal;
       var isBlock = cat === 'block';
+      var showNote = cat === 'doing' || cat === 'done' || cat === 'block';
       var rowAttr = isDesign ? 'data-design-id="' + it.id + '" data-kind="design"' : 'data-task-id="' + it.id + '" data-kind="task"';
       var nameBadge = isDesign ? '<span class="dl-design-badge">設計</span>' : '';
       var unlistedClass = cat ? '' : ' dl-row-unlisted';
       html += '<div class="dl-row' + unlistedClass + '" ' + rowAttr + '>';
       html += '<div class="dl-row-head">';
       html += '<div class="dl-task-main"><div class="dl-task-title-line"><span class="dl-task-name">' + nameBadge + escHtml(it.taskName) + '</span>';
-      if (it.taskDesc) {
-        html += '<span class="dl-task-desc" title="' + escAttr(it.taskDesc) + '">' + escHtml(it.taskDesc) + '</span>';
-      }
       html += '</div>';
       if (it.assignee) {
         html += '<span class="dl-task-meta" title="' + escAttr(it.assignee) + '">' + escHtml(it.assignee) + '</span>';
@@ -13613,9 +13653,10 @@ function renderDailyLogTasks(preselectId) {
       html += buildDailyCatSelect(cat, isBlock);
       html += buildDailyTomorrowCheckbox(tomorrowChecked, cat);
       html += '</div>';
-      html += '<textarea class="dl-note" rows="2" placeholder="補充說明（選填，Enter 可換行）" onclick="event.stopPropagation()">' + escHtml(noteVal) + '</textarea>';
-      html += '<textarea class="dl-block-reason" rows="2" placeholder="卡關原因（必填）" style="display:' + (isBlock ? 'block' : 'none') + '" onclick="event.stopPropagation()">' + String(blockVal).replace(/</g, '&lt;') + '</textarea>';
+      html += '<textarea class="dl-note" rows="2" placeholder="補充說明（選填，Enter 可換行）" style="display:' + (showNote ? '' : 'none') + '" onclick="event.stopPropagation()">' + escHtml(noteVal) + '</textarea>';
       html += '</div>';
+      });
+      html += '</div></div>';
     });
     html += '</div>';
   });
@@ -13693,6 +13734,7 @@ function collectDailyLogCategories() {
     var noteVal = extra._noteTouched ? String(extra.note || '') : (extra.note || (isDesign ? (designNotes[id] || '') : (taskNotes[id] || '')));
     var blockReason = extra.blockReason !== undefined ? String(extra.blockReason || '').trim()
       : (isDesign ? String((designMaps.blockReasons || {})[id] || '').trim() : String(getBlockReasonForTaskFromJournals(dayTs, author, id) || '').trim());
+    if (cat === 'block') blockReason = noteVal.trim();
     if (isDesign) {
       var dctx = getDesignContext(id);
       if (!dctx) return;
@@ -13769,6 +13811,7 @@ function openDailyLog(preselectId, preselectKind) {
   dailyLogDate.setHours(0, 0, 0, 0);
   dailyLogProjFilter = '';
   dailyLogPersonFilter = '';
+  dailyLogOpenWi = {};
   dailyLogPreselectId = preselectId || null;
   dailyLogPreselectKind = preselectKind || 'task';
 
@@ -13923,11 +13966,11 @@ function saveDailyJournal() {
   var missingBlock = data.groups.block.filter(function(row) { return !row.blockReason; });
   var missingDesignBlock = data.designGroups.block.filter(function(row) { return !row.blockReason; });
   if (missingBlock.length) {
-    alert('卡關任務請在該項下方填寫卡關原因：' + missingBlock.map(function(r) { return r.taskName; }).join('、'));
+    alert('卡關任務請在該項下方填寫補充說明：' + missingBlock.map(function(r) { return r.taskName; }).join('、'));
     return;
   }
   if (missingDesignBlock.length) {
-    alert('卡關設計項目請在該項下方填寫卡關原因：' + missingDesignBlock.map(function(r) { return r.taskName; }).join('、'));
+    alert('卡關設計項目請在該項下方填寫補充說明：' + missingDesignBlock.map(function(r) { return r.taskName; }).join('、'));
     return;
   }
 
